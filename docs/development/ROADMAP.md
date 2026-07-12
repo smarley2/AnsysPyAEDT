@@ -1,0 +1,66 @@
+# Development Roadmap
+
+## Milestone 0: Foundation and compatibility spike
+
+- Establish Python packaging, quality gates, schemas, CI, and documentation.
+- Prove connection to AEDT 2024 R2 and a current AEDT release through PyAEDT.
+- Prove a minimal PySide6/QML application and Qt Quick 3D preview.
+- Record a capability matrix for Commercial and Student editions.
+
+Exit criterion: a documented spike creates and saves a trivial Maxwell 2D and 3D design without domain-to-PyAEDT coupling.
+
+## Milestone 1: Toroid domain and catalogs
+
+- Implement units, project schemas, commercial core records, conductor records, winding sectors, and validation.
+- Import a reviewed subset of Magnetics commercial powder-core and ferrite toroids.
+- Build the canonical-files-to-SQLite catalog pipeline.
+
+Exit criterion: a versioned project selects a commercial core, defines multiple valid windings, and survives schema round trips.
+
+## Milestone 2: Geometry and live preview
+
+- Implement the solver-independent toroid and winding geometry.
+- Add automatic sector packing, spacing rules, collision detection, lead reservation, and deterministic naming.
+- Add periodicity validation and optional symmetry-plan generation.
+- Render the same geometry model in the Guided Studio preview.
+
+Exit criterion: previewed geometry passes property-based invariants and deterministic golden-manifest tests.
+
+## Milestone 3: Maxwell 3D MVP
+
+- Generate toroid core geometry and round-wire windings.
+- Support solid and stranded winding behavior.
+- Assign materials, coils, winding groups, directions, region, boundaries, mesh intent, AC Magnetic setup, and standard reports.
+
+Exit criterion: a supported AEDT installation opens a generated 3D project that is ready to solve.
+
+## Milestone 4: Maxwell 2D and DC operating point compatibility
+
+- Generate the documented 2D equivalent cross-sectional model.
+- Use native 3D Include DC Fields where supported.
+- Implement the AEDT 2024 R2 Magnetostatic plus incremental-linearization fallback.
+- Make approximations and capability differences visible in the project manifest and UI.
+
+Exit criterion: release-matrix fixtures generate valid projects and identify native versus approximate operating-point treatment.
+
+## Milestone 5: Material Studio
+
+- Import PDF images, screenshots, CSV data, and formulas.
+- Calibrate linear and logarithmic axes, extract/edit points, fit supported models, validate units and physics, and preserve provenance.
+- Export only approved material revisions to Maxwell.
+
+Exit criterion: a reviewer can reproduce a material record from its stored source metadata and transformation history.
+
+## Milestone 6: Productization
+
+- Package the Windows application with PyInstaller and Inno Setup.
+- Package the AEDT extension separately.
+- Add recovery, diagnostics, reports, release notes, checksums, and the controlled AEDT release checklist.
+
+Exit criterion: the installer and extension pass the Commercial/Student compatibility matrix.
+
+## Milestone 7: Additional core families
+
+- Add E, PQ, EQ, EER, and other approved commercial geometries as independent geometry plugins.
+
+Exit criterion: each family has its own catalog schema, geometry invariants, previews, Maxwell adapters, and integration fixtures.
