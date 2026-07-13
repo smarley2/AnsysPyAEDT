@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^20[2-9][0-9]\.[12]$')]
+    [ValidatePattern('^(?:2024\.2|20(?:2[5-9]|[3-9][0-9])\.[12])$')]
     [string]$Release,
 
     [Parameter(Mandatory = $true)]

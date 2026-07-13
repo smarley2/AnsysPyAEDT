@@ -19,5 +19,7 @@ def test_recording_gateway_returns_both_dimensions_in_stable_order(tmp_path: Pat
     assert gateway.requests == [request]
     assert [artifact.dimension.value for artifact in result.artifacts] == ["2d", "3d"]
     assert all(artifact.created and artifact.saved for artifact in result.artifacts)
-    assert result.release == request.release
-    assert result.edition == request.edition
+    assert result.requested_release == request.release
+    assert result.requested_edition == request.edition
+    assert all(artifact.observed_release == request.release for artifact in result.artifacts)
+    assert all(artifact.observed_edition == request.edition for artifact in result.artifacts)

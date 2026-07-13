@@ -5,7 +5,25 @@ from dataclasses import dataclass
 from pathlib import Path
 
 INNER_PACKAGES = frozenset({"domain", "geometry", "materials", "simulation"})
-FORBIDDEN_ROOTS = frozenset({"ansys", "pyaedt", "PySide6", "sqlite3", "os", "platform"})
+FORBIDDEN_ROOTS = frozenset(
+    {
+        "PySide6",
+        "ansys",
+        "ctypes",
+        "multiprocessing",
+        "os",
+        "pathlib",
+        "platform",
+        "pyaedt",
+        "resource",
+        "shutil",
+        "socket",
+        "sqlite3",
+        "subprocess",
+        "tempfile",
+        "winreg",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -32,3 +32,26 @@ def test_missing_project_identifier_is_rejected() -> None:
                 "target": {"aedtRelease": "2024.2", "edition": "commercial"},
             }
         )
+
+
+@pytest.mark.parametrize("release", ["2024.2", "2025.1", "2099.2"])
+def test_project_schema_accepts_supported_aedt_releases(release: str) -> None:
+    document = json.loads(
+        Path("tests/fixtures/projects/minimal-v1.inductor.json").read_text(encoding="utf-8")
+    )
+    document["target"]["aedtRelease"] = release
+
+    SchemaRepository(Path("schemas")).validate_project(document)
+
+
+@pytest.mark.parametrize("release", ["2024.1", "2023.2", "2100.1"])
+def test_project_schema_rejects_aedt_releases_outside_supported_range(
+    release: str,
+) -> None:
+    document = json.loads(
+        Path("tests/fixtures/projects/minimal-v1.inductor.json").read_text(encoding="utf-8")
+    )
+    document["target"]["aedtRelease"] = release
+
+    with pytest.raises(ValidationError):
+        SchemaRepository(Path("schemas")).validate_project(document)

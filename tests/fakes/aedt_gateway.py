@@ -5,7 +5,11 @@ from inductor_designer.application.ports.aedt_gateway import (
     AedtProbeResult,
     ProbeArtifact,
 )
-from inductor_designer.simulation.capabilities import CapabilitySnapshot, ModelDimension
+from inductor_designer.simulation.capabilities import (
+    CapabilityReviewStatus,
+    CapabilitySnapshot,
+    ModelDimension,
+)
 
 
 class RecordingAedtGateway:
@@ -18,6 +22,8 @@ class RecordingAedtGateway:
             ProbeArtifact(
                 dimension=dimension,
                 project_path=Path(request.output_directory) / f"probe-{dimension.value}.aedt",
+                observed_release=request.release,
+                observed_edition=request.edition,
                 created=True,
                 saved=True,
                 message="recorded without launching AEDT",
@@ -25,8 +31,8 @@ class RecordingAedtGateway:
             for dimension in (ModelDimension.TWO_D, ModelDimension.THREE_D)
         )
         return AedtProbeResult(
-            release=request.release,
-            edition=request.edition,
+            requested_release=request.release,
+            requested_edition=request.edition,
             pyaedt_version="recording-fake",
             capabilities=CapabilitySnapshot(
                 release=request.release,
@@ -34,6 +40,7 @@ class RecordingAedtGateway:
                 include_dc_fields_3d=None,
                 discovered_limits=(),
                 evidence_source="recording-fake",
+                review_status=CapabilityReviewStatus.UNREVIEWED,
             ),
             artifacts=artifacts,
         )

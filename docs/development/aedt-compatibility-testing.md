@@ -27,13 +27,14 @@ Repeat with `student`, then with the latest installed Commercial and Student rel
 
 ## Review evidence
 
-1. Open both generated projects and confirm the named rectangle/box exists.
-2. Confirm each project saves, closes, and reopens without a repair warning.
-3. Record the exact PyAEDT version from `evidence.json`.
-4. In Maxwell 3D, inspect whether the AC Magnetic/Eddy Current setup exposes Include DC Fields; do not set the matrix value from release number alone.
-5. Record exact reproducible Student restrictions in `discoveredLimits`; do not include license server names, user names, or machine paths.
-6. Update only the matching row in `compatibility/aedt-matrix.yml` to `passed` or `failed`, copy booleans from reviewed evidence, and set ISO-8601 UTC review time and reviewer GitHub handle.
-7. Delete local artifacts after the review if they are no longer needed. They must remain ignored by Git.
+1. Compare `requestedEnvironment` with every artifact's `observedSession`. Stop and preserve the evidence without updating a matrix row if either AEDT session reports a different release or edition than requested.
+2. Open both generated projects and confirm the named rectangle/box exists.
+3. Confirm each project saves, closes, and reopens without a repair warning.
+4. Record the exact PyAEDT version from `evidence.json`.
+5. In Maxwell 3D, inspect whether the AC Magnetic/Eddy Current setup exposes Include DC Fields; do not set the value from a release number alone.
+6. In the `manualReview` object in the ignored local `evidence.json`, record the inspected `includeDcFields3d` boolean, exact reproducible `discoveredLimits`, reviewer GitHub handle in `reviewedBy`, and ISO-8601 UTC review time in `reviewedAt`. These fields are intentionally null or empty when the spike finishes and must be completed only by the human reviewer. Do not include license server names, user names, or machine paths.
+7. Update only the matching row in `compatibility/aedt-matrix.yml` to `passed` or `failed`, copy the manually reviewed values and exact PyAEDT version, and set `evidenceReviewedAt` and `evidenceReviewedBy` from the manual-review record. The generated `capabilities.reviewStatus` remains `unreviewed`; it is not approval evidence.
+8. Delete local artifacts after the review if they are no longer needed. They must remain ignored by Git.
 
 ## Acceptance
 

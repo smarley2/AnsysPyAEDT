@@ -22,7 +22,10 @@
       "additionalProperties": false,
       "required": ["aedtRelease", "edition"],
       "properties": {
-        "aedtRelease": { "type": "string", "pattern": "^20[2-9][0-9]\\.[12]$" },
+        "aedtRelease": {
+          "type": "string",
+          "pattern": "^(?:2024\\.2|20(?:2[5-9]|[3-9][0-9])\\.[12])$"
+        },
         "edition": { "enum": ["commercial", "student"] }
       }
     }

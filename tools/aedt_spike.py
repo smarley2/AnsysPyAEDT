@@ -15,21 +15,39 @@ def run_spike(
     request: AedtProbeRequest,
     evidence_path: Path,
 ) -> dict[str, object]:
+    evidence_path.unlink(missing_ok=True)
     result = gateway.run_probe(request)
     evidence: dict[str, object] = {
-        "schemaVersion": 1,
-        "aedtRelease": str(result.release),
-        "edition": result.edition.value,
+        "schemaVersion": 2,
+        "requestedEnvironment": {
+            "aedtRelease": str(result.requested_release),
+            "edition": result.requested_edition.value,
+        },
         "pyaedtVersion": result.pyaedt_version,
         "capabilities": {
+            "observed3dSession": {
+                "aedtRelease": str(result.capabilities.release),
+                "edition": result.capabilities.edition.value,
+            },
             "includeDcFields3d": result.capabilities.include_dc_fields_3d,
             "discoveredLimits": list(result.capabilities.discovered_limits),
             "evidenceSource": result.capabilities.evidence_source,
+            "reviewStatus": result.capabilities.review_status.value,
+        },
+        "manualReview": {
+            "includeDcFields3d": None,
+            "discoveredLimits": [],
+            "reviewedBy": None,
+            "reviewedAt": None,
         },
         "artifacts": [
             {
                 "dimension": artifact.dimension.value,
-                "projectPath": artifact.project_path.name,
+                "projectFile": artifact.project_path.name,
+                "observedSession": {
+                    "aedtRelease": str(artifact.observed_release),
+                    "edition": artifact.observed_edition.value,
+                },
                 "created": artifact.created,
                 "saved": artifact.saved,
                 "message": artifact.message,

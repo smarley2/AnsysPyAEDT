@@ -9,15 +9,28 @@ class AedtRelease:
     year: int
     release: int
 
+    def __post_init__(self) -> None:
+        if (
+            type(self.year) is not int
+            or type(self.release) is not int
+            or not 2000 <= self.year <= 2099
+            or self.release not in (1, 2)
+            or (self.year, self.release) < (2024, 2)
+        ):
+            raise ValueError(f"Invalid AEDT release: {self.year}.{self.release}")
+
     @classmethod
     def parse(cls, value: str) -> AedtRelease:
         parts = value.split(".")
-        if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        if (
+            len(parts) != 2
+            or len(parts[0]) != 4
+            or not parts[0].startswith("20")
+            or len(parts[1]) != 1
+            or not all(part.isdigit() for part in parts)
+        ):
             raise ValueError(f"Invalid AEDT release: {value}")
-        parsed = cls(int(parts[0]), int(parts[1]))
-        if parsed.year < 2022 or parsed.release not in (1, 2):
-            raise ValueError(f"Invalid AEDT release: {value}")
-        return parsed
+        return cls(int(parts[0]), int(parts[1]))
 
     def __str__(self) -> str:
         return f"{self.year}.{self.release}"
@@ -39,6 +52,11 @@ class DcBiasStrategy(str, Enum):
     BLOCKED = "blocked"
 
 
+class CapabilityReviewStatus(str, Enum):
+    UNREVIEWED = "unreviewed"
+    REVIEWED = "reviewed"
+
+
 @dataclass(frozen=True, slots=True)
 class CapabilitySnapshot:
     release: AedtRelease
@@ -46,6 +64,7 @@ class CapabilitySnapshot:
     include_dc_fields_3d: bool | None
     discovered_limits: tuple[str, ...]
     evidence_source: str
+    review_status: CapabilityReviewStatus
 
     def __post_init__(self) -> None:
         if self.include_dc_fields_3d and self.release < AedtRelease(2025, 1):
@@ -71,6 +90,12 @@ def select_dc_bias_strategy(
             False,
             "Maxwell 2D DC-bias generation is blocked until a validated policy is available.",
         )
+    if capabilities.review_status is CapabilityReviewStatus.UNREVIEWED:
+        return DcBiasDecision(
+            DcBiasStrategy.BLOCKED,
+            False,
+            "The 3D capability evidence has not been reviewed for this environment.",
+        )
     if capabilities.include_dc_fields_3d:
         return DcBiasDecision(
             DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS,
@@ -83,9 +108,15 @@ def select_dc_bias_strategy(
             False,
             "The 3D Include DC Fields capability has not been reviewed for this environment.",
         )
+    if capabilities.release == AedtRelease(2024, 2):
+        return DcBiasDecision(
+            DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK,
+            True,
+            "Use the documented Magnetostatic operating-point and "
+            "incremental-linearization approximation.",
+        )
     return DcBiasDecision(
-        DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK,
-        True,
-        "Use the documented Magnetostatic operating-point and "
-        "incremental-linearization approximation.",
+        DcBiasStrategy.BLOCKED,
+        False,
+        "The incremental-linearization fallback is only approved for AEDT 2024 R2.",
     )

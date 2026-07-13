@@ -7,6 +7,11 @@ from inductor_designer.application.ports.aedt_gateway import AedtProbeRequest
 from inductor_designer.simulation.capabilities import AedtEdition, AedtRelease
 
 
+class FakeDesktop:
+    def __init__(self, student_version: bool) -> None:
+        self.student_version = student_version
+
+
 class FakeModeler:
     def __init__(
         self,
@@ -36,8 +41,12 @@ class FakeApp:
         creation_result: object = True,
         creation_error: Exception | None = None,
         save_error: Exception | None = None,
+        aedt_version_id: str = "2025.1",
+        student_version: bool = False,
     ) -> None:
         self.modeler = FakeModeler(creation_result, creation_error)
+        self.aedt_version_id = aedt_version_id
+        self.desktop_class = FakeDesktop(student_version)
         self.saved_paths: list[str] = []
         self.released = False
         self.save_error = save_error
@@ -61,11 +70,15 @@ class FakeFactory:
         creation_results: tuple[object, object] = (True, True),
         creation_errors: tuple[Exception | None, Exception | None] = (None, None),
         save_errors: tuple[Exception | None, Exception | None] = (None, None),
+        observed_releases: tuple[str, str] = ("2025.1", "2025.1"),
+        observed_student_versions: tuple[bool, bool] = (False, False),
     ) -> None:
         self.apps: list[tuple[str, dict[str, object], FakeApp]] = []
         self.creation_results = creation_results
         self.creation_errors = creation_errors
         self.save_errors = save_errors
+        self.observed_releases = observed_releases
+        self.observed_student_versions = observed_student_versions
 
     def create(self, dimension: str, **kwargs: object) -> FakeApp:
         app_index = len(self.apps)
@@ -73,6 +86,8 @@ class FakeFactory:
             self.creation_results[app_index],
             self.creation_errors[app_index],
             self.save_errors[app_index],
+            self.observed_releases[app_index],
+            self.observed_student_versions[app_index],
         )
         self.apps.append((dimension, kwargs, app))
         return app
@@ -156,6 +171,18 @@ def test_probe_creates_and_saves_2d_and_3d_projects(tmp_path: Path) -> None:
         tmp_path / "probe-3d.aedt",
     ]
     assert result.capabilities.include_dc_fields_3d is None
+    assert result.requested_release == AedtRelease.parse("2024.2")
+    assert result.requested_edition is AedtEdition.STUDENT
+    assert [artifact.observed_release for artifact in result.artifacts] == [
+        AedtRelease.parse("2025.1"),
+        AedtRelease.parse("2025.1"),
+    ]
+    assert [artifact.observed_edition for artifact in result.artifacts] == [
+        AedtEdition.COMMERCIAL,
+        AedtEdition.COMMERCIAL,
+    ]
+    assert result.capabilities.release == AedtRelease.parse("2025.1")
+    assert result.capabilities.edition is AedtEdition.COMMERCIAL
 
 
 def test_probe_reports_failed_primitive_creation(tmp_path: Path) -> None:

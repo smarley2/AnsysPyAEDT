@@ -24,6 +24,8 @@ class AedtProbeRequest:
 class ProbeArtifact:
     dimension: ModelDimension
     project_path: Path
+    observed_release: AedtRelease
+    observed_edition: AedtEdition
     created: bool
     saved: bool
     message: str
@@ -31,8 +33,8 @@ class ProbeArtifact:
 
 @dataclass(frozen=True, slots=True)
 class AedtProbeResult:
-    release: AedtRelease
-    edition: AedtEdition
+    requested_release: AedtRelease
+    requested_edition: AedtEdition
     pyaedt_version: str
     capabilities: CapabilitySnapshot
     artifacts: tuple[ProbeArtifact, ...]

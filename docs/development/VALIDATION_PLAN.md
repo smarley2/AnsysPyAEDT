@@ -63,7 +63,7 @@ Use this command pattern from the repository root for each row:
 
 Run `2024.2` once for each edition. Then run each latest-installed row with that edition's exact installed release value. Use graphical mode first so startup and edition behavior are observed rather than assumed.
 
-For every run, retain the generated `evidence.json` and Maxwell projects outside Git long enough for review. Confirm that the runner exits successfully when the spike succeeds, the evidence identifies the exact AEDT edition, release, and PyAEDT version, and both Maxwell 2D and Maxwell 3D artifact results are complete. Check evidence for personal paths, license information, credentials, or other sensitive machine details before sharing it.
+For every run, retain the generated `evidence.json` and Maxwell projects outside Git long enough for review. Confirm that the runner exits successfully when the spike succeeds, `requestedEnvironment` matches each artifact's `observedSession`, the exact PyAEDT version is present, and both Maxwell 2D and Maxwell 3D artifact results are complete. Stop without updating the matrix if an observed session differs from the requested release or edition. Check evidence for personal paths, license information, credentials, or other sensitive machine details before sharing it.
 
 ## Phase D: Manual inspection and matrix update
 
@@ -71,10 +71,10 @@ For each controlled run:
 
 1. Open both generated projects and confirm that the named rectangle or box exists.
 2. Confirm that each project saved, closed, and reopens without a repair warning.
-3. Inspect Maxwell 3D for the Include DC Fields capability and record only the observed result.
-4. Record reproducible Student restrictions in `discoveredLimits` without personal, license-server, or machine-path details.
+3. Inspect Maxwell 3D for the Include DC Fields capability and record only the observed result in `manualReview.includeDcFields3d`.
+4. Record reproducible Student restrictions in `manualReview.discoveredLimits` without personal, license-server, or machine-path details; add the reviewer GitHub handle and ISO-8601 UTC time to `manualReview.reviewedBy` and `manualReview.reviewedAt`. The generated fields start null or empty and `capabilities.reviewStatus` remains `unreviewed`.
 5. Review all evidence, then update only the matching row in the [AEDT compatibility matrix](../../compatibility/aedt-matrix.yml) to `passed` or `failed`.
-6. Copy reviewed capability booleans from evidence and add the exact PyAEDT version, ISO-8601 UTC review time, and reviewer GitHub handle.
+6. Copy manually reviewed capability values from evidence and add the exact PyAEDT version, ISO-8601 UTC review time, and reviewer GitHub handle.
 7. Delete local generated artifacts after review when they are no longer needed; never commit them.
 
 If a latest-installed row used a concrete release, replace `latest-installed` only in that matching row with the exact reviewed `YYYY.R` value.

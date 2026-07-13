@@ -8,11 +8,23 @@ from inductor_designer.application.ports.aedt_gateway import (
     AedtProbeResult,
     ProbeArtifact,
 )
-from inductor_designer.simulation.capabilities import CapabilitySnapshot, ModelDimension
+from inductor_designer.simulation.capabilities import (
+    AedtEdition,
+    AedtRelease,
+    CapabilityReviewStatus,
+    CapabilitySnapshot,
+    ModelDimension,
+)
+
+
+class DesktopSession(Protocol):
+    student_version: bool
 
 
 class MaxwellApp(Protocol):
     modeler: Any
+    aedt_version_id: str
+    desktop_class: DesktopSession
 
     def save_project(self, path: str) -> bool: ...
 
@@ -47,16 +59,18 @@ class PyaedtGateway:
             self._create_design(request, ModelDimension.TWO_D),
             self._create_design(request, ModelDimension.THREE_D),
         )
+        observed_3d = artifacts[1]
         return AedtProbeResult(
-            release=request.release,
-            edition=request.edition,
+            requested_release=request.release,
+            requested_edition=request.edition,
             pyaedt_version=self._factory.pyaedt_version,
             capabilities=CapabilitySnapshot(
-                release=request.release,
-                edition=request.edition,
+                release=observed_3d.observed_release,
+                edition=observed_3d.observed_edition,
                 include_dc_fields_3d=None,
                 discovered_limits=(),
                 evidence_source="trivial-design-spike",
+                review_status=CapabilityReviewStatus.UNREVIEWED,
             ),
             artifacts=artifacts,
         )
@@ -79,6 +93,12 @@ class PyaedtGateway:
             student_version=request.edition.value == "student",
         )
         try:
+            observed_release = AedtRelease.parse(app.aedt_version_id)
+            observed_edition = (
+                AedtEdition.STUDENT
+                if app.desktop_class.student_version
+                else AedtEdition.COMMERCIAL
+            )
             if dimension is ModelDimension.TWO_D:
                 created = bool(
                     app.modeler.create_rectangle(
@@ -99,6 +119,8 @@ class PyaedtGateway:
             return ProbeArtifact(
                 dimension=dimension,
                 project_path=project_path,
+                observed_release=observed_release,
+                observed_edition=observed_edition,
                 created=created,
                 saved=saved,
                 message=(
