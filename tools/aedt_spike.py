@@ -54,14 +54,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def _artifacts_are_complete(evidence: dict[str, object]) -> bool:
     artifacts = evidence["artifacts"]
-    if not isinstance(artifacts, list):
+    if not isinstance(artifacts, list) or len(artifacts) != 2:
         return False
-    return all(
-        isinstance(item, dict)
-        and item.get("created") is True
-        and item.get("saved") is True
-        for item in artifacts
-    )
+    observed_dimensions: set[object] = set()
+    for item in artifacts:
+        if (
+            not isinstance(item, dict)
+            or item.get("created") is not True
+            or item.get("saved") is not True
+        ):
+            return False
+        observed_dimensions.add(item.get("dimension"))
+    return observed_dimensions == {"2d", "3d"}
 
 
 def main(

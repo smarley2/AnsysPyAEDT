@@ -8,7 +8,11 @@ from inductor_designer.application.ports.aedt_gateway import (
     AedtProbeRequest,
     AedtProbeResult,
 )
-from inductor_designer.simulation.capabilities import AedtEdition, AedtRelease
+from inductor_designer.simulation.capabilities import (
+    AedtEdition,
+    AedtRelease,
+    ModelDimension,
+)
 from tests.fakes.aedt_gateway import RecordingAedtGateway
 from tools.aedt_spike import main, run_spike
 
@@ -27,6 +31,24 @@ class RecordingStatusGateway(RecordingAedtGateway):
             saved=self.saved,
         )
         return replace(result, artifacts=(first_artifact, result.artifacts[1]))
+
+
+class RecordingDimensionsGateway(RecordingAedtGateway):
+    def __init__(self, dimensions: tuple[ModelDimension, ...]) -> None:
+        super().__init__()
+        self.dimensions = dimensions
+
+    def run_probe(self, request: AedtProbeRequest) -> AedtProbeResult:
+        result = super().run_probe(request)
+        artifacts_by_dimension = {
+            artifact.dimension: artifact for artifact in result.artifacts
+        }
+        return replace(
+            result,
+            artifacts=tuple(
+                artifacts_by_dimension[dimension] for dimension in self.dimensions
+            ),
+        )
 
 
 def spike_args(tmp_path: Path) -> list[str]:
@@ -118,3 +140,23 @@ def test_main_returns_nonzero_for_incomplete_artifact(
     evidence = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
     assert evidence["artifacts"][0]["created"] is created
     assert evidence["artifacts"][0]["saved"] is saved
+
+
+@pytest.mark.parametrize(
+    "dimensions",
+    [
+        (),
+        (ModelDimension.TWO_D,),
+        (ModelDimension.TWO_D, ModelDimension.THREE_D, ModelDimension.THREE_D),
+    ],
+    ids=["empty", "missing-3d", "duplicate-3d"],
+)
+def test_main_returns_nonzero_without_exactly_one_artifact_per_dimension(
+    tmp_path: Path,
+    dimensions: tuple[ModelDimension, ...],
+) -> None:
+    gateway = RecordingDimensionsGateway(dimensions)
+
+    exit_code = main(spike_args(tmp_path), gateway=gateway)
+
+    assert exit_code == 1
