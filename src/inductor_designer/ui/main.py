@@ -28,4 +28,4 @@ def main() -> int:
     engine = create_engine()
     if not engine.rootObjects():
         return 1
-    return app.exec()
+    return int(app.exec())
