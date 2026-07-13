@@ -73,6 +73,10 @@ class FakeFactory:
         creation_errors: tuple[Exception | None, Exception | None] = (None, None),
         save_errors: tuple[Exception | None, Exception | None] = (None, None),
         observed_releases: tuple[str, str] = ("2025.1", "2025.1"),
+        desktop_install_dirs: tuple[str, str] = (
+            r"C:\Program Files\ANSYS Inc\v252\AnsysEM",
+            r"C:\Program Files\ANSYS Inc\v252\AnsysEM",
+        ),
         observed_student_versions: tuple[bool, bool] = (False, False),
     ) -> None:
         self.apps: list[tuple[str, dict[str, object], FakeApp]] = []
@@ -80,6 +84,7 @@ class FakeFactory:
         self.creation_errors = creation_errors
         self.save_errors = save_errors
         self.observed_releases = observed_releases
+        self.desktop_install_dirs = desktop_install_dirs
         self.observed_student_versions = observed_student_versions
 
     def create(self, dimension: str, **kwargs: object) -> FakeApp:
@@ -89,6 +94,7 @@ class FakeFactory:
             creation_error=self.creation_errors[app_index],
             save_error=self.save_errors[app_index],
             aedt_version_id=self.observed_releases[app_index],
+            desktop_install_dir=self.desktop_install_dirs[app_index],
             student_version=self.observed_student_versions[app_index],
         )
         self.apps.append((dimension, kwargs, app))
@@ -185,6 +191,35 @@ def test_probe_creates_and_saves_2d_and_3d_projects(tmp_path: Path) -> None:
     ]
     assert result.capabilities.release == AedtRelease.parse("2025.2")
     assert result.capabilities.edition is AedtEdition.COMMERCIAL
+
+
+@pytest.mark.parametrize(
+    "desktop_install_dir",
+    [
+        r"C:\Program Files\ANSYS Inc\v252\AnsysEM",
+        "/opt/ansys_inc/v252/AnsysEM",
+    ],
+)
+def test_probe_reads_release_from_cross_platform_install_directory(
+    tmp_path: Path,
+    desktop_install_dir: str,
+) -> None:
+    factory = FakeFactory(
+        desktop_install_dirs=(desktop_install_dir, desktop_install_dir),
+    )
+    request = AedtProbeRequest(
+        release=AedtRelease.parse("2025.2"),
+        edition=AedtEdition.COMMERCIAL,
+        non_graphical=True,
+        output_directory=tmp_path,
+    )
+
+    result = PyaedtGateway(factory).run_probe(request)
+
+    assert [artifact.observed_release for artifact in result.artifacts] == [
+        AedtRelease.parse("2025.2"),
+        AedtRelease.parse("2025.2"),
+    ]
 
 
 def test_probe_reports_failed_primitive_creation(tmp_path: Path) -> None:
