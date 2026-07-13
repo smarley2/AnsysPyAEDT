@@ -1324,7 +1324,7 @@ def qml_directory() -> Path:
     return Path(__file__).with_name("qml")
 
 
-def create_engine() -> "QQmlApplicationEngine":
+def create_engine() -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
 
@@ -1425,15 +1425,26 @@ Rectangle {
 
 - [ ] **Step 5: Ensure QML ships in wheels**
 
+> **Approved packaging decision (2026-07-13):** The existing
+> `[tool.hatch.build.targets.wheel] packages = ["src/inductor_designer"]` setting includes
+> the QML package data. Do not add a `force-include` mapping for the same QML directory;
+> current Hatchling versions reject the duplicate archive paths.
+
 Add to `pyproject.toml`:
 
 ```toml
 [project.scripts]
 inductor-designer = "inductor_designer.ui.main:main"
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/inductor_designer/ui/qml" = "inductor_designer/ui/qml"
 ```
+
+Build a wheel and verify its QML files and console entry point:
+
+```powershell
+python -m pip wheel . --no-deps --wheel-dir build/task-8-wheel
+python -c "import configparser, pathlib, zipfile; wheel=max(pathlib.Path('build/task-8-wheel').glob('*.whl'), key=lambda path: path.stat().st_mtime); archive=zipfile.ZipFile(wheel); names=set(archive.namelist()); required={'inductor_designer/ui/qml/Main.qml', 'inductor_designer/ui/qml/PreviewPane.qml'}; assert required <= names, sorted(required - names); entry_name=next(name for name in names if name.endswith('.dist-info/entry_points.txt')); parser=configparser.ConfigParser(); parser.read_string(archive.read(entry_name).decode()); assert parser['console_scripts']['inductor-designer'] == 'inductor_designer.ui.main:main'; archive.close(); print(f'verified {wheel.name}')"
+```
+
+Expected: the wheel builds successfully and the inspection prints its verified wheel name.
 
 - [ ] **Step 6: Verify the UI smoke test and launcher**
 
