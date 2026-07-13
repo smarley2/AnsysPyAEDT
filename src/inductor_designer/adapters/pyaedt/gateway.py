@@ -101,7 +101,11 @@ class PyaedtGateway:
                 project_path=project_path,
                 created=created,
                 saved=saved,
-                message="Trivial Maxwell design created and save requested.",
+                message=(
+                    "Trivial Maxwell design created and save requested."
+                    if created
+                    else "Trivial Maxwell primitive creation failed; project save requested."
+                ),
             )
         finally:
             app.release_desktop(close_projects=True, close_desktop=True)

@@ -170,6 +170,10 @@ def test_probe_reports_failed_primitive_creation(tmp_path: Path) -> None:
     result = PyaedtGateway(factory).run_probe(request)
 
     assert [artifact.created for artifact in result.artifacts] == [False, False]
+    assert [artifact.message for artifact in result.artifacts] == [
+        "Trivial Maxwell primitive creation failed; project save requested.",
+        "Trivial Maxwell primitive creation failed; project save requested.",
+    ]
 
 
 def test_probe_uses_falsy_injected_factory(tmp_path: Path) -> None:
