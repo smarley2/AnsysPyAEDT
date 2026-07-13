@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyaedt-inductor-designer"
+dynamic = ["version"]
+description = "Design inductors and generate Ansys Maxwell projects through PyAEDT."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { file = "LICENSE" }
+authors = [{ name = "PyAEDT Inductor Designer contributors" }]
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "packaging>=24.2,<26",
+  "platformdirs>=4.3,<5",
+]
+
+[project.optional-dependencies]
+ui = ["PySide6>=6.7,<7"]
+aedt = ["pyaedt>=0.27,<2"]
+dev = [
+  "mypy>=1.13,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<8",
+  "ruff>=0.9,<1",
+  "types-jsonschema>=4.23,<5",
+  "PyYAML>=6.0,<7",
+]
+
+[tool.hatch.version]
+path = "src/inductor_designer/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inductor_designer"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+  "aedt: requires a controlled licensed AEDT installation",
+  "ui: requires the PySide6 UI extra",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["inductor_designer"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["inductor_designer"]
+
+[[tool.mypy.overrides]]
+module = ["ansys.aedt.*", "PySide6.*"]
+ignore_missing_imports = true
