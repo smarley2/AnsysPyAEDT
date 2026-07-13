@@ -13,6 +13,8 @@ The project is in the approved design and planning phase. No production implemen
 Read the canonical design:
 
 - [`docs/superpowers/specs/2026-07-12-pyaedt-inductor-application-design.md`](docs/superpowers/specs/2026-07-12-pyaedt-inductor-application-design.md)
+- [`docs/superpowers/plans/README.md`](docs/superpowers/plans/README.md)
+- [`docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md`](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
 - [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md)
 - [`docs/development/coordination.md`](docs/development/coordination.md)
