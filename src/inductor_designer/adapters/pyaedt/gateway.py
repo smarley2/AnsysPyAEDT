@@ -39,7 +39,7 @@ class DefaultMaxwellAppFactory:
 
 class PyaedtGateway:
     def __init__(self, app_factory: MaxwellAppFactory | None = None) -> None:
-        self._factory = app_factory or DefaultMaxwellAppFactory()
+        self._factory = DefaultMaxwellAppFactory() if app_factory is None else app_factory
 
     def run_probe(self, request: AedtProbeRequest) -> AedtProbeResult:
         request.output_directory.mkdir(parents=True, exist_ok=True)
@@ -80,22 +80,26 @@ class PyaedtGateway:
         )
         try:
             if dimension is ModelDimension.TWO_D:
-                app.modeler.create_rectangle(
-                    origin=["0mm", "0mm", "0mm"],
-                    sizes=["10mm", "5mm"],
-                    name="CompatibilityProbeRectangle",
+                created = bool(
+                    app.modeler.create_rectangle(
+                        origin=["0mm", "0mm", "0mm"],
+                        sizes=["10mm", "5mm"],
+                        name="CompatibilityProbeRectangle",
+                    )
                 )
             else:
-                app.modeler.create_box(
-                    origin=["0mm", "0mm", "0mm"],
-                    sizes=["10mm", "5mm", "2mm"],
-                    name="CompatibilityProbeBox",
+                created = bool(
+                    app.modeler.create_box(
+                        origin=["0mm", "0mm", "0mm"],
+                        sizes=["10mm", "5mm", "2mm"],
+                        name="CompatibilityProbeBox",
+                    )
                 )
             saved = bool(app.save_project(str(project_path)))
             return ProbeArtifact(
                 dimension=dimension,
                 project_path=project_path,
-                created=True,
+                created=created,
                 saved=saved,
                 message="Trivial Maxwell design created and save requested.",
             )
