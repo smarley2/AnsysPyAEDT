@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projectId": "87da0e28-2018-4fa5-bba7-a24e9b8de6ce",
+  "metadata": {
+    "name": "Minimal compatibility project",
+    "description": "Foundation fixture without inductor-domain fields."
+  },
+  "target": {
+    "aedtRelease": "2024.2",
+    "edition": "commercial"
+  }
+}

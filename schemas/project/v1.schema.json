@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/smarley2/AnsysPyAEDT/schemas/project/v1.schema.json",
+  "title": "PyAEDT Inductor Designer project envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectId", "metadata", "target"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "projectId": { "type": "string", "format": "uuid" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "default": "" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aedtRelease", "edition"],
+      "properties": {
+        "aedtRelease": { "type": "string", "pattern": "^20[2-9][0-9]\\.[12]$" },
+        "edition": { "enum": ["commercial", "student"] }
+      }
+    }
+  }
+}
