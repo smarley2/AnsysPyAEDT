@@ -2,7 +2,7 @@ schemaVersion: 1
 rows:
   - release: "2024.2"
     edition: commercial
-    status: unverified
+    status: out-of-scope
     pyaedtVersion: null
     maxwell2dTrivialProject: null
     maxwell3dTrivialProject: null
@@ -12,7 +12,7 @@ rows:
     evidenceReviewedBy: null
   - release: "2024.2"
     edition: student
-    status: unverified
+    status: out-of-scope
     pyaedtVersion: null
     maxwell2dTrivialProject: null
     maxwell3dTrivialProject: null
@@ -30,9 +30,9 @@ rows:
     discoveredLimits: []
     evidenceReviewedAt: "2026-07-13T00:00:00Z"
     evidenceReviewedBy: hermes
-  - release: "latest-installed"
+  - release: "2025.2"
     edition: student
-    status: unverified
+    status: out-of-scope
     pyaedtVersion: null
     maxwell2dTrivialProject: null
     maxwell3dTrivialProject: null

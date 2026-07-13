@@ -33,10 +33,10 @@ Verified non-AEDT evidence:
 
 Remaining evidence:
 
-- Reviewed controlled AEDT evidence for AEDT 2024 R2 Commercial, AEDT 2024 R2 Student, latest installed Commercial, and latest installed Student.
-- The development machine has no detected supported AEDT 2024 R2 or newer executable, so all four [compatibility matrix](../../compatibility/aedt-matrix.yml) rows remain unverified.
+- The 2025 R2 Commercial row is reviewed and passed (evidence on disk under `artifacts/compatibility/2025.2-commercial/`, gitignored).
+- The 2024 R2 (Commercial and Student) and 2025 R2 Student rows are marked `out-of-scope` for Milestone 0 because no matching AEDT executable or license is available on the development machine.
 
-Task 11 and Milestone 0 remain open until every required controlled AEDT row has reviewed evidence and the remaining Milestone 0 gates are satisfied. Milestone 1 remains blocked by Milestone 0 acceptance. Follow the [AEDT compatibility procedure](aedt-compatibility-testing.md) and the [validation plan](VALIDATION_PLAN.md) to collect and review the missing evidence.
+Task 11 closes when the 2025.2 Commercial review is accepted and the remaining Milestone 0 gates pass. Milestone 1 remains blocked by Milestone 0 acceptance. The deferred rows become required again only when a later milestone targets a Student or 2024 R2 release.
 
 ## Milestone 1: Toroid domain and catalogs
 

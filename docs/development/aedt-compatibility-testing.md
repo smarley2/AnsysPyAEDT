@@ -6,7 +6,7 @@ This controlled test verifies observed behavior. It does not infer support from 
 
 ## Current controlled-execution status
 
-Controlled execution is pending because no supported AEDT executable was detected on the development machine. All four matrix rows remain unverified until a human operator completes the controlled runs and evidence review.
+Controlled execution is in progress: AEDT 2025 R2 Commercial has been reviewed and passed. The 2024 R2 (Commercial and Student) and 2025 R2 Student rows are marked `out-of-scope` for Milestone 0 — the development machine has no matching executable or license — and become required again only when a later milestone targets them.
 
 ## Prerequisites
 

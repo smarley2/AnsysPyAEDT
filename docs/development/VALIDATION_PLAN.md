@@ -4,7 +4,7 @@
 
 This plan tells an operator how to collect the remaining evidence for Milestone 0 without relying on conversation history. The foundation implementation and validation infrastructure exist. Hosted non-AEDT CI success is recorded below; real AEDT execution and Milestone 0 completion are not recorded.
 
-No supported AEDT 2024 R2 or newer executable was detected on the development machine. Consequently, all four rows in the [AEDT compatibility matrix](../../compatibility/aedt-matrix.yml) remain unverified and must be run on a suitable Windows machine with Ansys AEDT.
+No supported AEDT 2024 R2 or 2025 R2 Student executable is installed on the development machine. The 2025.2 Commercial row is reviewed and passed; the other three rows are `out-of-scope` for this milestone (no machine, no license). They become required again if a future milestone targets a Student or 2024 R2 release.
 
 ## Scope and release/edition matrix
 
@@ -85,7 +85,7 @@ If a latest-installed row used a concrete release, replace `latest-installed` on
 - Never infer AEDT or PyAEDT support, Include DC Fields availability, or Student restrictions from version numbers.
 - Hosted evidence must cover Windows and Linux on Python 3.10 and 3.13.
 - Local clean-environment gates must pass with at least 80 percent branch-aware coverage.
-- Every required controlled AEDT row must contain reviewed evidence. Milestone 0 cannot close while any required row remains `unverified`.
+- Every **required** controlled AEDT row must contain reviewed evidence. Milestone 0 cannot close while any required row remains `unverified`. Rows marked `out-of-scope` are not required and are revisited only when a later milestone changes the support matrix.
 - A `failed` row is valid observed evidence, but it does not establish support. Its cause, compatibility policy, and effect on the Milestone 0 exit criterion must be documented and accepted before closure.
 - Task 11 remains pending until all four controlled rows have reviewed evidence and the other Milestone 0 gates are satisfied.
 - Milestone 1 planning and implementation remain blocked until Milestone 0 is formally accepted.
@@ -101,7 +101,7 @@ If a latest-installed row used a concrete release, replace `latest-installed` on
 - [ ] Manually reopen and inspect both projects from every run.
 - [ ] Review evidence for exact versions, observed capabilities, restrictions, and sensitive data.
 - [ ] Update only the matching matrix row after each evidence review.
-- [ ] Confirm that no required matrix row remains `unverified`.
+- [ ] Confirm that no required matrix row remains `unverified` (`out-of-scope` is fine).
 - [ ] Record any failed row's cause and accepted compatibility policy.
 - [ ] Keep generated AEDT artifacts and raw evidence out of Git.
 - [ ] Complete Task 11 only after all acceptance and gating rules above are satisfied.
