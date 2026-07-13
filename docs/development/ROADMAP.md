@@ -9,6 +9,35 @@
 
 Exit criterion: a documented spike creates and saves a trivial Maxwell 2D and 3D design without domain-to-PyAEDT coupling.
 
+### Current state
+
+The Milestone 0 implementation is present, but controlled AEDT validation and formal milestone acceptance are pending.
+
+Implemented foundation deliverables:
+
+- Python packaging and quality gates, including dependency-boundary enforcement.
+- A versioned project-envelope schema and repository adapter.
+- Solver-independent AEDT capability policy.
+- The AEDT gateway contract, recording fake, and lazy PyAEDT adapter.
+- A machine-readable compatibility-spike CLI.
+- A minimal PySide6/QML Guided Studio shell with a Qt Quick 3D preview smoke path.
+- A hosted non-AEDT CI definition.
+- A controlled AEDT runner, compatibility procedure, and four-row release/edition matrix.
+
+Verification already performed locally:
+
+- Non-AEDT quality, architecture, unit, and contract gates have been exercised locally.
+- Package installation and UI smoke checks have been exercised locally.
+- Fresh release decisions must use the reproducible gates in the [validation plan](VALIDATION_PLAN.md), rather than treating this status summary as current test evidence.
+
+Remaining evidence:
+
+- Reviewed hosted CI matrix results for Windows and Linux on Python 3.10 and 3.13.
+- Reviewed controlled AEDT evidence for AEDT 2024 R2 Commercial, AEDT 2024 R2 Student, latest installed Commercial, and latest installed Student.
+- The development machine has no detected supported AEDT 2024 R2 or newer executable, so all four [compatibility matrix](../../compatibility/aedt-matrix.yml) rows remain unverified.
+
+Task 11 and Milestone 0 remain open until every required controlled AEDT row has reviewed evidence and the remaining Milestone 0 gates are satisfied. Milestone 1 remains blocked by Milestone 0 acceptance. Follow the [AEDT compatibility procedure](aedt-compatibility-testing.md) and the [validation plan](VALIDATION_PLAN.md) to collect and review the missing evidence.
+
 ## Milestone 1: Toroid domain and catalogs
 
 - Implement units, project schemas, commercial core records, conductor records, winding sectors, and validation.

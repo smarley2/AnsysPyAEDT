@@ -8,10 +8,13 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-The project is implementing Milestone 0: Foundation and compatibility spike.
+The Milestone 0 foundation implementation exists, and controlled AEDT validation is pending. The four required release/edition rows remain unverified, so Milestone 0 is not complete and Milestone 1 remains blocked.
 
 - [Active implementation plan](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
 - [Implementation plan index](docs/superpowers/plans/README.md)
+- [AEDT compatibility procedure](docs/development/aedt-compatibility-testing.md)
+- [AEDT compatibility matrix](compatibility/aedt-matrix.yml)
+- [Validation plan](docs/development/VALIDATION_PLAN.md)
 
 Read the canonical design:
 

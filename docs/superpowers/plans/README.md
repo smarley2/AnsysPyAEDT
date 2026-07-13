@@ -4,6 +4,8 @@ This directory is the execution index for the approved [PyAEDT Inductor Designer
 
 Implementation plans are deliberately written one milestone at a time. Each milestone must finish with working, independently testable software and verified interfaces before the next plan freezes assumptions that depend on it.
 
+Milestone 0 status: **Implementation complete; controlled AEDT validation pending**. This status does not satisfy the existing exit evidence. Milestone 1 remains blocked until Milestone 0 is accepted; see the [validation plan](../../development/VALIDATION_PLAN.md).
+
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Approved product design | Non-AEDT CI passes; controlled runs create and save trivial Maxwell 2D and 3D projects; capability results are recorded for the release matrix |
