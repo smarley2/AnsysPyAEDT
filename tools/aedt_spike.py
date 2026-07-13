@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import argparse
+import json
+from collections.abc import Sequence
+from pathlib import Path
+
+from inductor_designer.adapters.pyaedt.gateway import PyaedtGateway
+from inductor_designer.application.ports.aedt_gateway import AedtGateway, AedtProbeRequest
+from inductor_designer.simulation.capabilities import AedtEdition, AedtRelease
+
+
+def run_spike(
+    gateway: AedtGateway,
+    request: AedtProbeRequest,
+    evidence_path: Path,
+) -> dict[str, object]:
+    result = gateway.run_probe(request)
+    evidence: dict[str, object] = {
+        "schemaVersion": 1,
+        "aedtRelease": str(result.release),
+        "edition": result.edition.value,
+        "pyaedtVersion": result.pyaedt_version,
+        "capabilities": {
+            "includeDcFields3d": result.capabilities.include_dc_fields_3d,
+            "discoveredLimits": list(result.capabilities.discovered_limits),
+            "evidenceSource": result.capabilities.evidence_source,
+        },
+        "artifacts": [
+            {
+                "dimension": artifact.dimension.value,
+                "projectPath": artifact.project_path.name,
+                "created": artifact.created,
+                "saved": artifact.saved,
+                "message": artifact.message,
+            }
+            for artifact in result.artifacts
+        ],
+    }
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    return evidence
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the controlled AEDT compatibility spike.")
+    parser.add_argument("--release", required=True, help="AEDT release such as 2024.2")
+    parser.add_argument("--edition", required=True, choices=["commercial", "student"])
+    parser.add_argument("--output-directory", required=True, type=Path)
+    parser.add_argument("--evidence", required=True, type=Path)
+    parser.add_argument("--graphical", action="store_true")
+    return parser.parse_args(argv)
+
+
+def _artifacts_are_complete(evidence: dict[str, object]) -> bool:
+    artifacts = evidence["artifacts"]
+    if not isinstance(artifacts, list):
+        return False
+    return all(
+        isinstance(item, dict)
+        and item.get("created") is True
+        and item.get("saved") is True
+        for item in artifacts
+    )
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    gateway: AedtGateway | None = None,
+) -> int:
+    args = parse_args(argv)
+    request = AedtProbeRequest(
+        release=AedtRelease.parse(args.release),
+        edition=AedtEdition(args.edition),
+        non_graphical=not args.graphical,
+        output_directory=args.output_directory,
+    )
+    selected_gateway = PyaedtGateway() if gateway is None else gateway
+    evidence = run_spike(selected_gateway, request, args.evidence)
+    return 0 if _artifacts_are_complete(evidence) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

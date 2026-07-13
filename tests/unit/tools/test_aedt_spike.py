@@ -1,0 +1,120 @@
+import json
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from inductor_designer.application.ports.aedt_gateway import (
+    AedtProbeRequest,
+    AedtProbeResult,
+)
+from inductor_designer.simulation.capabilities import AedtEdition, AedtRelease
+from tests.fakes.aedt_gateway import RecordingAedtGateway
+from tools.aedt_spike import main, run_spike
+
+
+class RecordingStatusGateway(RecordingAedtGateway):
+    def __init__(self, *, created: bool, saved: bool) -> None:
+        super().__init__()
+        self.created = created
+        self.saved = saved
+
+    def run_probe(self, request: AedtProbeRequest) -> AedtProbeResult:
+        result = super().run_probe(request)
+        first_artifact = replace(
+            result.artifacts[0],
+            created=self.created,
+            saved=self.saved,
+        )
+        return replace(result, artifacts=(first_artifact, result.artifacts[1]))
+
+
+def spike_args(tmp_path: Path) -> list[str]:
+    return [
+        "--release",
+        "2024.2",
+        "--edition",
+        "student",
+        "--output-directory",
+        str(tmp_path / "projects"),
+        "--evidence",
+        str(tmp_path / "evidence.json"),
+    ]
+
+
+def test_run_spike_writes_reviewable_evidence(tmp_path: Path) -> None:
+    evidence_path = tmp_path / "evidence.json"
+    request = AedtProbeRequest(
+        release=AedtRelease.parse("2024.2"),
+        edition=AedtEdition.COMMERCIAL,
+        non_graphical=True,
+        output_directory=tmp_path / "projects",
+    )
+
+    evidence = run_spike(RecordingAedtGateway(), request, evidence_path)
+
+    expected = {
+        "schemaVersion": 1,
+        "aedtRelease": "2024.2",
+        "edition": "commercial",
+        "pyaedtVersion": "recording-fake",
+        "capabilities": {
+            "includeDcFields3d": None,
+            "discoveredLimits": [],
+            "evidenceSource": "recording-fake",
+        },
+        "artifacts": [
+            {
+                "dimension": "2d",
+                "projectPath": "probe-2d.aedt",
+                "created": True,
+                "saved": True,
+                "message": "recorded without launching AEDT",
+            },
+            {
+                "dimension": "3d",
+                "projectPath": "probe-3d.aedt",
+                "created": True,
+                "saved": True,
+                "message": "recorded without launching AEDT",
+            },
+        ],
+    }
+    assert evidence == expected
+    assert evidence_path.read_text(encoding="utf-8") == json.dumps(expected, indent=2) + "\n"
+
+
+def test_main_returns_zero_for_created_and_saved_artifacts(tmp_path: Path) -> None:
+    gateway = RecordingAedtGateway()
+
+    exit_code = main([*spike_args(tmp_path), "--graphical"], gateway=gateway)
+
+    assert exit_code == 0
+    assert gateway.requests == [
+        AedtProbeRequest(
+            release=AedtRelease.parse("2024.2"),
+            edition=AedtEdition.STUDENT,
+            non_graphical=False,
+            output_directory=tmp_path / "projects",
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("created", "saved"),
+    [(False, True), (True, False)],
+    ids=["not-created", "not-saved"],
+)
+def test_main_returns_nonzero_for_incomplete_artifact(
+    tmp_path: Path,
+    created: bool,
+    saved: bool,
+) -> None:
+    gateway = RecordingStatusGateway(created=created, saved=saved)
+
+    exit_code = main(spike_args(tmp_path), gateway=gateway)
+
+    assert exit_code == 1
+    evidence = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
+    assert evidence["artifacts"][0]["created"] is created
+    assert evidence["artifacts"][0]["saved"] is saved
