@@ -8,7 +8,10 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-The project is in the approved design and planning phase. No production implementation has started.
+The project is implementing Milestone 0: Foundation and compatibility spike.
+
+- [Active implementation plan](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
+- [Implementation plan index](docs/superpowers/plans/README.md)
 
 Read the canonical design:
 
