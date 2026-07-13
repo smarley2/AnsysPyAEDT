@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from importlib.metadata import version
 from typing import Any, Protocol, cast
 
@@ -15,6 +16,16 @@ from inductor_designer.simulation.capabilities import (
     CapabilitySnapshot,
     ModelDimension,
 )
+
+
+def _release_from_install_dir(install_dir: str) -> AedtRelease:
+    match = re.search(r"(?:^|[\\/])v(?P<token>\d{3})(?:[\\/]|$)", install_dir)
+    if match is None:
+        raise ValueError(
+            f"Could not determine AEDT release from installation directory: {install_dir!r}"
+        )
+    token = match.group("token")
+    return AedtRelease(year=2000 + int(token[:2]), release=int(token[2]))
 
 
 class DesktopSession(Protocol):
@@ -94,12 +105,7 @@ class PyaedtGateway:
             student_version=request.edition.value == "student",
         )
         try:
-            from pathlib import Path as _Path
-
-            install_token = _Path(str(app.desktop_install_dir)).parent.name.lstrip("v")
-            observed_release = AedtRelease(
-                year=2000 + int(install_token[:2]), release=int(install_token[2])
-            )
+            observed_release = _release_from_install_dir(str(app.desktop_install_dir))
             observed_edition = (
                 AedtEdition.STUDENT
                 if app.desktop_class.student_version
