@@ -24,15 +24,15 @@ Implemented foundation deliverables:
 - A hosted non-AEDT CI definition.
 - A controlled AEDT runner, compatibility procedure, and four-row release/edition matrix.
 
-Verification already performed locally:
+Verified non-AEDT evidence:
 
+- [Hosted CI run 29234286379](https://github.com/smarley2/AnsysPyAEDT/actions/runs/29234286379) passed for commit `1f24ff3` with the quality job and Windows and Ubuntu test jobs on Python 3.10 and 3.13. The quality job covered Ruff, mypy, and architecture checks; every test job installed UI dependencies and ran the non-AEDT coverage suite.
 - Non-AEDT quality, architecture, unit, and contract gates have been exercised locally.
 - Package installation and UI smoke checks have been exercised locally.
 - Fresh release decisions must use the reproducible gates in the [validation plan](VALIDATION_PLAN.md), rather than treating this status summary as current test evidence.
 
 Remaining evidence:
 
-- Reviewed hosted CI matrix results for Windows and Linux on Python 3.10 and 3.13.
 - Reviewed controlled AEDT evidence for AEDT 2024 R2 Commercial, AEDT 2024 R2 Student, latest installed Commercial, and latest installed Student.
 - The development machine has no detected supported AEDT 2024 R2 or newer executable, so all four [compatibility matrix](../../compatibility/aedt-matrix.yml) rows remain unverified.
 

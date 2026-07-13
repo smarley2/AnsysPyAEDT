@@ -2,7 +2,7 @@
 
 ## Purpose and current status
 
-This plan tells an operator how to collect the remaining evidence for Milestone 0 without relying on conversation history. The foundation implementation and validation infrastructure exist, but this document does not record hosted CI success, real AEDT execution, or Milestone 0 completion.
+This plan tells an operator how to collect the remaining evidence for Milestone 0 without relying on conversation history. The foundation implementation and validation infrastructure exist. Hosted non-AEDT CI success is recorded below; real AEDT execution and Milestone 0 completion are not recorded.
 
 No supported AEDT 2024 R2 or newer executable was detected on the development machine. Consequently, all four rows in the [AEDT compatibility matrix](../../compatibility/aedt-matrix.yml) remain unverified and must be run on a suitable Windows machine with Ansys AEDT.
 
@@ -21,12 +21,13 @@ The latest installed Commercial and Student releases may differ. Record the exac
 
 ## Phase A: Hosted non-AEDT CI
 
-Run and review the [hosted CI workflow](../../.github/workflows/ci.yml) for the complete non-AEDT matrix:
+Recorded evidence:
 
-- Windows with Python 3.10 and 3.13.
-- Linux with Python 3.10 and 3.13.
+- [GitHub Actions run 29234286379](https://github.com/smarley2/AnsysPyAEDT/actions/runs/29234286379) passed for commit `1f24ff3`.
+- The successful jobs were quality, Windows Python 3.10, Windows Python 3.13, Ubuntu Python 3.10, and Ubuntu Python 3.13.
+- The quality job ran Ruff, mypy, and architecture checks. Each test job installed UI dependencies and ran the non-AEDT coverage suite defined by the [hosted CI workflow](../../.github/workflows/ci.yml).
 
-Confirm that the quality job installs the development dependencies and passes Ruff, mypy, and the architecture checker. Confirm that each of the four test-matrix jobs installs the UI dependencies and passes the non-AEDT tests. Preserve links to the reviewed workflow run for the Task 11 handoff. Do not describe the hosted matrix as passing until all jobs have completed successfully.
+This run satisfies the hosted non-AEDT CI evidence requirement for Task 11. It does not satisfy the local clean-environment gates or any controlled AEDT requirement.
 
 ## Phase B: Local clean-environment release gates
 
@@ -93,7 +94,7 @@ If a latest-installed row used a concrete release, replace `latest-installed` on
 ## Operator checklist
 
 - [ ] Use a clean checkout and fresh virtual environment.
-- [ ] Complete and review the hosted quality job and all four non-AEDT test-matrix jobs.
+- [x] Complete and review the hosted quality job and all four non-AEDT test-matrix jobs.
 - [ ] Run the Phase B release and hygiene commands exactly as shown.
 - [ ] Prepare a supported licensed Windows AEDT environment for each required release and edition.
 - [ ] Run the graphical controlled spike for all four rows.
