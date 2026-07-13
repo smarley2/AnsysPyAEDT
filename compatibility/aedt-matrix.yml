@@ -1,0 +1,42 @@
+schemaVersion: 1
+rows:
+  - release: "2024.2"
+    edition: commercial
+    status: unverified
+    pyaedtVersion: null
+    maxwell2dTrivialProject: null
+    maxwell3dTrivialProject: null
+    includeDcFields3d: null
+    discoveredLimits: []
+    evidenceReviewedAt: null
+    evidenceReviewedBy: null
+  - release: "2024.2"
+    edition: student
+    status: unverified
+    pyaedtVersion: null
+    maxwell2dTrivialProject: null
+    maxwell3dTrivialProject: null
+    includeDcFields3d: null
+    discoveredLimits: []
+    evidenceReviewedAt: null
+    evidenceReviewedBy: null
+  - release: "latest-installed"
+    edition: commercial
+    status: unverified
+    pyaedtVersion: null
+    maxwell2dTrivialProject: null
+    maxwell3dTrivialProject: null
+    includeDcFields3d: null
+    discoveredLimits: []
+    evidenceReviewedAt: null
+    evidenceReviewedBy: null
+  - release: "latest-installed"
+    edition: student
+    status: unverified
+    pyaedtVersion: null
+    maxwell2dTrivialProject: null
+    maxwell3dTrivialProject: null
+    includeDcFields3d: null
+    discoveredLimits: []
+    evidenceReviewedAt: null
+    evidenceReviewedBy: null

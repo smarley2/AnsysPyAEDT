@@ -11,3 +11,9 @@ dist/
 *.aedt.lock
 *.aedb/
 *.pyaedt/
+
+# Controlled AEDT compatibility artifacts
+artifacts/
+*.aedt
+*.aedt.lock
+*.aedtz
