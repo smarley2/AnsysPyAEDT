@@ -122,9 +122,6 @@ dev = [
   "PyYAML>=6.0,<7",
 ]
 
-[project.scripts]
-inductor-designer = "inductor_designer.ui.main:main"
-
 [tool.hatch.version]
 path = "src/inductor_designer/__about__.py"
 
@@ -1431,6 +1428,9 @@ Rectangle {
 Add to `pyproject.toml`:
 
 ```toml
+[project.scripts]
+inductor-designer = "inductor_designer.ui.main:main"
+
 [tool.hatch.build.targets.wheel.force-include]
 "src/inductor_designer/ui/qml" = "inductor_designer/ui/qml"
 ```
