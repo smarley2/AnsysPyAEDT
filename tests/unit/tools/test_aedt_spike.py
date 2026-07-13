@@ -106,7 +106,7 @@ def test_run_spike_writes_reviewable_evidence(tmp_path: Path) -> None:
         "artifacts": [
             {
                 "dimension": "2d",
-                "projectFile": "probe-2d.aedt",
+                "projectFile": "probe2d.aedt",
                 "observedSession": {
                     "aedtRelease": "2024.2",
                     "edition": "commercial",
@@ -117,7 +117,7 @@ def test_run_spike_writes_reviewable_evidence(tmp_path: Path) -> None:
             },
             {
                 "dimension": "3d",
-                "projectFile": "probe-3d.aedt",
+                "projectFile": "probe3d.aedt",
                 "observedSession": {
                     "aedtRelease": "2024.2",
                     "edition": "commercial",

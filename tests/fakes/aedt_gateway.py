@@ -21,7 +21,7 @@ class RecordingAedtGateway:
         artifacts = tuple(
             ProbeArtifact(
                 dimension=dimension,
-                project_path=Path(request.output_directory) / f"probe-{dimension.value}.aedt",
+                project_path=Path(request.output_directory) / f"probe{dimension.value}.aedt",
                 observed_release=request.release,
                 observed_edition=request.edition,
                 created=True,

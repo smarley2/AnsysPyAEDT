@@ -24,6 +24,7 @@ class DesktopSession(Protocol):
 class MaxwellApp(Protocol):
     modeler: Any
     aedt_version_id: str
+    desktop_install_dir: str
     desktop_class: DesktopSession
 
     def save_project(self, path: str) -> bool: ...
@@ -80,7 +81,7 @@ class PyaedtGateway:
         request: AedtProbeRequest,
         dimension: ModelDimension,
     ) -> ProbeArtifact:
-        project_path = request.output_directory / f"probe-{dimension.value}.aedt"
+        project_path = request.output_directory / f"probe{dimension.value}.aedt"
         app = self._factory.create(
             dimension.value,
             project=str(project_path),
@@ -93,7 +94,12 @@ class PyaedtGateway:
             student_version=request.edition.value == "student",
         )
         try:
-            observed_release = AedtRelease.parse(app.aedt_version_id)
+            from pathlib import Path as _Path
+
+            install_token = _Path(str(app.desktop_install_dir)).parent.name.lstrip("v")
+            observed_release = AedtRelease(
+                year=2000 + int(install_token[:2]), release=int(install_token[2])
+            )
             observed_edition = (
                 AedtEdition.STUDENT
                 if app.desktop_class.student_version

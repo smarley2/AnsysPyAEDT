@@ -42,10 +42,12 @@ class FakeApp:
         creation_error: Exception | None = None,
         save_error: Exception | None = None,
         aedt_version_id: str = "2025.1",
+        desktop_install_dir: str = r"C:\Program Files\ANSYS Inc\v252\AnsysEM",
         student_version: bool = False,
     ) -> None:
         self.modeler = FakeModeler(creation_result, creation_error)
         self.aedt_version_id = aedt_version_id
+        self.desktop_install_dir = desktop_install_dir
         self.desktop_class = FakeDesktop(student_version)
         self.saved_paths: list[str] = []
         self.released = False
@@ -83,11 +85,11 @@ class FakeFactory:
     def create(self, dimension: str, **kwargs: object) -> FakeApp:
         app_index = len(self.apps)
         app = FakeApp(
-            self.creation_results[app_index],
-            self.creation_errors[app_index],
-            self.save_errors[app_index],
-            self.observed_releases[app_index],
-            self.observed_student_versions[app_index],
+            creation_result=self.creation_results[app_index],
+            creation_error=self.creation_errors[app_index],
+            save_error=self.save_errors[app_index],
+            aedt_version_id=self.observed_releases[app_index],
+            student_version=self.observed_student_versions[app_index],
         )
         self.apps.append((dimension, kwargs, app))
         return app
@@ -114,7 +116,7 @@ def test_probe_creates_and_saves_2d_and_3d_projects(tmp_path: Path) -> None:
         (
             "2d",
             {
-                "project": str(tmp_path / "probe-2d.aedt"),
+                "project": str(tmp_path / "probe2d.aedt"),
                 "design": "CompatibilityProbe2D",
                 "solution_type": "Magnetostatic",
                 "version": "2024.2",
@@ -127,7 +129,7 @@ def test_probe_creates_and_saves_2d_and_3d_projects(tmp_path: Path) -> None:
         (
             "3d",
             {
-                "project": str(tmp_path / "probe-3d.aedt"),
+                "project": str(tmp_path / "probe3d.aedt"),
                 "design": "CompatibilityProbe3D",
                 "solution_type": "Magnetostatic",
                 "version": "2024.2",
@@ -161,27 +163,27 @@ def test_probe_creates_and_saves_2d_and_3d_projects(tmp_path: Path) -> None:
         )
     ]
     assert [app.saved_paths for _, _, app in factory.apps] == [
-        [str(tmp_path / "probe-2d.aedt")],
-        [str(tmp_path / "probe-3d.aedt")],
+        [str(tmp_path / "probe2d.aedt")],
+        [str(tmp_path / "probe3d.aedt")],
     ]
     assert all(app.released for _, _, app in factory.apps)
     assert all(artifact.saved for artifact in result.artifacts)
     assert [artifact.project_path for artifact in result.artifacts] == [
-        tmp_path / "probe-2d.aedt",
-        tmp_path / "probe-3d.aedt",
+        tmp_path / "probe2d.aedt",
+        tmp_path / "probe3d.aedt",
     ]
     assert result.capabilities.include_dc_fields_3d is None
     assert result.requested_release == AedtRelease.parse("2024.2")
     assert result.requested_edition is AedtEdition.STUDENT
     assert [artifact.observed_release for artifact in result.artifacts] == [
-        AedtRelease.parse("2025.1"),
-        AedtRelease.parse("2025.1"),
+        AedtRelease.parse("2025.2"),
+        AedtRelease.parse("2025.2"),
     ]
     assert [artifact.observed_edition for artifact in result.artifacts] == [
         AedtEdition.COMMERCIAL,
         AedtEdition.COMMERCIAL,
     ]
-    assert result.capabilities.release == AedtRelease.parse("2025.1")
+    assert result.capabilities.release == AedtRelease.parse("2025.2")
     assert result.capabilities.edition is AedtEdition.COMMERCIAL
 
 
@@ -251,4 +253,4 @@ def test_probe_releases_desktop_when_save_raises(tmp_path: Path) -> None:
 
     assert len(factory.apps) == 1
     assert factory.apps[0][2].released
-    assert factory.apps[0][2].saved_paths == [str(tmp_path / "probe-2d.aedt")]
+    assert factory.apps[0][2].saved_paths == [str(tmp_path / "probe2d.aedt")]
