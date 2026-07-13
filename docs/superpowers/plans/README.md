@@ -4,7 +4,7 @@ This directory is the execution index for the approved [PyAEDT Inductor Designer
 
 Implementation plans are deliberately written one milestone at a time. Each milestone must finish with working, independently testable software and verified interfaces before the next plan freezes assumptions that depend on it.
 
-Milestone 0 status: **Implementation complete; controlled AEDT validation pending**. This status does not satisfy the existing exit evidence. Milestone 1 remains blocked until Milestone 0 is accepted; see the [validation plan](../../development/VALIDATION_PLAN.md).
+Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commercial release available on the development machine. The 2024 R2 and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them; see the [validation plan](../../development/VALIDATION_PLAN.md). Milestone 1 is unblocked and its detailed plan may now be written.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |

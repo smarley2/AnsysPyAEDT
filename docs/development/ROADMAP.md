@@ -11,7 +11,7 @@ Exit criterion: a documented spike creates and saves a trivial Maxwell 2D and 3D
 
 ### Current state
 
-The Milestone 0 implementation is present, but controlled AEDT validation and formal milestone acceptance are pending.
+Milestone 0 is **accepted** as of 2026-07-13. Acceptance scope is deliberately limited to the AEDT 2025 R2 Commercial release available on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` and become required again only when a later milestone targets those releases. Milestone 1 is unblocked.
 
 Implemented foundation deliverables:
 
@@ -36,7 +36,7 @@ Remaining evidence:
 - The 2025 R2 Commercial row is reviewed and passed (evidence on disk under `artifacts/compatibility/2025.2-commercial/`, gitignored).
 - The 2024 R2 (Commercial and Student) and 2025 R2 Student rows are marked `out-of-scope` for Milestone 0 because no matching AEDT executable or license is available on the development machine.
 
-Task 11 closes when the 2025.2 Commercial review is accepted and the remaining Milestone 0 gates pass. Milestone 1 remains blocked by Milestone 0 acceptance. The deferred rows become required again only when a later milestone targets a Student or 2024 R2 release.
+Task 11 is closed: the 2025.2 Commercial review is accepted and the remaining Milestone 0 gates pass. Milestone 1 is unblocked. The deferred rows become required again only when a later milestone targets a Student or 2024 R2 release.
 
 ## Milestone 1: Toroid domain and catalogs
 

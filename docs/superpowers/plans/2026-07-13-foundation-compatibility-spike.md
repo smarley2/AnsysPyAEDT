@@ -1846,7 +1846,7 @@ The handoff message must state the exact commit hash, changed public interfaces,
 - The recording gateway and injected PyAEDT adapter pass the same contract without AEDT.
 - The real spike creates, saves, closes, and reopens trivial Maxwell 2D and 3D projects.
 - The Qt Quick 3D Guided Studio shell loads in an offscreen smoke test.
-- Commercial and Student results are reviewed for AEDT 2024 R2 and the latest installed release.
+- The latest installed release (AEDT 2025 R2 Commercial) is reviewed and passed. Accepted 2026-07-13. The 2024 R2 (Commercial and Student) and 2025 R2 Student rows are accepted as `out-of-scope` for Milestone 0 because no matching AEDT executable or license exists on the development machine; they become required again when a later milestone targets those releases.
 - Generated AEDT projects and raw local evidence remain outside Git.
 
 ## Authoritative implementation references

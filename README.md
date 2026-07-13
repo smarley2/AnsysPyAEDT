@@ -8,7 +8,7 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-The Milestone 0 foundation implementation exists, and controlled AEDT validation is pending. The four required release/edition rows remain unverified, so Milestone 0 is not complete and Milestone 1 remains blocked.
+Milestone 0 is accepted as of 2026-07-13. Acceptance is scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 is unblocked.
 
 - [Active implementation plan](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
 - [Implementation plan index](docs/superpowers/plans/README.md)
