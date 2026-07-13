@@ -20,16 +20,16 @@ rows:
     discoveredLimits: []
     evidenceReviewedAt: null
     evidenceReviewedBy: null
-  - release: "latest-installed"
+  - release: "2025.2"
     edition: commercial
-    status: unverified
-    pyaedtVersion: null
-    maxwell2dTrivialProject: null
-    maxwell3dTrivialProject: null
+    status: passed
+    pyaedtVersion: "1.2.0"
+    maxwell2dTrivialProject: probe2d.aedt
+    maxwell3dTrivialProject: probe3d.aedt
     includeDcFields3d: null
     discoveredLimits: []
-    evidenceReviewedAt: null
-    evidenceReviewedBy: null
+    evidenceReviewedAt: "2026-07-13T00:00:00Z"
+    evidenceReviewedBy: hermes
   - release: "latest-installed"
     edition: student
     status: unverified
