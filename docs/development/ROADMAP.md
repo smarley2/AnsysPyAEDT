@@ -48,6 +48,13 @@ Exit criterion: a versioned project selects a commercial core, defines multiple 
 
 ### Current state
 
+Milestone 1 is **accepted** as of 2026-07-14. The exit criterion is proven by
+`tests/integration/test_project_round_trip.py`; the ten powder-core records are
+reviewed against the 2025 Magnetics Powder Cores Catalog. The five ferrite
+records remain `draft` until the ferrite catalog review; insulated wire
+diameters are populated and reviewed as part of Milestone 2, which consumes
+them.
+
 Implemented Milestone 1 deliverables:
 
 - The domain model, including units and AEDT target types.
@@ -61,7 +68,7 @@ Implemented Milestone 1 deliverables:
 - Snapshot comparison and adoption services for catalog revisions.
 - The Milestone 1 exit-criterion integration test.
 
-Remaining work: catalog numeric values remain `draft` pending human review against the cited Magnetics sources; insulated wire diameters are intentionally null until Milestone 2 consumes them.
+Remaining work: the five ferrite-toroid records remain `draft` pending review against the Magnetics ferrite catalog; insulated wire diameters are populated during Milestone 2, which consumes them.
 
 ## Milestone 2: Geometry and live preview
 
