@@ -34,9 +34,30 @@ jobs:
       - name: Install import dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4 pyyaml jsonschema
 
-      - name: Scrape and validate KDM catalog
+      - name: Scrape KDM catalog
+        id: scrape
+        continue-on-error: true
+        shell: bash
         run: |
-          python tools/scrape_kdm_powder_toroids.py
+          set -o pipefail
+          python tools/scrape_kdm_powder_toroids.py 2>&1 | tee /tmp/kdm-import.log
+
+      - name: Upload import diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kdm-import-diagnostics
+          path: |
+            /tmp/kdm-import.log
+            artifacts/kdm-scrape-summary.json
+          if-no-files-found: warn
+
+      - name: Fail when scraping failed
+        if: steps.scrape.outcome == 'failure'
+        run: exit 1
+
+      - name: Validate generated catalog
+        run: |
           python tools/build_catalog.py --out /tmp/catalog.sqlite
           cat artifacts/kdm-scrape-summary.json
 
