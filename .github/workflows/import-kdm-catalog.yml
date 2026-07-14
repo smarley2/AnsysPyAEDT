@@ -7,6 +7,12 @@ on:
     paths:
       - tools/scrape_kdm_powder_toroids.py
       - .github/workflows/import-kdm-catalog.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/scrape_kdm_powder_toroids.py
+      - .github/workflows/import-kdm-catalog.yml
 
 permissions:
   contents: write
