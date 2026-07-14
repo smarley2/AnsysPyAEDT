@@ -28,6 +28,13 @@ class Family:
     code: str
     material_name: str
 
+    def matches_part_number(self, part_number: str) -> bool:
+        normalized = part_number.upper()
+        prefix, separator, variant = self.code.upper().partition("-")
+        if not normalized.startswith(prefix):
+            return False
+        return not separator or normalized.endswith(f"-{variant}")
+
 
 FAMILIES = (
     Family("KS", "Sendust"),
@@ -149,7 +156,7 @@ def parse_records(
         part_number = cells[0].strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", part_number):
             continue
-        if not part_number.upper().startswith(family.code):
+        if not family.matches_part_number(part_number):
             continue
 
         numeric_cells: list[float] = []
@@ -220,7 +227,17 @@ def parse_records(
     if not records:
         sample = rejected[:3]
         raise RuntimeError(f"No valid data rows parsed; rejected samples={sample!r}")
-    return records
+
+    unique: dict[str, dict[str, object]] = {}
+    for record in records:
+        part_number = str(record["partNumber"])
+        previous = unique.get(part_number)
+        if previous is None:
+            unique[part_number] = record
+            continue
+        if previous != record:
+            raise RuntimeError(f"Conflicting duplicate KDM part number: {part_number}")
+    return list(unique.values())
 
 
 def validate_records(records: list[dict[str, object]]) -> None:
