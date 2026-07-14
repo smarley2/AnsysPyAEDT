@@ -26,6 +26,7 @@ dev = [
   "ruff>=0.9,<1",
   "types-jsonschema>=4.23,<5",
   "PyYAML>=6.0,<7",
+  "types-PyYAML>=6.0,<7",
 ]
 
 [project.scripts]
@@ -63,7 +64,7 @@ select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
 [tool.mypy]
 python_version = "3.10"
 strict = true
-packages = ["inductor_designer"]
+files = ["src", "tools"]
 
 [[tool.mypy.overrides]]
 module = ["ansys.aedt.*", "PySide6.*"]
