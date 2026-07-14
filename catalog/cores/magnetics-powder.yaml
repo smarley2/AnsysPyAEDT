@@ -97,7 +97,7 @@ records:
   - partNumber: "0077109A7"
     manufacturer: Magnetics
     family: powder-toroid
-    material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
+    material: {manufacturer: Magnetics, name: Kool Mu, grade: "125"}
     coating: black epoxy
     catalogRevision: magnetics-powder-2025
     sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
@@ -108,7 +108,7 @@ records:
     effectiveAreaM2: 1.44e-4
     pathLengthM: 0.143
     volumeM3: 2.07e-5
-    alValueNh: 75.0
+    alValueNh: 156.0
     reviewStatus: reviewed
     reviewedBy: Fabio Posser
 
