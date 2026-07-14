@@ -1,0 +1,66 @@
+name: Generate Magnetics powder toroid catalog
+
+on:
+  push:
+    branches:
+      - agent/import-all-magnetics-powder-toroids
+    paths:
+      - .github/workflows/generate-magnetics-powder-toroids.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install extraction dependencies
+        run: python -m pip install --disable-pip-version-check pdfplumber PyYAML jsonschema
+
+      - name: Download 2025 Magnetics catalog
+        run: >-
+          curl --fail --location
+          'https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf'
+          --output /tmp/Magnetics-Powder-Core-Catalog.pdf
+
+      - name: Generate canonical powder toroid YAML
+        run: >-
+          python .github/scripts/generate_magnetics_powder_toroids.py
+          --pdf /tmp/Magnetics-Powder-Core-Catalog.pdf
+          --out catalog/cores/magnetics-powder.yaml
+
+      - name: Validate and compile catalog
+        run: |
+          python tools/build_catalog.py --out /tmp/catalog.sqlite
+          python - <<'PY'
+          import sqlite3
+
+          connection = sqlite3.connect('/tmp/catalog.sqlite')
+          try:
+              meta = dict(connection.execute('SELECT key, value FROM meta'))
+              assert meta['coreCount'] == '1928', meta
+              assert meta['conductorCount'] == '35', meta
+              assert connection.execute('SELECT COUNT(*) FROM cores').fetchone()[0] == 1928
+          finally:
+              connection.close()
+          PY
+
+      - name: Commit generated catalog
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalog/cores/magnetics-powder.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m 'data: import complete Magnetics powder toroids'
+          git push origin HEAD:agent/import-all-magnetics-powder-toroids
