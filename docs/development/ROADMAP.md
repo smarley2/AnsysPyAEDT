@@ -72,6 +72,31 @@ Remaining work: catalog numeric values remain `draft` pending human review again
 
 Exit criterion: previewed geometry passes property-based invariants and deterministic golden-manifest tests.
 
+### Design note: winding geometry uses finished (coated), not bare, core dimensions
+
+The wire is wound on the coated core surface, so packing and collision geometry
+must consume the **finished** core dimensions, never the bare nominal. The finish
+moves each dimension one way: the inner diameter shrinks (coating adds inward,
+reducing the winding window and the achievable turn count), while the outer
+diameter and height grow (coating adds outward, setting the board/enclosure
+envelope). The worst case for fitting turns is therefore the smallest finished
+inner diameter; the worst case for envelope is the largest finished outer
+diameter and height.
+
+The catalog already carries this. Each `Dimension` stores the bare value in
+`nominalM` and the finish-moved limit in the single relevant bound: inner
+diameter in `minM`, outer diameter and height in `maxM` (see
+`catalog/cores/magnetics-powder.yaml`, transcribed from the Magnetics catalog's
+"Before Finish (nominal)" and "After Finish (limits)" rows). Magnetics publishes
+no finished *nominal*, only limits, so the finished limit is the honest
+conservative input for packing.
+
+Milestone 2 decision: the packing engine reads `innerDiameter.minM`,
+`outerDiameter.maxM`, and `height.maxM` when present, falling back to `nominalM`
+only for manual cores that carry no finish data. Do not build winding geometry
+from `nominalM` on catalog cores — it models the bare core and overestimates the
+available window.
+
 ## Milestone 3: Maxwell 3D MVP
 
 - Generate toroid core geometry and round-wire windings.
