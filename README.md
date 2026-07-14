@@ -8,9 +8,10 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestone 0 is accepted as of 2026-07-13. Acceptance is scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 is unblocked.
+Milestone 0 is accepted as of 2026-07-13. Acceptance is scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 (toroid domain and catalogs) implementation is complete, with catalog data review pending.
 
 - [Active implementation plan](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
+- [Milestone 1 plan](docs/superpowers/plans/2026-07-13-toroid-domain-and-catalogs.md)
 - [Implementation plan index](docs/superpowers/plans/README.md)
 - [AEDT compatibility procedure](docs/development/aedt-compatibility-testing.md)
 - [AEDT compatibility matrix](compatibility/aedt-matrix.yml)

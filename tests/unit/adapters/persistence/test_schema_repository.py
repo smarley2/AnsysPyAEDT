@@ -4,7 +4,26 @@ from pathlib import Path
 import pytest
 from jsonschema.exceptions import ValidationError
 
-from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.adapters.persistence.schema_repository import (
+    LATEST_PROJECT_SCHEMA_VERSION,
+    SchemaRepository,
+)
+
+FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
+
+
+@pytest.fixture
+def schema_repository() -> SchemaRepository:
+    return SchemaRepository(Path("schemas"))
+
+
+def _v1_document() -> dict[str, object]:
+    return {
+        "schemaVersion": 1,
+        "projectId": "3f0e8f5e-8f4e-4a5e-9d5b-6c4f2b1a0d9c",
+        "metadata": {"name": "Legacy project"},
+        "target": {"aedtRelease": "2025.2", "edition": "commercial"},
+    }
 
 
 def test_minimal_v1_project_is_valid() -> None:
@@ -55,3 +74,25 @@ def test_project_schema_rejects_aedt_releases_outside_supported_range(
 
     with pytest.raises(ValidationError):
         SchemaRepository(Path("schemas")).validate_project(document)
+
+
+def test_latest_version_is_two() -> None:
+    assert LATEST_PROJECT_SCHEMA_VERSION == 2
+
+
+def test_v2_fixture_validates(schema_repository: SchemaRepository) -> None:
+    document = json.loads((FIXTURES / "project.v2.json").read_text(encoding="utf-8"))
+    schema_repository.validate_project(document)
+
+
+def test_migrate_v1_to_v2(schema_repository: SchemaRepository) -> None:
+    migrated = schema_repository.migrate_project(_v1_document())
+    assert migrated["schemaVersion"] == 2
+    assert migrated["core"] is None
+    assert migrated["windings"] == []
+    schema_repository.validate_project(migrated)
+
+
+def test_migrate_latest_is_identity(schema_repository: SchemaRepository) -> None:
+    document = json.loads((FIXTURES / "project.v2.json").read_text(encoding="utf-8"))
+    assert schema_repository.migrate_project(document) == document

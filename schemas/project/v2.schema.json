@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/smarley2/AnsysPyAEDT/schemas/project/v2.schema.json",
+  "title": "PyAEDT Inductor Designer project document v2",
+  "description": "Canonical units: meters (M), degrees (Deg), amperes (A), hertz (Hz), nanohenry per squared turn (Nh).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectId", "metadata", "target", "core", "windings"],
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nominalM", "minM", "maxM"],
+      "properties": {
+        "nominalM": {"type": "number", "exclusiveMinimum": 0},
+        "minM": {"type": ["number", "null"]},
+        "maxM": {"type": ["number", "null"]}
+      }
+    },
+    "materialRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manufacturer", "name", "grade"],
+      "properties": {
+        "manufacturer": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "grade": {"type": "string", "minLength": 1}
+      }
+    },
+    "coreSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manufacturer", "family", "partNumber", "material", "coating",
+        "catalogRevision", "sourceUrl", "sourcePage",
+        "outerDiameter", "innerDiameter", "height",
+        "effectiveAreaM2", "pathLengthM", "volumeM3", "alValueNh",
+        "reviewStatus", "reviewedBy"
+      ],
+      "properties": {
+        "manufacturer": {"type": "string", "minLength": 1},
+        "family": {"enum": ["powder-toroid", "ferrite-toroid"]},
+        "partNumber": {"type": "string", "minLength": 1},
+        "material": {"$ref": "#/$defs/materialRef"},
+        "coating": {"type": "string"},
+        "catalogRevision": {"type": "string", "minLength": 1},
+        "sourceUrl": {"type": "string", "minLength": 1},
+        "sourcePage": {"type": "integer", "minimum": 1},
+        "outerDiameter": {"$ref": "#/$defs/dimension"},
+        "innerDiameter": {"$ref": "#/$defs/dimension"},
+        "height": {"$ref": "#/$defs/dimension"},
+        "effectiveAreaM2": {"type": "number", "exclusiveMinimum": 0},
+        "pathLengthM": {"type": "number", "exclusiveMinimum": 0},
+        "volumeM3": {"type": "number", "exclusiveMinimum": 0},
+        "alValueNh": {"type": "number", "exclusiveMinimum": 0},
+        "reviewStatus": {"enum": ["draft", "reviewed"]},
+        "reviewedBy": {"type": ["string", "null"]}
+      }
+    },
+    "winding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windingId", "label", "turns", "conductor", "mode",
+        "startAngleDeg", "sectorDeg", "minSpacingM", "minClearanceM",
+        "windingDirection", "currentDirection", "terminalIntent",
+        "acMagnitudeA", "acPhaseDeg", "frequencyHz", "dcCurrentA"
+      ],
+      "properties": {
+        "windingId": {"type": "string", "minLength": 1},
+        "label": {"type": "string"},
+        "turns": {"type": "integer", "minimum": 1},
+        "conductor": {"type": "string", "minLength": 1},
+        "mode": {"enum": ["solid", "stranded"]},
+        "startAngleDeg": {"type": "number", "minimum": 0, "exclusiveMaximum": 360},
+        "sectorDeg": {"type": "number", "exclusiveMinimum": 0, "maximum": 360},
+        "minSpacingM": {"type": "number", "minimum": 0},
+        "minClearanceM": {"type": "number", "minimum": 0},
+        "windingDirection": {"enum": ["cw", "ccw"]},
+        "currentDirection": {"enum": ["forward", "reverse"]},
+        "terminalIntent": {"type": "string"},
+        "acMagnitudeA": {"type": "number", "minimum": 0},
+        "acPhaseDeg": {"type": "number"},
+        "frequencyHz": {"type": "number", "exclusiveMinimum": 0},
+        "dcCurrentA": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "projectId": {"type": "string", "format": "uuid"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "default": ""}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aedtRelease", "edition", "dimensionMode"],
+      "properties": {
+        "aedtRelease": {
+          "type": "string",
+          "pattern": "^(?:2024\\.2|20(?:2[5-9]|[3-9][0-9])\\.[12])$"
+        },
+        "edition": {"enum": ["commercial", "student"]},
+        "dimensionMode": {"enum": ["2d", "3d"]}
+      }
+    },
+    "core": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "partNumber", "snapshot", "overrides"],
+          "properties": {
+            "kind": {"const": "catalog"},
+            "partNumber": {"type": "string", "minLength": 1},
+            "snapshot": {"$ref": "#/$defs/coreSnapshot"},
+            "overrides": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field", "value", "reason"],
+                "properties": {
+                  "field": {"enum": ["outer_diameter_m", "inner_diameter_m", "height_m"]},
+                  "value": {"type": "number", "exclusiveMinimum": 0},
+                  "reason": {"type": "string", "minLength": 1}
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "outerDiameterM", "innerDiameterM", "heightM", "cornerRadiusM"],
+          "properties": {
+            "kind": {"const": "manual"},
+            "outerDiameterM": {"type": "number", "exclusiveMinimum": 0},
+            "innerDiameterM": {"type": "number", "exclusiveMinimum": 0},
+            "heightM": {"type": "number", "exclusiveMinimum": 0},
+            "cornerRadiusM": {"type": "number", "minimum": 0}
+          }
+        }
+      ]
+    },
+    "windings": {"type": "array", "items": {"$ref": "#/$defs/winding"}}
+  }
+}

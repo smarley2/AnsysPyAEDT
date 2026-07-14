@@ -4,12 +4,12 @@ This directory is the execution index for the approved [PyAEDT Inductor Designer
 
 Implementation plans are deliberately written one milestone at a time. Each milestone must finish with working, independently testable software and verified interfaces before the next plan freezes assumptions that depend on it.
 
-Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commercial release available on the development machine. The 2024 R2 and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them; see the [validation plan](../../development/VALIDATION_PLAN.md). Milestone 1 is unblocked and its detailed plan may now be written.
+Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commercial release available on the development machine. The 2024 R2 and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them; see the [validation plan](../../development/VALIDATION_PLAN.md). Milestone 1 implementation is **complete, pending review**.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Approved product design | Non-AEDT CI passes; controlled runs create and save trivial Maxwell 2D and 3D projects; capability results are recorded for the release matrix |
-| 1 | Toroid domain and catalogs | Written after Milestone 0 review | Milestone 0 contracts accepted | Versioned project round trip with reviewed commercial core and multiple windings |
+| 1 | Toroid domain and catalogs | [2026-07-13-toroid-domain-and-catalogs.md](2026-07-13-toroid-domain-and-catalogs.md) | Milestone 0 contracts accepted | Versioned project round trip with reviewed commercial core and multiple windings |
 | 2 | Geometry and live preview | Written after Milestone 1 review | Project and catalog schemas accepted | Deterministic toroid/winding geometry passes property and golden-manifest tests |
 | 3 | Maxwell 3D MVP | Written after Milestone 2 review | Geometry intermediate representation accepted | Supported AEDT installation opens a generated ready-to-solve Maxwell 3D project |
 | 4 | Maxwell 2D and DC operating point | Written after Milestone 3 review | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |

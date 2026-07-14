@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/smarley2/AnsysPyAEDT/schemas/catalog/conductor.v1.schema.json",
+  "title": "Round-wire conductor record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name", "standard", "bareDiameterM", "grade1DiameterM", "grade2DiameterM",
+    "source", "catalogRevision", "reviewStatus", "reviewedBy"
+  ],
+  "properties": {
+    "name": {"type": "string", "minLength": 1},
+    "standard": {"enum": ["awg", "iec-60317"]},
+    "bareDiameterM": {"type": "number", "exclusiveMinimum": 0},
+    "grade1DiameterM": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "grade2DiameterM": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "source": {"type": "string", "minLength": 1},
+    "catalogRevision": {"type": "string", "minLength": 1},
+    "reviewStatus": {"enum": ["draft", "reviewed"]},
+    "reviewedBy": {"type": ["string", "null"]}
+  }
+}

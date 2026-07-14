@@ -39,5 +39,15 @@ def test_finds_forbidden_dependency_in_inner_package(
     )
 
 
+def test_application_rejects_infrastructure_but_allows_pathlib(tmp_path: Path) -> None:
+    source = tmp_path / "inductor_designer" / "application" / "ports" / "gateway.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("from pathlib import Path\nimport sqlite3\n", encoding="utf-8")
+
+    assert find_forbidden_imports(tmp_path) == (
+        Violation(source, 2, "sqlite3", "application"),
+    )
+
+
 def test_repository_inner_packages_respect_boundaries() -> None:
     assert find_forbidden_imports(Path("src")) == ()

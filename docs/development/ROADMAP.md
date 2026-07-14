@@ -46,6 +46,23 @@ Task 11 is closed: the 2025.2 Commercial review is accepted and the remaining Mi
 
 Exit criterion: a versioned project selects a commercial core, defines multiple valid windings, and survives schema round trips.
 
+### Current state
+
+Implemented Milestone 1 deliverables:
+
+- The domain model, including units and AEDT target types.
+- Declarative validation covering the four spec categories, including wraparound sector overlap.
+- Project schema v2 with a v1-to-v2 migration.
+- The project repository with deterministic, byte-identical saves.
+- Catalog schemas and 15 draft Magnetics core records.
+- A generated round-wire conductor catalog (35 records).
+- The canonical-files-to-SQLite catalog builder.
+- The catalog repository port with a read-only SQLite adapter.
+- Snapshot comparison and adoption services for catalog revisions.
+- The Milestone 1 exit-criterion integration test.
+
+Remaining work: catalog numeric values remain `draft` pending human review against the cited Magnetics sources; insulated wire diameters are intentionally null until Milestone 2 consumes them.
+
 ## Milestone 2: Geometry and live preview
 
 - Implement the solver-independent toroid and winding geometry.

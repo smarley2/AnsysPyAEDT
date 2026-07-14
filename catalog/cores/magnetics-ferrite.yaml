@@ -1,0 +1,91 @@
+# Draft transcription — verify every value against the cited source before review.
+records:
+  - partNumber: "J-40601-TC"
+    manufacturer: Magnetics
+    family: ferrite-toroid
+    material: {manufacturer: Magnetics, name: J, grade: "5000"}
+    coating: parylene
+    catalogRevision: magnetics-ferrite-2024
+    sourceUrl: https://www.mag-inc.com/products/ferrite-cores/ferrite-toroids
+    sourcePage: 1
+    outerDiameter: {nominalM: 0.01590, minM: null, maxM: null}
+    innerDiameter: {nominalM: 0.00975, minM: null, maxM: null}
+    height: {nominalM: 0.00635, minM: null, maxM: null}
+    effectiveAreaM2: 1.76e-5
+    pathLengthM: 0.0391
+    volumeM3: 6.88e-7
+    alValueNh: 2800.0
+    reviewStatus: draft
+    reviewedBy: null
+
+  - partNumber: "J-41003-TC"
+    manufacturer: Magnetics
+    family: ferrite-toroid
+    material: {manufacturer: Magnetics, name: J, grade: "5000"}
+    coating: parylene
+    catalogRevision: magnetics-ferrite-2024
+    sourceUrl: https://www.mag-inc.com/products/ferrite-cores/ferrite-toroids
+    sourcePage: 1
+    outerDiameter: {nominalM: 0.02540, minM: null, maxM: null}
+    innerDiameter: {nominalM: 0.01430, minM: null, maxM: null}
+    height: {nominalM: 0.00930, minM: null, maxM: null}
+    effectiveAreaM2: 4.64e-5
+    pathLengthM: 0.0605
+    volumeM3: 2.81e-6
+    alValueNh: 4800.0
+    reviewStatus: draft
+    reviewedBy: null
+
+  - partNumber: "J-42206-TC"
+    manufacturer: Magnetics
+    family: ferrite-toroid
+    material: {manufacturer: Magnetics, name: J, grade: "5000"}
+    coating: parylene
+    catalogRevision: magnetics-ferrite-2024
+    sourceUrl: https://www.mag-inc.com/products/ferrite-cores/ferrite-toroids
+    sourcePage: 2
+    outerDiameter: {nominalM: 0.03580, minM: null, maxM: null}
+    innerDiameter: {nominalM: 0.02330, minM: null, maxM: null}
+    height: {nominalM: 0.01270, minM: null, maxM: null}
+    effectiveAreaM2: 7.14e-5
+    pathLengthM: 0.0901
+    volumeM3: 6.43e-6
+    alValueNh: 4950.0
+    reviewStatus: draft
+    reviewedBy: null
+
+  - partNumber: "R-41306-TC"
+    manufacturer: Magnetics
+    family: ferrite-toroid
+    material: {manufacturer: Magnetics, name: R, grade: "2300"}
+    coating: parylene
+    catalogRevision: magnetics-ferrite-2024
+    sourceUrl: https://www.mag-inc.com/products/ferrite-cores/ferrite-toroids
+    sourcePage: 3
+    outerDiameter: {nominalM: 0.02870, minM: null, maxM: null}
+    innerDiameter: {nominalM: 0.01520, minM: null, maxM: null}
+    height: {nominalM: 0.01590, minM: null, maxM: null}
+    effectiveAreaM2: 9.66e-5
+    pathLengthM: 0.0669
+    volumeM3: 6.46e-6
+    alValueNh: 4150.0
+    reviewStatus: draft
+    reviewedBy: null
+
+  - partNumber: "R-42507-TC"
+    manufacturer: Magnetics
+    family: ferrite-toroid
+    material: {manufacturer: Magnetics, name: R, grade: "2300"}
+    coating: parylene
+    catalogRevision: magnetics-ferrite-2024
+    sourceUrl: https://www.mag-inc.com/products/ferrite-cores/ferrite-toroids
+    sourcePage: 3
+    outerDiameter: {nominalM: 0.04060, minM: null, maxM: null}
+    innerDiameter: {nominalM: 0.02330, minM: null, maxM: null}
+    height: {nominalM: 0.01590, minM: null, maxM: null}
+    effectiveAreaM2: 1.238e-4
+    pathLengthM: 0.0974
+    volumeM3: 1.206e-5
+    alValueNh: 3650.0
+    reviewStatus: draft
+    reviewedBy: null

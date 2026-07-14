@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/smarley2/AnsysPyAEDT/schemas/catalog/core.v1.schema.json",
+  "title": "Commercial toroid core record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manufacturer", "family", "partNumber", "material", "coating",
+    "catalogRevision", "sourceUrl", "sourcePage",
+    "outerDiameter", "innerDiameter", "height",
+    "effectiveAreaM2", "pathLengthM", "volumeM3", "alValueNh",
+    "reviewStatus", "reviewedBy"
+  ],
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nominalM", "minM", "maxM"],
+      "properties": {
+        "nominalM": {"type": "number", "exclusiveMinimum": 0},
+        "minM": {"type": ["number", "null"]},
+        "maxM": {"type": ["number", "null"]}
+      }
+    }
+  },
+  "properties": {
+    "manufacturer": {"type": "string", "minLength": 1},
+    "family": {"enum": ["powder-toroid", "ferrite-toroid"]},
+    "partNumber": {"type": "string", "minLength": 1},
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manufacturer", "name", "grade"],
+      "properties": {
+        "manufacturer": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "grade": {"type": "string", "minLength": 1}
+      }
+    },
+    "coating": {"type": "string"},
+    "catalogRevision": {"type": "string", "minLength": 1},
+    "sourceUrl": {"type": "string", "minLength": 1},
+    "sourcePage": {"type": "integer", "minimum": 1},
+    "outerDiameter": {"$ref": "#/$defs/dimension"},
+    "innerDiameter": {"$ref": "#/$defs/dimension"},
+    "height": {"$ref": "#/$defs/dimension"},
+    "effectiveAreaM2": {"type": "number", "exclusiveMinimum": 0},
+    "pathLengthM": {"type": "number", "exclusiveMinimum": 0},
+    "volumeM3": {"type": "number", "exclusiveMinimum": 0},
+    "alValueNh": {"type": "number", "exclusiveMinimum": 0},
+    "reviewStatus": {"enum": ["draft", "reviewed"]},
+    "reviewedBy": {"type": ["string", "null"]}
+  }
+}

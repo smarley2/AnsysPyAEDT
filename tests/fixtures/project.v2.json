@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "projectId": "3f0e8f5e-8f4e-4a5e-9d5b-6c4f2b1a0d9c",
+  "metadata": {"name": "Boost inductor", "description": "Fixture project"},
+  "target": {"aedtRelease": "2025.2", "edition": "commercial", "dimensionMode": "3d"},
+  "core": {
+    "kind": "catalog",
+    "partNumber": "0077071A7",
+    "snapshot": {
+      "manufacturer": "Magnetics",
+      "family": "powder-toroid",
+      "partNumber": "0077071A7",
+      "material": {"manufacturer": "Magnetics", "name": "Kool Mu", "grade": "60"},
+      "coating": "black epoxy",
+      "catalogRevision": "magnetics-powder-2024",
+      "sourceUrl": "https://www.mag-inc.com/example",
+      "sourcePage": 10,
+      "outerDiameter": {"nominalM": 0.02692, "minM": 0.0264, "maxM": 0.0274},
+      "innerDiameter": {"nominalM": 0.01473, "minM": 0.0144, "maxM": 0.0151},
+      "height": {"nominalM": 0.01118, "minM": 0.0109, "maxM": 0.0115},
+      "effectiveAreaM2": 6.54e-5,
+      "pathLengthM": 0.0635,
+      "volumeM3": 4.15e-6,
+      "alValueNh": 61.0,
+      "reviewStatus": "draft",
+      "reviewedBy": null
+    },
+    "overrides": []
+  },
+  "windings": [
+    {
+      "windingId": "w1",
+      "label": "Primary",
+      "turns": 20,
+      "conductor": "AWG 18",
+      "mode": "solid",
+      "startAngleDeg": 0.0,
+      "sectorDeg": 150.0,
+      "minSpacingM": 0.0002,
+      "minClearanceM": 0.001,
+      "windingDirection": "cw",
+      "currentDirection": "forward",
+      "terminalIntent": "",
+      "acMagnitudeA": 2.0,
+      "acPhaseDeg": 0.0,
+      "frequencyHz": 100000.0,
+      "dcCurrentA": 5.0
+    }
+  ]
+}
