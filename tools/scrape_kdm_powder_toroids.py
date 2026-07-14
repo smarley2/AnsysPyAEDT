@@ -12,7 +12,10 @@ from urllib.parse import urljoin
 import requests
 import yaml
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from jsonschema import Draft202012Validator
+
+from tools.scrape_kdm_powder_toroids_guard import ensure_complete_family_results
 
 BASE_URL = "https://www.kdm-mag.com"
 INDEX_URL = f"{BASE_URL}/products/alloy-powder-cores-346.html"
@@ -88,7 +91,7 @@ def fetch(session: requests.Session, url: str) -> requests.Response:
             if "Internal Error" in response.text and len(response.text) < 10_000:
                 raise RuntimeError("site returned an internal-error page")
             return response
-        except Exception as exc:  # noqa: BLE001 - retries preserve the final cause
+        except Exception as exc:  # noqa: BLE001
             last_error = exc
             time.sleep(2**attempt)
     raise RuntimeError(f"Failed to fetch {url}: {last_error}") from last_error
@@ -100,11 +103,12 @@ def find_family_urls(session: requests.Session) -> dict[str, str]:
     result: dict[str, str] = {}
     for family in FAMILIES:
         pattern = re.compile(rf"\(\s*{re.escape(family.code)}\s*\)", re.IGNORECASE)
-        matches = []
+        matches: list[str] = []
         for anchor in soup.find_all("a", href=True):
             text = normalized_code_text(anchor.get_text(" ", strip=True))
-            if pattern.search(text):
-                matches.append(urljoin(response.url, anchor["href"]))
+            href = anchor.get("href")
+            if pattern.search(text) and isinstance(href, str):
+                matches.append(urljoin(response.url, href))
         unique = list(dict.fromkeys(matches))
         if not unique:
             raise RuntimeError(f"Could not find product page for {family.code}")
@@ -118,23 +122,25 @@ def find_datasheet_url(session: requests.Session, product_url: str) -> str:
     candidates: list[str] = []
     for anchor in soup.find_all("a", href=True):
         text = clean_text(anchor.get_text(" ", strip=True)).lower()
-        if text.startswith("datasheet"):
-            candidates.append(urljoin(response.url, anchor["href"]))
+        href = anchor.get("href")
+        if text.startswith("datasheet") and isinstance(href, str):
+            candidates.append(urljoin(response.url, href))
     if not candidates:
         raise RuntimeError("No Datasheet(s) link found on product page")
     return list(dict.fromkeys(candidates))[0]
 
 
-def candidate_row_cells(row: object) -> tuple[list[str], list[str]]:
+def candidate_row_cells(row: Tag) -> tuple[list[str], list[str]]:
     cells = row.find_all(["th", "td"], recursive=False)
     if not cells:
         cells = row.find_all(["th", "td"])
     texts = [clean_text(cell.get_text(" ", strip=True)) for cell in cells]
-    links = [
-        urljoin(BASE_URL, anchor["href"])
-        for cell in cells
-        for anchor in cell.find_all("a", href=True)
-    ]
+    links: list[str] = []
+    for cell in cells:
+        for anchor in cell.find_all("a", href=True):
+            href = anchor.get("href")
+            if isinstance(href, str):
+                links.append(urljoin(BASE_URL, href))
     return texts, links
 
 
@@ -225,8 +231,7 @@ def parse_records(
         )
 
     if not records:
-        sample = rejected[:3]
-        raise RuntimeError(f"No valid data rows parsed; rejected samples={sample!r}")
+        raise RuntimeError(f"No valid data rows parsed; rejected samples={rejected[:3]!r}")
 
     unique: dict[str, dict[str, object]] = {}
     for record in records:
@@ -248,8 +253,7 @@ def validate_records(records: list[dict[str, object]]) -> None:
         errors = sorted(validator.iter_errors(record), key=lambda item: list(item.path))
         if errors:
             failures.append(
-                f"{record['partNumber']}: "
-                + "; ".join(error.message for error in errors)
+                f"{record['partNumber']}: " + "; ".join(error.message for error in errors)
             )
     if failures:
         raise RuntimeError("Schema validation failed:\n" + "\n".join(failures[:20]))
@@ -285,11 +289,15 @@ def main() -> int:
             entry["error"] = None
             all_records.extend(records)
             print(f"{family.code}: {len(records)} records from {datasheet_url}")
-        except Exception as exc:  # noqa: BLE001 - inaccessible families must be reported
+        except Exception as exc:  # noqa: BLE001
             entry["records"] = 0
             entry["error"] = str(exc)
             print(f"{family.code}: ERROR: {exc}", file=sys.stderr)
         summaries.append(entry)
+
+    ensure_complete_family_results(
+        summaries, required_codes={family.code for family in FAMILIES}
+    )
 
     duplicates: dict[str, int] = {}
     for record in all_records:
@@ -304,8 +312,11 @@ def main() -> int:
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(
-        "# KDM toroidal alloy powder cores extracted from the manufacturer's web datasheet tables.\n"
-        "# New records remain draft pending human review.\n"
+        (
+            "# KDM toroidal alloy powder cores extracted from the manufacturer's "
+            "web datasheet tables.\n"
+        )
+        + "# New records remain draft pending human review.\n"
         + yaml.safe_dump(
             {"records": all_records},
             sort_keys=False,
