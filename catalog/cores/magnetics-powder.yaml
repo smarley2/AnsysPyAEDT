@@ -1,181 +1,190 @@
-# Draft transcription — verify every value against the cited source before review.
+# Reviewed against the 2025 Magnetics Powder Cores Catalog (Fabio Posser).
+# Dimensions: "Before Finish (nominal)" -> nominalM; "After Finish (limits)"
+# supplies the one-sided bound that coating actually moves (OD/HT grow, ID
+# shrinks) -> minM/maxM. Ae/Le/Ve/AL are the catalog's Physical and Magnetic
+# Parameters and Core Data table values for the cited page.
 records:
   - partNumber: "0077021A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 1
-    outerDiameter: {nominalM: 0.01270, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.00775, minM: null, maxM: null}
-    height: {nominalM: 0.00475, minM: null, maxM: null}
-    effectiveAreaM2: 1.14e-5
-    pathLengthM: 0.0317
-    volumeM3: 3.61e-7
-    alValueNh: 27.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 157
+    outerDiameter: {nominalM: 0.00635, minM: null, maxM: 0.00699}
+    innerDiameter: {nominalM: 0.00279, minM: 0.00229, maxM: null}
+    height: {nominalM: 0.00279, minM: null, maxM: 0.00343}
+    effectiveAreaM2: 4.70e-6
+    pathLengthM: 0.0136
+    volumeM3: 6.40e-8
+    alValueNh: 24.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
   - partNumber: "0077041A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 1
-    outerDiameter: {nominalM: 0.01590, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.00930, minM: null, maxM: null}
-    height: {nominalM: 0.00635, minM: null, maxM: null}
-    effectiveAreaM2: 1.99e-5
-    pathLengthM: 0.0392
-    volumeM3: 7.80e-7
-    alValueNh: 58.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 164
+    outerDiameter: {nominalM: 0.01016, minM: null, maxM: 0.01080}
+    innerDiameter: {nominalM: 0.00508, minM: 0.00457, maxM: null}
+    height: {nominalM: 0.00396, minM: null, maxM: 0.00460}
+    effectiveAreaM2: 9.57e-6
+    pathLengthM: 0.0230
+    volumeM3: 2.20e-7
+    alValueNh: 32.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
   - partNumber: "0077071A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 2
-    outerDiameter: {nominalM: 0.02500, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01499, minM: null, maxM: null}
-    height: {nominalM: 0.00965, minM: null, maxM: null}
-    effectiveAreaM2: 4.59e-5
-    pathLengthM: 0.0621
-    volumeM3: 2.85e-6
-    alValueNh: 210.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 173
+    outerDiameter: {nominalM: 0.03279, minM: null, maxM: 0.03366}
+    innerDiameter: {nominalM: 0.02009, minM: 0.01946, maxM: null}
+    height: {nominalM: 0.01067, minM: null, maxM: 0.01143}
+    effectiveAreaM2: 6.56e-5
+    pathLengthM: 0.0814
+    volumeM3: 5.34e-6
+    alValueNh: 61.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
   - partNumber: "0077083A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 2
-    outerDiameter: {nominalM: 0.02860, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01486, minM: null, maxM: null}
-    height: {nominalM: 0.01143, minM: null, maxM: null}
-    effectiveAreaM2: 7.46e-5
-    pathLengthM: 0.0676
-    volumeM3: 5.04e-6
-    alValueNh: 375.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 176
+    outerDiameter: {nominalM: 0.03988, minM: null, maxM: 0.04077}
+    innerDiameter: {nominalM: 0.02413, minM: 0.02332, maxM: null}
+    height: {nominalM: 0.01448, minM: null, maxM: 0.01537}
+    effectiveAreaM2: 1.07e-4
+    pathLengthM: 0.0984
+    volumeM3: 1.06e-5
+    alValueNh: 81.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
   - partNumber: "0077090A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 3
-    outerDiameter: {nominalM: 0.03175, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01905, minM: null, maxM: null}
-    height: {nominalM: 0.01270, minM: null, maxM: null}
-    effectiveAreaM2: 7.66e-5
-    pathLengthM: 0.0790
-    volumeM3: 6.05e-6
-    alValueNh: 450.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 179
+    outerDiameter: {nominalM: 0.04674, minM: null, maxM: 0.04763}
+    innerDiameter: {nominalM: 0.02870, minM: 0.02789, maxM: null}
+    height: {nominalM: 0.01524, minM: null, maxM: 0.01613}
+    effectiveAreaM2: 1.34e-4
+    pathLengthM: 0.116
+    volumeM3: 1.56e-5
+    alValueNh: 86.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
   - partNumber: "0077109A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 3
-    outerDiameter: {nominalM: 0.03600, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.02235, minM: null, maxM: null}
-    height: {nominalM: 0.01430, minM: null, maxM: null}
-    effectiveAreaM2: 9.27e-5
-    pathLengthM: 0.0907
-    volumeM3: 8.41e-6
-    alValueNh: 625.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 184
+    outerDiameter: {nominalM: 0.05715, minM: null, maxM: 0.05804}
+    innerDiameter: {nominalM: 0.03556, minM: 0.03475, maxM: null}
+    height: {nominalM: 0.01397, minM: null, maxM: 0.01486}
+    effectiveAreaM2: 1.44e-4
+    pathLengthM: 0.143
+    volumeM3: 2.07e-5
+    alValueNh: 75.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
-  - partNumber: "0077071A2"
+  # Same physical core as 0077071A7 (Core Dimensions table is shared across
+  # permeability grades at one size code); perm 26 grade instead of 60.
+  - partNumber: "0077550A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "26"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 4
-    outerDiameter: {nominalM: 0.02500, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01499, minM: null, maxM: null}
-    height: {nominalM: 0.00965, minM: null, maxM: null}
-    effectiveAreaM2: 4.59e-5
-    pathLengthM: 0.0621
-    volumeM3: 2.85e-6
-    alValueNh: 90.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 173
+    outerDiameter: {nominalM: 0.03279, minM: null, maxM: 0.03366}
+    innerDiameter: {nominalM: 0.02009, minM: 0.01946, maxM: null}
+    height: {nominalM: 0.01067, minM: null, maxM: 0.01143}
+    effectiveAreaM2: 6.56e-5
+    pathLengthM: 0.0814
+    volumeM3: 5.34e-6
+    alValueNh: 28.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
-  - partNumber: "0077083A2"
+  # Same physical core as 0077083A7; perm 26 grade instead of 60.
+  - partNumber: "0077256A7"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: Kool Mu, grade: "26"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 4
-    outerDiameter: {nominalM: 0.02860, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01486, minM: null, maxM: null}
-    height: {nominalM: 0.01143, minM: null, maxM: null}
-    effectiveAreaM2: 7.46e-5
-    pathLengthM: 0.0676
-    volumeM3: 5.04e-6
-    alValueNh: 160.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 176
+    outerDiameter: {nominalM: 0.03988, minM: null, maxM: 0.04077}
+    innerDiameter: {nominalM: 0.02413, minM: 0.02332, maxM: null}
+    height: {nominalM: 0.01448, minM: null, maxM: 0.01537}
+    effectiveAreaM2: 1.07e-4
+    pathLengthM: 0.0984
+    volumeM3: 1.06e-5
+    alValueNh: 35.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
-  - partNumber: "0058071A2"
+  # High Flux at the same physical core size as 0077071A7 (60 perm row).
+  - partNumber: "C058071A2"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: High Flux, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 5
-    outerDiameter: {nominalM: 0.02500, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01499, minM: null, maxM: null}
-    height: {nominalM: 0.01090, minM: null, maxM: null}
-    effectiveAreaM2: 5.19e-5
-    pathLengthM: 0.0621
-    volumeM3: 3.22e-6
-    alValueNh: 310.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 173
+    outerDiameter: {nominalM: 0.03279, minM: null, maxM: 0.03366}
+    innerDiameter: {nominalM: 0.02009, minM: 0.01946, maxM: null}
+    height: {nominalM: 0.01067, minM: null, maxM: 0.01143}
+    effectiveAreaM2: 6.56e-5
+    pathLengthM: 0.0814
+    volumeM3: 5.34e-6
+    alValueNh: 61.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
 
-  - partNumber: "0058083A2"
+  # High Flux at the same physical core size as 0077083A7 (60 perm row).
+  - partNumber: "C058083A2"
     manufacturer: Magnetics
     family: powder-toroid
     material: {manufacturer: Magnetics, name: High Flux, grade: "60"}
     coating: black epoxy
-    catalogRevision: magnetics-powder-2024
-    sourceUrl: https://www.mag-inc.com/products/powder-cores
-    sourcePage: 5
-    outerDiameter: {nominalM: 0.02860, minM: null, maxM: null}
-    innerDiameter: {nominalM: 0.01486, minM: null, maxM: null}
-    height: {nominalM: 0.01290, minM: null, maxM: null}
-    effectiveAreaM2: 8.42e-5
-    pathLengthM: 0.0676
-    volumeM3: 5.69e-6
-    alValueNh: 550.0
-    reviewStatus: draft
-    reviewedBy: null
+    catalogRevision: magnetics-powder-2025
+    sourceUrl: https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf
+    sourcePage: 176
+    outerDiameter: {nominalM: 0.03988, minM: null, maxM: 0.04077}
+    innerDiameter: {nominalM: 0.02413, minM: 0.02332, maxM: null}
+    height: {nominalM: 0.01448, minM: null, maxM: 0.01537}
+    effectiveAreaM2: 1.07e-4
+    pathLengthM: 0.0984
+    volumeM3: 1.06e-5
+    alValueNh: 81.0
+    reviewStatus: reviewed
+    reviewedBy: Fabio Posser
