@@ -18,7 +18,10 @@ jobs:
           python-version: "3.10"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+      # ui extra pulls in PySide6 so mypy resolves real Qt types; without it
+      # QQuick3DGeometry/QObject degrade to Any and strict-mode subclassing
+      # checks fail on ui/preview_geometry.py (green locally, red in CI).
+      - run: python -m pip install -e ".[dev,ui]"
       - run: python -m ruff check .
       - run: python -m mypy src tools
       - run: python -m tools.check_architecture

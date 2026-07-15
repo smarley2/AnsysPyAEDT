@@ -50,10 +50,20 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _install_qml_logging() -> None:
+    from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+
+    def handler(mode: QtMsgType, context: object, message: str) -> None:
+        print(f"[qml] {message}", file=sys.stderr, flush=True)
+
+    qInstallMessageHandler(handler)
+
+
 def main() -> int:
     from PySide6.QtGui import QGuiApplication
 
     args = _parse_args(sys.argv[1:])
+    _install_qml_logging()
     app = QGuiApplication(sys.argv)
 
     preview_entries: list[PreviewEntry] | None = None
@@ -75,12 +85,13 @@ def main() -> int:
         print(
             f"Loaded {args.project.name}: {len(preview_entries) - 1} winding(s); opening viewer.",
             file=sys.stderr,
+            flush=True,
         )
 
     engine = create_engine(preview_entries)
     roots = engine.rootObjects()
     if not roots:
-        print("QML failed to load; no window created.", file=sys.stderr)
+        print("QML failed to load; no window created.", file=sys.stderr, flush=True)
         return 1
     # Raise the window to the front so it is not lost behind the terminal.
     window = roots[0]
