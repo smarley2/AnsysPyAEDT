@@ -19,6 +19,7 @@ from tools.fair_rite_toroid_catalog import (
 )
 from tools.fair_rite_toroid_parser import (
     CATEGORY_URL,
+    MissingMagneticParameter,
     RawProduct,
     UnresolvedProduct,
     discover_product_urls,
@@ -75,6 +76,19 @@ def run_import(
     for index, url in enumerate(urls, start=1):
         try:
             products.append(parse_product_page(fetch(session, url), url))
+        except MissingMagneticParameter as exc:
+            part_match = re.search(r"toroids-(\d{10})", url)
+            part_number = part_match.group(1) if part_match else "unknown"
+            unresolved_fetches.append(
+                UnresolvedProduct(
+                    part_number=part_number,
+                    material_code=part_number[2:4] if len(part_number) == 10 else "unknown",
+                    product_url=url,
+                    coating="unknown",
+                    reason=f"missing required magnetic parameter: {exc.field}",
+                    missing_fields=(exc.field,),
+                )
+            )
         except Exception as exc:  # noqa: BLE001
             part_match = re.search(r"toroids-(\d{10})", url)
             part_number = part_match.group(1) if part_match else "unknown"

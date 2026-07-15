@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from tools.fair_rite_toroid_catalog import build_catalog
+from tools.fair_rite_toroid_catalog import build_catalog, render_unresolved
 from tools.fair_rite_toroid_parser import (
     ParsedDimension,
     RawProduct,
@@ -49,9 +49,11 @@ def test_discover_product_urls_deduplicates_and_filters() -> None:
     <a href='https://fair-rite.com/product/toroids-5980001801/'>duplicate</a>
     <a href='/product/not-a-toroid/'>ignore</a>
     <a href='/product/toroids-5943011121/'>5943011121</a>
+    <a href='/product/toroids-5975000621-2/'>5975000621</a>
     """
     assert discover_product_urls(html, "https://fair-rite.com/category/") == [
         "https://fair-rite.com/product/toroids-5943011121/",
+        "https://fair-rite.com/product/toroids-5975000621-2/",
         "https://fair-rite.com/product/toroids-5980001801/",
     ]
 
@@ -155,6 +157,50 @@ def test_missing_coated_counterpart_is_reported() -> None:
     assert unresolved[0].attempted_match == "5943011101"
 
 
+def test_limit_only_uncoated_product_is_reported_without_self_pairing() -> None:
+    product = RawProduct(
+        part_number="5980000101",
+        material_code="80",
+        coating="uncoated (burnished)",
+        source_url="https://fair-rite.com/product/toroids-5980000101/",
+        dimensions={
+            "A": ParsedDimension(None, 5.68, None),
+            "B": ParsedDimension(None, 2.88, None),
+            "C": ParsedDimension(None, 1.40, None),
+        },
+        al_value_nh=22.0,
+        area_cm2=0.031,
+        path_cm=1.32,
+        volume_cm3=0.041,
+    )
+
+    records, unresolved = build_catalog([product], "fair-rite-web-test")
+
+    assert records == []
+    assert unresolved[0].reason == "uncoated product has no published nominal dimensions"
+    assert unresolved[0].missing_fields == (
+        "outerDiameter.nominalM",
+        "innerDiameter.nominalM",
+        "height.nominalM",
+    )
+    assert unresolved[0].attempted_match is None
+
+
+def test_similar_product_does_not_replace_required_uncoated_counterpart() -> None:
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    similar = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
+    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text()
+    coated = parse_product_page(
+        coated_html, "https://fair-rite.com/product/toroids-5943011121/"
+    )
+
+    records, unresolved = build_catalog([similar, coated], "fair-rite-web-test")
+
+    assert [record["partNumber"] for record in records] == ["5980001801"]
+    assert unresolved[0].part_number == "5943011121"
+    assert unresolved[0].attempted_match == "5943011101"
+
+
 def test_magnetic_mismatch_prevents_pairing() -> None:
     base = RawProduct(
         part_number="5943011101",
@@ -213,6 +259,14 @@ def test_generated_record_matches_schema() -> None:
     schema = json.loads((ROOT / "schemas/catalog/core.v1.schema.json").read_text())
     errors = list(Draft202012Validator(schema).iter_errors(records[0]))
     assert errors == []
+    assert records[0]["outerDiameter"] == {
+        "nominalM": 0.0221,
+        "minM": 0.0217,
+        "maxM": 0.0225,
+    }
+    assert records[0]["effectiveAreaM2"] == 2.6e-5
+    assert records[0]["pathLengthM"] == 0.0542
+    assert records[0]["volumeM3"] == 1.42e-6
 
 
 def test_dimension_parser_handles_split_table_cells() -> None:
@@ -273,3 +327,90 @@ def test_run_import_writes_valid_local_artifacts(
     assert "5980001801" in output.read_text()
     assert "No unresolved Fair-Rite toroids" in unresolved.read_text()
     assert json.loads(summary.read_text())["importedRecords"] == 1
+
+
+def test_missing_magnetic_parameter_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tools.scrape_fair_rite_ferrite_toroids as module
+
+    category = """
+    <a href='/product/toroids-5980001801/'>valid</a>
+    <a href='/product/toroids-5943000201/'>missing Ae</a>
+    """
+    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    missing_ae_html = (
+        valid_html.replace("5980001801", "5943000201")
+        .replace("80 TOROID", "43 TOROID")
+        .replace("80 Material", "43 Material")
+        .replace("<tr><td>Ae(cm2)</td><td>0.260</td></tr>", "")
+    )
+
+    def fake_fetch(session: object, url: str) -> str:
+        if "product-category" in url:
+            return category
+        if "5943000201" in url:
+            return missing_ae_html
+        return valid_html
+
+    monkeypatch.setattr(module, "fetch", fake_fetch)
+    monkeypatch.setattr(module, "MIN_EXPECTED_PRODUCTS", 2)
+    records, unresolved = module.run_import(
+        output_path=tmp_path / "catalog.yaml",
+        unresolved_path=tmp_path / "unresolved.md",
+        summary_path=tmp_path / "summary.json",
+    )
+
+    assert len(records) == 1
+    assert unresolved[0].part_number == "5943000201"
+    assert unresolved[0].reason == "missing required magnetic parameter: effectiveAreaM2"
+    assert unresolved[0].missing_fields == ("effectiveAreaM2",)
+
+
+def test_malformed_product_page_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tools.scrape_fair_rite_ferrite_toroids as module
+
+    category = """
+    <a href='/product/toroids-5980001801/'>valid</a>
+    <a href='/product/toroids-5943000201/'>malformed</a>
+    """
+    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+
+    def fake_fetch(session: object, url: str) -> str:
+        if "product-category" in url:
+            return category
+        if "5943000201" in url:
+            return "<html><body>broken</body></html>"
+        return valid_html
+
+    monkeypatch.setattr(module, "fetch", fake_fetch)
+    monkeypatch.setattr(module, "MIN_EXPECTED_PRODUCTS", 2)
+    _, unresolved = module.run_import(
+        output_path=tmp_path / "catalog.yaml",
+        unresolved_path=tmp_path / "unresolved.md",
+        summary_path=tmp_path / "summary.json",
+    )
+
+    assert unresolved[0].part_number == "5943000201"
+    assert unresolved[0].reason.startswith("inaccessible or malformed product page:")
+
+
+def test_unresolved_report_contains_review_fields() -> None:
+    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text()
+    coated = parse_product_page(
+        coated_html, "https://fair-rite.com/product/toroids-5943011121/"
+    )
+    _, unresolved = build_catalog([coated], "fair-rite-web-test")
+
+    report = render_unresolved(unresolved)
+
+    assert "`5943011121`" in report
+    assert "Material: `43`" in report
+    assert "https://fair-rite.com/product/toroids-5943011121/" in report
+    assert "thermo-set plastic" in report
+    assert "Available dimensions:" in report
+    assert "no unambiguous nominal-dimension counterpart" in report
+    assert "Attempted counterpart: `5943011101`" in report
+    assert "Review action:" in report

@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "catalog" / "core.v1.schema.json"
 
 
+def _scale_si(value: float, factor: float) -> float:
+    return round(value * factor, 12)
+
+
 def _magnetics_match(left: RawProduct, right: RawProduct) -> bool:
     values = (
         (left.al_value_nh, right.al_value_nh),
@@ -35,9 +39,9 @@ def _dimension_to_si(dimension: ParsedDimension) -> dict[str, float | None]:
     if dimension.nominal_mm is None:
         raise ValueError("Dimension does not have a nominal value")
     return {
-        "nominalM": dimension.nominal_mm / 1_000,
-        "minM": None if dimension.min_mm is None else dimension.min_mm / 1_000,
-        "maxM": None if dimension.max_mm is None else dimension.max_mm / 1_000,
+        "nominalM": _scale_si(dimension.nominal_mm, 1e-3),
+        "minM": None if dimension.min_mm is None else _scale_si(dimension.min_mm, 1e-3),
+        "maxM": None if dimension.max_mm is None else _scale_si(dimension.max_mm, 1e-3),
     }
 
 
@@ -62,9 +66,9 @@ def _record(
         "outerDiameter": _dimension_to_si(dimensions["A"]),
         "innerDiameter": _dimension_to_si(dimensions["B"]),
         "height": _dimension_to_si(dimensions["C"]),
-        "effectiveAreaM2": product.area_cm2 * 1e-4,
-        "pathLengthM": product.path_cm * 1e-2,
-        "volumeM3": product.volume_cm3 * 1e-6,
+        "effectiveAreaM2": _scale_si(product.area_cm2, 1e-4),
+        "pathLengthM": _scale_si(product.path_cm, 1e-2),
+        "volumeM3": _scale_si(product.volume_cm3, 1e-6),
         "alValueNh": product.al_value_nh,
         "reviewStatus": "draft",
         "reviewedBy": None,
@@ -83,6 +87,25 @@ def build_catalog(
         dimensions = product.dimensions
         if all(dimensions[key].nominal_mm is not None for key in ("A", "B", "C")):
             records.append(_record(product, dimensions, revision))
+            continue
+
+        if product.coating == "uncoated (burnished)":
+            names = {"A": "outerDiameter", "B": "innerDiameter", "C": "height"}
+            unresolved.append(
+                UnresolvedProduct(
+                    part_number=product.part_number,
+                    material_code=product.material_code,
+                    product_url=product.source_url,
+                    coating=product.coating,
+                    reason="uncoated product has no published nominal dimensions",
+                    available_dimensions=dimensions,
+                    missing_fields=tuple(
+                        f"{names[key]}.nominalM"
+                        for key in ("A", "B", "C")
+                        if dimensions[key].nominal_mm is None
+                    ),
+                )
+            )
             continue
 
         counterpart_number = uncoated_counterpart(product.part_number)

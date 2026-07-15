@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 BASE_URL = "https://fair-rite.com"
 CATEGORY_URL = f"{BASE_URL}/product-category/inductive-components/toroids/"
-PRODUCT_URL_RE = re.compile(r"/product/toroids-(\d{10})/?$", re.IGNORECASE)
+PRODUCT_URL_RE = re.compile(r"/product/toroids-(\d{10})(?:-\d+)?/?$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,12 @@ class UnresolvedProduct:
     review_action: str = (
         "Review the Fair-Rite product page and confirm the missing or ambiguous data."
     )
+
+
+class MissingMagneticParameter(ValueError):
+    def __init__(self, field: str) -> None:
+        self.field = field
+        super().__init__(f"Missing required magnetic parameter: {field}")
 
 
 def clean_text(value: str) -> str:
@@ -142,6 +148,15 @@ def _extract_labeled_value(rows: dict[str, str], text: str, patterns: tuple[str,
     raise ValueError(f"Missing labeled value for {patterns!r}")
 
 
+def _extract_magnetic_value(
+    rows: dict[str, str], text: str, field: str, patterns: tuple[str, ...]
+) -> float:
+    try:
+        return parse_number(_extract_labeled_value(rows, text, patterns))
+    except ValueError as exc:
+        raise MissingMagneticParameter(field) from exc
+
+
 def _extract_dimension_rows(soup: BeautifulSoup) -> dict[str, ParsedDimension]:
     dimensions: dict[str, ParsedDimension] = {}
     for row in soup.find_all("tr"):
@@ -209,17 +224,17 @@ def parse_product_page(html: str, source_url: str) -> RawProduct:
 
     dimensions = _extract_dimension_rows(soup)
     rows = _row_map(soup)
-    al_value_nh = parse_number(
-        _extract_labeled_value(rows, text, (r"A_?L\(nH\)", r"AL\(nH\)"))
+    al_value_nh = _extract_magnetic_value(
+        rows, text, "alValueNh", (r"A_?L\(nH\)", r"AL\(nH\)")
     )
-    area_cm2 = parse_number(
-        _extract_labeled_value(rows, text, (r"Ae\(cm2\)", r"Ae\(cm\^?2\)"))
+    area_cm2 = _extract_magnetic_value(
+        rows, text, "effectiveAreaM2", (r"Ae\(cm2\)", r"Ae\(cm\^?2\)")
     )
-    path_cm = parse_number(
-        _extract_labeled_value(rows, text, (r"l_?e\(cm\)", r"le\(cm\)"))
+    path_cm = _extract_magnetic_value(
+        rows, text, "pathLengthM", (r"l_?e\(cm\)", r"le\(cm\)")
     )
-    volume_cm3 = parse_number(
-        _extract_labeled_value(rows, text, (r"V_?e\(cm3\)", r"Ve\(cm\^?3\)"))
+    volume_cm3 = _extract_magnetic_value(
+        rows, text, "volumeM3", (r"V_?e\(cm3\)", r"Ve\(cm\^?3\)")
     )
     return RawProduct(
         part_number=part_number,
