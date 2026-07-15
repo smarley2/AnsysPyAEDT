@@ -12,6 +12,22 @@ from tools.build_catalog import build
 ROOT = Path(__file__).resolve().parents[4]
 
 EXPECTED_POWDER_CORE_COUNT = 1_923
+EXPECTED_KDM_MPP_COUNT = 111
+EXPECTED_FAIR_RITE_COUNT = 195
+EXPECTED_FAIR_RITE_MATERIALS = {
+    "43",
+    "52",
+    "61",
+    "67",
+    "68",
+    "75",
+    "76",
+    "77",
+    "78",
+    "79",
+    "80",
+    "95",
+}
 EXPECTED_POWDER_MATERIALS = {
     "Edge",
     "High Flux",
@@ -67,11 +83,14 @@ def test_list_cores_sorted(repository: SqliteCatalogRepository) -> None:
     assert part_numbers == sorted(part_numbers)
 
 
-def test_complete_powder_toroid_catalog(repository: SqliteCatalogRepository) -> None:
+def test_complete_magnetics_powder_toroid_catalog(
+    repository: SqliteCatalogRepository,
+) -> None:
     powder_cores = tuple(
         core
         for core in repository.list_cores()
         if core.family is CoreFamily.POWDER_TOROID
+        and core.manufacturer == "Magnetics"
     )
     part_numbers = {core.part_number for core in powder_cores}
 
@@ -145,6 +164,56 @@ def test_catalog_data_table_representative_records(
         assert core.outer_diameter.nominal_m == pytest.approx(nominal_od_m)
         assert core.inner_diameter.min_m == pytest.approx(minimum_id_m)
         assert core.review_status is ReviewStatus.DRAFT
+
+
+def test_kdm_mpp_catalog(repository: SqliteCatalogRepository) -> None:
+    cores = tuple(
+        core
+        for core in repository.list_cores()
+        if core.manufacturer == "KDM" and core.material.name == "MPP"
+    )
+
+    assert len(cores) == EXPECTED_KDM_MPP_COUNT
+    assert len({core.part_number for core in cores}) == EXPECTED_KDM_MPP_COUNT
+    assert {core.material.grade for core in cores} == {"26", "60", "125"}
+    for part_number in ("KM050-026A", "KM400-125A", "KM401-026A"):
+        core = repository.get_core(part_number)
+        assert core is not None
+        assert core.review_status is ReviewStatus.DRAFT
+        assert core.reviewed_by is None
+
+
+def test_fair_rite_ferrite_catalog(repository: SqliteCatalogRepository) -> None:
+    cores = tuple(
+        core for core in repository.list_cores() if core.manufacturer == "Fair-Rite"
+    )
+
+    assert len(cores) == EXPECTED_FAIR_RITE_COUNT
+    assert len({core.part_number for core in cores}) == EXPECTED_FAIR_RITE_COUNT
+    assert {core.material.grade for core in cores} == EXPECTED_FAIR_RITE_MATERIALS
+    assert all(core.review_status is ReviewStatus.DRAFT for core in cores)
+    assert all(core.reviewed_by is None for core in cores)
+
+    symmetric = repository.get_core("5943000201")
+    assert symmetric is not None
+    assert symmetric.outer_diameter.nominal_m == pytest.approx(0.0095)
+    assert symmetric.outer_diameter.min_m == pytest.approx(0.0093)
+    assert symmetric.outer_diameter.max_m == pytest.approx(0.0097)
+
+    negative_only = repository.get_core("5943000101")
+    assert negative_only is not None
+    assert negative_only.height.nominal_m == pytest.approx(0.00165)
+    assert negative_only.height.min_m == pytest.approx(0.0014)
+    assert negative_only.height.max_m == pytest.approx(0.00165)
+
+    coated = repository.get_core("5943000111")
+    assert coated is not None
+    assert coated.outer_diameter.nominal_m == pytest.approx(0.00595)
+    assert coated.outer_diameter.min_m is None
+    assert coated.outer_diameter.max_m == pytest.approx(0.00599)
+    assert coated.inner_diameter.nominal_m == pytest.approx(0.00305)
+    assert coated.inner_diameter.min_m == pytest.approx(0.00291)
+    assert coated.inner_diameter.max_m is None
 
 
 def test_locator_only_rows_without_core_data_are_not_invented(
