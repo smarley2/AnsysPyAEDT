@@ -1,0 +1,5658 @@
+# Fair-Rite ferrite toroids extracted from manufacturer product pages.
+# All records remain draft pending human review.
+records:
+- partNumber: '5943000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 158.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000111'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000111/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: null
+    maxM: 0.00599
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00291
+    maxM: null
+  height:
+    nominalM: 0.00165
+    minM: null
+    maxM: 0.00169
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 158.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.003175
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.2e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000211'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000211/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00974
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00456
+    maxM: null
+  height:
+    nominalM: 0.003175
+    minM: null
+    maxM: 0.00334
+  effectiveAreaM2: 7.2e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0102
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0041
+    maxM: null
+  height:
+    nominalM: 0.003175
+    minM: null
+    maxM: 0.0038
+  effectiveAreaM2: 7.2e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 440.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000321'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000321/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00645
+    maxM: null
+  height:
+    nominalM: 0.0049
+    minM: null
+    maxM: 0.0054
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 440.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.0119
+    minM: 0.0115
+    maxM: 0.0123
+  effectiveAreaM2: 4.6e-05
+  pathLengthM: 0.052
+  volumeM3: 2.36e-06
+  alValueNh: 885.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000521'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000521/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: null
+    maxM: 0.02185
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0124
+    maxM: null
+  height:
+    nominalM: 0.0119
+    minM: null
+    maxM: 0.0128
+  effectiveAreaM2: 4.6e-05
+  pathLengthM: 0.052
+  volumeM3: 2.36e-06
+  alValueNh: 885.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 470.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: null
+    maxM: 0.02185
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0124
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 470.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00395
+    minM: 0.0038
+    maxM: 0.0041
+  innerDiameter:
+    nominalM: 0.00215
+    minM: 0.00215
+    maxM: 0.0023
+  height:
+    nominalM: 0.0014
+    minM: 0.00115
+    maxM: 0.0014
+  effectiveAreaM2: 1.1e-06
+  pathLengthM: 0.0092
+  volumeM3: 9.7e-09
+  alValueNh: 117.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  effectiveAreaM2: 4.1e-06
+  pathLengthM: 0.013
+  volumeM3: 5.3e-08
+  alValueNh: 315.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943000911'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943000911/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: null
+    maxM: 0.00599
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00291
+    maxM: null
+  height:
+    nominalM: 0.00305
+    minM: null
+    maxM: 0.00322
+  effectiveAreaM2: 4.1e-06
+  pathLengthM: 0.013
+  volumeM3: 5.3e-08
+  alValueNh: 315.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.073
+  volumeM3: 2.7e-06
+  alValueNh: 510.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001021'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001021/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: null
+    maxM: 0.03015
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.018
+    maxM: null
+  height:
+    nominalM: 0.0075
+    minM: null
+    maxM: 0.00825
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.073
+  volumeM3: 2.7e-06
+  alValueNh: 510.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 480.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 480.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.01385
+    minM: 0.01355
+    maxM: 0.01415
+  effectiveAreaM2: 6.9e-05
+  pathLengthM: 0.073
+  volumeM3: 5.0e-06
+  alValueNh: 950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 3.08e-05
+  pathLengthM: 0.062
+  volumeM3: 1.9e-06
+  alValueNh: 500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.00815
+    minM: 0.007829
+    maxM: 0.008471
+  effectiveAreaM2: 4.0e-05
+  pathLengthM: 0.062
+  volumeM3: 2.44e-05
+  alValueNh: 645.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001421'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001421/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: null
+    maxM: 0.0265
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.0145
+    maxM: null
+  height:
+    nominalM: 0.00815
+    minM: null
+    maxM: 0.00895
+  effectiveAreaM2: 4.0e-05
+  pathLengthM: 0.062
+  volumeM3: 2.44e-05
+  alValueNh: 645.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0311
+    minM: 0.03035
+    maxM: 0.03185
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0079
+    minM: 0.0076
+    maxM: 0.0082
+  effectiveAreaM2: 4.7e-05
+  pathLengthM: 0.076
+  volumeM3: 3.53e-06
+  alValueNh: 620.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: 0.031
+    maxM: 0.0325
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0095
+    minM: 0.0092
+    maxM: 0.0098
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 775.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 485.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 485.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.0127
+    minM: 0.01235
+    maxM: 0.01305
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 965.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943001921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943001921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01355
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 965.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 885.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943002721'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943002721/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: null
+    maxM: 0.0368
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02195
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 885.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 1075.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0628
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0342
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 1075.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943004901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943004901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 520.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943004921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943004921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: null
+    maxM: 0.0169
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0088
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 520.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943005101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943005101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00475
+    minM: 0.0045
+    maxM: 0.00475
+  effectiveAreaM2: 1.45e-05
+  pathLengthM: 0.0385
+  volumeM3: 5.6e-07
+  alValueNh: 375.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943005121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943005121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: null
+    maxM: 0.0169
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0088
+    maxM: null
+  height:
+    nominalM: 0.00475
+    minM: null
+    maxM: 0.00525
+  effectiveAreaM2: 1.45e-05
+  pathLengthM: 0.0385
+  volumeM3: 5.6e-07
+  alValueNh: 375.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943006401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943006401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 6.2e-05
+  pathLengthM: 0.062
+  volumeM3: 3.8e-06
+  alValueNh: 1000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943006421'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943006421/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: null
+    maxM: 0.0265
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.0145
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 6.2e-05
+  pathLengthM: 0.062
+  volumeM3: 3.8e-06
+  alValueNh: 1000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943007601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943007601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.0127
+    minM: 0.01225
+    maxM: 0.01315
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 970.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943011101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943011101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.07365
+    minM: 0.07215
+    maxM: 0.07515
+  innerDiameter:
+    nominalM: 0.03885
+    minM: 0.0381
+    maxM: 0.0396
+  height:
+    nominalM: 0.0127
+    minM: 0.0123
+    maxM: 0.0131
+  effectiveAreaM2: 0.000214
+  pathLengthM: 0.165
+  volumeM3: 3.53e-05
+  alValueNh: 1300.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943015901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943015901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.1
+    minM: 0.098
+    maxM: 0.102
+  innerDiameter:
+    nominalM: 0.055
+    minM: 0.0538
+    maxM: 0.0562
+  height:
+    nominalM: 0.0127
+    minM: 0.0124
+    maxM: 0.013
+  effectiveAreaM2: 0.000277
+  pathLengthM: 0.23
+  volumeM3: 6.37e-05
+  alValueNh: 1215.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943017301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943017301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0475
+    minM: 0.0463
+    maxM: 0.0487
+  innerDiameter:
+    nominalM: 0.0315
+    minM: 0.0307
+    maxM: 0.0323
+  height:
+    nominalM: 0.01905
+    minM: 0.0187
+    maxM: 0.0194
+  effectiveAreaM2: 0.000155
+  pathLengthM: 0.122
+  volumeM3: 1.89e-05
+  alValueNh: 1275.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943017501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943017501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.1026
+    minM: 0.1005
+    maxM: 0.1047
+  innerDiameter:
+    nominalM: 0.0635
+    minM: 0.0622
+    maxM: 0.0648
+  height:
+    nominalM: 0.01585
+    minM: 0.0155
+    maxM: 0.0162
+  effectiveAreaM2: 0.0003
+  pathLengthM: 0.251
+  volumeM3: 7.65e-05
+  alValueNh: 1225.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5943018601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 43 Material
+    grade: '43'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5943018601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0436
+    minM: 0.0426
+    maxM: 0.0446
+  innerDiameter:
+    nominalM: 0.0231
+    minM: 0.0226
+    maxM: 0.0236
+  height:
+    nominalM: 0.018
+    minM: 0.0175
+    maxM: 0.0185
+  effectiveAreaM2: 0.000178
+  pathLengthM: 0.098
+  volumeM3: 1.75e-05
+  alValueNh: 1830.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 325.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0618
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.03425
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 325.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00584
+    minM: 0.00558
+    maxM: 0.00584
+  innerDiameter:
+    nominalM: 0.003
+    minM: 0.0029
+    maxM: 0.0031
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.0128
+  volumeM3: 2.56e-08
+  alValueNh: 49.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00942
+    minM: 0.00922
+    maxM: 0.00962
+  innerDiameter:
+    nominalM: 0.00472
+    minM: 0.00457
+    maxM: 0.00487
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.2e-06
+  pathLengthM: 0.0206
+  volumeM3: 1.47e-07
+  alValueNh: 110.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0126
+    minM: 0.01235
+    maxM: 0.01285
+  innerDiameter:
+    nominalM: 0.00699
+    minM: 0.00679
+    maxM: 0.00719
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.3e-05
+  pathLengthM: 0.029
+  volumeM3: 3.78e-07
+  alValueNh: 141.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.01245
+    minM: 0.0122
+    maxM: 0.0127
+  innerDiameter:
+    nominalM: 0.0078
+    minM: 0.0076
+    maxM: 0.008
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.44e-05
+  pathLengthM: 0.0306
+  volumeM3: 4.42e-07
+  alValueNh: 148.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0217
+    minM: 0.0213
+    maxM: 0.0221
+  innerDiameter:
+    nominalM: 0.0135
+    minM: 0.0132
+    maxM: 0.0138
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.56e-05
+  pathLengthM: 0.0533
+  volumeM3: 1.368e-06
+  alValueNh: 151.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0288
+    minM: 0.02815
+    maxM: 0.02945
+  innerDiameter:
+    nominalM: 0.0187
+    minM: 0.0182
+    maxM: 0.0192
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.74e-05
+  pathLengthM: 0.0723
+  volumeM3: 2.702e-06
+  alValueNh: 162.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5952020801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 52 Material
+    grade: '52'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5952020801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03525
+    minM: 0.0345
+    maxM: 0.036
+  innerDiameter:
+    nominalM: 0.0226
+    minM: 0.02205
+    maxM: 0.02315
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.92e-05
+  pathLengthM: 0.0879
+  volumeM3: 6.959e-06
+  alValueNh: 283.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 25.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000111'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000111/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: null
+    maxM: 0.00599
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00291
+    maxM: null
+  height:
+    nominalM: 0.00165
+    minM: null
+    maxM: 0.00169
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 25.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 55.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000211'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000211/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00974
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00456
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.00334
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 55.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 69.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.0119
+    minM: 0.0115
+    maxM: 0.0123
+  effectiveAreaM2: 4.6e-05
+  pathLengthM: 0.052
+  volumeM3: 2.36e-06
+  alValueNh: 135.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: null
+    maxM: 0.02185
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0124
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961000801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961000801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00395
+    minM: 0.0038
+    maxM: 0.0041
+  innerDiameter:
+    nominalM: 0.00215
+    minM: 0.00215
+    maxM: 0.0023
+  height:
+    nominalM: 0.0014
+    minM: 0.00115
+    maxM: 0.0014
+  effectiveAreaM2: 1.1e-06
+  pathLengthM: 0.0092
+  volumeM3: 9.8e-09
+  alValueNh: 14.4
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.073
+  volumeM3: 2.7e-06
+  alValueNh: 80.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.01385
+    minM: 0.01355
+    maxM: 0.01415
+  effectiveAreaM2: 6.8e-05
+  pathLengthM: 0.073
+  volumeM3: 5.0e-06
+  alValueNh: 145.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: null
+    maxM: 0.03015
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.018
+    maxM: null
+  height:
+    nominalM: 0.01385
+    minM: null
+    maxM: 0.01464
+  effectiveAreaM2: 6.8e-05
+  pathLengthM: 0.073
+  volumeM3: 5.0e-06
+  alValueNh: 145.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: 0.031
+    maxM: 0.0325
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0095
+    minM: 0.0092
+    maxM: 0.0098
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 120.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001721'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001721/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: null
+    maxM: 0.033
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01805
+    maxM: null
+  height:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0103
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 120.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 75.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.0127
+    minM: 0.01235
+    maxM: 0.01305
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 150.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961001921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961001921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01355
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 150.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 140.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961002721'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961002721/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: null
+    maxM: 0.0368
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02195
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 140.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 170.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0631
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0339
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.014
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 170.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961004901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961004901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 80.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5961004921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 61 Material
+    grade: '61'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5961004921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: null
+    maxM: 0.0169
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0088
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 80.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 6.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 17.6
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 22.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967000601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967000601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 24.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.0732
+  volumeM3: 2.7e-06
+  alValueNh: 25.5
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.66e-07
+  alValueNh: 24.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.01385
+    minM: 0.01355
+    maxM: 0.01415
+  effectiveAreaM2: 6.9e-05
+  pathLengthM: 0.073
+  volumeM3: 5.0e-06
+  alValueNh: 47.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: 0.031
+    maxM: 0.0325
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0095
+    minM: 0.0092
+    maxM: 0.0098
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 39.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.6e-05
+  pathLengthM: 0.0541
+  volumeM3: 1.42e-06
+  alValueNh: 24.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967001901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967001901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.0127
+    minM: 0.01235
+    maxM: 0.01305
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 48.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 45.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 55.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5967003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 67 Material
+    grade: '67'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5967003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0628
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0342
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 55.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 5.3
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 6.6
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 7.2
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.0541
+  volumeM3: 1.42e-06
+  alValueNh: 7.3
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 13.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 16.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968020901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968020901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00609
+    minM: 0.00584
+    maxM: 0.00609
+  innerDiameter:
+    nominalM: 0.00312
+    minM: 0.00302
+    maxM: 0.00322
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.1e-06
+  pathLengthM: 0.0133
+  volumeM3: 2.7e-08
+  alValueNh: 2.3
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5968021001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 68 Material
+    grade: '68'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5968021001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.02995
+    minM: 0.0293
+    maxM: 0.0306
+  innerDiameter:
+    nominalM: 0.01945
+    minM: 0.01895
+    maxM: 0.01995
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.88e-05
+  pathLengthM: 0.0752
+  volumeM3: 2.917e-06
+  alValueNh: 7.7
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 785.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000111'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000111/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: null
+    maxM: 0.00599
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00291
+    maxM: null
+  height:
+    nominalM: 0.00165
+    minM: null
+    maxM: 0.00169
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 785.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 2200.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000211'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000211/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00974
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00456
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.00334
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 2200.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0102
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0041
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.0038
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 2200.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 2725.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000321'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000321/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00645
+    maxM: null
+  height:
+    nominalM: 0.0049
+    minM: null
+    maxM: 0.0054
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 2725.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.0119
+    minM: 0.0115
+    maxM: 0.0123
+  effectiveAreaM2: 4.6e-05
+  pathLengthM: 0.052
+  volumeM3: 2.36e-06
+  alValueNh: 5500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 2950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000621-2/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: null
+    maxM: 0.02185
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0124
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 2950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975000801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975000801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.004
+    minM: 0.00385
+    maxM: 0.00415
+  innerDiameter:
+    nominalM: 0.0024
+    minM: null
+    maxM: null
+  height:
+    nominalM: 0.00127
+    minM: 0.00114
+    maxM: 0.0014
+  effectiveAreaM2: 1.0e-06
+  pathLengthM: 0.0096
+  volumeM3: 9.8e-09
+  alValueNh: 650.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 3000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 3000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.00815
+    minM: 0.00785
+    maxM: 0.00845
+  effectiveAreaM2: 4.0e-05
+  pathLengthM: 0.062
+  volumeM3: 2.42e-06
+  alValueNh: 4000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 3025.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 3025.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975001901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975001901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.0127
+    minM: 0.01235
+    maxM: 0.01305
+  effectiveAreaM2: 2.99e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 6000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975002101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975002101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00495
+    minM: 0.0047
+    maxM: 0.00495
+  innerDiameter:
+    nominalM: 0.0022
+    minM: 0.0022
+    maxM: 0.00235
+  height:
+    nominalM: 0.0014
+    minM: 0.00115
+    maxM: 0.0014
+  effectiveAreaM2: 1.58e-06
+  pathLengthM: 0.0102
+  volumeM3: 1.57e-08
+  alValueNh: 770.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 5500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 6850.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0628
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0342
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000158
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 6850.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975004901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975004901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 3225.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975004921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975004921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: null
+    maxM: 0.0169
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0088
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 3225.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975005101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975005101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00475
+    minM: 0.0045
+    maxM: 0.00475
+  effectiveAreaM2: 1.45e-05
+  pathLengthM: 0.0385
+  volumeM3: 5.6e-07
+  alValueNh: 2350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975005121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975005121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: null
+    maxM: 0.0169
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0088
+    maxM: null
+  height:
+    nominalM: 0.00475
+    minM: null
+    maxM: 0.00525
+  effectiveAreaM2: 1.45e-05
+  pathLengthM: 0.0385
+  volumeM3: 5.6e-07
+  alValueNh: 2350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975006401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975006401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 6.2e-05
+  pathLengthM: 0.062
+  volumeM3: 3.8e-06
+  alValueNh: 6250.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975007601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975007601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.0127
+    minM: 0.01225
+    maxM: 0.01315
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 6100.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975007621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975007621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01365
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 6100.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975011101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975011101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.07365
+    minM: 0.07215
+    maxM: 0.07515
+  innerDiameter:
+    nominalM: 0.03885
+    minM: null
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: 0.0123
+    maxM: 0.0131
+  effectiveAreaM2: 0.000214
+  pathLengthM: 0.165
+  volumeM3: 3.53e-05
+  alValueNh: 8100.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5975011121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 75 Material
+    grade: '75'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5975011121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.07365
+    minM: null
+    maxM: 0.07565
+  innerDiameter:
+    nominalM: 0.03885
+    minM: 0.0376
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0136
+  effectiveAreaM2: 0.000214
+  pathLengthM: 0.165
+  volumeM3: 3.53e-05
+  alValueNh: 8100.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 1950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 4400.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000211'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000211/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00974
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00456
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.00334
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 4400.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00995
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00435
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.00355
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 4400.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00395
+    minM: 0.0038
+    maxM: 0.0041
+  innerDiameter:
+    nominalM: 0.00222
+    minM: 0.00212
+    maxM: 0.00232
+  height:
+    nominalM: 0.0014
+    minM: 0.00115
+    maxM: 0.0014
+  effectiveAreaM2: 1.1e-06
+  pathLengthM: 0.0092
+  volumeM3: 9.8e-09
+  alValueNh: 1430.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5976000811'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 76 Material
+    grade: '76'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5976000811/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00395
+    minM: null
+    maxM: 0.00414
+  innerDiameter:
+    nominalM: 0.00222
+    minM: 0.00208
+    maxM: null
+  height:
+    nominalM: 0.0014
+    minM: null
+    maxM: 0.00144
+  effectiveAreaM2: 1.1e-06
+  pathLengthM: 0.0092
+  volumeM3: 9.8e-09
+  alValueNh: 1430.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00595
+    minM: 0.0057
+    maxM: 0.00595
+  innerDiameter:
+    nominalM: 0.00305
+    minM: 0.00295
+    maxM: 0.00315
+  height:
+    nominalM: 0.00165
+    minM: 0.0014
+    maxM: 0.00165
+  effectiveAreaM2: 2.0e-06
+  pathLengthM: 0.013
+  volumeM3: 2.7e-08
+  alValueNh: 420.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 945.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000211'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: Parylene C
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000211/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.00974
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.00456
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.00334
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 945.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0102
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0041
+    maxM: null
+  height:
+    nominalM: 0.0033
+    minM: null
+    maxM: 0.0038
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 945.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 1180.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000321'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000321/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00645
+    maxM: null
+  height:
+    nominalM: 0.0049
+    minM: null
+    maxM: 0.0054
+  effectiveAreaM2: 1.29e-05
+  pathLengthM: 0.0295
+  volumeM3: 3.8e-07
+  alValueNh: 1180.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000501'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000501/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.0119
+    minM: 0.0115
+    maxM: 0.0123
+  effectiveAreaM2: 4.6e-05
+  pathLengthM: 0.052
+  volumeM3: 2.36e-06
+  alValueNh: 2375.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: 0.02065
+    maxM: 0.02135
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0129
+    maxM: 0.0135
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 1270.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977000621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977000621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.021
+    minM: null
+    maxM: 0.02185
+  innerDiameter:
+    nominalM: 0.0132
+    minM: 0.0124
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.43e-05
+  pathLengthM: 0.052
+  volumeM3: 1.26e-06
+  alValueNh: 1270.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.073
+  volumeM3: 2.7e-06
+  alValueNh: 1365.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001021'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001021/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: null
+    maxM: 0.03015
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.018
+    maxM: null
+  height:
+    nominalM: 0.0075
+    minM: null
+    maxM: 0.00825
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.073
+  volumeM3: 2.7e-06
+  alValueNh: 1365.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 1300.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001121'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001121/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 1.5e-05
+  pathLengthM: 0.0312
+  volumeM3: 4.7e-07
+  alValueNh: 1300.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.01385
+    minM: 0.01355
+    maxM: 0.01415
+  effectiveAreaM2: 6.9e-05
+  pathLengthM: 0.073
+  volumeM3: 5.1e-06
+  alValueNh: 2520.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001221'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001221/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: null
+    maxM: 0.03015
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.018
+    maxM: null
+  height:
+    nominalM: 0.01385
+    minM: null
+    maxM: 0.01465
+  effectiveAreaM2: 6.9e-05
+  pathLengthM: 0.073
+  volumeM3: 5.1e-06
+  alValueNh: 2520.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 3.08e-05
+  pathLengthM: 0.062
+  volumeM3: 1.9e-06
+  alValueNh: 1350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001321'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001321/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: null
+    maxM: 0.0265
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.0145
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 3.08e-05
+  pathLengthM: 0.062
+  volumeM3: 1.9e-06
+  alValueNh: 1350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001401/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.00815
+    minM: 0.00785
+    maxM: 0.00845
+  effectiveAreaM2: 4.0e-05
+  pathLengthM: 0.062
+  volumeM3: 2.44e-06
+  alValueNh: 1730.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0311
+    minM: 0.03035
+    maxM: 0.03185
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0079
+    minM: 0.0076
+    maxM: 0.0082
+  effectiveAreaM2: 4.7e-05
+  pathLengthM: 0.076
+  volumeM3: 3.53e-06
+  alValueNh: 1665.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0311
+    minM: null
+    maxM: 0.03235
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01805
+    maxM: null
+  height:
+    nominalM: 0.0079
+    minM: null
+    maxM: 0.0087
+  effectiveAreaM2: 4.7e-05
+  pathLengthM: 0.076
+  volumeM3: 3.53e-06
+  alValueNh: 1665.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: 0.031
+    maxM: 0.0325
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0095
+    minM: 0.0092
+    maxM: 0.0098
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 2090.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001721'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001721/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: null
+    maxM: 0.033
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01805
+    maxM: null
+  height:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0103
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 2090.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 1305.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.00635
+    minM: null
+    maxM: 0.0071
+  effectiveAreaM2: 2.62e-05
+  pathLengthM: 0.054
+  volumeM3: 1.42e-06
+  alValueNh: 1305.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0077
+    maxM: 0.0081
+  height:
+    nominalM: 0.0127
+    minM: 0.01235
+    maxM: 0.01305
+  effectiveAreaM2: 3.0e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 2595.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977001921'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977001921/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01345
+  innerDiameter:
+    nominalM: 0.0079
+    minM: 0.0072
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01355
+  effectiveAreaM2: 3.0e-05
+  pathLengthM: 0.0312
+  volumeM3: 9.3e-07
+  alValueNh: 2595.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 7.8e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 2400.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000157
+  pathLengthM: 0.144
+  volumeM3: 2.28e-05
+  alValueNh: 2950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977003821/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0628
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0342
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000157
+  pathLengthM: 0.144
+  volumeM3: 2.28e-05
+  alValueNh: 2950.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977004901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977004901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 1.99e-05
+  pathLengthM: 0.0385
+  volumeM3: 7.7e-07
+  alValueNh: 1400.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977005101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977005101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.016
+    minM: 0.0156
+    maxM: 0.0164
+  innerDiameter:
+    nominalM: 0.0096
+    minM: 0.0093
+    maxM: 0.0099
+  height:
+    nominalM: 0.00475
+    minM: 0.0045
+    maxM: 0.00475
+  effectiveAreaM2: 1.45e-05
+  pathLengthM: 0.0385
+  volumeM3: 5.6e-07
+  alValueNh: 1015.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977006401'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977006401-2/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0254
+    minM: 0.0248
+    maxM: 0.026
+  innerDiameter:
+    nominalM: 0.0155
+    minM: 0.015
+    maxM: 0.016
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 6.2e-05
+  pathLengthM: 0.062
+  volumeM3: 3.8e-06
+  alValueNh: 2700.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977007601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977007601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.0127
+    minM: 0.01225
+    maxM: 0.01315
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 2615.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5977011101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 77 Material
+    grade: '77'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5977011101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.07365
+    minM: 0.07215
+    maxM: 0.07515
+  innerDiameter:
+    nominalM: 0.03885
+    minM: 0.0381
+    maxM: 0.0396
+  height:
+    nominalM: 0.0127
+    minM: 0.0123
+    maxM: 0.0131
+  effectiveAreaM2: 0.000214
+  pathLengthM: 0.165
+  volumeM3: 3.53e-05
+  alValueNh: 3500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978001201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978001201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.01385
+    minM: 0.01355
+    maxM: 0.01415
+  effectiveAreaM2: 6.8e-05
+  pathLengthM: 0.073
+  volumeM3: 5.0e-06
+  alValueNh: 2695.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978001701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978001701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: 0.031
+    maxM: 0.0325
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  height:
+    nominalM: 0.0095
+    minM: 0.0092
+    maxM: 0.0098
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 2230.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978001721'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978001721/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03175
+    minM: null
+    maxM: 0.033
+  innerDiameter:
+    nominalM: 0.01905
+    minM: 0.01805
+    maxM: null
+  height:
+    nominalM: 0.0095
+    minM: null
+    maxM: 0.0103
+  effectiveAreaM2: 5.9e-05
+  pathLengthM: 0.076
+  volumeM3: 4.5e-06
+  alValueNh: 2230.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978002101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978002101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.00495
+    minM: 0.0047
+    maxM: 0.00495
+  innerDiameter:
+    nominalM: 0.0022
+    minM: 0.0022
+    maxM: 0.00235
+  height:
+    nominalM: 0.0014
+    minM: 0.00115
+    maxM: 0.0014
+  effectiveAreaM2: 1.6e-06
+  pathLengthM: 0.0102
+  volumeM3: 1.57e-08
+  alValueNh: 440.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978002701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978002701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.03555
+    minM: 0.0348
+    maxM: 0.0363
+  innerDiameter:
+    nominalM: 0.023
+    minM: 0.02245
+    maxM: 0.02355
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 9.06e-05
+  pathLengthM: 0.089
+  volumeM3: 7.0e-06
+  alValueNh: 2545.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978003801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978003801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: 0.0597
+    maxM: 0.0623
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0347
+    maxM: 0.0364
+  height:
+    nominalM: 0.0127
+    minM: 0.0122
+    maxM: 0.0132
+  effectiveAreaM2: 0.000157
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 3155.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978003821'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978003821-2/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.061
+    minM: null
+    maxM: 0.0628
+  innerDiameter:
+    nominalM: 0.03555
+    minM: 0.0342
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.0137
+  effectiveAreaM2: 0.000157
+  pathLengthM: 0.145
+  volumeM3: 2.28e-05
+  alValueNh: 3155.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978007601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978007601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.0127
+    minM: 0.01225
+    maxM: 0.01315
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 2795.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978007621'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: thermo-set plastic
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978007621/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: null
+    maxM: 0.023
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0129
+    maxM: null
+  height:
+    nominalM: 0.0127
+    minM: null
+    maxM: 0.01365
+  effectiveAreaM2: 5.2e-05
+  pathLengthM: 0.054
+  volumeM3: 2.83e-06
+  alValueNh: 2795.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978008001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978008001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.1566
+    minM: 0.1526
+    maxM: 0.1606
+  innerDiameter:
+    nominalM: 0.0703
+    minM: 0.0685
+    maxM: 0.0721
+  height:
+    nominalM: 0.01905
+    minM: 0.01855
+    maxM: 0.01955
+  effectiveAreaM2: 0.00076
+  pathLengthM: 0.317
+  volumeM3: 0.0002418
+  alValueNh: 7000.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978011101'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978011101/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.07365
+    minM: 0.07215
+    maxM: 0.07515
+  innerDiameter:
+    nominalM: 0.03885
+    minM: 0.0381
+    maxM: 0.0396
+  height:
+    nominalM: 0.0127
+    minM: 0.0123
+    maxM: 0.0131
+  effectiveAreaM2: 0.000213
+  pathLengthM: 0.165
+  volumeM3: 3.53e-05
+  alValueNh: 3740.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978014001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978014001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.1016
+    minM: 0.0995
+    maxM: 0.1037
+  innerDiameter:
+    nominalM: 0.0752
+    minM: 0.0737
+    maxM: 0.0767
+  height:
+    nominalM: 0.02475
+    minM: 0.0242
+    maxM: 0.0253
+  effectiveAreaM2: 0.000324
+  pathLengthM: 0.274
+  volumeM3: 8.87e-05
+  alValueNh: 3425.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978015901'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978015901/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.1
+    minM: 0.098
+    maxM: 0.102
+  innerDiameter:
+    nominalM: 0.055
+    minM: 0.0538
+    maxM: 0.0562
+  height:
+    nominalM: 0.0127
+    minM: 0.0124
+    maxM: 0.013
+  effectiveAreaM2: 0.000277
+  pathLengthM: 0.23
+  volumeM3: 6.37e-05
+  alValueNh: 3500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978017301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978017301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0492
+    minM: 0.048
+    maxM: 0.0504
+  innerDiameter:
+    nominalM: 0.0325
+    minM: 0.0317
+    maxM: 0.0333
+  height:
+    nominalM: 0.01905
+    minM: 0.0187
+    maxM: 0.0194
+  effectiveAreaM2: 0.000155
+  pathLengthM: 0.122
+  volumeM3: 1.89e-05
+  alValueNh: 3670.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978018601'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978018601/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0436
+    minM: 0.0426
+    maxM: 0.0446
+  innerDiameter:
+    nominalM: 0.0231
+    minM: 0.0226
+    maxM: 0.0236
+  height:
+    nominalM: 0.018
+    minM: 0.0175
+    maxM: 0.0185
+  effectiveAreaM2: 0.000178
+  pathLengthM: 0.098
+  volumeM3: 1.75e-05
+  alValueNh: 5260.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5978018701'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 78 Material
+    grade: '78'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5978018701/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0563
+    minM: 0.0551
+    maxM: 0.0575
+  innerDiameter:
+    nominalM: 0.0327
+    minM: 0.032
+    maxM: 0.0334
+  height:
+    nominalM: 0.018
+    minM: 0.0175
+    maxM: 0.0185
+  effectiveAreaM2: 0.000207
+  pathLengthM: 0.133
+  volumeM3: 2.76e-05
+  alValueNh: 4500.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5979000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 79 Material
+    grade: '79'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5979000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0032
+    minM: 0.00295
+    maxM: 0.0032
+  effectiveAreaM2: 7.2e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 626.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5979000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 79 Material
+    grade: '79'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5979000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 0.0132
+  pathLengthM: 0.0292
+  volumeM3: 0.000385
+  alValueNh: 794.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5979001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 79 Material
+    grade: '79'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5979001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.0732
+  volumeM3: 2.7e-06
+  alValueNh: 890.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5979001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 79 Material
+    grade: '79'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5979001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.6e-05
+  pathLengthM: 0.0541
+  volumeM3: 1.42e-06
+  alValueNh: 863.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5980000201'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 80 Material
+    grade: '80'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5980000201/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0095
+    minM: 0.0093
+    maxM: 0.0097
+  innerDiameter:
+    nominalM: 0.00475
+    minM: 0.0046
+    maxM: 0.0049
+  height:
+    nominalM: 0.0033
+    minM: 0.00305
+    maxM: 0.0033
+  effectiveAreaM2: 7.3e-06
+  pathLengthM: 0.0207
+  volumeM3: 1.5e-07
+  alValueNh: 245.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5980000301'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 80 Material
+    grade: '80'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5980000301/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0127
+    minM: 0.01245
+    maxM: 0.01295
+  innerDiameter:
+    nominalM: 0.00715
+    minM: 0.00695
+    maxM: 0.00735
+  height:
+    nominalM: 0.0049
+    minM: 0.00465
+    maxM: 0.0049
+  effectiveAreaM2: 0.0132
+  pathLengthM: 0.0292
+  volumeM3: 0.000385
+  alValueNh: 340.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5980001001'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 80 Material
+    grade: '80'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5980001001/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.029
+    minM: 0.02835
+    maxM: 0.02965
+  innerDiameter:
+    nominalM: 0.019
+    minM: 0.0185
+    maxM: 0.0195
+  height:
+    nominalM: 0.0075
+    minM: 0.00725
+    maxM: 0.00775
+  effectiveAreaM2: 3.7e-05
+  pathLengthM: 0.0732
+  volumeM3: 2.7e-06
+  alValueNh: 350.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5980001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 80 Material
+    grade: '80'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5980001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.6e-05
+  pathLengthM: 0.0542
+  volumeM3: 1.42e-06
+  alValueNh: 330.0
+  reviewStatus: draft
+  reviewedBy: null
+- partNumber: '5995001801'
+  manufacturer: Fair-Rite
+  family: ferrite-toroid
+  material:
+    manufacturer: Fair-Rite
+    name: 95 Material
+    grade: '95'
+  coating: uncoated (burnished)
+  catalogRevision: fair-rite-web-2026-07-15
+  sourceUrl: https://fair-rite.com/product/toroids-5995001801/
+  sourcePage: 1
+  outerDiameter:
+    nominalM: 0.0221
+    minM: 0.0217
+    maxM: 0.0225
+  innerDiameter:
+    nominalM: 0.0137
+    minM: 0.0134
+    maxM: 0.014
+  height:
+    nominalM: 0.00635
+    minM: 0.0061
+    maxM: 0.0066
+  effectiveAreaM2: 2.6e-05
+  pathLengthM: 0.0541
+  volumeM3: 1.42e-06
+  alValueNh: 1824.0
+  reviewStatus: draft
+  reviewedBy: null
