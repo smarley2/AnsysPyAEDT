@@ -16,7 +16,10 @@ Rectangle {
 
         PerspectiveCamera {
             id: camera
-            position: hasPreviewEntries ? Qt.vector3d(0, -80, 40) : Qt.vector3d(0, 0, 450)
+            // Project view: 3/4 view aimed at the origin (forward = -Z rotated
+            // +45 deg about X exactly hits (0,0,0) from (0,-60,60)).
+            position: hasPreviewEntries ? Qt.vector3d(0, -60, 60) : Qt.vector3d(0, 0, 450)
+            eulerRotation.x: hasPreviewEntries ? 45 : 0
         }
         OrbitCameraController { camera: camera; origin: originNode }
         Node { id: originNode }
