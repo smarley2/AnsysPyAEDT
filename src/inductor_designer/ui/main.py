@@ -100,3 +100,7 @@ def main() -> int:
     if hasattr(window, "requestActivate"):
         window.requestActivate()
     return int(app.exec())
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
