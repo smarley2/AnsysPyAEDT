@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.geometry.primitives import Vec3, sample_path
-from inductor_designer.geometry.turn_path import build_connector, build_lead, build_turn_loop
+from inductor_designer.geometry.turn_path import build_lead, build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +169,9 @@ def tessellate_winding(
     d = packing.insulated_diameter_m
     radius = d / 2.0
     meshes: list[Mesh] = []
+    # Design decision (reviewed 2026-07-14): each turn is one closed loop; no
+    # turn-to-turn connector is modeled or drawn. Maxwell (M3) assigns one
+    # coil terminal per closed turn and groups them into the winding.
     for layer in packing.layers:
         for station in layer.station_deg:
             loop = build_turn_loop(core, layer.index, d, station)
@@ -178,9 +181,6 @@ def tessellate_winding(
             # zero-length step and blow up tangent computation in tube().
             points = list(sample_path(loop))
             meshes.append(tube(points, radius, tube_sides))
-        for a, b in zip(layer.station_deg, layer.station_deg[1:], strict=False):
-            connector = build_connector(core, layer.index, d, a, b)
-            meshes.append(tube(list(sample_path([connector])), radius, tube_sides))
     # Draw lead stubs at the first and last turn stations so they attach to
     # the winding's outer runs; lead_in/out_deg mark the reserved exit gap in
     # the manifest but no turn (and thus no wire) sits at those angles.

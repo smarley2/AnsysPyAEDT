@@ -109,8 +109,9 @@ def pack_winding(core: FinishedCore, spec: WindingSpec) -> PackedWinding:
                 min_pitch_deg=round(math.degrees(min_pitch), 9),
             )
         )
+        # Design decision (reviewed 2026-07-14): each turn is one closed loop;
+        # no turn-to-turn connector wire is modeled, so none is counted here.
         wire_length += count * turn_loop_length_m(core, layer_index, d)
-        wire_length += (count - 1) * pitch * (core.r_outer_m + build)
     wire_length += 2.0 * 3.0 * d
 
     return PackedWinding(
