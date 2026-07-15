@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.geometry.primitives import Vec3, sample_path
-from inductor_designer.geometry.turn_path import build_lead, build_turn_loop
+from inductor_designer.geometry.turn_path import build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,11 +181,4 @@ def tessellate_winding(
             # zero-length step and blow up tangent computation in tube().
             points = list(sample_path(loop))
             meshes.append(tube(points, radius, tube_sides))
-    # Draw lead stubs at the first and last turn stations so they attach to
-    # the winding's outer runs; lead_in/out_deg mark the reserved exit gap in
-    # the manifest but no turn (and thus no wire) sits at those angles.
-    first_layer = packing.layers[0]
-    for station in (first_layer.station_deg[0], first_layer.station_deg[-1]):
-        lead = build_lead(core, first_layer.index, d, station)
-        meshes.append(tube(list(sample_path([lead])), radius, tube_sides))
     return _merge(meshes)

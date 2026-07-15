@@ -107,12 +107,12 @@ available window.
 ### Design note: one closed loop per turn
 
 Reviewed decision (2026-07-14): each winding turn is modeled as one closed
-planar D-loop; no turn-to-turn connector wire exists in the geometry, the wire
-length estimate, or the preview. Maxwell (Milestone 3) assigns one coil
-terminal per closed turn and groups the turns into the winding, which is the
-standard Maxwell treatment and avoids helical geometry entirely. Lead stubs
-attach to the first and last turns; `leadInDeg`/`leadOutDeg` in the manifest
-mark the reserved exit gap, not wire.
+planar D-loop; no turn-to-turn connector and no lead wire exists in the
+geometry, the wire length estimate, or the preview. Maxwell (Milestone 3)
+assigns one coil terminal per closed turn and groups the turns into the
+winding, which is the standard Maxwell treatment and avoids helical geometry
+entirely. `leadInDeg`/`leadOutDeg` in the manifest mark the reserved packing
+gap at the sector ends, not wire.
 
 ### Current state
 

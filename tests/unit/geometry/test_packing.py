@@ -64,11 +64,10 @@ def test_infeasible_reports_max_turns() -> None:
 
 
 def test_wire_length_analytic() -> None:
-    # Each turn is one closed loop (reviewed decision); no connector wire.
+    # Each turn is one closed loop (reviewed decision); no connector or lead wire.
     packed = pack_winding(CORE, spec(turns=10))
     loops = 10 * turn_loop_length_m(CORE, 1, D)
-    leads = 2 * 3 * D
-    assert packed.wire_length_m == pytest.approx(loops + leads, rel=1e-9)
+    assert packed.wire_length_m == pytest.approx(loops, rel=1e-9)
 
 
 def test_full_circle_sector_reserves_lead_gap() -> None:

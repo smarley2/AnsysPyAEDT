@@ -73,7 +73,7 @@
         "w1_TermOut"
       ],
       "windingId": "w1",
-      "wireLengthM": 0.412431006
+      "wireLengthM": 0.405723006
     },
     {
       "bareDiameterM": 0.001023687,
@@ -124,7 +124,7 @@
         "w2_TermOut"
       ],
       "windingId": "w2",
-      "wireLengthM": 0.412431006
+      "wireLengthM": 0.405723006
     }
   ]
 }

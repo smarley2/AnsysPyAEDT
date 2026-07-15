@@ -110,9 +110,8 @@ def pack_winding(core: FinishedCore, spec: WindingSpec) -> PackedWinding:
             )
         )
         # Design decision (reviewed 2026-07-14): each turn is one closed loop;
-        # no turn-to-turn connector wire is modeled, so none is counted here.
+        # no connector or lead wire is modeled, so none is counted here.
         wire_length += count * turn_loop_length_m(core, layer_index, d)
-    wire_length += 2.0 * 3.0 * d
 
     return PackedWinding(
         winding_id=spec.winding_id,
