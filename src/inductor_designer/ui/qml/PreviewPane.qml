@@ -1,19 +1,31 @@
 import QtQuick
 import QtQuick3D
+import QtQuick3D.Helpers
 
 Rectangle {
     color: "#111827"
 
+    property bool hasPreviewEntries: typeof previewEntries !== "undefined"
+
     View3D {
         anchors.fill: parent
         environment: SceneEnvironment {
-            clearColor: "#111827"
+            clearColor: hasPreviewEntries ? "#1a1a2e" : "#111827"
             backgroundMode: SceneEnvironment.Color
         }
 
-        PerspectiveCamera { z: 450 }
-        DirectionalLight { eulerRotation.x: -35; eulerRotation.y: -30 }
+        PerspectiveCamera {
+            id: camera
+            position: hasPreviewEntries ? Qt.vector3d(0, -80, 40) : Qt.vector3d(0, 0, 450)
+        }
+        OrbitCameraController { camera: camera; origin: originNode }
+        Node { id: originNode }
+        DirectionalLight { eulerRotation.x: -30 }
+        DirectionalLight { eulerRotation.x: 150; brightness: 0.5 }
+
+        // Foundation preview spike: shown until a real project supplies previewEntries.
         Model {
+            visible: !hasPreviewEntries
             source: "#Cylinder"
             scale: Qt.vector3d(1.8, 0.45, 1.8)
             eulerRotation.x: 68
@@ -24,11 +36,24 @@ Rectangle {
             }
         }
         Model {
+            visible: !hasPreviewEntries
             source: "#Cylinder"
             x: 120
             scale: Qt.vector3d(0.12, 1.1, 0.12)
             eulerRotation.x: 68
             materials: PrincipledMaterial { baseColor: "#d97706" }
+        }
+
+        Repeater3D {
+            model: hasPreviewEntries ? previewEntries : []
+            Model {
+                geometry: modelData.geometry
+                scale: Qt.vector3d(1000, 1000, 1000) // meters -> millimeters for camera sanity
+                materials: DefaultMaterial {
+                    diffuseColor: modelData.color
+                    opacity: modelData.opacity
+                }
+            }
         }
     }
 }

@@ -1,0 +1,43 @@
+# DRAFT transcription. Metric rows: IEC 60317-0-1 grade 1 / grade 2 maximum
+# overall diameter. AWG rows: NEMA MW1000 single / heavy build maximum overall
+# diameter. Verify every value against the standard before flipping
+# reviewStatus to reviewed. Names must match catalog/conductors/round-wire.yaml.
+source: IEC 60317-0-1 (metric) and NEMA MW1000 (AWG) maximum overall diameters
+reviewStatus: draft
+reviewedBy: null
+records:
+  - {name: "0.2 mm",  grade1DiameterM: 0.000222, grade2DiameterM: 0.000239}
+  - {name: "0.25 mm", grade1DiameterM: 0.000275, grade2DiameterM: 0.000297}
+  - {name: "0.315 mm", grade1DiameterM: 0.000342, grade2DiameterM: 0.000367}
+  - {name: "0.4 mm",  grade1DiameterM: 0.000431, grade2DiameterM: 0.000459}
+  - {name: "0.5 mm",  grade1DiameterM: 0.000536, grade2DiameterM: 0.000566}
+  - {name: "0.63 mm", grade1DiameterM: 0.000671, grade2DiameterM: 0.000704}
+  - {name: "0.8 mm",  grade1DiameterM: 0.000845, grade2DiameterM: 0.000881}
+  - {name: "1 mm",    grade1DiameterM: 0.001050, grade2DiameterM: 0.001089}
+  - {name: "1.25 mm", grade1DiameterM: 0.001305, grade2DiameterM: 0.001349}
+  - {name: "1.6 mm",  grade1DiameterM: 0.001659, grade2DiameterM: 0.001706}
+  - {name: "2 mm",    grade1DiameterM: 0.002061, grade2DiameterM: 0.002112}
+  - {name: "2.5 mm",  grade1DiameterM: 0.002567, grade2DiameterM: 0.002622}
+  - {name: "AWG 10", grade1DiameterM: 0.002643, grade2DiameterM: 0.002721}
+  - {name: "AWG 11", grade1DiameterM: 0.002363, grade2DiameterM: 0.002435}
+  - {name: "AWG 12", grade1DiameterM: 0.002113, grade2DiameterM: 0.002182}
+  - {name: "AWG 13", grade1DiameterM: 0.001885, grade2DiameterM: 0.001946}
+  - {name: "AWG 14", grade1DiameterM: 0.001681, grade2DiameterM: 0.001737}
+  - {name: "AWG 15", grade1DiameterM: 0.001501, grade2DiameterM: 0.001554}
+  - {name: "AWG 16", grade1DiameterM: 0.001341, grade2DiameterM: 0.001392}
+  - {name: "AWG 17", grade1DiameterM: 0.001199, grade2DiameterM: 0.001247}
+  - {name: "AWG 18", grade1DiameterM: 0.001072, grade2DiameterM: 0.001118}
+  - {name: "AWG 19", grade1DiameterM: 0.000958, grade2DiameterM: 0.001001}
+  - {name: "AWG 20", grade1DiameterM: 0.000856, grade2DiameterM: 0.000897}
+  - {name: "AWG 21", grade1DiameterM: 0.000767, grade2DiameterM: 0.000805}
+  - {name: "AWG 22", grade1DiameterM: 0.000688, grade2DiameterM: 0.000723}
+  - {name: "AWG 23", grade1DiameterM: 0.000615, grade2DiameterM: 0.000649}
+  - {name: "AWG 24", grade1DiameterM: 0.000552, grade2DiameterM: 0.000583}
+  - {name: "AWG 25", grade1DiameterM: 0.000494, grade2DiameterM: 0.000524}
+  - {name: "AWG 26", grade1DiameterM: 0.000442, grade2DiameterM: 0.000470}
+  - {name: "AWG 27", grade1DiameterM: 0.000397, grade2DiameterM: 0.000424}
+  - {name: "AWG 28", grade1DiameterM: 0.000355, grade2DiameterM: 0.000380}
+  - {name: "AWG 29", grade1DiameterM: 0.000319, grade2DiameterM: 0.000343}
+  - {name: "AWG 30", grade1DiameterM: 0.000285, grade2DiameterM: 0.000308}
+  - {name: "AWG 31", grade1DiameterM: 0.000257, grade2DiameterM: 0.000279}
+  - {name: "AWG 32", grade1DiameterM: 0.000231, grade2DiameterM: 0.000251}

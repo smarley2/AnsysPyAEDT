@@ -1,9 +1,9 @@
 """Generate the canonical round-wire conductor catalog.
 
 Bare AWG diameters use the exact ASTM B258 formula. Insulated (grade 1/2)
-diameters are intentionally null in Milestone 1: they gain a consumer in the
-Milestone 2 packing engine, and the IEC 60317-0-1 maximum-overall-diameter
-tables must be transcribed and reviewed before they carry values.
+diameters come from catalog/conductors/insulation-round-wire.yaml, a draft
+transcription of the IEC 60317-0-1 / NEMA MW1000 maximum-overall-diameter
+tables that must be reviewed before it is trusted for production use.
 """
 
 from __future__ import annotations
@@ -15,20 +15,34 @@ import yaml
 
 from inductor_designer.domain.units import awg_bare_diameter_m
 
-_CATALOG_REVISION = "round-wire-1"
+_CATALOG_REVISION = "round-wire-2"
 _AWG_RANGE = range(10, 33)
 _IEC_DIAMETERS_MM = (0.20, 0.25, 0.315, 0.40, 0.50, 0.63, 0.80, 1.00, 1.25, 1.60, 2.00, 2.50)
+_INSULATION_PATH = Path("catalog/conductors/insulation-round-wire.yaml")
+
+
+def _load_insulation(path: Path) -> dict[str, tuple[float, float]]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return {
+        entry["name"]: (entry["grade1DiameterM"], entry["grade2DiameterM"])
+        for entry in data["records"]
+    }
 
 
 def _record(
-    name: str, standard: str, bare_diameter_m: float, source: str
+    name: str,
+    standard: str,
+    bare_diameter_m: float,
+    source: str,
+    insulation: dict[str, tuple[float, float]],
 ) -> dict[str, object]:
+    grades = insulation.get(name)
     return {
         "name": name,
         "standard": standard,
         "bareDiameterM": round(bare_diameter_m, 9),
-        "grade1DiameterM": None,
-        "grade2DiameterM": None,
+        "grade1DiameterM": grades[0] if grades else None,
+        "grade2DiameterM": grades[1] if grades else None,
         "source": source,
         "catalogRevision": _CATALOG_REVISION,
         "reviewStatus": "draft",
@@ -36,13 +50,20 @@ def _record(
     }
 
 
-def generate_records() -> list[dict[str, object]]:
+def generate_records(insulation_path: Path = _INSULATION_PATH) -> list[dict[str, object]]:
+    insulation = _load_insulation(insulation_path)
     records = [
-        _record(f"AWG {gauge}", "awg", awg_bare_diameter_m(gauge), "ASTM B258 formula")
+        _record(f"AWG {gauge}", "awg", awg_bare_diameter_m(gauge), "ASTM B258 formula", insulation)
         for gauge in _AWG_RANGE
     ]
     records.extend(
-        _record(f"{diameter_mm:g} mm", "iec-60317", diameter_mm / 1000.0, "IEC 60317 nominal")
+        _record(
+            f"{diameter_mm:g} mm",
+            "iec-60317",
+            diameter_mm / 1000.0,
+            "IEC 60317 nominal",
+            insulation,
+        )
         for diameter_mm in _IEC_DIAMETERS_MM
     )
     return sorted(records, key=lambda record: str(record["name"]))

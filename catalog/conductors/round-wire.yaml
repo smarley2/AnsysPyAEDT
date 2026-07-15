@@ -3,315 +3,315 @@ records:
 - name: 0.2 mm
   standard: iec-60317
   bareDiameterM: 0.0002
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000222
+  grade2DiameterM: 0.000239
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.25 mm
   standard: iec-60317
   bareDiameterM: 0.00025
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000275
+  grade2DiameterM: 0.000297
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.315 mm
   standard: iec-60317
   bareDiameterM: 0.000315
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000342
+  grade2DiameterM: 0.000367
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.4 mm
   standard: iec-60317
   bareDiameterM: 0.0004
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000431
+  grade2DiameterM: 0.000459
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.5 mm
   standard: iec-60317
   bareDiameterM: 0.0005
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000536
+  grade2DiameterM: 0.000566
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.63 mm
   standard: iec-60317
   bareDiameterM: 0.00063
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000671
+  grade2DiameterM: 0.000704
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 0.8 mm
   standard: iec-60317
   bareDiameterM: 0.0008
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000845
+  grade2DiameterM: 0.000881
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 1 mm
   standard: iec-60317
   bareDiameterM: 0.001
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.00105
+  grade2DiameterM: 0.001089
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 1.25 mm
   standard: iec-60317
   bareDiameterM: 0.00125
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001305
+  grade2DiameterM: 0.001349
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 1.6 mm
   standard: iec-60317
   bareDiameterM: 0.0016
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001659
+  grade2DiameterM: 0.001706
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 2 mm
   standard: iec-60317
   bareDiameterM: 0.002
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.002061
+  grade2DiameterM: 0.002112
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: 2.5 mm
   standard: iec-60317
   bareDiameterM: 0.0025
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.002567
+  grade2DiameterM: 0.002622
   source: IEC 60317 nominal
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 10
   standard: awg
   bareDiameterM: 0.002588187
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.002643
+  grade2DiameterM: 0.002721
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 11
   standard: awg
   bareDiameterM: 0.002304847
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.002363
+  grade2DiameterM: 0.002435
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 12
   standard: awg
   bareDiameterM: 0.002052525
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.002113
+  grade2DiameterM: 0.002182
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 13
   standard: awg
   bareDiameterM: 0.001827827
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001885
+  grade2DiameterM: 0.001946
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 14
   standard: awg
   bareDiameterM: 0.001627727
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001681
+  grade2DiameterM: 0.001737
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 15
   standard: awg
   bareDiameterM: 0.001449532
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001501
+  grade2DiameterM: 0.001554
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 16
   standard: awg
   bareDiameterM: 0.001290846
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001341
+  grade2DiameterM: 0.001392
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 17
   standard: awg
   bareDiameterM: 0.001149531
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001199
+  grade2DiameterM: 0.001247
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 18
   standard: awg
   bareDiameterM: 0.001023687
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.001072
+  grade2DiameterM: 0.001118
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 19
   standard: awg
   bareDiameterM: 0.00091162
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000958
+  grade2DiameterM: 0.001001
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 20
   standard: awg
   bareDiameterM: 0.000811821
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000856
+  grade2DiameterM: 0.000897
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 21
   standard: awg
   bareDiameterM: 0.000722947
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000767
+  grade2DiameterM: 0.000805
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 22
   standard: awg
   bareDiameterM: 0.000643803
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000688
+  grade2DiameterM: 0.000723
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 23
   standard: awg
   bareDiameterM: 0.000573323
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000615
+  grade2DiameterM: 0.000649
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 24
   standard: awg
   bareDiameterM: 0.000510559
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000552
+  grade2DiameterM: 0.000583
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 25
   standard: awg
   bareDiameterM: 0.000454666
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000494
+  grade2DiameterM: 0.000524
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 26
   standard: awg
   bareDiameterM: 0.000404892
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000442
+  grade2DiameterM: 0.00047
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 27
   standard: awg
   bareDiameterM: 0.000360567
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000397
+  grade2DiameterM: 0.000424
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 28
   standard: awg
   bareDiameterM: 0.000321094
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000355
+  grade2DiameterM: 0.00038
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 29
   standard: awg
   bareDiameterM: 0.000285942
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000319
+  grade2DiameterM: 0.000343
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 30
   standard: awg
   bareDiameterM: 0.000254639
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000285
+  grade2DiameterM: 0.000308
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 31
   standard: awg
   bareDiameterM: 0.000226763
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000257
+  grade2DiameterM: 0.000279
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null
 - name: AWG 32
   standard: awg
   bareDiameterM: 0.000201938
-  grade1DiameterM: null
-  grade2DiameterM: null
+  grade1DiameterM: 0.000231
+  grade2DiameterM: 0.000251
   source: ASTM B258 formula
-  catalogRevision: round-wire-1
+  catalogRevision: round-wire-2
   reviewStatus: draft
   reviewedBy: null

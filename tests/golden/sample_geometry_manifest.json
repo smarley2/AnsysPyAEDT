@@ -1,0 +1,130 @@
+{
+  "collisions": [],
+  "core": {
+    "cornerRadiusM": 0.0,
+    "halfHeightM": 0.005715,
+    "name": "Core",
+    "rInnerM": 0.00973,
+    "rOuterM": 0.01683
+  },
+  "planar": {
+    "conductorCount": 40,
+    "depthM": 0.01143,
+    "rInnerM": 0.00973,
+    "rOuterM": 0.01683
+  },
+  "schemaVersion": 1,
+  "symmetry": {
+    "cutAnglesDeg": [
+      345.0,
+      165.0
+    ],
+    "multiplier": 2,
+    "sectorDeg": 180.0
+  },
+  "symmetryRefusal": null,
+  "windings": [
+    {
+      "bareDiameterM": 0.001023687,
+      "insulatedDiameterM": 0.001118,
+      "layers": [
+        {
+          "layer": 1,
+          "minPitchDeg": 7.615052881,
+          "pitchDeg": 13.476989424,
+          "radialBuildM": 0.000559,
+          "stationsDeg": [
+            14.353547593,
+            27.830537017,
+            41.307526441,
+            54.784515864,
+            68.261505288,
+            81.738494712,
+            95.215484136,
+            108.692473559,
+            122.169462983,
+            135.646452407
+          ],
+          "turnNames": [
+            "w1_L01_T001",
+            "w1_L01_T002",
+            "w1_L01_T003",
+            "w1_L01_T004",
+            "w1_L01_T005",
+            "w1_L01_T006",
+            "w1_L01_T007",
+            "w1_L01_T008",
+            "w1_L01_T009",
+            "w1_L01_T010"
+          ]
+        }
+      ],
+      "leadInDeg": 3.807526441,
+      "leadNames": [
+        "w1_LeadIn",
+        "w1_LeadOut"
+      ],
+      "leadOutDeg": 146.192473559,
+      "occupancy": 0.416666667,
+      "sectorDeg": 150.0,
+      "startDeg": 0.0,
+      "terminalNames": [
+        "w1_TermIn",
+        "w1_TermOut"
+      ],
+      "windingId": "w1",
+      "wireLengthM": 0.449242833
+    },
+    {
+      "bareDiameterM": 0.001023687,
+      "insulatedDiameterM": 0.001118,
+      "layers": [
+        {
+          "layer": 1,
+          "minPitchDeg": 7.615052881,
+          "pitchDeg": 13.476989424,
+          "radialBuildM": 0.000559,
+          "stationsDeg": [
+            194.353547593,
+            207.830537017,
+            221.307526441,
+            234.784515864,
+            248.261505288,
+            261.738494712,
+            275.215484136,
+            288.692473559,
+            302.169462983,
+            315.646452407
+          ],
+          "turnNames": [
+            "w2_L01_T001",
+            "w2_L01_T002",
+            "w2_L01_T003",
+            "w2_L01_T004",
+            "w2_L01_T005",
+            "w2_L01_T006",
+            "w2_L01_T007",
+            "w2_L01_T008",
+            "w2_L01_T009",
+            "w2_L01_T010"
+          ]
+        }
+      ],
+      "leadInDeg": 183.807526441,
+      "leadNames": [
+        "w2_LeadIn",
+        "w2_LeadOut"
+      ],
+      "leadOutDeg": 326.192473559,
+      "occupancy": 0.416666667,
+      "sectorDeg": 150.0,
+      "startDeg": 180.0,
+      "terminalNames": [
+        "w2_TermIn",
+        "w2_TermOut"
+      ],
+      "windingId": "w2",
+      "wireLengthM": 0.449242833
+    }
+  ]
+}

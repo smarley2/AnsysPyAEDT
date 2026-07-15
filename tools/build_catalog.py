@@ -59,6 +59,10 @@ def build(source_root: Path, schema_root: Path, out_path: Path) -> None:
         cores.extend(_load_records(path, core_validator))
     conductors: list[dict[str, Any]] = []
     for path in sorted((source_root / "conductors").glob("*.yaml")):
+        # insulation-*.yaml files are draft source data for tools/generate_conductors.py,
+        # not canonical conductor catalog records — skip them here.
+        if path.stem.startswith("insulation-"):
+            continue
         conductors.extend(_load_records(path, conductor_validator))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

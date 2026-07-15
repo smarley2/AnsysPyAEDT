@@ -32,7 +32,7 @@ def test_awg_range_and_metric_sizes_present() -> None:
 def test_awg_18_value() -> None:
     record = next(r for r in generate_records() if r["name"] == "AWG 18")
     assert record["bareDiameterM"] == pytest.approx(0.00102362, rel=1e-3)
-    assert record["grade1DiameterM"] is None
+    assert record["grade1DiameterM"] == pytest.approx(0.001072, rel=1e-3)
 
 
 def test_generation_is_deterministic() -> None:
@@ -51,3 +51,20 @@ def test_committed_file_matches_generator() -> None:
         (ROOT / "catalog/conductors/round-wire.yaml").read_text(encoding="utf-8")
     )
     assert committed["records"] == generate_records()
+
+
+def test_all_records_have_insulated_diameters() -> None:
+    for record in generate_records():
+        assert record["grade1DiameterM"] is not None, record["name"]
+        assert record["grade2DiameterM"] is not None, record["name"]
+        bare = record["bareDiameterM"]
+        assert bare < record["grade1DiameterM"] < record["grade2DiameterM"]  # type: ignore[operator]
+
+
+def test_insulation_file_covers_every_conductor() -> None:
+    insulation = yaml.safe_load(
+        (ROOT / "catalog/conductors/insulation-round-wire.yaml").read_text(encoding="utf-8")
+    )
+    names = {entry["name"] for entry in insulation["records"]}
+    generated = {record["name"] for record in generate_records()}
+    assert generated <= names

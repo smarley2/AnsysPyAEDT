@@ -8,6 +8,8 @@ Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commerci
 
 Milestone 1 status: **Accepted 2026-07-14**. Powder-core records reviewed against the 2025 Magnetics catalog; ferrite records stay `draft` until their catalog review. Milestone 2 is the active milestone.
 
+Milestone 2 implementation is complete, pending review.
+
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Approved product design | Non-AEDT CI passes; controlled runs create and save trivial Maxwell 2D and 3D projects; capability results are recorded for the release matrix |

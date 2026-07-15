@@ -1,0 +1,91 @@
+{
+  "core": {
+    "kind": "catalog",
+    "overrides": [],
+    "partNumber": "0077071A7",
+    "snapshot": {
+      "alValueNh": 61.0,
+      "catalogRevision": "magnetics-powder-2025",
+      "coating": "black epoxy",
+      "effectiveAreaM2": 6.56e-05,
+      "family": "powder-toroid",
+      "height": {
+        "maxM": 0.01143,
+        "minM": null,
+        "nominalM": 0.01067
+      },
+      "innerDiameter": {
+        "maxM": null,
+        "minM": 0.01946,
+        "nominalM": 0.02009
+      },
+      "manufacturer": "Magnetics",
+      "material": {
+        "grade": "60",
+        "manufacturer": "Magnetics",
+        "name": "Kool Mu"
+      },
+      "outerDiameter": {
+        "maxM": 0.03366,
+        "minM": null,
+        "nominalM": 0.03279
+      },
+      "partNumber": "0077071A7",
+      "pathLengthM": 0.0814,
+      "reviewStatus": "reviewed",
+      "reviewedBy": "Fabio Posser",
+      "sourcePage": 173,
+      "sourceUrl": "https://www.mag-inc.com/Media/Magnetics/File-Library/Product%20Literature/Powder%20Core%20Literature/Magnetics-Powder-Core-Catalog.pdf",
+      "volumeM3": 5.34e-06
+    }
+  },
+  "metadata": {
+    "description": "",
+    "name": "M2 golden sample"
+  },
+  "projectId": "a7e5b21c-6a53-4f0e-9d3a-2f1b4c8d9e0f",
+  "schemaVersion": 2,
+  "target": {
+    "aedtRelease": "2025.2",
+    "dimensionMode": "3d",
+    "edition": "commercial"
+  },
+  "windings": [
+    {
+      "acMagnitudeA": 2.0,
+      "acPhaseDeg": 0.0,
+      "conductor": "AWG 18",
+      "currentDirection": "forward",
+      "dcCurrentA": 5.0,
+      "frequencyHz": 100000.0,
+      "label": "w1",
+      "minClearanceM": 0.001,
+      "minSpacingM": 0.0001,
+      "mode": "solid",
+      "sectorDeg": 150.0,
+      "startAngleDeg": 0.0,
+      "terminalIntent": "",
+      "turns": 10,
+      "windingDirection": "cw",
+      "windingId": "w1"
+    },
+    {
+      "acMagnitudeA": 2.0,
+      "acPhaseDeg": 0.0,
+      "conductor": "AWG 18",
+      "currentDirection": "forward",
+      "dcCurrentA": 5.0,
+      "frequencyHz": 100000.0,
+      "label": "w2",
+      "minClearanceM": 0.001,
+      "minSpacingM": 0.0001,
+      "mode": "solid",
+      "sectorDeg": 150.0,
+      "startAngleDeg": 180.0,
+      "terminalIntent": "",
+      "turns": 10,
+      "windingDirection": "cw",
+      "windingId": "w2"
+    }
+  ]
+}

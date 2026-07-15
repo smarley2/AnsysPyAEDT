@@ -104,6 +104,27 @@ only for manual cores that carry no finish data. Do not build winding geometry
 from `nominalM` on catalog cores — it models the bare core and overestimates the
 available window.
 
+### Current state
+
+Milestone 2 implementation is complete, pending review. Implemented deliverables:
+
+- Finished-core resolution that honors the design note above (`resolve_finished_core`).
+- D-shaped turn paths with closed 8-segment planar loops.
+- Multi-layer concentric-shell winding packing.
+- Cross-winding clearance and occupancy reporting.
+- Deterministic object naming.
+- Data-level symmetry plans (`propose_symmetry_plan`).
+- The 2D planar equivalent model.
+- A canonical geometry manifest with a committed golden fixture.
+- The hypothesis property suite for packing invariants.
+- Core and winding tessellation into triangle-soup meshes.
+- The Qt Quick 3D orbit-camera preview viewer.
+
+Remaining work: insulation data (`catalog/conductors/insulation-round-wire.yaml`)
+remains `draft` pending human review against IEC 60317-0-1 / NEMA MW1000; the
+five ferrite core records remain `draft`; the interactive preview visual/orbit
+check is pending a human with a display.
+
 ## Milestone 3: Maxwell 3D MVP
 
 - Generate toroid core geometry and round-wire windings.
