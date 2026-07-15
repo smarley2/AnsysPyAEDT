@@ -181,7 +181,11 @@ def tessellate_winding(
         for a, b in zip(layer.station_deg, layer.station_deg[1:], strict=False):
             connector = build_connector(core, layer.index, d, a, b)
             meshes.append(tube(list(sample_path([connector])), radius, tube_sides))
-    for station in (packing.lead_in_deg, packing.lead_out_deg):
-        lead = build_lead(core, 1, d, station)
+    # Draw lead stubs at the first and last turn stations so they attach to
+    # the winding's outer runs; lead_in/out_deg mark the reserved exit gap in
+    # the manifest but no turn (and thus no wire) sits at those angles.
+    first_layer = packing.layers[0]
+    for station in (first_layer.station_deg[0], first_layer.station_deg[-1]):
+        lead = build_lead(core, first_layer.index, d, station)
         meshes.append(tube(list(sample_path([lead])), radius, tube_sides))
     return _merge(meshes)
