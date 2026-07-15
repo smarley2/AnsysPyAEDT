@@ -60,17 +60,32 @@ def main() -> int:
     if args.project is not None:
         from inductor_designer.application.services.geometry_model import GeometryModelError
 
+        if not args.project.is_file():
+            print(f"Project file not found: {args.project}", file=sys.stderr)
+            return 4
         if not args.catalog.is_file():
-            print("Catalog index not found; run: python -m tools.build_catalog")
+            print("Catalog index not found; run: python -m tools.build_catalog", file=sys.stderr)
             return 2
         try:
             preview_entries = _load_preview_entries(args.project, args.catalog)
         except GeometryModelError as error:
             for issue in error.issues:
-                print(issue)
+                print(issue, file=sys.stderr)
             return 3
+        print(
+            f"Loaded {args.project.name}: {len(preview_entries) - 1} winding(s); opening viewer.",
+            file=sys.stderr,
+        )
 
     engine = create_engine(preview_entries)
-    if not engine.rootObjects():
+    roots = engine.rootObjects()
+    if not roots:
+        print("QML failed to load; no window created.", file=sys.stderr)
         return 1
+    # Raise the window to the front so it is not lost behind the terminal.
+    window = roots[0]
+    if hasattr(window, "raise_"):
+        window.raise_()
+    if hasattr(window, "requestActivate"):
+        window.requestActivate()
     return int(app.exec())
