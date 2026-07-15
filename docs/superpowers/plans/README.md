@@ -8,7 +8,7 @@ Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commerci
 
 Milestone 1 status: **Accepted 2026-07-14**. Powder-core records reviewed against the 2025 Magnetics catalog; ferrite records stay `draft` until their catalog review. Milestone 2 is the active milestone.
 
-Milestone 2 implementation is complete, pending review.
+Milestone 2 status: **Accepted 2026-07-15** (exit tests green; interactive preview reviewed; one-closed-loop-per-turn model confirmed). Milestone 3 planning is next.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |

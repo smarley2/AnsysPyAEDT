@@ -116,7 +116,11 @@ gap at the sector ends, not wire.
 
 ### Current state
 
-Milestone 2 implementation is complete, pending review. Implemented deliverables:
+Milestone 2 is **accepted** as of 2026-07-15. The exit criterion is proven by
+the hypothesis packing invariants, the committed golden manifest, and the
+preview smoke test; the interactive visual check was performed by the reviewer
+(Fabio Posser) on the sample project, leading to the accepted
+one-closed-loop-per-turn model. Implemented deliverables:
 
 - Finished-core resolution that honors the design note above (`resolve_finished_core`).
 - D-shaped turn paths with closed 8-segment planar loops.
@@ -130,10 +134,9 @@ Milestone 2 implementation is complete, pending review. Implemented deliverables
 - Core and winding tessellation into triangle-soup meshes.
 - The Qt Quick 3D orbit-camera preview viewer.
 
-Remaining work: insulation data (`catalog/conductors/insulation-round-wire.yaml`)
-remains `draft` pending human review against IEC 60317-0-1 / NEMA MW1000; the
-five ferrite core records remain `draft`; the interactive preview visual/orbit
-check is pending a human with a display.
+Remaining work: the five ferrite core records remain `draft` pending review
+against the Magnetics ferrite catalog. The insulation values were confirmed
+correct by the reviewer on 2026-07-15.
 
 ## Milestone 3: Maxwell 3D MVP
 

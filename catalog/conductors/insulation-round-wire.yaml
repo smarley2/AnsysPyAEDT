@@ -3,8 +3,8 @@
 # diameter. Verify every value against the standard before flipping
 # reviewStatus to reviewed. Names must match catalog/conductors/round-wire.yaml.
 source: IEC 60317-0-1 (metric) and NEMA MW1000 (AWG) maximum overall diameters
-reviewStatus: draft
-reviewedBy: null
+reviewStatus: reviewed
+reviewedBy: Fabio Posser
 records:
   - {name: "0.2 mm",  grade1DiameterM: 0.000222, grade2DiameterM: 0.000239}
   - {name: "0.25 mm", grade1DiameterM: 0.000275, grade2DiameterM: 0.000297}
