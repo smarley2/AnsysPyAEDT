@@ -43,19 +43,11 @@ FAMILIES = (
     Family("KS", "Sendust"),
     Family("KS-HF", "Super Sendust"),
     Family("KPH", "Sendust Plus"),
-    Family("KPH-HP", "Super Sendust G3"),
-    Family("KPH-HT", "Super Sendust G4"),
     Family("KSF", "Si-Fe"),
     Family("KNF", "Neu Flux"),
-    Family("KSF-HP", "Low Loss Si-Fe G3"),
-    Family("KSF-FC", "High DCBias Si-Fe G3"),
-    Family("KSF-HT", "Si-Fe G4"),
     Family("KH", "High Flux"),
     Family("KH-H", "High Flux Plus"),
-    Family("KH-HP", "High Flux G3"),
-    Family("KH-HT", "High Flux G4"),
     Family("KAM", "Nanodust"),
-    Family("KM", "MPP"),
 )
 
 
@@ -80,6 +72,10 @@ def number(value: str) -> float:
 
 def grade(value: float) -> str:
     return str(int(value)) if value.is_integer() else f"{value:g}"
+
+
+def scale_si(value: float, factor: float) -> float:
+    return round(value * factor, 12)
 
 
 def fetch(session: requests.Session, url: str) -> requests.Response:
@@ -207,23 +203,23 @@ def parse_records(
                 "sourceUrl": source_url,
                 "sourcePage": 1,
                 "outerDiameter": {
-                    "nominalM": before_od_mm / 1_000,
+                    "nominalM": scale_si(before_od_mm, 1e-3),
                     "minM": None,
-                    "maxM": after_od_max_mm / 1_000,
+                    "maxM": scale_si(after_od_max_mm, 1e-3),
                 },
                 "innerDiameter": {
-                    "nominalM": before_id_mm / 1_000,
-                    "minM": after_id_min_mm / 1_000,
+                    "nominalM": scale_si(before_id_mm, 1e-3),
+                    "minM": scale_si(after_id_min_mm, 1e-3),
                     "maxM": None,
                 },
                 "height": {
-                    "nominalM": before_height_mm / 1_000,
+                    "nominalM": scale_si(before_height_mm, 1e-3),
                     "minM": None,
-                    "maxM": after_height_max_mm / 1_000,
+                    "maxM": scale_si(after_height_max_mm, 1e-3),
                 },
-                "effectiveAreaM2": area_cm2 * 1e-4,
-                "pathLengthM": path_cm * 1e-2,
-                "volumeM3": volume_cm3 * 1e-6,
+                "effectiveAreaM2": scale_si(area_cm2, 1e-4),
+                "pathLengthM": scale_si(path_cm, 1e-2),
+                "volumeM3": scale_si(volume_cm3, 1e-6),
                 "alValueNh": al_value_nh,
                 "reviewStatus": "draft",
                 "reviewedBy": None,
@@ -240,7 +236,9 @@ def parse_records(
         if previous is None:
             unique[part_number] = record
             continue
-        if previous != record:
+        previous_data = {key: value for key, value in previous.items() if key != "sourceUrl"}
+        record_data = {key: value for key, value in record.items() if key != "sourceUrl"}
+        if previous_data != record_data:
             raise RuntimeError(f"Conflicting duplicate KDM part number: {part_number}")
     return list(unique.values())
 
