@@ -59,7 +59,9 @@ def test_discover_product_urls_deduplicates_and_filters() -> None:
 
 
 def test_parse_uncoated_product_page() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     product = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
     assert product.part_number == "5980001801"
     assert product.material_code == "80"
@@ -74,7 +76,9 @@ def test_parse_uncoated_product_page() -> None:
 
 
 def test_parse_coated_product_page() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text(
+        encoding="utf-8"
+    )
     product = parse_product_page(html, "https://fair-rite.com/product/toroids-5943011121/")
     assert product.coating == "thermo-set plastic"
     assert product.dimensions["A"] == ParsedDimension(None, None, 75.85)
@@ -187,9 +191,13 @@ def test_limit_only_uncoated_product_is_reported_without_self_pairing() -> None:
 
 
 def test_similar_product_does_not_replace_required_uncoated_counterpart() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     similar = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
-    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text()
+    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text(
+        encoding="utf-8"
+    )
     coated = parse_product_page(
         coated_html, "https://fair-rite.com/product/toroids-5943011121/"
     )
@@ -238,13 +246,17 @@ def test_magnetic_mismatch_prevents_pairing() -> None:
 
 
 def test_identical_duplicates_are_deduplicated() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     product = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
     assert merge_duplicate_products([product, product]) == [product]
 
 
 def test_conflicting_duplicates_fail() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     product = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
     conflicting = RawProduct(**{**product.__dict__, "al_value_nh": 331.0})
     with pytest.raises(RuntimeError, match="Conflicting duplicate"):
@@ -252,7 +264,9 @@ def test_conflicting_duplicates_fail() -> None:
 
 
 def test_generated_record_matches_schema() -> None:
-    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     product = parse_product_page(html, "https://fair-rite.com/product/toroids-5980001801/")
     records, unresolved = build_catalog([product], "fair-rite-web-test")
     assert unresolved == []
@@ -303,7 +317,9 @@ def test_run_import_writes_valid_local_artifacts(
     import tools.scrape_fair_rite_ferrite_toroids as module
 
     category = "<a href='/product/toroids-5980001801/'>5980001801</a>"
-    product_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    product_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
 
     def fake_fetch(session: object, url: str) -> str:
         if "product-category" in url:
@@ -338,7 +354,9 @@ def test_missing_magnetic_parameter_is_reported(
     <a href='/product/toroids-5980001801/'>valid</a>
     <a href='/product/toroids-5943000201/'>missing Ae</a>
     """
-    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
     missing_ae_html = (
         valid_html.replace("5980001801", "5943000201")
         .replace("80 TOROID", "43 TOROID")
@@ -376,7 +394,9 @@ def test_malformed_product_page_is_reported(
     <a href='/product/toroids-5980001801/'>valid</a>
     <a href='/product/toroids-5943000201/'>malformed</a>
     """
-    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text()
+    valid_html = (Path(__file__).parent / "fixtures/fair_rite_uncoated.html").read_text(
+        encoding="utf-8"
+    )
 
     def fake_fetch(session: object, url: str) -> str:
         if "product-category" in url:
@@ -398,7 +418,9 @@ def test_malformed_product_page_is_reported(
 
 
 def test_unresolved_report_contains_review_fields() -> None:
-    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text()
+    coated_html = (Path(__file__).parent / "fixtures/fair_rite_coated.html").read_text(
+        encoding="utf-8"
+    )
     coated = parse_product_page(
         coated_html, "https://fair-rite.com/product/toroids-5943011121/"
     )
