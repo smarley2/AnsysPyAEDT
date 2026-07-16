@@ -234,6 +234,7 @@ class PyaedtMaxwell3dExporter:
     def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
         request.output_directory.mkdir(parents=True, exist_ok=True)
         project_path = request.output_directory / f"{request.project_name}.aedt"
+        project_path.unlink(missing_ok=True)
         plan = request.plan
         stages: list[StageRecord] = []
 
