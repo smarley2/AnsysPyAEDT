@@ -9,57 +9,63 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.core_profile import build_core_profile
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.naming import core_name, unique_identifiers
-from inductor_designer.geometry.packing import PackedWinding
-from inductor_designer.geometry.terminals import build_terminal_disk
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.planar import PlanarModel
 from inductor_designer.simulation.capabilities import DcBiasDecision
+from inductor_designer.simulation.maxwell2d_plan import (
+    DESIGN_NAME_2D,
+    Conductor2dPlan,
+    Core2dPlan,
+    Maxwell2dDesignPlan,
+    Winding2dGroupPlan,
+)
 from inductor_designer.simulation.maxwell_plan import (
-    DESIGN_NAME,
     MATRIX_NAME,
     REGION_PADDING_PERCENT,
     SETUP_NAME,
     SOLUTION_TYPE,
-    CorePlan,
-    Maxwell3dDesignPlan,
     MeshPlan,
     PlanBuildError,
     Polarity,
     RegionPlan,
     ReportPlan,
     SetupPlan,
-    TerminalPlan,
-    TurnPlan,
-    WindingGroupPlan,
     core_material_spec,
     dc_bias_notes,
 )
 
+_TWO_D_NOTE = (
+    "The 2D model is a documented approximate XY cross-section equivalent; turns and "
+    "polarity are represented through coil and winding assignments, and model depth "
+    "derives from the core height."
+)
 
-def _polarity(definition: WindingDefinition) -> Polarity:
+
+def _base_polarity(definition: WindingDefinition) -> Polarity:
     positive = (definition.current_direction is CurrentDirection.FORWARD) == (
         definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
     )
     return Polarity.POSITIVE if positive else Polarity.NEGATIVE
 
 
-def build_maxwell3d_plan(
-    core: FinishedCore,
+def _invert(polarity: Polarity) -> Polarity:
+    return Polarity.NEGATIVE if polarity is Polarity.POSITIVE else Polarity.POSITIVE
+
+
+def build_maxwell2d_plan(
+    planar: PlanarModel,
     core_record: CoreRecord,
-    packings: Sequence[PackedWinding],
     windings: Sequence[WindingDefinition],
     bare_diameter_m: Mapping[str, float],
     dc_bias_decision: DcBiasDecision | None = None,
-) -> Maxwell3dDesignPlan:
+) -> Maxwell2dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
-    if not packings:
-        issues.append("No packed windings; nothing to export.")
-    missing = [p.winding_id for p in packings if p.winding_id not in by_id]
+    if not planar.windings:
+        issues.append("No planar windings; nothing to export.")
+    missing = [w.winding_id for w in planar.windings if w.winding_id not in by_id]
     if missing:
-        issues.append(f"Packings without winding definitions: {missing}.")
+        issues.append(f"Planar windings without definitions: {missing}.")
     frequencies = sorted({definition.frequency_hz for definition in windings})
     if len(frequencies) > 1:
         issues.append(f"All windings must share one frequency; got {frequencies}.")
@@ -67,50 +73,36 @@ def build_maxwell3d_plan(
         raise PlanBuildError(tuple(issues))
     material = core_material_spec(core_record)
 
-    identifiers = unique_identifiers([packing.winding_id for packing in packings])
-    groups: list[WindingGroupPlan] = []
+    identifiers = unique_identifiers([w.winding_id for w in planar.windings])
+    groups: list[Winding2dGroupPlan] = []
     max_bare = 0.0
-    for packing in packings:
-        definition = by_id[packing.winding_id]
-        base = identifiers[packing.winding_id]
-        bare = bare_diameter_m[packing.winding_id]
+    for planar_winding in planar.windings:
+        definition = by_id[planar_winding.winding_id]
+        base = identifiers[planar_winding.winding_id]
+        bare = bare_diameter_m[planar_winding.winding_id]
         max_bare = max(max_bare, bare)
-        polarity = _polarity(definition)
-        turns: list[TurnPlan] = []
-        counter = 1
-        for layer in packing.layers:
-            for station in layer.station_deg:
-                name = f"{base}_L{layer.index:02d}_T{counter:03d}"
-                turns.append(
-                    TurnPlan(
-                        name=name,
-                        segments=build_turn_loop(
-                            core, layer.index, packing.insulated_diameter_m, station
-                        ),
-                        bare_diameter_m=bare,
-                        terminal=TerminalPlan(
-                            name=f"{name}_Term",
-                            disk=build_terminal_disk(
-                                core,
-                                layer.index,
-                                packing.insulated_diameter_m,
-                                bare,
-                                station,
-                            ),
-                            polarity=polarity,
-                        ),
-                    )
-                )
-                counter += 1
+        base_polarity = _base_polarity(definition)
+        conductors = tuple(
+            Conductor2dPlan(
+                name=f"{base}_C{index:03d}",
+                x_m=conductor.x_m,
+                y_m=conductor.y_m,
+                radius_m=conductor.radius_m,
+                polarity=(
+                    base_polarity if conductor.polarity > 0 else _invert(base_polarity)
+                ),
+            )
+            for index, conductor in enumerate(planar_winding.conductors, start=1)
+        )
         groups.append(
-            WindingGroupPlan(
+            Winding2dGroupPlan(
                 name=base,
-                winding_id=packing.winding_id,
+                winding_id=planar_winding.winding_id,
                 is_solid=definition.mode is ConductorMode.SOLID,
                 current_peak_a=definition.ac_magnitude_a,
                 phase_deg=definition.ac_phase_deg,
                 dc_current_a=definition.dc_current_a,
-                turns=tuple(turns),
+                conductors=conductors,
             )
         )
 
@@ -129,7 +121,7 @@ def build_maxwell3d_plan(
             )
         )
 
-    notes: list[str] = []
+    notes: list[str] = [_TWO_D_NOTE]
     if material.draft:
         notes.append(
             f"Core material {material.name} derives from a draft catalog record; "
@@ -138,17 +130,21 @@ def build_maxwell3d_plan(
     dc_requested = any(group.dc_current_a != 0.0 for group in groups)
     notes.extend(dc_bias_notes(dc_bias_decision, dc_requested))
 
-    width = core.r_outer_m - core.r_inner_m
-    height = 2.0 * core.half_height_m
-    return Maxwell3dDesignPlan(
-        design_name=DESIGN_NAME,
+    return Maxwell2dDesignPlan(
+        design_name=DESIGN_NAME_2D,
         solution_type=SOLUTION_TYPE,
-        core=CorePlan(name=core_name(), profile=build_core_profile(core), material=material),
+        model_depth_m=planar.depth_m,
+        core=Core2dPlan(
+            name=core_name(),
+            r_inner_m=planar.r_inner_m,
+            r_outer_m=planar.r_outer_m,
+            material=material,
+        ),
         windings=tuple(groups),
         region=RegionPlan(padding_percent=REGION_PADDING_PERCENT),
         mesh=MeshPlan(
             conductor_max_length_m=round(1.5 * max_bare, 9),
-            core_max_length_m=round(min(width, height) / 3.0, 9),
+            core_max_length_m=round((planar.r_outer_m - planar.r_inner_m) / 3.0, 9),
         ),
         setup=SetupPlan(
             name=SETUP_NAME,

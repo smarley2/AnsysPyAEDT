@@ -8,8 +8,10 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestone 0 is accepted as of 2026-07-13, scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 (toroid domain and catalogs) is accepted as of 2026-07-14, with powder-core records reviewed against the 2025 Magnetics catalog and ferrite records still draft. Milestone 2 (geometry and live preview) is accepted as of 2026-07-15, with the one-closed-loop-per-turn winding model confirmed in the interactive preview; the five ferrite core records remain draft. Milestone 3 (Maxwell 3D MVP) is accepted as of 2026-07-16, with all 15 export stages succeeding on AEDT 2025 R2 Commercial and the generated project passing design validation.
+Milestone 0 is accepted as of 2026-07-13, scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 (toroid domain and catalogs) is accepted as of 2026-07-14, with powder-core records reviewed against the 2025 Magnetics catalog and ferrite records still draft. Milestone 2 (geometry and live preview) is accepted as of 2026-07-15, with the one-closed-loop-per-turn winding model confirmed in the interactive preview; the five ferrite core records remain draft. Milestone 3 (Maxwell 3D MVP) is accepted as of 2026-07-16, with all 15 export stages succeeding on AEDT 2025 R2 Commercial and the generated project passing design validation. Milestone 4 (Maxwell 2D and DC operating-point compatibility) is implementation complete, pending Fabio Posser's live verification on AEDT 2025 R2 Commercial before acceptance (see [ROADMAP](docs/development/ROADMAP.md)).
 
+- [Maxwell 2D generation procedure](docs/development/maxwell2d-generation.md)
+- [DC operating-point compatibility](docs/development/dc-bias-compatibility.md)
 - [Active implementation plan (Milestone 3)](docs/superpowers/plans/2026-07-16-maxwell3d-mvp.md)
 - [Maxwell 3D generation procedure](docs/development/maxwell3d-generation.md)
 - [Milestone 2 plan](docs/superpowers/plans/2026-07-14-geometry-and-live-preview.md)

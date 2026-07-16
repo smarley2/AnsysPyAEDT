@@ -10,6 +10,7 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
 from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
 from tests.unit.simulation.test_maxwell_plan import make_core_record
@@ -58,7 +59,10 @@ def pack(definition: WindingDefinition) -> object:
     )
 
 
-def build(definitions: tuple[WindingDefinition, ...]) -> object:
+def build(
+    definitions: tuple[WindingDefinition, ...],
+    dc_bias_decision: DcBiasDecision | None = None,
+) -> object:
     packings = tuple(pack(d) for d in definitions)
     return build_maxwell3d_plan(
         CORE,
@@ -66,6 +70,7 @@ def build(definitions: tuple[WindingDefinition, ...]) -> object:
         packings,
         definitions,
         {d.winding_id: BARE for d in definitions},
+        dc_bias_decision=dc_bias_decision,
     )
 
 
@@ -119,10 +124,39 @@ def test_mixed_frequencies_refused() -> None:
         )
 
 
+NATIVE = DcBiasDecision(DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS, False, "native ok")
+FALLBACK = DcBiasDecision(
+    DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK, True, "2024 R2 fallback"
+)
+BLOCKED = DcBiasDecision(DcBiasStrategy.BLOCKED, False, "unreviewed")
+
+
+def test_native_decision_lands_in_plan_and_notes() -> None:
+    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=NATIVE)
+    assert plan.dc_bias is NATIVE
+    assert any("Include DC Fields" in note for note in plan.notes)
+    assert any("linear" in note for note in plan.notes)
+
+
+def test_fallback_decision_notes_deferral() -> None:
+    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=FALLBACK)
+    assert any("deferred" in note and "2024 R2" in note for note in plan.notes)
+
+
+def test_blocked_decision_notes_reason() -> None:
+    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=BLOCKED)
+    assert any("unreviewed" in note for note in plan.notes)
+
+
+def test_zero_dc_current_emits_no_dc_notes() -> None:
+    plan = build((make_definition(dc_current_a=0.0),), dc_bias_decision=NATIVE)
+    assert not any("DC" in note for note in plan.notes)
+
+
 def test_setup_mesh_reports_and_notes() -> None:
     plan = build((make_definition(dc_current_a=5.0),))
     assert plan.setup.frequency_hz == 100_000.0
     assert plan.mesh.conductor_max_length_m == round(1.5 * BARE, 9)
     assert plan.mesh.core_max_length_m == round(min(0.0071, 0.01143) / 3.0, 9)
     assert [r.expression for r in plan.reports] == ["Matrix1.R(w1,w1)", "Matrix1.L(w1,w1)"]
-    assert any("Milestone 4" in note for note in plan.notes)
+    assert any("no capability decision" in note for note in plan.notes)

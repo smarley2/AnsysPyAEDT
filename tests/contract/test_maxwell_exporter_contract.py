@@ -39,3 +39,28 @@ def test_result_not_succeeded_when_stages_incomplete(tmp_path: Path) -> None:
     full = exporter.export(make_request(tmp_path))
     truncated = replace(full, stages=full.stages[:3])
     assert not truncated.succeeded()
+
+
+def test_extra_stage_before_save_still_succeeds(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from inductor_designer.application.ports.maxwell_exporter import StageRecord
+
+    full = RecordingMaxwell3dExporter().export(make_request(tmp_path))
+    extra = StageRecord(name="extra", succeeded=True, message="stage counts may vary")
+    augmented = replace(full, stages=full.stages[:-1] + (extra, full.stages[-1]))
+    assert augmented.succeeded()
+
+
+def test_failed_stage_never_succeeds(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from inductor_designer.application.ports.maxwell_exporter import StageRecord
+
+    full = RecordingMaxwell3dExporter().export(make_request(tmp_path))
+    broken = replace(
+        full,
+        stages=full.stages[:-1]
+        + (StageRecord(name="save", succeeded=False, message="disk full"),),
+    )
+    assert not broken.succeeded()

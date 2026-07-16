@@ -7,6 +7,7 @@ from inductor_designer.domain.catalog_records import CoreFamily, CoreRecord, Rev
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
 from inductor_designer.geometry.terminals import TerminalDisk
+from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 
 SOLUTION_TYPE = "EddyCurrent"
 DESIGN_NAME = "Inductor3D"
@@ -107,6 +108,7 @@ class Maxwell3dDesignPlan:
     matrix_name: str
     reports: tuple[ReportPlan, ...]
     notes: tuple[str, ...]
+    dc_bias: DcBiasDecision | None = None
 
 
 def core_material_spec(record: CoreRecord) -> MaterialSpec:
@@ -139,3 +141,23 @@ def core_material_spec(record: CoreRecord) -> MaterialSpec:
         conductivity_s_per_m=0.0,
         draft=record.review_status is not ReviewStatus.REVIEWED,
     )
+
+
+def dc_bias_notes(decision: DcBiasDecision | None, dc_requested: bool) -> tuple[str, ...]:
+    """Human-visible DC-bias treatment notes for plans and manifests."""
+    if not dc_requested:
+        return ()
+    if decision is None:
+        return ("DC operating currents are recorded but not applied; no capability decision.",)
+    if decision.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS:
+        return (
+            "DC operating point applied natively via 3D Include DC Fields.",
+            "Core material is linear until Milestone 5; DC bias has no incremental "
+            "effect on a linear material.",
+        )
+    if decision.strategy is DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK:
+        return (
+            "DC operating currents are recorded but not applied; the 2024 R2 "
+            "Magnetostatic fallback is deferred until a 2024 R2 installation exists.",
+        )
+    return (f"DC operating currents are recorded but not applied: {decision.reason}",)

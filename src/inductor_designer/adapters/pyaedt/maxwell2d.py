@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
-from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
+from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExportRequest
 from inductor_designer.application.ports.maxwell_exporter import (
-    Maxwell3dExportRequest,
-    Maxwell3dExportResult,
+    MaxwellExportResult,
     StageRecord,
 )
-from inductor_designer.simulation.capabilities import DcBiasStrategy
-from inductor_designer.simulation.maxwell_plan import COPPER_MATERIAL, Maxwell3dDesignPlan
+from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
+from inductor_designer.simulation.maxwell_plan import COPPER_MATERIAL
 
 
-class Maxwell3dApp(Protocol):
+class Maxwell2dApp(Protocol):
     modeler: Any
     mesh: Any
     post: Any
     materials: Any
+    model_depth: Any
 
     def assign_material(self, assignment: Any, material: str) -> Any: ...
 
@@ -41,13 +40,13 @@ class Maxwell3dApp(Protocol):
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None: ...
 
 
-class Maxwell3dAppFactory(Protocol):
+class Maxwell2dAppFactory(Protocol):
     pyaedt_version: str
 
-    def create(self, **kwargs: object) -> Maxwell3dApp: ...
+    def create(self, **kwargs: object) -> Maxwell2dApp: ...
 
 
-class DefaultMaxwell3dAppFactory:
+class DefaultMaxwell2dAppFactory:
     @property
     def pyaedt_version(self) -> str:
         try:
@@ -55,18 +54,19 @@ class DefaultMaxwell3dAppFactory:
         except PackageNotFoundError:
             return "not-installed"
 
-    def create(self, **kwargs: object) -> Maxwell3dApp:
-        from ansys.aedt.core import Maxwell3d
+    def create(self, **kwargs: object) -> Maxwell2dApp:
+        from ansys.aedt.core import Maxwell2d
 
-        return cast(Maxwell3dApp, Maxwell3d(**kwargs))
+        return cast(Maxwell2dApp, Maxwell2d(**kwargs))
 
 
-def _stage_units(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_units(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     app.modeler.model_units = "meter"
-    return "Model units set to meter."
+    app.model_depth = f"{plan.model_depth_m:g}meter"
+    return f"Units meter; model depth {plan.model_depth_m:g} m."
 
 
-def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_materials(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     spec = plan.core.material
     material = app.materials.add_material(spec.name)
     material.permeability = spec.relative_permeability
@@ -74,77 +74,44 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Material {spec.name} created (draft={spec.draft})."
 
 
-def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    data = polyline_data(plan.core.profile, closed=True)
-    app.modeler.create_polyline(
-        points=[list(point) for point in data.points],
-        segment_type=list(data.kinds),
-        name=plan.core.name,
-        cover_surface=True,
-        close_surface=False,
+def _stage_core(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
+    bore = f"{plan.core.name}_Bore"
+    app.modeler.create_circle(
+        origin=[0.0, 0.0, 0.0], radius=plan.core.r_outer_m, name=plan.core.name
     )
-    app.modeler.sweep_around_axis(plan.core.name, axis="Z", sweep_angle=360)
+    app.modeler.create_circle(origin=[0.0, 0.0, 0.0], radius=plan.core.r_inner_m, name=bore)
+    app.modeler.subtract(plan.core.name, bore, keep_originals=False)
     app.assign_material(plan.core.name, plan.core.material.name)
-    return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+    return f"Annular core {plan.core.name} created."
 
 
-def _stage_windings(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_conductors(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     count = 0
     for group in plan.windings:
-        for turn in group.turns:
-            data = polyline_data(turn.segments, closed=True)
-            app.modeler.create_polyline(
-                points=[list(point) for point in data.points],
-                segment_type=list(data.kinds),
-                name=turn.name,
-                material=COPPER_MATERIAL,
-                xsection_type="Circle",
-                xsection_width=turn.bare_diameter_m,
-                xsection_num_seg=0,
-            )
-            count += 1
-    return f"{count} turn conductors created."
-
-
-def _stage_terminals(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    count = 0
-    for group in plan.windings:
-        for turn in group.turns:
-            disk = turn.terminal.disk
-            radial = math.hypot(disk.center.x, disk.center.y)
+        for conductor in group.conductors:
             app.modeler.create_circle(
-                orientation="YZ",
-                origin=[round(radial, 9), 0.0, disk.center.z],
-                radius=disk.radius_m,
-                name=turn.terminal.name,
+                origin=[conductor.x_m, conductor.y_m, 0.0],
+                radius=conductor.radius_m,
+                name=conductor.name,
+                material=COPPER_MATERIAL,
             )
-            app.modeler.rotate(turn.terminal.name, axis="Z", angle=disk.station_deg)
             count += 1
-    return f"{count} terminal sheets created."
+    return f"{count} conductor regions created."
 
 
-def _native_dc_active(plan: Maxwell3dDesignPlan) -> bool:
-    return (
-        plan.dc_bias is not None
-        and plan.dc_bias.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS
-        and any(group.dc_current_a != 0.0 for group in plan.windings)
-    )
-
-
-def _stage_excitations(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    dc_applied = 0
+def _stage_excitations(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     for group in plan.windings:
         coil_names: list[str] = []
-        for turn in group.turns:
-            coil = f"{turn.name}_Coil"
+        for conductor in group.conductors:
+            coil = f"{conductor.name}_Coil"
             app.assign_coil(
-                turn.terminal.name,
+                conductor.name,
                 conductors_number=1,
-                polarity=turn.terminal.polarity.value,
+                polarity=conductor.polarity.value,
                 name=coil,
             )
             coil_names.append(coil)
-        winding = app.assign_winding(
+        app.assign_winding(
             assignment=None,
             winding_type="Current",
             is_solid=group.is_solid,
@@ -152,20 +119,13 @@ def _stage_excitations(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
             phase=group.phase_deg,
             name=group.name,
         )
-        if _native_dc_active(plan) and group.dc_current_a != 0.0:
-            winding.props["DCValue"] = f"{group.dc_current_a:g}A"
-            winding.update()
-            dc_applied += 1
         app.add_winding_coils(assignment=group.name, coils=coil_names)
-    message = f"{len(plan.windings)} windings excited."
-    if dc_applied:
-        message += f" DC applied to {dc_applied} windings."
-    return message
+    return f"{len(plan.windings)} windings excited."
 
 
-def _stage_eddy(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    solid = [t.name for g in plan.windings if g.is_solid for t in g.turns]
-    stranded = [t.name for g in plan.windings if not g.is_solid for t in g.turns]
+def _stage_eddy(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
+    solid = [c.name for g in plan.windings if g.is_solid for c in g.conductors]
+    stranded = [c.name for g in plan.windings if not g.is_solid for c in g.conductors]
     if solid:
         app.eddy_effects_on(solid, enable_eddy_effects=True)
     if stranded:
@@ -173,14 +133,14 @@ def _stage_eddy(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Eddy effects: {len(solid)} solid on, {len(stranded)} stranded off."
 
 
-def _stage_region(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_region(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     pad = plan.region.padding_percent
-    app.modeler.create_air_region(pad, pad, pad, pad, pad, pad)
+    app.modeler.create_air_region(pad, pad, pad, pad)
     return f"Air region with {pad:g}% padding."
 
 
-def _stage_mesh(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    conductors = [t.name for g in plan.windings for t in g.turns]
+def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
+    conductors = [c.name for g in plan.windings for c in g.conductors]
     app.mesh.assign_length_mesh(
         conductors, maximum_length=plan.mesh.conductor_max_length_m, name="ConductorLength"
     )
@@ -190,22 +150,16 @@ def _stage_mesh(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return "Length-based mesh restrictions assigned."
 
 
-def _stage_setup(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_setup(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     setup = app.create_setup(name=plan.setup.name)
     setup.props["Frequency"] = f"{plan.setup.frequency_hz:g}Hz"
     setup.props["MaximumPasses"] = plan.setup.maximum_passes
     setup.props["PercentError"] = plan.setup.percent_error
-    native_dc = _native_dc_active(plan)
-    if native_dc:
-        setup.props["IncludeDcFields"] = True
     setup.update()
-    message = f"Setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
-    if native_dc:
-        message += " DC fields included."
-    return message
+    return f"Setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
 
 
-def _stage_matrix(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_matrix(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     from ansys.aedt.core.modules.boundary.maxwell_boundary import (
         MatrixACMagnetic,
         SourceACMagnetic,
@@ -217,24 +171,23 @@ def _stage_matrix(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Matrix {plan.matrix_name} over {len(plan.windings)} windings."
 
 
-def _stage_reports(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_reports(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     for report in plan.reports:
         app.post.create_report(expressions=[report.expression], plot_name=report.name)
     return f"{len(plan.reports)} reports requested."
 
 
-def _stage_validate(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_validate(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     if app.validate_simple() != 1:
         raise RuntimeError("Design validation failed.")
     return "Design validation passed."
 
 
-_STAGES: tuple[tuple[str, Any], ...] = (
+_STAGES_2D: tuple[tuple[str, Any], ...] = (
     ("units", _stage_units),
     ("materials", _stage_materials),
     ("core", _stage_core),
-    ("windings", _stage_windings),
-    ("terminals", _stage_terminals),
+    ("conductors", _stage_conductors),
     ("excitations", _stage_excitations),
     ("eddy", _stage_eddy),
     ("region", _stage_region),
@@ -246,21 +199,21 @@ _STAGES: tuple[tuple[str, Any], ...] = (
 )
 
 
-class PyaedtMaxwell3dExporter:
-    """Executes a Maxwell3dDesignPlan as named stages; never reports a partial design."""
+class PyaedtMaxwell2dExporter:
+    """Executes a Maxwell2dDesignPlan as named stages; never reports a partial design."""
 
-    def __init__(self, app_factory: Maxwell3dAppFactory | None = None) -> None:
-        self._factory = DefaultMaxwell3dAppFactory() if app_factory is None else app_factory
+    def __init__(self, app_factory: Maxwell2dAppFactory | None = None) -> None:
+        self._factory = DefaultMaxwell2dAppFactory() if app_factory is None else app_factory
 
-    def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
+    def export(self, request: Maxwell2dExportRequest) -> MaxwellExportResult:
         request.output_directory.mkdir(parents=True, exist_ok=True)
         project_path = request.output_directory / f"{request.project_name}.aedt"
         project_path.unlink(missing_ok=True)
         plan = request.plan
         stages: list[StageRecord] = []
 
-        def result() -> Maxwell3dExportResult:
-            return Maxwell3dExportResult(
+        def result() -> MaxwellExportResult:
+            return MaxwellExportResult(
                 project_path=project_path,
                 design_name=plan.design_name,
                 pyaedt_version=self._factory.pyaedt_version,
@@ -285,11 +238,11 @@ class PyaedtMaxwell3dExporter:
             StageRecord(
                 name="launch",
                 succeeded=True,
-                message=f"Maxwell 3D design {plan.design_name!r} opened.",
+                message=f"Maxwell 2D design {plan.design_name!r} opened.",
             )
         )
         try:
-            for name, stage in _STAGES:
+            for name, stage in _STAGES_2D:
                 try:
                     message = stage(app, plan)
                 except Exception as error:  # noqa: BLE001 - stage boundary

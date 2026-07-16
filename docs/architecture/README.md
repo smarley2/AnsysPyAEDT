@@ -25,7 +25,8 @@ The inner modules define interfaces. Infrastructure implements them.
 - `materials`: Material records, provenance, curve data, fitting, approval state, and physical validation.
 - `simulation`: Solver-independent AC Magnetic recipes, Maxwell 3D design plans, DC-biased capability requests, mesh intent, and report intent.
 - `application`: Use cases such as validate, preview, generate, solve, migrate, and export.
-- `adapters/pyaedt`: Maxwell 2D/3D operations, the staged Maxwell 3D exporter, and AEDT-version capability handling.
+- `adapters/pyaedt`: Maxwell 2D/3D operations, the staged Maxwell 2D/3D exporters, and AEDT-version capability handling.
+- `adapters/compatibility`: `MatrixCapabilityRepository`, loading `compatibility/aedt-matrix.yml` into `CapabilitySnapshot` values for DC-bias strategy selection.
 - `adapters/preview`: Qt Quick 3D mesh conversion.
 - `adapters/persistence`: Project JSON, canonical catalog files, and compiled SQLite indexes.
 - `ui`: PySide6 and QML Guided Studio.

@@ -38,8 +38,10 @@ never reported as successful.
 - Core material is a linear draft model derived from the powder grade
   (relative permeability = grade, conductivity 0). Real material records
   arrive with Material Studio (Milestone 5). Ferrite cores refuse to export.
-- DC operating currents are recorded in the manifest but not applied
-  (Milestone 4).
+- DC operating currents are recorded in the manifest and, as of Milestone 4,
+  applied natively when the reviewed capability matrix confirms 3D Include DC
+  Fields support; see `docs/development/dc-bias-compatibility.md` for the
+  decision table and the 2024 R2 fallback status.
 - Full model only; symmetry stays data-level (Milestone 2 plan output).
 - Exact PyAEDT keyword names were verified against the installed pyaedt by
   the AEDT integration test; the recording fakes mirror the adapter's calls.

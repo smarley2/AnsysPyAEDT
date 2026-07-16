@@ -57,6 +57,28 @@ class _FakeSetup:
         return True
 
 
+class _FakeWinding:
+    def __init__(self, log: list[tuple[str, dict[str, Any]]], name: str) -> None:
+        self._log = log
+        self._name = name
+        self.props = _PropsProxy(log, name)
+
+    def update(self) -> bool:
+        self._log.append(("winding.update", {"name": self._name}))
+        return True
+
+
+class _PropsProxy(dict[str, Any]):
+    def __init__(self, log: list[tuple[str, dict[str, Any]]], name: str) -> None:
+        super().__init__()
+        self._log = log
+        self._name = name
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._log.append(("winding.set_prop", {"name": self._name, "key": key, "value": value}))
+        super().__setitem__(key, value)
+
+
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
@@ -82,7 +104,10 @@ class FakeMaxwell3dApp:
         return self._record("assign_coil", assignment=assignment, **kwargs)
 
     def assign_winding(self, assignment: Any = None, **kwargs: Any) -> Any:
-        return self._record("assign_winding", assignment=assignment, **kwargs)
+        if self.raise_on == "assign_winding":
+            raise RuntimeError("boom in assign_winding")
+        self.calls.append(("assign_winding", {"assignment": assignment, **kwargs}))
+        return _FakeWinding(self.calls, str(kwargs.get("name")))
 
     def add_winding_coils(self, assignment: Any, coils: Any) -> Any:
         return self._record("add_winding_coils", assignment=assignment, coils=coils)

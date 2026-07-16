@@ -22,6 +22,16 @@ ApplicationWindow {
                 Label { text: qsTr("Windings") }
                 Label { text: qsTr("Materials") }
                 Label { text: qsTr("Simulation") }
+                Column {
+                    Repeater {
+                        model: simulationSummary
+                        delegate: Text {
+                            text: modelData
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 12
+                        }
+                    }
+                }
                 Label { text: qsTr("Review") }
                 Item { Layout.fillHeight: true }
                 Label { text: qsTr("Foundation preview spike") }
