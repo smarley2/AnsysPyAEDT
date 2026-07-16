@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
@@ -49,7 +49,10 @@ class Maxwell3dAppFactory(Protocol):
 class DefaultMaxwell3dAppFactory:
     @property
     def pyaedt_version(self) -> str:
-        return version("pyaedt")
+        try:
+            return version("pyaedt")
+        except PackageNotFoundError:
+            return "not-installed"
 
     def create(self, **kwargs: object) -> Maxwell3dApp:
         from ansys.aedt.core import Maxwell3d
