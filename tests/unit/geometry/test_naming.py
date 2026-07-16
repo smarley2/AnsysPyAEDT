@@ -9,6 +9,7 @@ from inductor_designer.geometry.naming import (
     sanitize_identifier,
     terminal_names,
     turn_name,
+    unique_identifiers,
     winding_names,
 )
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
@@ -37,3 +38,18 @@ def test_winding_names_cover_all_turns_in_order() -> None:
     assert names[0] == "w1_L01_T001"
     assert len(set(names)) == 30
     assert names == tuple(sorted(names))
+
+
+def test_unique_identifiers_disambiguates_collisions() -> None:
+    mapping = unique_identifiers(["a b", "a-b", "a_b"])
+    assert mapping == {"a b": "a_b", "a-b": "a_b_2", "a_b": "a_b_3"}
+
+
+def test_unique_identifiers_skips_already_taken_suffix() -> None:
+    mapping = unique_identifiers(["a b", "a_b_2", "a-b"])
+    assert mapping == {"a b": "a_b", "a_b_2": "a_b_2", "a-b": "a_b_3"}
+
+
+def test_unique_identifiers_rejects_duplicate_raw_ids() -> None:
+    with pytest.raises(ValueError, match="Duplicate"):
+        unique_identifiers(["w1", "w1"])

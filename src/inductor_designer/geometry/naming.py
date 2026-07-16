@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 from inductor_designer.geometry.packing import PackedWinding
 
@@ -42,3 +43,24 @@ def winding_names(packing: PackedWinding) -> tuple[str, ...]:
             names.append(turn_name(packing.winding_id, layer.index, counter))
             counter += 1
     return tuple(names)
+
+
+def unique_identifiers(raw_ids: Sequence[str]) -> dict[str, str]:
+    """Deterministic collision-free sanitized identifiers, keyed by raw id.
+
+    Later collisions get an ``_2``, ``_3``, ... suffix in input order.
+    """
+    result: dict[str, str] = {}
+    taken: set[str] = set()
+    for raw in raw_ids:
+        if raw in result:
+            raise ValueError(f"Duplicate raw identifier: {raw!r}")
+        candidate = sanitize_identifier(raw)
+        if candidate in taken:
+            suffix = 2
+            while f"{candidate}_{suffix}" in taken:
+                suffix += 1
+            candidate = f"{candidate}_{suffix}"
+        taken.add(candidate)
+        result[raw] = candidate
+    return result
