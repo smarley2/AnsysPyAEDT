@@ -183,9 +183,14 @@ def _stage_setup(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
 
 
 def _stage_matrix(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    app.assign_matrix(
-        assignment=[group.name for group in plan.windings], matrix_name=plan.matrix_name
+    from ansys.aedt.core.modules.boundary.maxwell_boundary import (
+        MatrixACMagnetic,
+        SourceACMagnetic,
     )
+
+    sources = [SourceACMagnetic(name=g.name) for g in plan.windings]
+    schema = MatrixACMagnetic(signal_sources=sources, matrix_name=plan.matrix_name)
+    app.assign_matrix(schema)
     return f"Matrix {plan.matrix_name} over {len(plan.windings)} windings."
 
 

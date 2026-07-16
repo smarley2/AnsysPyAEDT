@@ -96,7 +96,7 @@ class FakeMaxwell3dApp:
         self.calls.append(("create_setup", {"name": name}))
         return _FakeSetup(self.calls, name)
 
-    def assign_matrix(self, assignment: Any, **kwargs: Any) -> Any:
+    def assign_matrix(self, assignment: Any = None, **kwargs: Any) -> Any:
         return self._record("assign_matrix", assignment=assignment, **kwargs)
 
     def validate_full_design(self) -> tuple[list[str], bool]:

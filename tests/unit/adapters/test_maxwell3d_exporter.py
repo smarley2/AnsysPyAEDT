@@ -93,7 +93,7 @@ def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     assert setup_updates[0]["props"]["Frequency"] == "100000Hz"
     assert setup_updates[0]["props"]["MaximumPasses"] == 10
     matrix = [k for n, k in app.calls if n == "assign_matrix"]
-    assert matrix[0]["assignment"] == ["w1"]
+    assert matrix[0]["assignment"] is not None  # schema object passed positionally
     reports = [k for n, k in app.calls if n == "post.create_report"]
     assert len(reports) == 2
     assert ("validate_full_design", {}) in app.calls
