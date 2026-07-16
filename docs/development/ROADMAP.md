@@ -146,6 +146,21 @@ correct by the reviewer on 2026-07-15.
 
 Exit criterion: a supported AEDT installation opens a generated 3D project that is ready to solve.
 
+### Current state
+
+Implementation complete pending human AEDT verification. Deliverables:
+
+- The solver-independent `Maxwell3dDesignPlan` (frozen dataclasses) and `build_maxwell3d_plan` plan builder.
+- The staged PyAEDT exporter (`PyaedtMaxwell3dExporter`) running 15 named stages with guaranteed `release_desktop`; a partial design is never reported as successful.
+- The `Maxwell3dExporter` application port with a recording fake and a `FakeMaxwell3dApp` for unit tests.
+- The `export_maxwell3d` application service with a deterministic generation manifest, refusing 2D projects, manual cores, and collisions.
+- `core_material_spec` deriving a linear draft material from the powder grade (D2); ferrites and non-numeric grades refuse export.
+- Terminal-per-turn excitations with the D6 polarity convention.
+- The `generate_maxwell3d` CLI, the `run_aedt_maxwell3d.ps1` controlled runner, and the `aedt`-marked integration test.
+- The M2 should-fix #2 unique-identifier guard (`unique_identifiers`).
+
+Exit criterion is verified by `tools/run_aedt_maxwell3d.ps1` plus a manual open in AEDT 2025 R2 Commercial (evidence gitignored under `artifacts/maxwell3d/`). The milestone is **accepted only after** Fabio's run — the `aedt`-marked integration test is the arbiter for exact PyAEDT keyword names; if a documented kwarg differs in the installed pyaedt, fix the adapter (and its fake) to match reality, never the other way around.
+
 ## Milestone 4: Maxwell 2D and DC operating point compatibility
 
 - Generate the documented 2D equivalent cross-sectional model.

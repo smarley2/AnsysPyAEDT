@@ -23,9 +23,9 @@ The inner modules define interfaces. Infrastructure implements them.
 - `domain`: Units, core selections, conductors, winding definitions, excitations, project configuration, and validation rules.
 - `geometry`: Solver-independent geometry representation, toroid construction, winding packing, collision checks, and 2D-equivalent construction.
 - `materials`: Material records, provenance, curve data, fitting, approval state, and physical validation.
-- `simulation`: Solver-independent AC Magnetic recipes, DC-biased capability requests, mesh intent, and report intent.
+- `simulation`: Solver-independent AC Magnetic recipes, Maxwell 3D design plans, DC-biased capability requests, mesh intent, and report intent.
 - `application`: Use cases such as validate, preview, generate, solve, migrate, and export.
-- `adapters/pyaedt`: Maxwell 2D/3D operations and AEDT-version capability handling.
+- `adapters/pyaedt`: Maxwell 2D/3D operations, the staged Maxwell 3D exporter, and AEDT-version capability handling.
 - `adapters/preview`: Qt Quick 3D mesh conversion.
 - `adapters/persistence`: Project JSON, canonical catalog files, and compiled SQLite indexes.
 - `ui`: PySide6 and QML Guided Studio.
