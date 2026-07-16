@@ -96,6 +96,6 @@ def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     assert matrix[0]["assignment"] is not None  # schema object passed positionally
     reports = [k for n, k in app.calls if n == "post.create_report"]
     assert len(reports) == 2
-    assert ("validate_full_design", {}) in app.calls
+    assert ("validate_simple", {}) in app.calls
     saves = [k for n, k in app.calls if n == "save_project"]
     assert saves[0]["path"].endswith("Boost_inductor.aedt")

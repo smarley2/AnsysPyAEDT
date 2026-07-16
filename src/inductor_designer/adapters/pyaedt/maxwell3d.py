@@ -33,7 +33,7 @@ class Maxwell3dApp(Protocol):
 
     def assign_matrix(self, assignment: Any, **kwargs: Any) -> Any: ...
 
-    def validate_full_design(self) -> tuple[list[str], bool]: ...
+    def validate_simple(self, log_file: str | None = None) -> int: ...
 
     def save_project(self, path: str) -> bool: ...
 
@@ -201,10 +201,8 @@ def _stage_reports(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
 
 
 def _stage_validate(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    messages, valid = app.validate_full_design()
-    if not valid:
-        tail = " | ".join(str(entry) for entry in messages[-5:])
-        raise RuntimeError(f"Design validation failed: {tail}")
+    if app.validate_simple() != 1:
+        raise RuntimeError("Design validation failed.")
     return "Design validation passed."
 
 

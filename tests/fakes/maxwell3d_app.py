@@ -99,11 +99,11 @@ class FakeMaxwell3dApp:
     def assign_matrix(self, assignment: Any = None, **kwargs: Any) -> Any:
         return self._record("assign_matrix", assignment=assignment, **kwargs)
 
-    def validate_full_design(self) -> tuple[list[str], bool]:
-        if self.raise_on == "validate_full_design":
-            raise RuntimeError("boom in validate_full_design")
-        self.calls.append(("validate_full_design", {}))
-        return ([], True)
+    def validate_simple(self, log_file: str | None = None) -> int:
+        if self.raise_on == "validate_simple":
+            raise RuntimeError("boom in validate_simple")
+        self.calls.append(("validate_simple", {}))
+        return 1
 
     def save_project(self, path: str) -> bool:
         if self.raise_on == "save_project":
