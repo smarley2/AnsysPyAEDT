@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
 from inductor_designer.application.ports.maxwell2d_exporter import STAGE_NAMES_2D
 from tests.contract.test_maxwell2d_exporter_contract import make_request
 from tests.fakes.maxwell2d_app import FakeMaxwell2dApp, FakeMaxwell2dAppFactory
+
+pytestmark = pytest.mark.usefixtures("fake_maxwell_boundary")
 
 
 def run(tmp_path: Path, app: FakeMaxwell2dApp) -> object:
