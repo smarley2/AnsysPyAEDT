@@ -148,7 +148,10 @@ Exit criterion: a supported AEDT installation opens a generated 3D project that 
 
 ### Current state
 
-Implementation complete pending human AEDT verification. Deliverables:
+Milestone 3 is **accepted** as of 2026-07-16. The exit criterion is proven by
+the full 15-stage export on AEDT 2025 R2 Commercial (`run_aedt_maxwell3d.ps1`),
+with every stage succeeding and the generated project passing design
+validation. Implemented deliverables:
 
 - The solver-independent `Maxwell3dDesignPlan` (frozen dataclasses) and `build_maxwell3d_plan` plan builder.
 - The staged PyAEDT exporter (`PyaedtMaxwell3dExporter`) running 15 named stages with guaranteed `release_desktop`; a partial design is never reported as successful.
@@ -159,7 +162,7 @@ Implementation complete pending human AEDT verification. Deliverables:
 - The `generate_maxwell3d` CLI, the `run_aedt_maxwell3d.ps1` controlled runner, and the `aedt`-marked integration test.
 - The M2 should-fix #2 unique-identifier guard (`unique_identifiers`).
 
-Exit criterion is verified by `tools/run_aedt_maxwell3d.ps1` plus a manual open in AEDT 2025 R2 Commercial (evidence gitignored under `artifacts/maxwell3d/`). The milestone is **accepted only after** Fabio's run — the `aedt`-marked integration test is the arbiter for exact PyAEDT keyword names; if a documented kwarg differs in the installed pyaedt, fix the adapter (and its fake) to match reality, never the other way around.
+Exit criterion is verified by `tools/run_aedt_maxwell3d.ps1` plus a manual open in AEDT 2025 R2 Commercial (evidence gitignored under `artifacts/maxwell3d/`). The `aedt`-marked integration test is the arbiter for exact PyAEDT keyword names; the adapter was fixed to match the installed pyaedt 1.2.0 API (`assign_matrix` schema, `validate_simple`) during verification.
 
 ## Milestone 4: Maxwell 2D and DC operating point compatibility
 
