@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
 from inductor_designer.application.ports.maxwell_exporter import (
     STAGE_NAMES,
@@ -11,6 +13,8 @@ from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from tests.fakes.maxwell3d_app import FakeMaxwell3dApp, FakeMaxwell3dAppFactory
 from tests.unit.simulation.test_plan_builder import build, make_definition
+
+pytestmark = pytest.mark.usefixtures("fake_maxwell_boundary")
 
 
 def make_request(tmp_path: Path) -> Maxwell3dExportRequest:
