@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 from inductor_designer.materials.calibration import (
     AxisCalibration,
@@ -55,6 +55,17 @@ def _extraction_to_json(extraction: ExtractionRecord) -> dict[str, object]:
             {"xPx": point.x_px, "yPx": point.y_px} for point in extraction.pixel_points
         ],
     }
+
+
+def _reject_non_finite(value: object, path: str = "record") -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{path} must contain only finite numeric values")
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _reject_non_finite(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _reject_non_finite(item, f"{path}[{index}]")
 
 
 def material_record_to_json(
@@ -119,110 +130,205 @@ def material_record_to_json(
     }
     if include_revision:
         document["revisionId"] = record.revision_id
+    _reject_non_finite(document)
     return document
 
 
-def _mapping(value: object) -> Mapping[str, Any]:
-    return cast("Mapping[str, Any]", value)
+def _value(document: Mapping[str, Any], key: str, path: str) -> object:
+    try:
+        return document[key]
+    except KeyError as error:
+        raise ValueError(f"{path}.{key} is required") from error
 
 
-def _axis_from_json(document: Mapping[str, Any]) -> AxisCalibration:
+def _mapping(value: object, path: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{path} must be an object")
+    return value
+
+
+def _list(document: Mapping[str, Any], key: str, path: str) -> list[object]:
+    value = _value(document, key, path)
+    if not isinstance(value, list):
+        raise ValueError(f"{path}.{key} must be an array")
+    return value
+
+
+def _string(document: Mapping[str, Any], key: str, path: str) -> str:
+    value = _value(document, key, path)
+    if not isinstance(value, str):
+        raise ValueError(f"{path}.{key} must be a string")
+    return value
+
+
+def _optional_string(document: Mapping[str, Any], key: str, path: str) -> str | None:
+    value = _value(document, key, path)
+    if value is not None and not isinstance(value, str):
+        raise ValueError(f"{path}.{key} must be a string or null")
+    return value
+
+
+def _number(document: Mapping[str, Any], key: str, path: str) -> float:
+    value = _value(document, key, path)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{path}.{key} must be a number")
+    if not math.isfinite(value):
+        raise ValueError(f"{path}.{key} must be finite")
+    return float(value)
+
+
+def _optional_number(document: Mapping[str, Any], key: str, path: str) -> float | None:
+    if _value(document, key, path) is None:
+        return None
+    return _number(document, key, path)
+
+
+def _integer(document: Mapping[str, Any], key: str, path: str) -> int:
+    value = _value(document, key, path)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{path}.{key} must be an integer")
+    return value
+
+
+def _optional_integer(document: Mapping[str, Any], key: str, path: str) -> int | None:
+    if _value(document, key, path) is None:
+        return None
+    return _integer(document, key, path)
+
+
+def _axis_from_json(document: Mapping[str, Any], path: str) -> AxisCalibration:
     return AxisCalibration(
-        scale=AxisScale(document["scale"]),
-        pixel_a=document["pixelA"],
-        value_a=document["valueA"],
-        pixel_b=document["pixelB"],
-        value_b=document["valueB"],
+        scale=AxisScale(_string(document, "scale", path)),
+        pixel_a=_number(document, "pixelA", path),
+        value_a=_number(document, "valueA", path),
+        pixel_b=_number(document, "pixelB", path),
+        value_b=_number(document, "valueB", path),
     )
 
 
-def _extraction_from_json(document: Mapping[str, Any]) -> ExtractionRecord:
-    crop = _mapping(document["crop"])
+def _extraction_from_json(document: Mapping[str, Any], path: str) -> ExtractionRecord:
+    crop_path = f"{path}.crop"
+    crop = _mapping(_value(document, "crop", path), crop_path)
+    pixel_points = []
+    for index, item in enumerate(_list(document, "pixelPoints", path)):
+        point_path = f"{path}.pixelPoints[{index}]"
+        point = _mapping(item, point_path)
+        pixel_points.append(
+            PixelPoint(_number(point, "xPx", point_path), _number(point, "yPx", point_path))
+        )
     return ExtractionRecord(
-        crop=CropRegion(crop["left"], crop["top"], crop["width"], crop["height"]),
-        x_axis=_axis_from_json(_mapping(document["xAxis"])),
-        y_axis=_axis_from_json(_mapping(document["yAxis"])),
-        pixel_points=tuple(
-            PixelPoint(point["xPx"], point["yPx"])
-            for item in document["pixelPoints"]
-            if (point := _mapping(item))
+        crop=CropRegion(
+            _integer(crop, "left", crop_path),
+            _integer(crop, "top", crop_path),
+            _integer(crop, "width", crop_path),
+            _integer(crop, "height", crop_path),
         ),
+        x_axis=_axis_from_json(
+            _mapping(_value(document, "xAxis", path), f"{path}.xAxis"), f"{path}.xAxis"
+        ),
+        y_axis=_axis_from_json(
+            _mapping(_value(document, "yAxis", path), f"{path}.yAxis"), f"{path}.yAxis"
+        ),
+        pixel_points=tuple(pixel_points),
     )
 
 
 def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
-    ref = _mapping(document["ref"])
-    sources = tuple(
-        SourceProvenance(
-            kind=SourceKind(source["kind"]),
-            filename=source["filename"],
-            sha256=source["sha256"],
-            url=source["url"],
-            page=source["page"],
-            captured_at=source["capturedAt"],
-            description=source["description"],
+    ref = _mapping(_value(document, "ref", "record"), "record.ref")
+    sources = []
+    for index, item in enumerate(_list(document, "sources", "record")):
+        path = f"record.sources[{index}]"
+        source = _mapping(item, path)
+        sources.append(
+            SourceProvenance(
+                kind=SourceKind(_string(source, "kind", path)),
+                filename=_string(source, "filename", path),
+                sha256=_string(source, "sha256", path),
+                url=_string(source, "url", path),
+                page=_optional_integer(source, "page", path),
+                captured_at=_string(source, "capturedAt", path),
+                description=_string(source, "description", path),
+            )
         )
-        for item in document["sources"]
-        if (source := _mapping(item))
-    )
     series_items = []
-    for item in document["series"]:
-        series = _mapping(item)
-        conditions = _mapping(series["conditions"])
-        extraction = series["extraction"]
+    for index, item in enumerate(_list(document, "series", "record")):
+        path = f"record.series[{index}]"
+        series = _mapping(item, path)
+        conditions_path = f"{path}.conditions"
+        conditions = _mapping(_value(series, "conditions", path), conditions_path)
+        points = []
+        for point_index, point_item in enumerate(_list(series, "points", path)):
+            point_path = f"{path}.points[{point_index}]"
+            point = _mapping(point_item, point_path)
+            points.append(
+                CurvePoint(_number(point, "x", point_path), _number(point, "y", point_path))
+            )
+        extraction = _value(series, "extraction", path)
         series_items.append(
             PointSeries(
-                series_id=series["seriesId"],
-                kind=SeriesKind(series["kind"]),
-                x_unit=series["xUnit"],
-                y_unit=series["yUnit"],
+                series_id=_string(series, "seriesId", path),
+                kind=SeriesKind(_string(series, "kind", path)),
+                x_unit=_string(series, "xUnit", path),
+                y_unit=_string(series, "yUnit", path),
                 conditions=CurveConditions(
-                    conditions["frequencyHz"],
-                    conditions["temperatureC"],
-                    conditions["dcBiasAPerM"],
+                    _optional_number(conditions, "frequencyHz", conditions_path),
+                    _optional_number(conditions, "temperatureC", conditions_path),
+                    _optional_number(conditions, "dcBiasAPerM", conditions_path),
                 ),
-                points=tuple(
-                    CurvePoint(point["x"], point["y"])
-                    for point_item in series["points"]
-                    if (point := _mapping(point_item))
-                ),
-                source_filename=series["sourceFilename"],
+                points=tuple(points),
+                source_filename=_string(series, "sourceFilename", path),
                 extraction=(
-                    _extraction_from_json(_mapping(extraction))
+                    _extraction_from_json(
+                        _mapping(extraction, f"{path}.extraction"), f"{path}.extraction"
+                    )
                     if extraction is not None
                     else None
                 ),
             )
         )
-    fit_data = document["steinmetz"]
-    fit = _mapping(fit_data) if fit_data is not None else None
+    fit_data = _value(document, "steinmetz", "record")
+    fit = _mapping(fit_data, "record.steinmetz") if fit_data is not None else None
+    revision = document.get("revisionId", "")
+    if not isinstance(revision, str):
+        raise ValueError("record.revisionId must be a string")
     return MaterialRecord(
-        ref=MaterialRef(ref["manufacturer"], ref["name"], ref["grade"]),
-        revision_id=document.get("revisionId", ""),
-        status=MaterialStatus(document["status"]),
-        created_at=document["createdAt"],
-        reviewed_by=document["reviewedBy"],
-        approved_by=document["approvedBy"],
-        sources=sources,
+        ref=MaterialRef(
+            _string(ref, "manufacturer", "record.ref"),
+            _string(ref, "name", "record.ref"),
+            _string(ref, "grade", "record.ref"),
+        ),
+        revision_id=revision,
+        status=MaterialStatus(_string(document, "status", "record")),
+        created_at=_string(document, "createdAt", "record"),
+        reviewed_by=_optional_string(document, "reviewedBy", "record"),
+        approved_by=_optional_string(document, "approvedBy", "record"),
+        sources=tuple(sources),
         series=tuple(series_items),
-        relative_permeability=document["relativePermeability"],
+        relative_permeability=_optional_number(document, "relativePermeability", "record"),
         steinmetz=(
             SteinmetzFit(
-                k=fit["k"],
-                alpha=fit["alpha"],
-                beta=fit["beta"],
-                rms_relative_residual=fit["rmsRelativeResidual"],
-                max_relative_residual=fit["maxRelativeResidual"],
+                k=_number(fit, "k", "record.steinmetz"),
+                alpha=_number(fit, "alpha", "record.steinmetz"),
+                beta=_number(fit, "beta", "record.steinmetz"),
+                rms_relative_residual=_number(
+                    fit, "rmsRelativeResidual", "record.steinmetz"
+                ),
+                max_relative_residual=_number(
+                    fit, "maxRelativeResidual", "record.steinmetz"
+                ),
             )
             if fit is not None
             else None
         ),
-        notes=document["notes"],
+        notes=_string(document, "notes", "record"),
     )
 
 
 def material_record_json(record: MaterialRecord) -> str:
-    return json.dumps(material_record_to_json(record), indent=2, sort_keys=True) + "\n"
+    return (
+        json.dumps(material_record_to_json(record), allow_nan=False, indent=2, sort_keys=True)
+        + "\n"
+    )
 
 
 def revision_id_for(record: MaterialRecord) -> str:
@@ -230,11 +336,14 @@ def revision_id_for(record: MaterialRecord) -> str:
     document["revisionId"] = ""
     for key in ("status", "reviewedBy", "approvedBy"):
         del document[key]
-    canonical = json.dumps(document, indent=2, sort_keys=True) + "\n"
+    canonical = json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n"
     return sha256_hex(canonical.encode("utf-8"))[:12]
 
 
 def points_csv(series: PointSeries) -> str:
+    for point in series.points:
+        if not math.isfinite(point.x) or not math.isfinite(point.y):
+            raise ValueError("CSV points must contain only finite values")
     rows = (f"{repr(round(point.x, 9))},{repr(round(point.y, 9))}" for point in series.points)
     return "x,y\n" + "".join(f"{row}\n" for row in rows)
 

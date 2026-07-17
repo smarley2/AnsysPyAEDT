@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 import pytest
@@ -156,6 +157,80 @@ def test_points_csv_has_exact_lf_format_and_rounds_to_nine_places() -> None:
     assert rendered == "x,y\n1.12345679,2.0\n3.0,4.0\n"
     assert "\r" not in rendered
     assert parse_points_csv(rendered) == ((1.12345679, 2.0), (3.0, 4.0))
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_points_csv_rejects_non_finite_values(value: float) -> None:
+    series = replace(_record().series[0], points=(CurvePoint(value, 1.0),))
+
+    with pytest.raises(ValueError, match="finite"):
+        points_csv(series)
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+@pytest.mark.parametrize(
+    "field",
+    ["relative-permeability", "point", "fit", "condition", "axis", "pixel-point"],
+)
+def test_material_serialization_rejects_non_finite_numeric_fields(
+    value: float, field: str
+) -> None:
+    record = _record()
+    series = record.series[0]
+    extraction = series.extraction
+    assert extraction is not None
+    if field == "relative-permeability":
+        invalid = replace(record, relative_permeability=value)
+    elif field == "point":
+        invalid_series = replace(series, points=(CurvePoint(value, 0.0),))
+        invalid = replace(record, series=(invalid_series, record.series[1]))
+    elif field == "fit":
+        assert record.steinmetz is not None
+        invalid = replace(record, steinmetz=replace(record.steinmetz, beta=value))
+    elif field == "condition":
+        invalid_series = replace(
+            series, conditions=replace(series.conditions, temperature_c=value)
+        )
+        invalid = replace(record, series=(invalid_series, record.series[1]))
+    elif field == "axis":
+        invalid_extraction = replace(
+            extraction, x_axis=replace(extraction.x_axis, value_a=value)
+        )
+        invalid_series = replace(series, extraction=invalid_extraction)
+        invalid = replace(record, series=(invalid_series, record.series[1]))
+    else:
+        invalid_extraction = replace(extraction, pixel_points=(PixelPoint(value, 1.0),))
+        invalid_series = replace(series, extraction=invalid_extraction)
+        invalid = replace(record, series=(invalid_series, record.series[1]))
+
+    with pytest.raises(ValueError, match="finite"):
+        material_record_to_json(invalid)
+    with pytest.raises(ValueError, match="finite"):
+        material_record_json(invalid)
+    with pytest.raises(ValueError, match="finite"):
+        revision_id_for(invalid)
+
+
+@pytest.mark.parametrize("collection", ["sources", "points"])
+def test_material_deserialization_rejects_malformed_collection_elements(
+    collection: str,
+) -> None:
+    document = material_record_to_json(_record())
+    if collection == "sources":
+        document["sources"].append({})  # type: ignore[union-attr]
+    else:
+        document["series"][0]["points"].append({})  # type: ignore[index]
+
+    with pytest.raises(ValueError, match=collection):
+        material_record_from_json(document)
+
+
+def test_material_deserialization_rejects_wrong_primitive_scalar_type() -> None:
+    document = material_record_to_json(_record())
+    document["relativePermeability"] = "sixty"
+
+    with pytest.raises(ValueError, match="relativePermeability"):
+        material_record_from_json(document)
 
 
 @pytest.mark.parametrize(
