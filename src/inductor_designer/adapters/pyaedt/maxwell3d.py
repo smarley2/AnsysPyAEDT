@@ -153,7 +153,7 @@ def _stage_excitations(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
             name=group.name,
         )
         if _native_dc_active(plan) and group.dc_current_a != 0.0:
-            winding.props["DCValue"] = f"{group.dc_current_a:g}A"
+            winding.props["DC Current"] = f"{group.dc_current_a:g}A"
             winding.update()
             dc_applied += 1
         app.add_winding_coils(assignment=group.name, coils=coil_names)
@@ -197,14 +197,8 @@ def _stage_setup(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     setup.props["Frequency"] = f"{plan.setup.frequency_hz:g}Hz"
     setup.props["MaximumPasses"] = plan.setup.maximum_passes
     setup.props["PercentError"] = plan.setup.percent_error
-    native_dc = _native_dc_active(plan)
-    if native_dc:
-        setup.props["IncludeDcFields"] = True
     setup.update()
-    message = f"Setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
-    if native_dc:
-        message += " DC fields included."
-    return message
+    return f"Setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
 
 
 def _stage_matrix(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:

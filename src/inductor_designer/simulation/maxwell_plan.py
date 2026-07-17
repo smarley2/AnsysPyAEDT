@@ -10,6 +10,7 @@ from inductor_designer.geometry.terminals import TerminalDisk
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 
 SOLUTION_TYPE = "EddyCurrent"
+SOLUTION_TYPE_DC = "AC Magnetic with DC"
 DESIGN_NAME = "Inductor3D"
 SETUP_NAME = "Setup1"
 MATRIX_NAME = "Matrix1"
@@ -151,7 +152,8 @@ def dc_bias_notes(decision: DcBiasDecision | None, dc_requested: bool) -> tuple[
         return ("DC operating currents are recorded but not applied; no capability decision.",)
     if decision.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS:
         return (
-            "DC operating point applied natively via 3D Include DC Fields.",
+            "DC operating point applied natively via the AC Magnetic with DC "
+            "solution type.",
             "Core material is linear until Milestone 5; DC bias has no incremental "
             "effect on a linear material.",
         )

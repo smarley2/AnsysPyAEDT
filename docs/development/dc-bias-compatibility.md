@@ -22,9 +22,17 @@ Studio Simulation summary.
    `compatibility/aedt-matrix.yml`, update `evidenceReviewedAt`/`evidenceReviewedBy`.
 4. Re-run `tools/run_aedt_maxwell3d.ps1` with a project carrying nonzero
    `dcCurrentA`; verify the manifest reports `native-include-dc-fields`, the
-   setup flag and per-winding DC values exist in AEDT, and validation passes.
-   The adapter's `IncludeDcFields`/`DCValue` prop names are best-effort — fix
-   adapter + fakes to match the installed pyaedt if AEDT rejects them.
+   design uses the `AC Magnetic with DC` solution type, per-winding
+   `'DC Current'` values exist in AEDT, and validation passes.
+
+Verified live against AEDT 2025.2 (2026-07-17): native DC bias is the design
+solution type `AC Magnetic with DC` (pyaedt maps this to
+`DCBiasedEddyCurrent`, 2025 R1+); the setup then carries DC convergence
+properties (`DCMaxmumPasses`, etc.) automatically — there is no
+`IncludeDcFields` setup property. Per-winding DC is set via
+`winding.props["DC Current"] = "<value>A"` followed by `.update()`; this is
+the only prop name AEDT persists — `DCCurrent`/`DCValue` are silently
+ignored and the field stays at its `0mA` default.
 
 ## 2024 R2 fallback
 

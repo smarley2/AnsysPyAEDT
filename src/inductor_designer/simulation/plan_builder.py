@@ -15,13 +15,14 @@ from inductor_designer.geometry.naming import core_name, unique_identifiers
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.geometry.terminals import build_terminal_disk
 from inductor_designer.geometry.turn_path import build_turn_loop
-from inductor_designer.simulation.capabilities import DcBiasDecision
+from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (
     DESIGN_NAME,
     MATRIX_NAME,
     REGION_PADDING_PERCENT,
     SETUP_NAME,
     SOLUTION_TYPE,
+    SOLUTION_TYPE_DC,
     CorePlan,
     Maxwell3dDesignPlan,
     MeshPlan,
@@ -138,11 +139,18 @@ def build_maxwell3d_plan(
     dc_requested = any(group.dc_current_a != 0.0 for group in groups)
     notes.extend(dc_bias_notes(dc_bias_decision, dc_requested))
 
+    native_dc = (
+        dc_bias_decision is not None
+        and dc_bias_decision.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS
+        and dc_requested
+    )
+    solution_type = SOLUTION_TYPE_DC if native_dc else SOLUTION_TYPE
+
     width = core.r_outer_m - core.r_inner_m
     height = 2.0 * core.half_height_m
     return Maxwell3dDesignPlan(
         design_name=DESIGN_NAME,
-        solution_type=SOLUTION_TYPE,
+        solution_type=solution_type,
         core=CorePlan(name=core_name(), profile=build_core_profile(core), material=material),
         windings=tuple(groups),
         region=RegionPlan(padding_percent=REGION_PADDING_PERCENT),

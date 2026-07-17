@@ -11,6 +11,7 @@ from inductor_designer.application.ports.maxwell_exporter import (
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
+from inductor_designer.simulation.maxwell_plan import SOLUTION_TYPE_DC
 from tests.fakes.maxwell3d_app import FakeMaxwell3dApp, FakeMaxwell3dAppFactory
 from tests.unit.simulation.test_plan_builder import build, make_definition
 
@@ -129,26 +130,35 @@ def native_request(tmp_path: Path) -> Maxwell3dExportRequest:
     base = make_request(tmp_path)
     decision = DcBiasDecision(DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS, False, "native ok")
     windings = tuple(replace(g, dc_current_a=5.0) for g in base.plan.windings)
-    return replace(base, plan=replace(base.plan, windings=windings, dc_bias=decision))
+    return replace(
+        base,
+        plan=replace(
+            base.plan, windings=windings, dc_bias=decision, solution_type=SOLUTION_TYPE_DC
+        ),
+    )
 
 
-def test_native_dc_sets_setup_flag_and_winding_dc(tmp_path: Path) -> None:
+def test_native_dc_sets_winding_dc_current_and_solution_type(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
-    exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
+    factory = FakeMaxwell3dAppFactory(app)
+    exporter = PyaedtMaxwell3dExporter(app_factory=factory)
     result = exporter.export(native_request(tmp_path))
     assert result.succeeded()
+    assert factory.create_kwargs[0]["solution_type"] == SOLUTION_TYPE_DC
     setup_updates = [k for n, k in app.calls if n == "setup.update"]
-    assert setup_updates[0]["props"]["IncludeDcFields"] is True
+    assert "IncludeDcFields" not in setup_updates[0]["props"]
     dc_sets = [k for n, k in app.calls if n == "winding.set_prop"]
-    assert dc_sets == [{"name": "w1", "key": "DCValue", "value": "5A"}]
+    assert dc_sets == [{"name": "w1", "key": "DC Current", "value": "5A"}]
     winding_updates = [k for n, k in app.calls if n == "winding.update"]
     assert len(winding_updates) == 1
 
 
 def test_no_dc_flag_without_native_decision(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
-    exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
+    factory = FakeMaxwell3dAppFactory(app)
+    exporter = PyaedtMaxwell3dExporter(app_factory=factory)
     exporter.export(make_request(tmp_path))
+    assert factory.create_kwargs[0]["solution_type"] == "EddyCurrent"
     setup_updates = [k for n, k in app.calls if n == "setup.update"]
     assert "IncludeDcFields" not in setup_updates[0]["props"]
     assert not [k for n, k in app.calls if n == "winding.set_prop"]
@@ -168,13 +178,14 @@ def test_native_dc_only_applies_to_nonzero_windings(tmp_path: Path) -> None:
             DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS, False, "native ok"
         ),
     )
+    assert plan.solution_type == SOLUTION_TYPE_DC
     request = replace(make_request(tmp_path), plan=plan)
     app = FakeMaxwell3dApp()
     exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
     result = exporter.export(request)
     assert result.succeeded()
     dc_sets = [k for n, k in app.calls if n == "winding.set_prop"]
-    assert dc_sets == [{"name": "w1", "key": "DCValue", "value": "5A"}]
+    assert dc_sets == [{"name": "w1", "key": "DC Current", "value": "5A"}]
     winding_updates = [k for n, k in app.calls if n == "winding.update"]
     assert len(winding_updates) == 1
     winding_assigns = [k for n, k in app.calls if n == "assign_winding"]

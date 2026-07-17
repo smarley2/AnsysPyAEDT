@@ -11,7 +11,11 @@ from inductor_designer.domain.winding import (
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
-from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
+from inductor_designer.simulation.maxwell_plan import (
+    SOLUTION_TYPE_DC,
+    PlanBuildError,
+    Polarity,
+)
 from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
 from tests.unit.simulation.test_maxwell_plan import make_core_record
 
@@ -134,8 +138,19 @@ BLOCKED = DcBiasDecision(DcBiasStrategy.BLOCKED, False, "unreviewed")
 def test_native_decision_lands_in_plan_and_notes() -> None:
     plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=NATIVE)
     assert plan.dc_bias is NATIVE
-    assert any("Include DC Fields" in note for note in plan.notes)
+    assert plan.solution_type == SOLUTION_TYPE_DC
+    assert any("AC Magnetic with DC" in note for note in plan.notes)
     assert any("linear" in note for note in plan.notes)
+
+
+def test_native_decision_without_dc_current_keeps_eddy_current_solution() -> None:
+    plan = build((make_definition(dc_current_a=0.0),), dc_bias_decision=NATIVE)
+    assert plan.solution_type == "EddyCurrent"
+
+
+def test_fallback_decision_keeps_eddy_current_solution() -> None:
+    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=FALLBACK)
+    assert plan.solution_type == "EddyCurrent"
 
 
 def test_fallback_decision_notes_deferral() -> None:
