@@ -202,3 +202,67 @@ def test_missing_image_does_not_prevent_independent_extraction_check() -> None:
         "source 'bh.png' is missing",
         "series 'bh-image' points mismatch",
     )
+
+
+def test_series_arithmetic_failure_is_reported_before_revision_mismatch() -> None:
+    record, sources = _record_fixture()
+    image = record.series[-1]
+    assert image.extraction is not None
+    overflowing_extraction = replace(
+        image.extraction,
+        x_axis=AxisCalibration(AxisScale.LOG, 0.0, 1.0, 1.0, 10.0),
+        pixel_points=(PixelPoint(1_000.0, 50.0),),
+    )
+    tampered = replace(
+        record,
+        revision_id="0" * 12,
+        series=(*record.series[:-1], replace(image, extraction=overflowing_extraction)),
+    )
+
+    report = reproduce_record(tampered, sources)
+
+    assert report.mismatches == (
+        "series 'bh-image' reconstruction failed: arithmetic error",
+        "revision ID mismatch",
+    )
+
+
+def test_fit_arithmetic_failure_is_reported_before_revision_mismatch() -> None:
+    record, _ = _record_fixture()
+    raw_series = (
+        (10_000_000_000.0, "x,y\n100000,1e200\n10000000000,1e200\n"),
+        (1e300, "x,y\n1e100,1e50\n"),
+        (1e100, "x,y\n1e50,1e-5\n"),
+    )
+    source_data = {
+        f"overflow-{index}.csv": text.encode("utf-8")
+        for index, (_, text) in enumerate(raw_series)
+    }
+    provenance = tuple(
+        _source(SourceKind.CSV, filename, data) for filename, data in source_data.items()
+    )
+    loss_series = tuple(
+        import_curve_csv(
+            text,
+            series_id=f"overflow-{index}",
+            kind=SeriesKind.LOSS_TABLE,
+            x_unit="T",
+            y_unit="W/m3",
+            conditions=CurveConditions(frequency, 25.0, None),
+            source=provenance[index],
+        )
+        for index, (frequency, text) in enumerate(raw_series)
+    )
+    tampered = replace(
+        record,
+        revision_id="0" * 12,
+        sources=provenance,
+        series=loss_series,
+    )
+
+    report = reproduce_record(tampered, source_data)
+
+    assert report.mismatches == (
+        "Steinmetz fit could not be reproduced: arithmetic error",
+        "revision ID mismatch",
+    )

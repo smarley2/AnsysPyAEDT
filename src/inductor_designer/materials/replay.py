@@ -75,6 +75,12 @@ def reproduce_record(
                 failed_loss_reconstruction |= series.kind is SeriesKind.LOSS_TABLE
                 continue
             points = canonicalize_points(raw_points, series.x_unit, series.y_unit)
+        except ArithmeticError:
+            mismatches.append(
+                f"series '{series.series_id}' reconstruction failed: arithmetic error"
+            )
+            failed_loss_reconstruction |= series.kind is SeriesKind.LOSS_TABLE
+            continue
         except (UnicodeError, ValueError) as error:
             mismatches.append(f"series '{series.series_id}' reconstruction failed: {error}")
             failed_loss_reconstruction |= series.kind is SeriesKind.LOSS_TABLE
@@ -86,6 +92,8 @@ def reproduce_record(
     if record.steinmetz is not None and not failed_loss_reconstruction:
         try:
             reproduced_fit = fit_steinmetz(_loss_samples(record.series, reproduced))
+        except ArithmeticError:
+            mismatches.append("Steinmetz fit could not be reproduced: arithmetic error")
         except MaterialFitError:
             mismatches.append("Steinmetz fit could not be reproduced")
         else:
