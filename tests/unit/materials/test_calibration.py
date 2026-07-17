@@ -78,3 +78,14 @@ def test_extract_points_round_trips_three_points() -> None:
     )
 
     assert extract_points(record) == ((0.0, 0.0), (0.5, 1.0), (1.0, 2.0))
+
+
+def test_extract_points_rounds_each_coordinate_to_nine_decimal_places() -> None:
+    record = ExtractionRecord(
+        crop=CropRegion(left=0, top=0, width=1, height=1),
+        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 1.0, 1.0),
+        y_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 1.0, 1.0),
+        pixel_points=(PixelPoint(0.1234567896, 0.9876543216),),
+    )
+
+    assert extract_points(record) == ((0.12345679, 0.987654322),)
