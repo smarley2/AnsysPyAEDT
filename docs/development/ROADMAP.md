@@ -175,19 +175,44 @@ Exit criterion: release-matrix fixtures generate valid projects and identify nat
 
 ### Current state
 
-Milestone 4 is **implementation complete**, pending Fabio Posser's live
-verification on AEDT 2025 R2 Commercial before acceptance. Implemented
-deliverables:
+Milestone 4 is **accepted** as of 2026-07-17. Live verification ran on AEDT
+2025 R2 Commercial in four rounds; each round's defect was fixed and
+re-verified on the real machine:
+
+1. The 2D region silently failed (`create_air_region` is 3D-only; the 2D XY
+   API is `create_region(pad_value, pad_type)`), and stage failures discarded
+   the project. Fixed with the correct call, falsy-return guards on pyaedt
+   calls, and a diagnostic save on any stage failure.
+2. Maxwell 2D AC Magnetic requires an explicit outer boundary; a balloon
+   boundary is now assigned on the region edges.
+3. Non-graphical AEDT rejects design-settings writes on an empty design, so
+   the 2D model depth is set after geometry exists.
+4. The native DC guesses (`IncludeDcFields` setup property, `DCValue` winding
+   property) were silently ignored by AEDT. The verified mechanism is the
+   **"AC Magnetic with DC" solution type** plus the per-winding
+   **`DC Current`** property, both confirmed persisted in the saved project.
+   pyaedt 1.2.0's `assign_matrix` does not support that solution type, so the
+   3D adapter assigns the matrix through the raw `MaxwellParameterSetup`
+   module.
+
+Accepted evidence: the `aedt`-marked 2D and 3D export tests pass against
+AEDT 2025.2 Commercial; a full 15-stage native-DC 3D generation (all stages
+succeeded, design validation passed, `'DC Current'='5A'` persisted for both
+windings, `Matrix1` assigned) ran via `tools/generate_maxwell3d.py`; the 2D
+runner generated, validated, and simulated a project reviewed by Fabio
+Posser. The matrix row `2025.2/commercial` now records
+`includeDcFields3d: true` (live probe, 2026-07-17) with the two discovered
+pyaedt limits. Implemented deliverables:
 
 - The `MatrixCapabilityRepository` loader turning
   `compatibility/aedt-matrix.yml` rows into `CapabilitySnapshot` values.
 - DC-bias strategy selection (`select_dc_bias_strategy`) wired into 3D
-  generation: native Include DC Fields applied through the `IncludeDcFields`
-  setup property and per-winding `DCValue` when the matrix confirms support;
-  the 2024 R2 magnetostatic-incremental fallback and the 2D case are
-  identified in the manifest but blocked from generation (decision D4,
-  2026-07-16 — no 2024 R2 installation exists, and the fallback is a physical
-  no-op until Milestone 5's nonlinear material data).
+  generation: native DC through the "AC Magnetic with DC" solution type and
+  per-winding `DC Current` values when the matrix confirms support; the
+  2024 R2 magnetostatic-incremental fallback and the 2D case are identified
+  in the manifest but blocked from generation (decision D4, 2026-07-16 — no
+  2024 R2 installation exists, and the fallback is a physical no-op until
+  Milestone 5's nonlinear material data).
 - The Maxwell 2D stack: solver-independent plan types and `build_maxwell2d_plan`
   from `PlanarModel`, the `Maxwell2dExporter` application port, the staged
   `PyaedtMaxwell2dExporter` (14 stages including launch and save), the
@@ -198,19 +223,8 @@ deliverables:
   and approximation status.
 - The exit-criterion integration test, `tests/integration/test_release_matrix.py`.
 
-Exit criterion is proven by `tests/integration/test_release_matrix.py`
-against the full release/edition matrix plus the `aedt`-marked 2D export
-test. It is **not yet accepted**: acceptance requires Fabio Posser, on the
-licensed AEDT 2025 R2 Commercial machine, to (1) run
-`run_aedt_maxwell2d.ps1`, open the generated project, and confirm design
-validation, (2) run the `aedt`-marked 2D integration test, (3) review
-Include DC Fields per `docs/development/dc-bias-compatibility.md`, flip
-`includeDcFields3d` on the matrix row, and re-run the 3D runner with a DC
-project to confirm native application in AEDT (fixing the `IncludeDcFields`/
-`DCValue` adapter prop names if AEDT rejects them), and (4) confirm the
-Guided Studio Simulation summary shows the expected strategy lines for both
-a 3D and a 2D project. The 2024 R2 rows stay `out-of-scope` per D4 and are
-not part of this acceptance.
+The 2024 R2 rows stay `out-of-scope` per D4 and were not part of this
+acceptance.
 
 ## Milestone 5: Material Studio
 

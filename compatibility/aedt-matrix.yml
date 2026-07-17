@@ -26,10 +26,16 @@ rows:
     pyaedtVersion: "1.2.0"
     maxwell2dTrivialProject: probe2d.aedt
     maxwell3dTrivialProject: probe3d.aedt
-    includeDcFields3d: null
-    discoveredLimits: []
-    evidenceReviewedAt: "2026-07-13T00:00:00Z"
-    evidenceReviewedBy: hermes
+    # Live probe 2026-07-17 (delegated by Fabio Posser): "AC Magnetic with DC"
+    # design generated, per-winding 'DC Current' persisted, matrix assigned,
+    # design validation passed, project saved. Evidence: full 15-stage
+    # generate_maxwell3d run against AEDT 2025.2 Commercial.
+    includeDcFields3d: true
+    discoveredLimits:
+      - "pyaedt 1.2.0 assign_matrix lacks 'AC Magnetic with DC'; adapter uses raw AssignMatrix"
+      - "non-graphical SetDesignSettings fails on an empty 2D design; set model depth after geometry"
+    evidenceReviewedAt: "2026-07-17T00:00:00Z"
+    evidenceReviewedBy: fabio.posser (delegated live probe)
   - release: "2025.2"
     edition: student
     status: out-of-scope

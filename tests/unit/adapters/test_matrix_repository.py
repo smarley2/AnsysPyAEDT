@@ -35,7 +35,8 @@ def test_real_matrix_reviewed_row_maps_to_snapshot() -> None:
     repo = MatrixCapabilityRepository(REAL_MATRIX)
     snapshot = repo.snapshot_for(AedtRelease(2025, 2), AedtEdition.COMMERCIAL)
     assert snapshot.review_status is CapabilityReviewStatus.REVIEWED
-    assert snapshot.include_dc_fields_3d is None
+    # Reviewed true on 2026-07-17 via live probe (AC Magnetic with DC).
+    assert snapshot.include_dc_fields_3d is True
     assert snapshot.evidence_source == "aedt-matrix:aedt-matrix.yml"
 
 

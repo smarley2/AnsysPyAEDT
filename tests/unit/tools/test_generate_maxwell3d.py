@@ -26,4 +26,4 @@ def test_main_exports_sample_project_and_writes_evidence(tmp_path: Path) -> None
     assert payload["succeeded"] is True
     assert payload["designName"] == "Inductor3D"
     assert [w["name"] for w in payload["windings"]] == ["w1", "w2"]
-    assert payload["dcBias"]["strategy"] == "blocked"
+    assert payload["dcBias"]["strategy"] == "native-include-dc-fields"

@@ -53,11 +53,13 @@ def manifest_3d(matrix: Path, release: AedtRelease, tmp_path: Path) -> dict[str,
     return json.loads(generation_manifest_json(outcome))
 
 
-def test_real_matrix_2025_2_is_blocked_until_reviewed(tmp_path: Path) -> None:
+def test_real_matrix_2025_2_identifies_native(tmp_path: Path) -> None:
+    # includeDcFields3d reviewed true on 2026-07-17 (live probe on AEDT 2025.2).
     payload = manifest_3d(REAL_MATRIX, AedtRelease(2025, 2), tmp_path)
     assert payload["succeeded"] is True
-    assert payload["dcBias"]["strategy"] == "blocked"
+    assert payload["dcBias"]["strategy"] == "native-include-dc-fields"
     assert payload["dcBias"]["approximate"] is False
+    assert payload["solutionType"] == "AC Magnetic with DC"
 
 
 def test_synthetic_native_row_identifies_native(tmp_path: Path) -> None:
