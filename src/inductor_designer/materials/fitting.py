@@ -20,7 +20,8 @@ class LossSample:
     loss_w_per_m3: float
 
     def __post_init__(self) -> None:
-        if self.frequency_hz <= 0 or self.flux_density_t <= 0 or self.loss_w_per_m3 <= 0:
+        values = (self.frequency_hz, self.flux_density_t, self.loss_w_per_m3)
+        if any(not math.isfinite(value) or value <= 0 for value in values):
             raise MaterialFitError("loss sample values must be positive")
 
 
@@ -64,7 +65,8 @@ def fit_steinmetz(samples: Sequence[LossSample]) -> SteinmetzFit:
         sum(flux_density * loss for _, flux_density, loss in rows),
     )
     denominator = _determinant(matrix)
-    if denominator == 0.0:
+    determinant_scale = math.prod(math.hypot(*row) for row in matrix)
+    if math.isclose(denominator, 0.0, rel_tol=0.0, abs_tol=1e-12 * determinant_scale):
         raise MaterialFitError("loss samples do not define an independent fit")
 
     log_k = _determinant(

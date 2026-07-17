@@ -53,13 +53,41 @@ def test_fit_steinmetz_rejects_degenerate_samples(samples: tuple[LossSample, ...
         fit_steinmetz(samples)
 
 
+@pytest.mark.parametrize("invalid_value", [0.0, -1.0])
 @pytest.mark.parametrize("value_index", range(3))
-def test_loss_sample_requires_positive_values(value_index: int) -> None:
+def test_loss_sample_requires_positive_values(invalid_value: float, value_index: int) -> None:
     values = [10_000.0, 0.1, 1.0]
-    values[value_index] = 0.0
+    values[value_index] = invalid_value
 
     with pytest.raises(MaterialFitError):
         LossSample(*values)
+
+
+@pytest.mark.parametrize("invalid_value", [math.nan, math.inf, -math.inf])
+@pytest.mark.parametrize("value_index", range(3))
+def test_loss_sample_rejects_non_finite_values(
+    invalid_value: float, value_index: int
+) -> None:
+    values = [10_000.0, 0.1, 1.0]
+    values[value_index] = invalid_value
+
+    with pytest.raises(MaterialFitError):
+        LossSample(*values)
+
+
+def test_fit_steinmetz_rejects_collinear_log_space_samples() -> None:
+    frequencies = (1234.0, 56_789.0, 234_567.0, 9_876_543.0)
+    samples = tuple(
+        LossSample(
+            frequency,
+            frequency**1.23456789,
+            2.5 * frequency**1.4 * (frequency**1.23456789) ** 2.3,
+        )
+        for frequency in frequencies
+    )
+
+    with pytest.raises(MaterialFitError):
+        fit_steinmetz(samples)
 
 
 def test_mean_relative_permeability_averages_linear_bh_points() -> None:
