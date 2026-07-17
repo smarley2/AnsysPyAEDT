@@ -31,6 +31,7 @@ def test_geometry_and_depth_calls(tmp_path: Path) -> None:
     names = [name for name, _ in app.calls]
     depth_sets = [k for n, k in app.calls if n == "set.model_depth"]
     assert depth_sets and depth_sets[0]["value"].endswith("meter")
+    assert names.index("set.model_depth") < names.index("create_setup")
     # core outer + bore + 8 conductors
     assert names.count("modeler.create_circle") == 2 + 8
     assert names.count("modeler.subtract") == 1

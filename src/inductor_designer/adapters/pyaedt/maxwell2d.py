@@ -64,8 +64,7 @@ class DefaultMaxwell2dAppFactory:
 
 def _stage_units(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     app.modeler.model_units = "meter"
-    app.model_depth = f"{plan.model_depth_m:g}meter"
-    return f"Units meter; model depth {plan.model_depth_m:g} m."
+    return "Model units set to meter."
 
 
 def _stage_materials(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
@@ -158,12 +157,18 @@ def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
 
 
 def _stage_setup(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
+    # Non-graphical AEDT rejects design-settings writes (model_depth) on an
+    # empty design, so depth is set here, once geometry/region/boundary exist.
+    app.model_depth = f"{plan.model_depth_m:g}meter"
     setup = app.create_setup(name=plan.setup.name)
     setup.props["Frequency"] = f"{plan.setup.frequency_hz:g}Hz"
     setup.props["MaximumPasses"] = plan.setup.maximum_passes
     setup.props["PercentError"] = plan.setup.percent_error
     setup.update()
-    return f"Setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
+    return (
+        f"Model depth {plan.model_depth_m:g} m; "
+        f"setup {plan.setup.name} at {plan.setup.frequency_hz:g} Hz."
+    )
 
 
 def _stage_matrix(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
