@@ -40,6 +40,9 @@ class FakeFemmModule:
     def mi_addmaterial(self, *args: Any) -> Any:
         return self._record("mi_addmaterial", *args)
 
+    def mi_addbhpoints(self, *args: Any) -> Any:
+        return self._record("mi_addbhpoints", *args)
+
     def mi_addcircprop(self, *args: Any) -> Any:
         return self._record("mi_addcircprop", *args)
 

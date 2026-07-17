@@ -58,6 +58,11 @@ class _FakeMaterial:
         else:
             self._log.append((f"material.set.{name}", {"material": self._name, "value": value}))
 
+    def set_power_ferrite_coreloss(self, **kwargs: Any) -> None:
+        self._log.append(
+            ("material.set_power_ferrite_coreloss", {"material": self._name, **kwargs})
+        )
+
 
 class _FakeMaterials:
     def __init__(self, log: list[tuple[str, dict[str, Any]]]) -> None:

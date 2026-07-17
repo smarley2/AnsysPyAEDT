@@ -13,6 +13,7 @@ from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import SOLUTION_TYPE_DC
 from tests.fakes.maxwell3d_app import FakeMaxwell3dApp, FakeMaxwell3dAppFactory
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
 from tests.unit.simulation.test_plan_builder import build, make_definition
 
 pytestmark = pytest.mark.usefixtures("fake_maxwell_boundary")
@@ -56,6 +57,39 @@ def test_geometry_calls_are_made(tmp_path: Path) -> None:
     turn_kwargs = polyline_kwargs[1]
     assert turn_kwargs["xsection_type"] == "Circle"
     assert turn_kwargs["material"] == "copper"
+
+
+def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    app = FakeMaxwell3dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+    exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert result.succeeded()
+    assert (
+        "material.set.permeability",
+        {
+            "material": "Magnetics_Kool_Mu_60_r0123456789ab",
+            "value": [[0.0, 0.0], [0.025132741, 100.0]],
+        },
+    ) in app.calls
+    assert (
+        "material.set_power_ferrite_coreloss",
+        {
+            "material": "Magnetics_Kool_Mu_60_r0123456789ab",
+            "cm": 2.5,
+            "x": 1.4,
+            "y": 2.3,
+        },
+    ) in app.calls
 
 
 def test_failing_stage_truncates_and_still_releases(tmp_path: Path) -> None:

@@ -9,7 +9,22 @@ from inductor_designer.domain.catalog_records import (
     ReviewStatus,
 )
 from inductor_designer.materials.identity import MaterialRef
-from inductor_designer.simulation.maxwell_plan import PlanBuildError, core_material_spec
+from inductor_designer.materials.records import (
+    CurveConditions,
+    CurvePoint,
+    MaterialRecord,
+    MaterialStatus,
+    PointSeries,
+    SeriesKind,
+    SourceKind,
+    SourceProvenance,
+    SteinmetzFit,
+)
+from inductor_designer.simulation.maxwell_plan import (
+    PlanBuildError,
+    core_material_spec,
+    material_spec_from_material_record,
+)
 
 
 def make_core_record(
@@ -38,6 +53,46 @@ def make_core_record(
     )
 
 
+def make_approved_material_record(
+    *,
+    status: MaterialStatus = MaterialStatus.APPROVED,
+    relative_permeability: float | None = None,
+) -> MaterialRecord:
+    source = SourceProvenance(
+        kind=SourceKind.CSV,
+        filename="bh.csv",
+        sha256="0" * 64,
+        url="https://example.com/material.pdf",
+        page=1,
+        captured_at="2026-07-17T08:32:00+00:00",
+        description="B-H curve",
+    )
+    return MaterialRecord(
+        ref=MaterialRef("Magnetics", "Kool Mu", "60"),
+        revision_id="0123456789ab",
+        status=status,
+        created_at="2026-07-17T08:32:00+00:00",
+        reviewed_by="reviewer@example.com" if status is not MaterialStatus.DRAFT else None,
+        approved_by="approver@example.com" if status is MaterialStatus.APPROVED else None,
+        sources=(source,),
+        series=(
+            PointSeries(
+                series_id="bh",
+                kind=SeriesKind.BH_CURVE,
+                x_unit="A/m",
+                y_unit="T",
+                conditions=CurveConditions(None, 25.0, None),
+                points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.025132741)),
+                source_filename=source.filename,
+                extraction=None,
+            ),
+        ),
+        relative_permeability=relative_permeability,
+        steinmetz=SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02),
+        notes="Approved nonlinear material.",
+    )
+
+
 def test_powder_grade_becomes_linear_material() -> None:
     spec = core_material_spec(make_core_record())
     assert spec.name == "Magnetics_Kool_Mu_60"
@@ -59,3 +114,34 @@ def test_ferrite_family_is_refused() -> None:
 def test_non_numeric_grade_is_refused() -> None:
     with pytest.raises(PlanBuildError, match="numeric"):
         core_material_spec(make_core_record(grade="N87"))
+
+
+def test_approved_record_becomes_nonlinear_material_with_scalar_fallback() -> None:
+    record = make_approved_material_record()
+
+    spec = material_spec_from_material_record(
+        make_core_record(family=CoreFamily.FERRITE_TOROID), record
+    )
+
+    assert spec.name == "Magnetics_Kool_Mu_60_r0123456789ab"
+    assert spec.relative_permeability == pytest.approx(200.0, rel=1e-7)
+    assert spec.conductivity_s_per_m == 0.0
+    assert spec.draft is False
+    assert spec.bh_curve == ((0.0, 0.0), (0.025132741, 100.0))
+    assert spec.steinmetz is record.steinmetz
+    assert spec.material_revision == record.revision_id
+
+
+def test_approved_record_prefers_explicit_scalar_permeability() -> None:
+    spec = material_spec_from_material_record(
+        make_core_record(), make_approved_material_record(relative_permeability=75.0)
+    )
+
+    assert spec.relative_permeability == 75.0
+
+
+def test_non_approved_material_record_is_refused() -> None:
+    with pytest.raises(PlanBuildError, match="approved"):
+        material_spec_from_material_record(
+            make_core_record(), make_approved_material_record(status=MaterialStatus.REVIEWED)
+        )

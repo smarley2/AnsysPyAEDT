@@ -5,6 +5,7 @@ from inductor_designer.simulation.femm_problem import (
     femm_problem_from_plan,
 )
 from inductor_designer.simulation.maxwell_plan import Polarity
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
 from tests.unit.simulation.test_plan_builder import make_definition
 from tests.unit.simulation.test_plan_builder2d import build2d
 
@@ -42,3 +43,14 @@ def test_solid_winding_gets_conductive_copper() -> None:
     assert problem.conductors[0].material == "Copper_solid"
     assert materials["Copper_solid"].conductivity_ms_per_m == COPPER_CONDUCTIVITY_MS_PER_M
     assert materials["Air"].relative_permeability == 1.0
+
+
+def test_core_bh_curve_is_forwarded_as_femm_material_points() -> None:
+    plan = build2d(
+        (make_definition(),), material_record=make_approved_material_record()
+    )
+
+    problem = femm_problem_from_plan(plan)  # type: ignore[arg-type]
+
+    core_material = next(item for item in problem.materials if item.name == plan.core.material.name)
+    assert core_material.bh_points == ((0.0, 0.0), (0.025132741, 100.0))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from inductor_designer.domain.catalog_records import CoreFamily
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
@@ -10,6 +11,7 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (
     SOLUTION_TYPE_DC,
@@ -17,7 +19,10 @@ from inductor_designer.simulation.maxwell_plan import (
     Polarity,
 )
 from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
-from tests.unit.simulation.test_maxwell_plan import make_core_record
+from tests.unit.simulation.test_maxwell_plan import (
+    make_approved_material_record,
+    make_core_record,
+)
 
 CORE = FinishedCore(
     r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715, corner_radius_m=0.0
@@ -66,6 +71,7 @@ def pack(definition: WindingDefinition) -> object:
 def build(
     definitions: tuple[WindingDefinition, ...],
     dc_bias_decision: DcBiasDecision | None = None,
+    material_record: MaterialRecord | None = None,
 ) -> object:
     packings = tuple(pack(d) for d in definitions)
     return build_maxwell3d_plan(
@@ -75,6 +81,7 @@ def build(
         definitions,
         {d.winding_id: BARE for d in definitions},
         dc_bias_decision=dc_bias_decision,
+        material_record=material_record,
     )
 
 
@@ -166,6 +173,22 @@ def test_blocked_decision_notes_reason() -> None:
 def test_zero_dc_current_emits_no_dc_notes() -> None:
     plan = build((make_definition(dc_current_a=0.0),), dc_bias_decision=NATIVE)
     assert not any("DC" in note for note in plan.notes)
+
+
+def test_approved_record_unblocks_ferrite_and_drops_linear_dc_note() -> None:
+    definitions = (make_definition(dc_current_a=5.0),)
+    plan = build_maxwell3d_plan(
+        CORE,
+        make_core_record(family=CoreFamily.FERRITE_TOROID),
+        tuple(pack(d) for d in definitions),
+        definitions,
+        {"w1": BARE},
+        dc_bias_decision=NATIVE,
+        material_record=make_approved_material_record(),
+    )
+
+    assert plan.core.material.bh_curve
+    assert not any("linear material" in note for note in plan.notes)
 
 
 def test_setup_mesh_reports_and_notes() -> None:

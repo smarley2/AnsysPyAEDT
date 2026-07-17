@@ -70,8 +70,18 @@ def _stage_units(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
 def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     spec = plan.core.material
     material = app.materials.add_material(spec.name)
-    material.permeability = spec.relative_permeability
+    material.permeability = (
+        [[b, h] for b, h in spec.bh_curve]
+        if spec.bh_curve
+        else spec.relative_permeability
+    )
     material.conductivity = spec.conductivity_s_per_m
+    if spec.steinmetz is not None:
+        material.set_power_ferrite_coreloss(
+            cm=spec.steinmetz.k,
+            x=spec.steinmetz.alpha,
+            y=spec.steinmetz.beta,
+        )
     return f"Material {spec.name} created (draft={spec.draft})."
 
 

@@ -7,6 +7,13 @@ from inductor_designer.domain.catalog_records import CoreFamily, CoreRecord, Rev
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
 from inductor_designer.geometry.terminals import TerminalDisk
+from inductor_designer.materials.fitting import MaterialFitError, mean_relative_permeability
+from inductor_designer.materials.records import (
+    MaterialRecord,
+    MaterialStatus,
+    SeriesKind,
+    SteinmetzFit,
+)
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 
 SOLUTION_TYPE = "EddyCurrent"
@@ -31,12 +38,15 @@ class Polarity(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class MaterialSpec:
-    """Linear material for Maxwell; Milestone 5 replaces this with real records."""
+    """Solver-independent magnetic material properties."""
 
     name: str
     relative_permeability: float
     conductivity_s_per_m: float
     draft: bool
+    bh_curve: tuple[tuple[float, float], ...] = ()
+    steinmetz: SteinmetzFit | None = None
+    material_revision: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,19 +154,69 @@ def core_material_spec(record: CoreRecord) -> MaterialSpec:
     )
 
 
-def dc_bias_notes(decision: DcBiasDecision | None, dc_requested: bool) -> tuple[str, ...]:
+def material_spec_from_material_record(
+    core_record: CoreRecord, material: MaterialRecord
+) -> MaterialSpec:
+    """Build solver material data from an approved project snapshot."""
+    if material.status is not MaterialStatus.APPROVED:
+        raise PlanBuildError(("Only approved material records can be exported.",))
+    if material.ref != core_record.material:
+        raise PlanBuildError(("Material record identity does not match the selected core.",))
+
+    bh_series = next(
+        (series for series in material.series if series.kind is SeriesKind.BH_CURVE), None
+    )
+    bh_points = (
+        tuple((point.x, point.y) for point in bh_series.points) if bh_series is not None else ()
+    )
+    if material.relative_permeability is not None:
+        relative_permeability = material.relative_permeability
+    else:
+        try:
+            relative_permeability = mean_relative_permeability(bh_points)
+        except MaterialFitError as error:
+            raise PlanBuildError(
+                ("Approved material requires scalar permeability or usable B-H points.",)
+            ) from error
+
+    name = sanitize_identifier(
+        f"{material.ref.manufacturer}_{material.ref.name}_{material.ref.grade}"
+        f"_r{material.revision_id}"
+    )
+    return MaterialSpec(
+        name=name,
+        relative_permeability=relative_permeability,
+        conductivity_s_per_m=0.0,
+        draft=False,
+        bh_curve=tuple(
+            (flux_density, field_strength) for field_strength, flux_density in bh_points
+        ),
+        steinmetz=material.steinmetz,
+        material_revision=material.revision_id,
+    )
+
+
+def dc_bias_notes(
+    decision: DcBiasDecision | None,
+    dc_requested: bool,
+    *,
+    nonlinear_material: bool = False,
+) -> tuple[str, ...]:
     """Human-visible DC-bias treatment notes for plans and manifests."""
     if not dc_requested:
         return ()
     if decision is None:
         return ("DC operating currents are recorded but not applied; no capability decision.",)
     if decision.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS:
-        return (
-            "DC operating point applied natively via the AC Magnetic with DC "
-            "solution type.",
-            "Core material is linear until Milestone 5; DC bias has no incremental "
-            "effect on a linear material.",
-        )
+        notes = [
+            "DC operating point applied natively via the AC Magnetic with DC solution type."
+        ]
+        if not nonlinear_material:
+            notes.append(
+                "Core material is linear until Milestone 5; DC bias has no incremental "
+                "effect on a linear material."
+            )
+        return tuple(notes)
     if decision.strategy is DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK:
         return (
             "DC operating currents are recorded but not applied; the 2024 R2 "

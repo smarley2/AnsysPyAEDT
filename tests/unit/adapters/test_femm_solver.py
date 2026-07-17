@@ -9,6 +9,7 @@ from inductor_designer.adapters.femm.solver import PyfemmSolver
 from inductor_designer.application.ports.femm_solver import FemmSolveRequest
 from inductor_designer.simulation.femm_problem import femm_problem_from_plan
 from tests.fakes.femm_module import FakeFemmModule, FakeFemmModuleFactory
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
 from tests.unit.simulation.test_plan_builder import make_definition
 from tests.unit.simulation.test_plan_builder2d import build2d
 
@@ -66,6 +67,28 @@ def test_signed_turns_forwarded_to_setblockprop(tmp_path: Path) -> None:
     setblockprop_calls = [args for name, args in module.calls if name == "mi_setblockprop"]
     turns = {call[-1] for call in setblockprop_calls}
     assert turns == {1, -1, 0}
+
+
+def test_nonlinear_bh_points_are_added_after_material(tmp_path: Path) -> None:
+    plan = build2d(
+        (make_definition(),), material_record=make_approved_material_record()
+    )
+    problem = femm_problem_from_plan(plan)  # type: ignore[arg-type]
+    request = FemmSolveRequest(
+        problem=problem,
+        output_directory=tmp_path,
+        project_name="nonlinear_inductor",
+        analyze=False,
+    )
+    module = FakeFemmModule()
+    solver = PyfemmSolver(module_factory=FakeFemmModuleFactory(module))
+
+    solver.solve(request)
+
+    material_name = plan.core.material.name
+    assert ("mi_addbhpoints", (material_name, [[0.0, 0.0], [0.025132741, 100.0]])) in module.calls
+    names = [name for name, _ in module.calls]
+    assert names.index("mi_addmaterial") < names.index("mi_addbhpoints")
 
 
 def test_resistance_and_inductance_math(tmp_path: Path) -> None:

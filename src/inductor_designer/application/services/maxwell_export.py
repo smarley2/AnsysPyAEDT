@@ -27,6 +27,7 @@ from inductor_designer.application.services.geometry_model import (
 from inductor_designer.domain.aedt_target import ModelDimension
 from inductor_designer.domain.project import CatalogCoreSelection, InductorProject
 from inductor_designer.geometry.naming import sanitize_identifier
+from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import (
     CapabilitySnapshot,
     DcBiasDecision,
@@ -80,6 +81,19 @@ def _validated_model(
     return core_selection, model
 
 
+def _selected_material(
+    project: InductorProject, core_selection: CatalogCoreSelection
+) -> MaterialRecord | None:
+    return next(
+        (
+            selection.snapshot
+            for selection in project.materials
+            if selection.ref == core_selection.snapshot.material
+        ),
+        None,
+    )
+
+
 def export_maxwell3d(
     project: InductorProject,
     catalog: CatalogRepository,
@@ -99,6 +113,7 @@ def export_maxwell3d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
+            material_record=_selected_material(project, core_selection),
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -137,6 +152,7 @@ def export_maxwell2d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
+            material_record=_selected_material(project, core_selection),
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -184,6 +200,7 @@ def export_femm2d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
+            material_record=_selected_material(project, core_selection),
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -250,11 +267,19 @@ def _capabilities_block(capabilities: CapabilitySnapshot) -> dict[str, object]:
 
 
 def _core_material_block(plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan) -> dict[str, object]:
+    steinmetz = plan.core.material.steinmetz
     return {
         "name": plan.core.material.name,
         "relativePermeability": plan.core.material.relative_permeability,
         "conductivitySPerM": plan.core.material.conductivity_s_per_m,
         "draft": plan.core.material.draft,
+        "bhPointCount": len(plan.core.material.bh_curve),
+        "steinmetz": (
+            None
+            if steinmetz is None
+            else {"k": steinmetz.k, "alpha": steinmetz.alpha, "beta": steinmetz.beta}
+        ),
+        "materialRevision": plan.core.material.material_revision,
     }
 
 

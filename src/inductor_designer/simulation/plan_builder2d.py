@@ -11,6 +11,7 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.naming import core_name, unique_identifiers
 from inductor_designer.geometry.planar import PlanarModel
+from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision
 from inductor_designer.simulation.maxwell2d_plan import (
     DESIGN_NAME_2D,
@@ -32,6 +33,7 @@ from inductor_designer.simulation.maxwell_plan import (
     SetupPlan,
     core_material_spec,
     dc_bias_notes,
+    material_spec_from_material_record,
 )
 
 _TWO_D_NOTE = (
@@ -58,6 +60,7 @@ def build_maxwell2d_plan(
     windings: Sequence[WindingDefinition],
     bare_diameter_m: Mapping[str, float],
     dc_bias_decision: DcBiasDecision | None = None,
+    material_record: MaterialRecord | None = None,
 ) -> Maxwell2dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -71,7 +74,11 @@ def build_maxwell2d_plan(
         issues.append(f"All windings must share one frequency; got {frequencies}.")
     if issues:
         raise PlanBuildError(tuple(issues))
-    material = core_material_spec(core_record)
+    material = (
+        core_material_spec(core_record)
+        if material_record is None
+        else material_spec_from_material_record(core_record, material_record)
+    )
 
     identifiers = unique_identifiers([w.winding_id for w in planar.windings])
     groups: list[Winding2dGroupPlan] = []
@@ -128,7 +135,11 @@ def build_maxwell2d_plan(
             "verify against the manufacturer catalog before trusting results."
         )
     dc_requested = any(group.dc_current_a != 0.0 for group in groups)
-    notes.extend(dc_bias_notes(dc_bias_decision, dc_requested))
+    notes.extend(
+        dc_bias_notes(
+            dc_bias_decision, dc_requested, nonlinear_material=bool(material.bh_curve)
+        )
+    )
 
     return Maxwell2dDesignPlan(
         design_name=DESIGN_NAME_2D,

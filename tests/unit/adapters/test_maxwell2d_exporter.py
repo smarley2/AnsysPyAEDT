@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,9 @@ from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
 from inductor_designer.application.ports.maxwell2d_exporter import STAGE_NAMES_2D
 from tests.contract.test_maxwell2d_exporter_contract import make_request
 from tests.fakes.maxwell2d_app import FakeMaxwell2dApp, FakeMaxwell2dAppFactory
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
+from tests.unit.simulation.test_plan_builder import make_definition
+from tests.unit.simulation.test_plan_builder2d import build2d
 
 pytestmark = pytest.mark.usefixtures("fake_maxwell_boundary")
 
@@ -52,6 +56,37 @@ def test_geometry_and_depth_calls(tmp_path: Path) -> None:
         "Region_edge4",
     ]
     assert balloon_calls[0]["boundary"] == "Balloon"
+
+
+def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build2d(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+    exporter = PyaedtMaxwell2dExporter(app_factory=FakeMaxwell2dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert result.succeeded()
+    assert (
+        "material.set.permeability",
+        {
+            "material": "Magnetics_Kool_Mu_60_r0123456789ab",
+            "value": [[0.0, 0.0], [0.025132741, 100.0]],
+        },
+    ) in app.calls
+    assert (
+        "material.set_power_ferrite_coreloss",
+        {
+            "material": "Magnetics_Kool_Mu_60_r0123456789ab",
+            "cm": 2.5,
+            "x": 1.4,
+            "y": 2.3,
+        },
+    ) in app.calls
 
 
 def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:

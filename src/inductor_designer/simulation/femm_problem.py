@@ -16,6 +16,7 @@ class FemmMaterial:
     name: str
     relative_permeability: float
     conductivity_ms_per_m: float
+    bh_points: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +76,7 @@ def femm_problem_from_plan(plan: Maxwell2dDesignPlan) -> FemmProblem:
             plan.core.material.name,
             relative_permeability=plan.core.material.relative_permeability,
             conductivity_ms_per_m=0.0,
+            bh_points=plan.core.material.bh_curve,
         ),
     ]
     has_solid = any(winding.is_solid for winding in plan.windings)

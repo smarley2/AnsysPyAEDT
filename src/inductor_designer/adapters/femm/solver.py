@@ -29,6 +29,8 @@ class FemmModule(Protocol):
 
     def mi_addmaterial(self, *args: Any) -> Any: ...
 
+    def mi_addbhpoints(self, *args: Any) -> Any: ...
+
     def mi_addcircprop(self, *args: Any) -> Any: ...
 
     def mi_selectlabel(self, *args: Any) -> Any: ...
@@ -114,6 +116,10 @@ class PyfemmSolver:
                     0,
                     0,
                 )
+                if material.bh_points:
+                    femm.mi_addbhpoints(
+                        material.name, [[b, h] for b, h in material.bh_points]
+                    )
             messages.append(f"{len(problem.materials)} materials added.")
 
             phase_deferred = False

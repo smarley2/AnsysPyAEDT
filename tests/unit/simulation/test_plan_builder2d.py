@@ -6,7 +6,7 @@ from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.planar import build_planar_model
 from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan
-from tests.unit.simulation.test_maxwell_plan import make_core_record
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record, make_core_record
 from tests.unit.simulation.test_plan_builder import BARE, CORE, make_definition
 
 
@@ -79,3 +79,10 @@ def test_mixed_frequencies_refused() -> None:
                 ),
             )
         )
+
+
+def test_approved_material_record_is_threaded_to_2d_plan() -> None:
+    plan = build2d((make_definition(),), material_record=make_approved_material_record())
+
+    assert plan.core.material.bh_curve == ((0.0, 0.0), (0.025132741, 100.0))
+    assert plan.core.material.material_revision == "0123456789ab"
