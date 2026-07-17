@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
 from inductor_designer.domain.catalog_records import CoreRecord
 from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.materials.records import MaterialRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +41,23 @@ CoreSelection = CatalogCoreSelection | ManualCoreSelection
 
 
 @dataclass(frozen=True, slots=True)
+class MaterialRevisionSelection:
+    ref: MaterialRef
+    revision_id: str
+    snapshot: MaterialRecord
+
+    def __post_init__(self) -> None:
+        if not self.revision_id.strip():
+            raise ValueError("MaterialRevisionSelection revision_id cannot be blank")
+        if self.ref != self.snapshot.ref:
+            raise ValueError("MaterialRevisionSelection ref must match snapshot.ref")
+        if self.revision_id != self.snapshot.revision_id:
+            raise ValueError(
+                "MaterialRevisionSelection revision_id must match snapshot.revision_id"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class InductorProject:
     project_id: str
     name: str
@@ -48,6 +67,7 @@ class InductorProject:
     dimension_mode: ModelDimension
     core: CoreSelection | None
     windings: tuple[WindingDefinition, ...]
+    materials: tuple[MaterialRevisionSelection, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.project_id.strip():

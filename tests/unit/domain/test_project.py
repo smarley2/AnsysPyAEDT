@@ -8,6 +8,7 @@ from inductor_designer.domain.project import (
     CoreOverride,
     InductorProject,
     ManualCoreSelection,
+    MaterialRevisionSelection,
 )
 from inductor_designer.domain.winding import (
     ConductorMode,
@@ -15,6 +16,8 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
+from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.materials.records import MaterialRecord, MaterialStatus
 from tests.unit.domain.test_catalog_records import make_core
 
 
@@ -56,6 +59,22 @@ def make_project(**overrides: object) -> InductorProject:
     return InductorProject(**values)  # type: ignore[arg-type]
 
 
+def make_material_record() -> MaterialRecord:
+    return MaterialRecord(
+        ref=MaterialRef("Magnetics", "Kool Mu", "60"),
+        revision_id="0123456789ab",
+        status=MaterialStatus.APPROVED,
+        created_at="2026-07-17T08:32:00+00:00",
+        reviewed_by="reviewer@example.com",
+        approved_by="approver@example.com",
+        sources=(),
+        series=(),
+        relative_permeability=60.0,
+        steinmetz=None,
+        notes="Approved scalar material.",
+    )
+
+
 def test_project_aggregate_holds_selection_and_windings() -> None:
     project = make_project()
     assert isinstance(project.core, CatalogCoreSelection)
@@ -86,3 +105,47 @@ def test_project_rejects_blank_name() -> None:
 def test_override_carries_reason() -> None:
     override = CoreOverride(field="outer_diameter_m", value=0.027, reason="measured sample")
     assert override.reason == "measured sample"
+
+
+def test_material_revision_selection_matches_snapshot_identity() -> None:
+    snapshot = make_material_record()
+
+    selection = MaterialRevisionSelection(snapshot.ref, snapshot.revision_id, snapshot)
+
+    assert selection.snapshot is snapshot
+
+
+def test_material_revision_selection_rejects_mismatched_ref() -> None:
+    snapshot = make_material_record()
+
+    with pytest.raises(ValueError, match="ref"):
+        MaterialRevisionSelection(
+            MaterialRef("Magnetics", "Kool Mu", "75"), snapshot.revision_id, snapshot
+        )
+
+
+def test_material_revision_selection_rejects_mismatched_revision() -> None:
+    snapshot = make_material_record()
+
+    with pytest.raises(ValueError, match="revision_id"):
+        MaterialRevisionSelection(snapshot.ref, "abcdef012345", snapshot)
+
+
+def test_material_revision_selection_rejects_blank_revision() -> None:
+    snapshot = make_material_record()
+    transient = MaterialRecord(
+        ref=snapshot.ref,
+        revision_id="",
+        status=MaterialStatus.DRAFT,
+        created_at=snapshot.created_at,
+        reviewed_by=None,
+        approved_by=None,
+        sources=snapshot.sources,
+        series=snapshot.series,
+        relative_permeability=snapshot.relative_permeability,
+        steinmetz=snapshot.steinmetz,
+        notes=snapshot.notes,
+    )
+
+    with pytest.raises(ValueError, match="revision_id"):
+        MaterialRevisionSelection(transient.ref, transient.revision_id, transient)

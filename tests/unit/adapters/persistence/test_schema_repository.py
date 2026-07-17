@@ -76,8 +76,8 @@ def test_project_schema_rejects_aedt_releases_outside_supported_range(
         SchemaRepository(Path("schemas")).validate_project(document)
 
 
-def test_latest_version_is_two() -> None:
-    assert LATEST_PROJECT_SCHEMA_VERSION == 2
+def test_latest_version_is_three() -> None:
+    assert LATEST_PROJECT_SCHEMA_VERSION == 3
 
 
 def test_v2_fixture_validates(schema_repository: SchemaRepository) -> None:
@@ -85,14 +85,29 @@ def test_v2_fixture_validates(schema_repository: SchemaRepository) -> None:
     schema_repository.validate_project(document)
 
 
-def test_migrate_v1_to_v2(schema_repository: SchemaRepository) -> None:
+def test_migrate_v1_to_v3(schema_repository: SchemaRepository) -> None:
     migrated = schema_repository.migrate_project(_v1_document())
-    assert migrated["schemaVersion"] == 2
+    assert migrated["schemaVersion"] == 3
     assert migrated["core"] is None
     assert migrated["windings"] == []
+    assert migrated["materials"] == []
+    schema_repository.validate_project(migrated)
+
+
+def test_migrate_v2_to_v3_adds_empty_materials(
+    schema_repository: SchemaRepository,
+) -> None:
+    document = json.loads((FIXTURES / "project.v2.json").read_text(encoding="utf-8"))
+
+    migrated = schema_repository.migrate_project(document)
+
+    assert migrated["schemaVersion"] == 3
+    assert migrated["materials"] == []
     schema_repository.validate_project(migrated)
 
 
 def test_migrate_latest_is_identity(schema_repository: SchemaRepository) -> None:
-    document = json.loads((FIXTURES / "project.v2.json").read_text(encoding="utf-8"))
+    document = json.loads(
+        (FIXTURES / "sample_geometry_project.inductor.json").read_text(encoding="utf-8")
+    )
     assert schema_repository.migrate_project(document) == document

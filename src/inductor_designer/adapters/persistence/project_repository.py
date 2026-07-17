@@ -17,12 +17,18 @@ from inductor_designer.domain.project import (
     CoreSelection,
     InductorProject,
     ManualCoreSelection,
+    MaterialRevisionSelection,
 )
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
     WindingDefinition,
     WindingDirection,
+)
+from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.materials.serde import (
+    material_record_from_json,
+    material_record_to_json,
 )
 
 
@@ -110,7 +116,7 @@ def _core_from_json(data: Mapping[str, Any] | None) -> CoreSelection | None:
 
 def project_to_document(project: InductorProject) -> dict[str, object]:
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "projectId": project.project_id,
         "metadata": {"name": project.name, "description": project.description},
         "target": {
@@ -120,6 +126,18 @@ def project_to_document(project: InductorProject) -> dict[str, object]:
         },
         "core": _core_to_json(project.core),
         "windings": [_winding_to_json(w) for w in project.windings],
+        "materials": [
+            {
+                "ref": {
+                    "manufacturer": material.ref.manufacturer,
+                    "name": material.ref.name,
+                    "grade": material.ref.grade,
+                },
+                "revisionId": material.revision_id,
+                "snapshot": material_record_to_json(material.snapshot),
+            }
+            for material in project.materials
+        ],
     }
 
 
@@ -135,6 +153,18 @@ def project_from_document(document: Mapping[str, Any]) -> InductorProject:
         dimension_mode=ModelDimension(target["dimensionMode"]),
         core=_core_from_json(document["core"]),
         windings=tuple(_winding_from_json(w) for w in document["windings"]),
+        materials=tuple(
+            MaterialRevisionSelection(
+                ref=MaterialRef(
+                    item["ref"]["manufacturer"],
+                    item["ref"]["name"],
+                    item["ref"]["grade"],
+                ),
+                revision_id=item["revisionId"],
+                snapshot=material_record_from_json(item["snapshot"]),
+            )
+            for item in document.get("materials", [])
+        ),
     )
 
 

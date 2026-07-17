@@ -39,12 +39,13 @@
       "volumeM3": 5.34e-06
     }
   },
+  "materials": [],
   "metadata": {
     "description": "",
     "name": "M2 golden sample"
   },
   "projectId": "a7e5b21c-6a53-4f0e-9d3a-2f1b4c8d9e0f",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "target": {
     "aedtRelease": "2025.2",
     "dimensionMode": "3d",
