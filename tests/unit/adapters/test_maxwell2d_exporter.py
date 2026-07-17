@@ -40,11 +40,32 @@ def test_geometry_and_depth_calls(tmp_path: Path) -> None:
     assert polarities == {"Positive", "Negative"}
     winding_calls = [k for n, k in app.calls if n == "assign_winding"]
     assert len(winding_calls) == 1
+    region_calls = [k for n, k in app.calls if n == "modeler.create_region"]
+    assert region_calls == [{"pad_value": 100.0, "pad_type": "Percentage Offset"}]
 
 
 def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp(raise_on="assign_matrix")
     result = run(tmp_path, app)
     assert not result.succeeded()
-    assert result.stages[-1].name == "matrix"
+    assert result.stages[-2].name == "matrix"
+    assert result.stages[-2].succeeded is False
+    assert "boom" in result.stages[-2].message
+    assert result.stages[-1].name == "save"
+    assert result.stages[-1].succeeded is True
+    saves = [k for n, k in app.calls if n == "save_project"]
+    assert len(saves) == 1
+    assert app.released == [(True, True)]
+
+
+def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp(falsy_on="create_region")
+    result = run(tmp_path, app)
+    assert not result.succeeded()
+    assert result.stages[-2].name == "region"
+    assert result.stages[-2].succeeded is False
+    assert result.stages[-1].name == "save"
+    assert result.stages[-1].succeeded is True
+    saves = [k for n, k in app.calls if n == "save_project"]
+    assert len(saves) == 1
     assert app.released == [(True, True)]

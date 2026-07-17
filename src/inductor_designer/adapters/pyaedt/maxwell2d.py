@@ -135,7 +135,9 @@ def _stage_eddy(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
 
 def _stage_region(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     pad = plan.region.padding_percent
-    app.modeler.create_air_region(pad, pad, pad, pad)
+    region = app.modeler.create_region(pad_value=pad, pad_type="Percentage Offset")
+    if not region:
+        raise RuntimeError("create_region returned no region object.")
     return f"Air region with {pad:g}% padding."
 
 
@@ -247,6 +249,19 @@ class PyaedtMaxwell2dExporter:
                     message = stage(app, plan)
                 except Exception as error:  # noqa: BLE001 - stage boundary
                     stages.append(StageRecord(name=name, succeeded=False, message=str(error)))
+                    try:
+                        app.save_project(str(project_path))
+                        stages.append(
+                            StageRecord(
+                                name="save",
+                                succeeded=True,
+                                message="Diagnostic save after failed stage.",
+                            )
+                        )
+                    except Exception as save_error:  # noqa: BLE001 - stage boundary
+                        stages.append(
+                            StageRecord(name="save", succeeded=False, message=str(save_error))
+                        )
                     return result()
                 stages.append(StageRecord(name=name, succeeded=True, message=message))
             try:

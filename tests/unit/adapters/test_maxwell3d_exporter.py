@@ -61,9 +61,26 @@ def test_failing_stage_truncates_and_still_releases(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp(raise_on="assign_matrix")
     result = run(tmp_path, app)
     assert not result.succeeded()  # type: ignore[attr-defined]
-    assert result.stages[-1].name == "matrix"  # type: ignore[attr-defined]
-    assert result.stages[-1].succeeded is False  # type: ignore[attr-defined]
-    assert "boom" in result.stages[-1].message  # type: ignore[attr-defined]
+    assert result.stages[-2].name == "matrix"  # type: ignore[attr-defined]
+    assert result.stages[-2].succeeded is False  # type: ignore[attr-defined]
+    assert "boom" in result.stages[-2].message  # type: ignore[attr-defined]
+    assert result.stages[-1].name == "save"  # type: ignore[attr-defined]
+    assert result.stages[-1].succeeded is True  # type: ignore[attr-defined]
+    saves = [k for n, k in app.calls if n == "save_project"]
+    assert len(saves) == 1
+    assert app.released == [(True, True)]
+
+
+def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
+    app = FakeMaxwell3dApp(falsy_on="create_air_region")
+    result = run(tmp_path, app)
+    assert not result.succeeded()  # type: ignore[attr-defined]
+    assert result.stages[-2].name == "region"  # type: ignore[attr-defined]
+    assert result.stages[-2].succeeded is False  # type: ignore[attr-defined]
+    assert result.stages[-1].name == "save"  # type: ignore[attr-defined]
+    assert result.stages[-1].succeeded is True  # type: ignore[attr-defined]
+    saves = [k for n, k in app.calls if n == "save_project"]
+    assert len(saves) == 1
     assert app.released == [(True, True)]
 
 

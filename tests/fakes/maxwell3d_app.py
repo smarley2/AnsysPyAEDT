@@ -4,9 +4,15 @@ from typing import Any
 
 
 class _Recorder:
-    def __init__(self, log: list[tuple[str, dict[str, Any]]], prefix: str) -> None:
+    def __init__(
+        self,
+        log: list[tuple[str, dict[str, Any]]],
+        prefix: str,
+        falsy_on: str | None = None,
+    ) -> None:
         self._log = log
         self._prefix = prefix
+        self._falsy_on = falsy_on
 
     def __getattr__(self, name: str) -> Any:
         def record(*args: Any, **kwargs: Any) -> Any:
@@ -14,6 +20,8 @@ class _Recorder:
             if args:
                 merged["_args"] = args
             self._log.append((f"{self._prefix}{name}", merged))
+            if self._falsy_on == name:
+                return None
             return f"{self._prefix}{name}-result"
 
         return record
@@ -82,10 +90,10 @@ class _PropsProxy(dict[str, Any]):
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
-    def __init__(self, raise_on: str | None = None) -> None:
+    def __init__(self, raise_on: str | None = None, falsy_on: str | None = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.raise_on = raise_on
-        self.modeler = _Recorder(self.calls, "modeler.")
+        self.modeler = _Recorder(self.calls, "modeler.", falsy_on=falsy_on)
         self.mesh = _Recorder(self.calls, "mesh.")
         self.post = _Recorder(self.calls, "post.")
         self.materials = _FakeMaterials(self.calls)
