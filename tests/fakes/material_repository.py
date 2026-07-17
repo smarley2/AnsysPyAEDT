@@ -19,18 +19,26 @@ class InMemoryMaterialRepository:
     def _validated_sources(
         record: MaterialRecord, sources: Mapping[str, bytes]
     ) -> dict[str, bytes]:
+        expected = {provenance.filename for provenance in record.sources}
+        if set(sources) != expected:
+            raise ValueError("sources mapping keys must exactly match provenance filenames")
         verified = {}
         for provenance in record.sources:
-            try:
-                source = sources[provenance.filename]
-            except KeyError as error:
-                raise ValueError(
-                    f"sha256 verification requires source {provenance.filename}"
-                ) from error
+            source = sources[provenance.filename]
             if sha256_hex(source) != provenance.sha256:
                 raise ValueError(f"sha256 mismatch for source {provenance.filename}")
             verified[provenance.filename] = source
         return verified
+
+    @staticmethod
+    def _validate_canonical_points(record: MaterialRecord) -> None:
+        if any(
+            value != round(value, 9)
+            for series in record.series
+            for point in series.points
+            for value in (point.x, point.y)
+        ):
+            raise ValueError("material points must already satisfy round(9)")
 
     @staticmethod
     def _material_path_key(ref: MaterialRef) -> tuple[str, str, str]:
@@ -76,6 +84,7 @@ class InMemoryMaterialRepository:
 
     def save(self, record: MaterialRecord, sources: Mapping[str, bytes]) -> None:
         verified = self._validated_sources(record, sources)
+        self._validate_canonical_points(record)
         requested_key = self._material_path_key(record.ref)
         if any(
             stored_ref != record.ref and self._material_path_key(stored_ref) == requested_key

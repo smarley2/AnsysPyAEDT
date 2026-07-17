@@ -130,6 +130,36 @@ def test_save_rejects_source_hash_mismatch(repository: MaterialRepository) -> No
     assert repository.list_revisions(record.ref) == ()
 
 
+@pytest.mark.parametrize(
+    "sources",
+    ({}, {"bh-source.csv": b"source", "extra.csv": b"extra"}),
+)
+def test_save_requires_exact_source_keys(
+    repository: MaterialRepository, sources: dict[str, bytes]
+) -> None:
+    record = _record(b"source")
+
+    with pytest.raises(ValueError, match="sources mapping.*provenance"):
+        repository.save(record, sources)
+
+    assert repository.list_revisions(record.ref) == ()
+
+
+def test_save_rejects_points_that_cannot_round_trip(repository: MaterialRepository) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    record = _record(source)
+    noncanonical = replace(
+        record.series[0],
+        points=(record.series[0].points[0], CurvePoint(100.0, 0.1234567894)),
+    )
+    record = replace(record, series=(noncanonical,))
+
+    with pytest.raises(ValueError, match=r"round\(9\)"):
+        repository.save(record, {"bh-source.csv": source})
+
+    assert repository.list_revisions(record.ref) == ()
+
+
 def test_latest_approved_uses_created_at(repository: MaterialRepository) -> None:
     source = b"h,b\n0,0\n100,0.2\n"
     ref = _record(source).ref
@@ -163,6 +193,31 @@ def test_save_rejects_material_path_alias(repository: MaterialRepository) -> Non
 
     with pytest.raises(ValueError, match="material identity.*collide"):
         repository.save(alias, {"bh-source.csv": source})
+
+
+def test_material_path_alias_is_typed_unknown(repository: MaterialRepository) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    stored = _record(source)
+    alias = MaterialRef("ACME-Materials", "Test Ferrite", "N 87")
+    repository.save(stored, {"bh-source.csv": source})
+
+    with pytest.raises(MaterialLookupError):
+        repository.get(alias, stored.revision_id)
+    with pytest.raises(MaterialLookupError):
+        repository.source_bytes(alias, stored.revision_id)
+    assert repository.list_revisions(alias) == ()
+    assert repository.latest_approved(alias) is None
+
+
+def test_revision_path_alias_is_typed_unknown(repository: MaterialRepository) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    stored = _record(source, revision_id="rev-a")
+    repository.save(stored, {"bh-source.csv": source})
+
+    with pytest.raises(MaterialLookupError):
+        repository.get(stored.ref, "rev_a")
+    with pytest.raises(MaterialLookupError):
+        repository.source_bytes(stored.ref, "rev_a")
 
 
 def test_save_rejects_sanitized_series_collision(repository: MaterialRepository) -> None:

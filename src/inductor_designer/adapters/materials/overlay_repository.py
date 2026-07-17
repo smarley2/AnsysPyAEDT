@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
+import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,10 +71,23 @@ class FileOverlayMaterialRepository:
         return document
 
     def _load_record(
-        self, ref: MaterialRef, revision_id: str, revision_directory: Path
+        self,
+        ref: MaterialRef,
+        revision_id: str,
+        revision_directory: Path,
+        *,
+        alias_is_unknown: bool = False,
     ) -> MaterialRecord:
         record = material_record_from_json(self._document(revision_directory / "record.json"))
-        if record.ref != ref or record.revision_id != revision_id:
+        if record.ref != ref:
+            if alias_is_unknown:
+                raise MaterialLookupError(f"unknown material revision: {ref!r} {revision_id}")
+            raise ValueError("persisted material identity does not match its repository path")
+        if record.revision_id != revision_id:
+            if alias_is_unknown and sanitize_identifier(record.revision_id).casefold() == (
+                sanitize_identifier(revision_id).casefold()
+            ):
+                raise MaterialLookupError(f"unknown material revision: {ref!r} {revision_id}")
             raise ValueError("persisted material identity does not match its repository path")
         return record
 
@@ -86,15 +102,23 @@ class FileOverlayMaterialRepository:
     def _validate_source_mapping(
         record: MaterialRecord, sources: Mapping[str, bytes]
     ) -> None:
+        expected = {provenance.filename for provenance in record.sources}
+        if set(sources) != expected:
+            raise ValueError("sources mapping keys must exactly match provenance filenames")
         for provenance in record.sources:
-            try:
-                source = sources[provenance.filename]
-            except KeyError as error:
-                raise ValueError(
-                    f"sha256 verification requires source {provenance.filename}"
-                ) from error
+            source = sources[provenance.filename]
             if sha256_hex(source) != provenance.sha256:
                 raise ValueError(f"sha256 mismatch for source {provenance.filename}")
+
+    @staticmethod
+    def _validate_canonical_points(record: MaterialRecord) -> None:
+        if any(
+            value != round(value, 9)
+            for series in record.series
+            for point in series.points
+            for value in (point.x, point.y)
+        ):
+            raise ValueError("material points must already satisfy round(9)")
 
     def _read_sources(
         self, record: MaterialRecord, revision_directory: Path
@@ -130,7 +154,9 @@ class FileOverlayMaterialRepository:
         revision_directory = self._revision_directory(ref, revision_id)
         if not revision_directory.is_dir():
             raise MaterialLookupError(f"unknown material revision: {ref!r} {revision_id}")
-        record = self._load_record(ref, revision_id, revision_directory)
+        record = self._load_record(
+            ref, revision_id, revision_directory, alias_is_unknown=True
+        )
         sources = self._read_sources(record, revision_directory)
         self._verify_points(record, revision_directory)
         return record, sources
@@ -141,11 +167,11 @@ class FileOverlayMaterialRepository:
             return ()
         revisions = []
         for path in material_directory.iterdir():
-            if not path.is_dir():
+            if not path.is_dir() or path.name.startswith("."):
                 continue
             record = material_record_from_json(self._document(path / "record.json"))
             if record.ref != ref:
-                raise ValueError("persisted material identity does not match its repository path")
+                return ()
             revisions.append(record.revision_id)
         return tuple(sorted(revisions))
 
@@ -167,6 +193,7 @@ class FileOverlayMaterialRepository:
 
     def save(self, record: MaterialRecord, sources: Mapping[str, bytes]) -> None:
         self._validate_source_mapping(record, sources)
+        self._validate_canonical_points(record)
         self._reject_material_path_alias(record.ref)
         source_names = [
             self._source_name(source.filename).casefold() for source in record.sources
@@ -185,18 +212,57 @@ class FileOverlayMaterialRepository:
             if stored.status is MaterialStatus.APPROVED:
                 raise ValueError("approved material revisions are immutable")
 
-        (revision_directory / "sources").mkdir(parents=True, exist_ok=True)
-        (revision_directory / "record.json").write_text(
-            material_record_json(record), encoding="utf-8", newline=""
+        record_text = material_record_json(record)
+        point_texts = {
+            self._points_name(series.series_id): points_csv(series) for series in record.series
+        }
+        revision_directory.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(
+            tempfile.mkdtemp(
+                prefix=f".{revision_directory.name}.staging-",
+                dir=revision_directory.parent,
+            )
         )
-        for series in record.series:
-            (revision_directory / self._points_name(series.series_id)).write_text(
-                points_csv(series), encoding="utf-8", newline=""
+        backup = revision_directory.parent / (
+            f".{revision_directory.name}.backup-{uuid.uuid4().hex}"
+        )
+        try:
+            (staging / "sources").mkdir()
+            (staging / "record.json").write_text(
+                record_text, encoding="utf-8", newline=""
             )
-        for provenance in record.sources:
-            (revision_directory / "sources" / self._source_name(provenance.filename)).write_bytes(
-                sources[provenance.filename]
-            )
+            for filename, text in point_texts.items():
+                (staging / filename).write_text(text, encoding="utf-8", newline="")
+            for provenance in record.sources:
+                (staging / "sources" / self._source_name(provenance.filename)).write_bytes(
+                    sources[provenance.filename]
+                )
+
+            staged = self._load_record(record.ref, record.revision_id, staging)
+            if staged != record:
+                raise ValueError("staged material record does not match the requested record")
+            self._read_sources(staged, staging)
+            self._verify_points(staged, staging)
+
+            if revision_directory.exists():
+                revision_directory.replace(backup)
+            try:
+                staging.replace(revision_directory)
+            except BaseException:
+                if backup.exists():
+                    backup.replace(revision_directory)
+                raise
+            if backup.exists():
+                try:
+                    shutil.rmtree(backup)
+                except BaseException:
+                    revision_directory.replace(staging)
+                    backup.replace(revision_directory)
+                    shutil.rmtree(staging, ignore_errors=True)
+                    raise
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
 
     def source_bytes(self, ref: MaterialRef, revision_id: str) -> Mapping[str, bytes]:
         _, sources = self._load_verified(ref, revision_id)
