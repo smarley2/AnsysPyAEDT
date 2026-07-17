@@ -35,6 +35,23 @@ def test_to_canonical_rejects_non_finite() -> None:
         to_canonical(math.nan, "mm")
 
 
+def test_flux_density_units() -> None:
+    assert to_canonical(1.0, "T") == 1.0
+    assert to_canonical(1000.0, "G") == pytest.approx(0.1)
+    assert to_canonical(10.0, "kG") == pytest.approx(1.0)
+    assert to_canonical(100.0, "mT") == pytest.approx(0.1)
+
+
+def test_field_strength_units() -> None:
+    assert to_canonical(1.0, "Oe") == pytest.approx(79.57747154594767)
+    assert to_canonical(2.0, "kA/m") == pytest.approx(2000.0)
+
+
+def test_loss_density_units() -> None:
+    assert to_canonical(1.0, "mW/cm3") == pytest.approx(1000.0)
+    assert to_canonical(1.0, "kW/m3") == pytest.approx(1000.0)
+
+
 def test_awg_formula() -> None:
     assert awg_bare_diameter_m(36) == pytest.approx(0.000127, rel=1e-6)
     assert awg_bare_diameter_m(18) == pytest.approx(0.00102362, rel=1e-3)

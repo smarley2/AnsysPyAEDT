@@ -17,11 +17,24 @@ _CONVERSIONS: dict[str, float] = {
     "MHz": 1e6,
     # angle -> degrees (canonical angle unit is the degree)
     "deg": 1.0,
+    # flux density -> tesla
+    "T": 1.0,
+    "mT": 1e-3,
+    "G": 1e-4,
+    "kG": 0.1,
+    # magnetic field strength -> amperes per meter
+    "A/m": 1.0,
+    "kA/m": 1e3,
+    "Oe": 79.57747154594767,
+    # loss density -> watts per cubic meter
+    "W/m3": 1.0,
+    "kW/m3": 1e3,
+    "mW/cm3": 1e3,
 }
 
 
 def to_canonical(value: float, unit: str) -> float:
-    """Convert a value to the canonical unit of its dimension (m, A, Hz, deg)."""
+    """Convert a value to the canonical unit of its dimension."""
     factor = _CONVERSIONS.get(unit)
     if factor is None:
         raise ValueError(f"Unknown unit: {unit!r}")
