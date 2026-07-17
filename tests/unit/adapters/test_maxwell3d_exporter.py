@@ -59,7 +59,7 @@ def test_geometry_calls_are_made(tmp_path: Path) -> None:
 
 
 def test_failing_stage_truncates_and_still_releases(tmp_path: Path) -> None:
-    app = FakeMaxwell3dApp(raise_on="assign_matrix")
+    app = FakeMaxwell3dApp(raise_on="AssignMatrix")
     result = run(tmp_path, app)
     assert not result.succeeded()  # type: ignore[attr-defined]
     assert result.stages[-2].name == "matrix"  # type: ignore[attr-defined]
@@ -115,8 +115,12 @@ def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     setup_updates = [k for n, k in app.calls if n == "setup.update"]
     assert setup_updates[0]["props"]["Frequency"] == "100000Hz"
     assert setup_updates[0]["props"]["MaximumPasses"] == 10
-    matrix = [k for n, k in app.calls if n == "assign_matrix"]
-    assert matrix[0]["assignment"] is not None  # schema object passed positionally
+    matrix = [k for n, k in app.calls if n == "MaxwellParameterSetup.AssignMatrix"]
+    assert len(matrix) == 1
+    (matrix_args,) = matrix[0]["_args"]
+    assert matrix_args[0] == "NAME:Matrix1"
+    sources = {entry[2] for entry in matrix_args[1] if isinstance(entry, list)}
+    assert sources == {"w1"}
     reports = [k for n, k in app.calls if n == "post.create_report"]
     assert len(reports) == 2
     assert ("validate_simple", {}) in app.calls

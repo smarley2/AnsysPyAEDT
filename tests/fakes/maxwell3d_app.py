@@ -17,13 +17,17 @@ class _Recorder:
         log: list[tuple[str, dict[str, Any]]],
         prefix: str,
         falsy_on: str | None = None,
+        raise_on: str | None = None,
     ) -> None:
         self._log = log
         self._prefix = prefix
         self._falsy_on = falsy_on
+        self._raise_on = raise_on
 
     def __getattr__(self, name: str) -> Any:
         def record(*args: Any, **kwargs: Any) -> Any:
+            if self._raise_on == name:
+                raise RuntimeError(f"boom in {name}")
             merged = dict(kwargs)
             if args:
                 merged["_args"] = args
@@ -97,6 +101,26 @@ class _PropsProxy(dict[str, Any]):
         super().__setitem__(key, value)
 
 
+class _FakeODesign:
+    def __init__(
+        self,
+        log: list[tuple[str, dict[str, Any]]],
+        raise_on: str | None = None,
+        falsy_on: str | None = None,
+    ) -> None:
+        self._log = log
+        self._raise_on = raise_on
+        self._falsy_on = falsy_on
+
+    def GetModule(self, name: str) -> _Recorder:  # noqa: N802 - matches AEDT COM API casing
+        return _Recorder(
+            self._log,
+            f"{name}.",
+            falsy_on=self._falsy_on,
+            raise_on=self._raise_on,
+        )
+
+
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
@@ -108,6 +132,7 @@ class FakeMaxwell3dApp:
         self.mesh = _Recorder(self.calls, "mesh.")
         self.post = _Recorder(self.calls, "post.")
         self.materials = _FakeMaterials(self.calls)
+        self.odesign = _FakeODesign(self.calls, raise_on=raise_on, falsy_on=falsy_on)
         self.released: list[tuple[bool, bool]] = []
 
     def _record(self, _name: str, **kwargs: Any) -> Any:

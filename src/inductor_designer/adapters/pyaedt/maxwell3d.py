@@ -19,6 +19,7 @@ class Maxwell3dApp(Protocol):
     mesh: Any
     post: Any
     materials: Any
+    odesign: Any
 
     def assign_material(self, assignment: Any, material: str) -> Any: ...
 
@@ -202,14 +203,14 @@ def _stage_setup(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
 
 
 def _stage_matrix(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    from ansys.aedt.core.modules.boundary.maxwell_boundary import (
-        MatrixACMagnetic,
-        SourceACMagnetic,
-    )
-
-    sources = [SourceACMagnetic(name=g.name) for g in plan.windings]
-    schema = MatrixACMagnetic(signal_sources=sources, matrix_name=plan.matrix_name)
-    app.assign_matrix(schema)
+    # ponytail: pyaedt's assign_matrix() dispatcher lacks "AC Magnetic with DC"
+    # support; the raw AEDT API call is live-verified to work for both 3D
+    # solution types, so we bypass the pyaedt schema helper entirely.
+    entries: list[object] = ["NAME:MatrixEntry"]
+    for group in plan.windings:
+        entries.append(["NAME:MatrixEntry", "Source:=", group.name])
+    module = app.odesign.GetModule("MaxwellParameterSetup")
+    module.AssignMatrix([f"NAME:{plan.matrix_name}", entries])
     return f"Matrix {plan.matrix_name} over {len(plan.windings)} windings."
 
 
