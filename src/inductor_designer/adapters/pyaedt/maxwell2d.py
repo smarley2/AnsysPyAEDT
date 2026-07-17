@@ -33,6 +33,8 @@ class Maxwell2dApp(Protocol):
 
     def assign_matrix(self, assignment: Any, **kwargs: Any) -> Any: ...
 
+    def assign_balloon(self, assignment: Any, **kwargs: Any) -> Any: ...
+
     def validate_simple(self, log_file: str | None = None) -> int: ...
 
     def save_project(self, path: str) -> bool: ...
@@ -138,7 +140,10 @@ def _stage_region(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     region = app.modeler.create_region(pad_value=pad, pad_type="Percentage Offset")
     if not region:
         raise RuntimeError("create_region returned no region object.")
-    return f"Air region with {pad:g}% padding."
+    balloon = app.assign_balloon(region.edges, boundary="Balloon")
+    if not balloon:
+        raise RuntimeError("assign_balloon returned no boundary object.")
+    return f"Air region with {pad:g}% padding; balloon boundary on region edges."
 
 
 def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:

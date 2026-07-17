@@ -30,8 +30,10 @@ partial design is never reported as successful.
    - Coils assigned per conductor circle, grouped into one winding per
      definition with go/return polarity opposite within the pair.
    - Model depth equals the core height.
-   - Air region with the standard padding, length-based mesh operations on
-     conductors and core.
+   - Air region with the standard padding and a balloon boundary assigned on
+     the region edges (Maxwell 2D AC Magnetic requires an explicit outer
+     boundary; the region alone does not satisfy validation), length-based
+     mesh operations on conductors and core.
    - `Setup1` (Eddy Current) at the project frequency, `Matrix1` over all
      windings, resistance/inductance report definitions.
    - Design validation (checkmark button) passes.

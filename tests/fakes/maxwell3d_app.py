@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
+
+
+@dataclass
+class _FakeRegion:
+    edges: list[str] = field(
+        default_factory=lambda: ["Region_edge1", "Region_edge2", "Region_edge3", "Region_edge4"]
+    )
 
 
 class _Recorder:
@@ -22,6 +30,8 @@ class _Recorder:
             self._log.append((f"{self._prefix}{name}", merged))
             if self._falsy_on == name:
                 return None
+            if name == "create_region":
+                return _FakeRegion()
             return f"{self._prefix}{name}-result"
 
         return record
@@ -93,6 +103,7 @@ class FakeMaxwell3dApp:
     def __init__(self, raise_on: str | None = None, falsy_on: str | None = None) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.raise_on = raise_on
+        self.falsy_on = falsy_on
         self.modeler = _Recorder(self.calls, "modeler.", falsy_on=falsy_on)
         self.mesh = _Recorder(self.calls, "mesh.")
         self.post = _Recorder(self.calls, "post.")
@@ -103,6 +114,8 @@ class FakeMaxwell3dApp:
         if self.raise_on == _name:
             raise RuntimeError(f"boom in {_name}")
         self.calls.append((_name, kwargs))
+        if self.falsy_on == _name:
+            return None
         return True
 
     def assign_material(self, assignment: Any, material: str) -> Any:
@@ -131,6 +144,9 @@ class FakeMaxwell3dApp:
 
     def assign_matrix(self, assignment: Any = None, **kwargs: Any) -> Any:
         return self._record("assign_matrix", assignment=assignment, **kwargs)
+
+    def assign_balloon(self, assignment: Any, **kwargs: Any) -> Any:
+        return self._record("assign_balloon", assignment=assignment, **kwargs)
 
     def validate_simple(self, log_file: str | None = None) -> int:
         if self.raise_on == "validate_simple":

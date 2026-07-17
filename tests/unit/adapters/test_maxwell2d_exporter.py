@@ -42,6 +42,15 @@ def test_geometry_and_depth_calls(tmp_path: Path) -> None:
     assert len(winding_calls) == 1
     region_calls = [k for n, k in app.calls if n == "modeler.create_region"]
     assert region_calls == [{"pad_value": 100.0, "pad_type": "Percentage Offset"}]
+    balloon_calls = [k for n, k in app.calls if n == "assign_balloon"]
+    assert len(balloon_calls) == 1
+    assert balloon_calls[0]["assignment"] == [
+        "Region_edge1",
+        "Region_edge2",
+        "Region_edge3",
+        "Region_edge4",
+    ]
+    assert balloon_calls[0]["boundary"] == "Balloon"
 
 
 def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:
@@ -64,6 +73,20 @@ def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None
     assert not result.succeeded()
     assert result.stages[-2].name == "region"
     assert result.stages[-2].succeeded is False
+    assert result.stages[-1].name == "save"
+    assert result.stages[-1].succeeded is True
+    saves = [k for n, k in app.calls if n == "save_project"]
+    assert len(saves) == 1
+    assert app.released == [(True, True)]
+
+
+def test_falsy_balloon_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp(falsy_on="assign_balloon")
+    result = run(tmp_path, app)
+    assert not result.succeeded()
+    assert result.stages[-2].name == "region"
+    assert result.stages[-2].succeeded is False
+    assert "assign_balloon" in result.stages[-2].message
     assert result.stages[-1].name == "save"
     assert result.stages[-1].succeeded is True
     saves = [k for n, k in app.calls if n == "save_project"]
