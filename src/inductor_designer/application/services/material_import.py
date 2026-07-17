@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from inductor_designer.domain.units import to_canonical
 from inductor_designer.materials.fitting import LossSample, MaterialFitError, fit_steinmetz
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
-    CurvePoint,
     MaterialRecord,
     MaterialStatus,
     PointSeries,
@@ -17,7 +15,11 @@ from inductor_designer.materials.records import (
     approve_record,
     review_record,
 )
-from inductor_designer.materials.serde import parse_points_csv, revision_id_for
+from inductor_designer.materials.serde import (
+    canonicalize_points,
+    parse_points_csv,
+    revision_id_for,
+)
 from inductor_designer.materials.validation import (
     IssueSeverity,
     MaterialIssue,
@@ -46,18 +48,7 @@ def import_curve_csv(
     conditions: CurveConditions,
     source: SourceProvenance,
 ) -> PointSeries:
-    points = tuple(
-        sorted(
-            (
-                CurvePoint(
-                    round(to_canonical(x, x_unit), 9),
-                    round(to_canonical(y, y_unit), 9),
-                )
-                for x, y in parse_points_csv(text)
-            ),
-            key=lambda point: point.x,
-        )
-    )
+    points = canonicalize_points(parse_points_csv(text), x_unit, y_unit)
     series = PointSeries(
         series_id=series_id,
         kind=kind,

@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
+from inductor_designer.domain.units import to_canonical
 from inductor_designer.materials.calibration import (
     AxisCalibration,
     AxisScale,
@@ -29,6 +30,24 @@ from inductor_designer.materials.records import (
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def canonicalize_points(
+    points: Iterable[tuple[float, float]], x_unit: str, y_unit: str
+) -> tuple[CurvePoint, ...]:
+    """Convert raw-unit points to sorted, nine-decimal canonical points."""
+    return tuple(
+        sorted(
+            (
+                CurvePoint(
+                    round(to_canonical(x, x_unit), 9),
+                    round(to_canonical(y, y_unit), 9),
+                )
+                for x, y in points
+            ),
+            key=lambda point: point.x,
+        )
+    )
 
 
 def _axis_to_json(axis: AxisCalibration) -> dict[str, object]:
