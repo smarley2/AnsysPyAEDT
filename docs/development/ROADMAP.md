@@ -285,10 +285,10 @@ nonzero); loss integrals are deferred to Milestone 5 alongside nonlinear
 material data. See `docs/development/automation-mcp-femm.md` for the full
 procedure, tool list, and verified-limits detail.
 
-Remaining for acceptance: Fabio Posser's engineering sanity check of the
-FEMM R/L results against an equivalent AEDT solve, a Guided Studio
-backend-selector and Generate click-through, and optionally driving
-`inductor-designer-mcp` from an MCP client.
+Milestone 4.5 is **accepted** as of 2026-07-17: Fabio Posser validated the
+FEMM results and the Guided Studio generation flow. Driving
+`inductor-designer-mcp` from an external MCP client remains an open
+follow-up validation and does not gate the milestone.
 
 ## Milestone 5: Material Studio
 
