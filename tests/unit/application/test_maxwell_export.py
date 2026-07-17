@@ -8,8 +8,10 @@ import pytest
 
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    export_femm2d,
     export_maxwell2d,
     export_maxwell3d,
+    femm_manifest_json,
     generation_manifest_json,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
@@ -18,6 +20,7 @@ from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
@@ -102,6 +105,7 @@ def test_manifest_is_deterministic_and_carries_stages(tmp_path: Path) -> None:
         in note
         for note in payload["notes"]
     )
+    assert payload["backend"] == "aedt"
 
 
 def test_3d_manifest_v2_identifies_blocked_dc(tmp_path: Path) -> None:
@@ -149,3 +153,40 @@ def test_2d_refuses_3d_project(tmp_path: Path) -> None:
             three_d_project(), CATALOG, RecordingMaxwell2dExporter(), tmp_path,  # type: ignore[arg-type]
             capabilities=SNAPSHOT,
         )
+
+
+def test_femm_export_happy_path(tmp_path: Path) -> None:
+    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
+    solver = RecordingFemmSolver()
+    outcome = export_femm2d(
+        project, CATALOG, solver, tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
+    )
+    assert outcome.result.analyzed is True
+    request = solver.requests[0]
+    assert request.project_name == "Boost_inductor_2d"
+
+    manifest = femm_manifest_json(outcome)
+    assert manifest == femm_manifest_json(outcome)
+    payload = json.loads(manifest)
+    assert payload["schemaVersion"] == 2
+    assert payload["backend"] == "femm"
+    assert payload["dimension"] == "2d"
+    assert payload["designName"] == outcome.plan.design_name
+    assert payload["femPath"] == str(outcome.result.fem_path)
+    assert payload["analyzed"] is True
+    assert payload["dcBias"]["strategy"] == "blocked"
+    assert set(payload["femmResults"]) == {"w1", "w2"}
+    assert payload["femmResults"]["w1"]["resistanceOhm"] == 0.1
+    assert payload["windings"][0]["conductorCount"] == 20
+
+
+def test_femm_export_not_analyzed_has_no_results(tmp_path: Path) -> None:
+    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
+    solver = RecordingFemmSolver()
+    outcome = export_femm2d(
+        project, CATALOG, solver, tmp_path,  # type: ignore[arg-type]
+        capabilities=SNAPSHOT, analyze=False,
+    )
+    payload = json.loads(femm_manifest_json(outcome))
+    assert payload["analyzed"] is False
+    assert payload["femmResults"] is None

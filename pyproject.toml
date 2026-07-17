@@ -20,6 +20,8 @@ dependencies = [
 [project.optional-dependencies]
 ui = ["PySide6>=6.7,<7"]
 aedt = ["pyaedt>=0.27,<2"]
+femm = ["pyfemm>=0.1.3"]
+mcp = ["mcp>=1.0,<2"]
 dev = [
   "mypy>=1.13,<2",
   "pytest>=8.3,<9",
@@ -28,10 +30,12 @@ dev = [
   "hypothesis>=6.100,<7",
   "types-jsonschema>=4.23,<5",
   "types-PyYAML>=6.0,<7",
+  "mcp>=1.0,<2",
 ]
 
 [project.scripts]
 inductor-designer = "inductor_designer.ui.main:main"
+inductor-designer-mcp = "inductor_designer.mcp_server.server:main"
 
 [tool.hatch.version]
 path = "src/inductor_designer/__about__.py"
@@ -45,6 +49,7 @@ testpaths = ["tests"]
 markers = [
   "aedt: requires a controlled licensed AEDT installation",
   "ui: requires the PySide6 UI extra",
+  "femm: requires a local FEMM 4.2 installation",
 ]
 
 [tool.coverage.run]
@@ -66,8 +71,10 @@ select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
 # PyAEDT objects are opaque duck-typed handles; Any is the honest type at the port boundary.
 "src/inductor_designer/adapters/pyaedt/maxwell3d.py" = ["ANN401"]
 "src/inductor_designer/adapters/pyaedt/maxwell2d.py" = ["ANN401"]
+"src/inductor_designer/adapters/femm/solver.py" = ["ANN401"]
 "tests/fakes/maxwell3d_app.py" = ["ANN401"]
 "tests/fakes/maxwell2d_app.py" = ["ANN401"]
+"tests/fakes/femm_module.py" = ["ANN401"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -75,5 +82,5 @@ strict = true
 files = ["src", "tools"]
 
 [[tool.mypy.overrides]]
-module = ["ansys.aedt.*", "PySide6.*"]
+module = ["ansys.aedt.*", "PySide6.*", "femm"]
 ignore_missing_imports = true

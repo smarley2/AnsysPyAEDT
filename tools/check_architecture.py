@@ -9,6 +9,8 @@ FORBIDDEN_ROOTS = frozenset(
         "PySide6",
         "ansys",
         "ctypes",
+        "femm",
+        "mcp",
         "multiprocessing",
         "os",
         "pathlib",
@@ -26,7 +28,7 @@ FORBIDDEN_ROOTS = frozenset(
 # The application layer defines ports and services; it may pass pathlib/OS
 # values through DTOs but must never import solver, UI, or persistence
 # infrastructure directly (dependency inversion, spec section 4.4).
-_APPLICATION_FORBIDDEN_ROOTS = frozenset({"PySide6", "ansys", "pyaedt", "sqlite3"})
+_APPLICATION_FORBIDDEN_ROOTS = frozenset({"PySide6", "ansys", "femm", "mcp", "pyaedt", "sqlite3"})
 PACKAGE_FORBIDDEN_ROOTS: dict[str, frozenset[str]] = {
     "application": _APPLICATION_FORBIDDEN_ROOTS,
     "domain": FORBIDDEN_ROOTS,

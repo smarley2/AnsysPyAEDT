@@ -32,6 +32,33 @@ ApplicationWindow {
                         }
                     }
                 }
+                ColumnLayout {
+                    visible: generationController !== null
+                    Layout.fillWidth: true
+                    ComboBox {
+                        id: backendCombo
+                        Layout.fillWidth: true
+                        model: backendChoices
+                    }
+                    Button {
+                        text: generationController !== null && generationController.busy
+                            ? qsTr("Generating…")
+                            : qsTr("Generate")
+                        enabled: generationController !== null && !generationController.busy
+                        onClicked: generationController.generate(backendCombo.currentText)
+                    }
+                    Column {
+                        Layout.fillWidth: true
+                        Repeater {
+                            model: generationController !== null ? generationController.lines : []
+                            delegate: Text {
+                                text: modelData
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 12
+                            }
+                        }
+                    }
+                }
                 Label { text: qsTr("Review") }
                 Item { Layout.fillHeight: true }
                 Label { text: qsTr("Foundation preview spike") }

@@ -32,6 +32,8 @@ The first functional product increment focuses on toroidal inductors. Later incr
 - Position windings automatically by angular sector with expert overrides.
 - Seed the commercial catalog with Magnetics powder-core and ferrite toroids.
 - Generate the full model by default and enable symmetry only when geometry, materials, windings, and excitations are provably periodic.
+- (Added 2026-07-17) Expose the designer over MCP so an AI client can create projects, validate them, generate solver designs, run simulations, and read results by itself.
+- (Added 2026-07-17) Offer FEMM as a user-selectable alternative to Ansys Maxwell for the 2D equivalent model, including an in-loop solve with R/L result extraction.
 
 ## 3. Scope
 
@@ -79,6 +81,8 @@ Use a modular Python architecture with dependency inversion. Both user interface
 - Canonical catalog file and compiled SQLite index adapter.
 - Magnetics catalog importer.
 - Optional GPL materialdatabase importer with preserved attribution and license metadata.
+- FEMM 4.2 via pyfemm (user-installed freeware; never bundled).
+- MCP server (optional extra) exposing application services as tools.
 
 ### 4.3 User interfaces
 

@@ -38,7 +38,7 @@ python -m pip install -e ".[dev,ui]"
 python -m ruff check .
 python -m mypy src tools
 python -m tools.check_architecture
-python -m pytest -m "not aedt" --cov=inductor_designer --cov-report=term-missing
+python -m pytest -m "not aedt and not femm" --cov=inductor_designer --cov-report=term-missing
 ```
 
 The installation must succeed; Ruff, mypy, and the boundary checker must exit successfully; all selected tests must pass; and branch-aware coverage must be at least 80 percent.

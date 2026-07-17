@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from PySide6.QtQml import QQmlApplicationEngine
 
     from inductor_designer.domain.project import InductorProject
+    from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.preview_geometry import PreviewEntry
 
 _DEFAULT_CATALOG = Path("artifacts/catalog/catalog.sqlite")
@@ -23,6 +24,8 @@ def qml_directory() -> Path:
 def create_engine(
     preview_entries: list[PreviewEntry] | None = None,
     simulation_summary: list[str] | None = None,
+    generation_controller: GenerationController | None = None,
+    backend_choices: list[str] | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -31,6 +34,8 @@ def create_engine(
     if preview_entries is not None:
         engine.rootContext().setContextProperty("previewEntries", preview_entries)
     engine.rootContext().setContextProperty("simulationSummary", simulation_summary or [])
+    engine.rootContext().setContextProperty("generationController", generation_controller)
+    engine.rootContext().setContextProperty("backendChoices", backend_choices or [])
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -65,6 +70,45 @@ def _load_simulation_summary(project: InductorProject, matrix_path: Path) -> lis
     return list(simulation_summary(project, capabilities))
 
 
+def _build_generation_controller(
+    project: InductorProject, catalog_path: Path, matrix_path: Path
+) -> GenerationController:
+    from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
+    from inductor_designer.adapters.compatibility.matrix_repository import (
+        MatrixCapabilityRepository,
+    )
+    from inductor_designer.adapters.femm.solver import PyfemmSolver
+    from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
+    from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
+    from inductor_designer.geometry.naming import sanitize_identifier
+    from inductor_designer.ui.generation_controller import GenerationController
+    from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
+
+    catalog = SqliteCatalogRepository(catalog_path)
+    capabilities = MatrixCapabilityRepository(matrix_path).snapshot_for(
+        project.target_release, project.target_edition
+    )
+    output_directory = Path("artifacts") / "studio" / sanitize_identifier(project.name)
+    maxwell3d_exporter = PyaedtMaxwell3dExporter()
+    maxwell2d_exporter = PyaedtMaxwell2dExporter()
+    femm_solver = PyfemmSolver()
+
+    def runner(backend_label: str) -> tuple[str, ...]:
+        backend = GenerationBackend(backend_label)
+        return run_generation(
+            backend,
+            project,
+            catalog,
+            capabilities,
+            output_directory,
+            maxwell3d_exporter=maxwell3d_exporter,
+            maxwell2d_exporter=maxwell2d_exporter,
+            femm_solver=femm_solver,
+        )
+
+    return GenerationController(runner)
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="inductor-designer")
     parser.add_argument("--project", type=Path, default=None)
@@ -91,8 +135,11 @@ def main() -> int:
 
     preview_entries: list[PreviewEntry] | None = None
     simulation_summary: list[str] = []
+    generation_controller: GenerationController | None = None
+    backend_choices: list[str] = []
     if args.project is not None:
         from inductor_designer.application.services.geometry_model import GeometryModelError
+        from inductor_designer.ui.generation_lines import GenerationBackend
 
         if not args.project.is_file():
             print(f"Project file not found: {args.project}", file=sys.stderr)
@@ -111,13 +158,19 @@ def main() -> int:
             for issue in error.issues:
                 print(issue, file=sys.stderr)
             return 3
+        generation_controller = _build_generation_controller(
+            project, args.catalog, args.matrix
+        )
+        backend_choices = [backend.value for backend in GenerationBackend]
         print(
             f"Loaded {args.project.name}: {len(preview_entries) - 1} winding(s); opening viewer.",
             file=sys.stderr,
             flush=True,
         )
 
-    engine = create_engine(preview_entries, simulation_summary)
+    engine = create_engine(
+        preview_entries, simulation_summary, generation_controller, backend_choices
+    )
     roots = engine.rootObjects()
     if not roots:
         print("QML failed to load; no window created.", file=sys.stderr, flush=True)

@@ -12,13 +12,17 @@ from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRe
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
+from inductor_designer.adapters.femm.solver import PyfemmSolver
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
+from inductor_designer.application.ports.femm_solver import FemmSolver
 from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExporter
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    export_femm2d,
     export_maxwell2d,
+    femm_manifest_json,
     generation_manifest_json,
 )
 from inductor_designer.domain.aedt_target import ModelDimension
@@ -28,7 +32,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(
-    argv: Sequence[str] | None = None, *, exporter: Maxwell2dExporter | None = None
+    argv: Sequence[str] | None = None,
+    *,
+    exporter: Maxwell2dExporter | None = None,
+    femm_solver: FemmSolver | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, required=True)
@@ -42,6 +49,17 @@ def main(
         "--force-2d",
         action="store_true",
         help="Override the project's dimension mode to 2d for this export.",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["aedt", "femm"],
+        default="aedt",
+        help="Solver backend to generate for.",
+    )
+    parser.add_argument(
+        "--no-analyze",
+        action="store_true",
+        help="FEMM backend only: write the .fem file without running the analysis.",
     )
     args = parser.parse_args(argv)
 
@@ -57,6 +75,33 @@ def main(
         project.target_release, project.target_edition
     )
 
+    args.evidence.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.backend == "femm":
+        try:
+            femm_outcome = export_femm2d(
+                project,
+                catalog,
+                femm_solver if femm_solver is not None else PyfemmSolver(),
+                args.output_directory,
+                capabilities=capabilities,
+                analyze=not args.no_analyze,
+            )
+        except MaxwellExportBlocked as blocked:
+            for issue in blocked.issues:
+                print(f"BLOCKED: {issue}", file=sys.stderr)
+            return 1
+
+        args.evidence.write_text(femm_manifest_json(femm_outcome), encoding="utf-8")
+        femm_result = femm_outcome.result
+        if femm_result.results:
+            for name, winding in femm_result.results.items():
+                print(f"{name}: R={winding.resistance_ohm}ohm L={winding.inductance_h}H")
+        print(f"fem: {femm_result.fem_path}")
+        analyzed_ok = femm_result.analyzed and bool(femm_result.results)
+        unanalyzed_ok = not femm_result.analyzed and femm_result.fem_path is not None
+        return 0 if analyzed_ok or unanalyzed_ok else 1
+
     try:
         outcome = export_maxwell2d(
             project,
@@ -71,7 +116,6 @@ def main(
             print(f"BLOCKED: {issue}", file=sys.stderr)
         return 1
 
-    args.evidence.parent.mkdir(parents=True, exist_ok=True)
     args.evidence.write_text(generation_manifest_json(outcome), encoding="utf-8")
     for stage in outcome.result.stages:
         status = "ok" if stage.succeeded else "FAILED"

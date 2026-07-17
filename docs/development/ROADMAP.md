@@ -226,6 +226,70 @@ pyaedt limits. Implemented deliverables:
 The 2024 R2 rows stay `out-of-scope` per D4 and were not part of this
 acceptance.
 
+## Milestone 4.5: Automation interfaces — MCP server and FEMM 2D backend
+
+Requirements added 2026-07-17 by Fabio Posser:
+
+- Expose the designer over MCP so an AI client can create projects, validate
+  them, generate solver designs, run simulations, and read results by itself.
+- Offer FEMM (https://www.femm.info) as a user-selectable alternative to
+  Ansys Maxwell for the 2D equivalent model, including an in-loop solve with
+  R/L result extraction.
+
+- Translate the solver-independent 2D design plan to a FEMM planar problem
+  (circuits with signed one-turn conductor blocks, linear materials,
+  asymptotic open boundary), solve headless, and extract per-winding
+  impedance results.
+- Select the 2D backend per call (CLI flag, MCP argument); project files stay
+  backend-agnostic.
+- Serve catalog, project, generation, and solve operations as MCP tools over
+  stdio behind an optional extra.
+
+Exit criterion: an MCP client session can create a valid project, generate a
+ready-to-solve Maxwell design, run a FEMM solve of the 2D equivalent, and
+read back per-winding R/L — with the backend chosen per call.
+
+### Current state
+
+Milestone 4.5 is implementation complete and live-verified on FEMM 4.2 the
+same day (2026-07-17). Evidence:
+
+- `INDUCTOR_FEMM_LIVE=1 pytest tests/integration/femm -m femm` passed against
+  the real FEMM 4.2 installation. One live fix was needed: the core
+  bore-interior air region (`r < r_inner`) had no material label, causing
+  FEMM analysis to fail; a second air block label at the origin fixed it
+  (commit `f30e662`).
+- A live CLI solve, `python -m tools.generate_maxwell2d --backend femm
+  --force-2d` on the sample fixture, produced
+  `artifacts/femm-check/M2_golden_sample_2d.fem` with all stages green and
+  symmetric results: windings w1/w2 both R ≈ 0.00854 Ω, L ≈ 15.16 µH at
+  100 kHz.
+- The exit-criterion integration test, `tests/integration/test_mcp_session.py`,
+  drives the full session (list cores, save project, validate, geometry
+  summary, generate Maxwell 3D, generate 2D on the FEMM backend, read back
+  the manifest) against the pure MCP tool functions with no error dicts.
+
+Implemented deliverables mirror the plan: pure FEMM problem translation
+(`adapters/femm/model.py`), the `FemmSolver` port with a recording fake and
+the pyfemm adapter (`adapters/femm/solver.py`), backend dispatch
+(`Backend2d`, `export_femm2d`) and FEMM manifests in
+`application/services/maxwell_export.py`, the `--backend`/`--no-analyze` CLI
+flags on `generate_maxwell2d`, nine pure MCP tool functions
+(`mcp_server/tools.py`) registered by a FastMCP stdio server
+(`mcp_server/server.py`, the `inductor-designer-mcp` console script), and a
+Guided Studio backend selector and Generate action.
+
+Deferred/known limits: circuit phase is not yet applied to FEMM circuits
+(magnitude-only excitation; a message is emitted when a circuit's phase is
+nonzero); loss integrals are deferred to Milestone 5 alongside nonlinear
+material data. See `docs/development/automation-mcp-femm.md` for the full
+procedure, tool list, and verified-limits detail.
+
+Remaining for acceptance: Fabio Posser's engineering sanity check of the
+FEMM R/L results against an equivalent AEDT solve, a Guided Studio
+backend-selector and Generate click-through, and optionally driving
+`inductor-designer-mcp` from an MCP client.
+
 ## Milestone 5: Material Studio
 
 - Import PDF images, screenshots, CSV data, and formulas.
