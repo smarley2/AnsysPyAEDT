@@ -124,6 +124,34 @@ def test_new_draft_record_fits_loss_csvs_at_multiple_frequencies() -> None:
     assert record.steinmetz.beta == pytest.approx(2.3, abs=1e-6)
 
 
+def test_new_draft_record_keeps_optional_fit_empty_for_log_collinear_losses() -> None:
+    samples = ((1_000.0, 0.01), (2_000.0, 0.02), (4_000.0, 0.04))
+    sources = tuple(_source(f"loss-{int(frequency)}.csv") for frequency, _ in samples)
+    series = tuple(
+        import_curve_csv(
+            f"x,y\n{flux_density},{2.5 * frequency**1.4 * flux_density**2.3}\n",
+            series_id=f"loss-{int(frequency)}",
+            kind=SeriesKind.LOSS_TABLE,
+            x_unit="T",
+            y_unit="W/m3",
+            conditions=CurveConditions(frequency, 25.0, None),
+            source=source,
+        )
+        for (frequency, flux_density), source in zip(samples, sources, strict=True)
+    )
+
+    record = new_draft_record(
+        MaterialRef("Example", "Ferrite", "F1"),
+        series=series,
+        sources=sources,
+        created_at="2026-07-17T12:00:00+00:00",
+    )
+
+    assert record.status is MaterialStatus.DRAFT
+    assert record.revision_id
+    assert record.steinmetz is None
+
+
 def test_review_and_approve_reject_record_with_error_issues() -> None:
     source = _source("bh.csv")
     series = _bh_series()

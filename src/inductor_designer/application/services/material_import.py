@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from inductor_designer.domain.units import to_canonical
-from inductor_designer.materials.fitting import LossSample, fit_steinmetz
+from inductor_designer.materials.fitting import LossSample, MaterialFitError, fit_steinmetz
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -88,7 +88,10 @@ def _fit_loss_series(series: tuple[PointSeries, ...]) -> SteinmetzFit | None:
         and len({sample.frequency_hz for sample in samples}) >= 2
         and len({sample.flux_density_t for sample in samples}) >= 2
     ):
-        return fit_steinmetz(samples)
+        try:
+            return fit_steinmetz(samples)
+        except MaterialFitError:
+            return None
     return None
 
 
