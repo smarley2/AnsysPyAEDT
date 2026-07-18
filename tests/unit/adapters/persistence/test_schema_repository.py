@@ -111,3 +111,20 @@ def test_migrate_latest_is_identity(schema_repository: SchemaRepository) -> None
         (FIXTURES / "sample_geometry_project.inductor.json").read_text(encoding="utf-8")
     )
     assert schema_repository.migrate_project(document) == document
+
+
+@pytest.mark.parametrize("revision_id", ["", "short", "0123456789AB", "0123456789ag"])
+def test_v3_material_selection_requires_lowercase_hex_revision(
+    schema_repository: SchemaRepository, revision_id: str
+) -> None:
+    document = schema_repository.migrate_project(_v1_document())
+    document["materials"] = [
+        {
+            "ref": {"manufacturer": "Example", "name": "Ferrite", "grade": "F1"},
+            "revisionId": revision_id,
+            "snapshot": {},
+        }
+    ]
+
+    with pytest.raises(ValidationError):
+        schema_repository.validate_project(document)

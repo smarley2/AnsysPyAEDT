@@ -16,6 +16,7 @@ from inductor_designer.materials.records import MaterialRecord, MaterialStatus
 from inductor_designer.materials.serde import (
     material_record_from_json,
     material_record_json,
+    material_record_to_json,
     parse_points_csv,
     points_csv,
     sha256_hex,
@@ -239,7 +240,8 @@ class FileOverlayMaterialRepository:
                 )
 
             staged = self._load_record(record.ref, record.revision_id, staging)
-            if staged != record:
+            canonical_record = material_record_from_json(material_record_to_json(record))
+            if staged != canonical_record:
                 raise ValueError("staged material record does not match the requested record")
             self._read_sources(staged, staging)
             self._verify_points(staged, staging)

@@ -211,13 +211,13 @@ def test_material_path_alias_is_typed_unknown(repository: MaterialRepository) ->
 
 def test_revision_path_alias_is_typed_unknown(repository: MaterialRepository) -> None:
     source = b"h,b\n0,0\n100,0.2\n"
-    stored = _record(source, revision_id="rev-a")
+    stored = _record(source)
     repository.save(stored, {"bh-source.csv": source})
 
     with pytest.raises(MaterialLookupError):
-        repository.get(stored.ref, "rev_a")
+        repository.get(stored.ref, stored.revision_id.upper())
     with pytest.raises(MaterialLookupError):
-        repository.source_bytes(stored.ref, "rev_a")
+        repository.source_bytes(stored.ref, stored.revision_id.upper())
 
 
 def test_save_rejects_sanitized_series_collision(repository: MaterialRepository) -> None:

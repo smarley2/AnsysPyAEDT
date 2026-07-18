@@ -249,3 +249,85 @@ def test_material_deserialization_rejects_wrong_primitive_scalar_type() -> None:
 def test_parse_points_csv_rejects_malformed_input(text: str) -> None:
     with pytest.raises(ValueError, match="CSV"):
         parse_points_csv(text)
+
+
+def test_material_serialization_canonicalizes_every_nested_float() -> None:
+    record = _record()
+    series = record.series[0]
+    extraction = series.extraction
+    fit = record.steinmetz
+    assert extraction is not None
+    assert fit is not None
+    noncanonical = replace(
+        record,
+        relative_permeability=60.0000000004,
+        steinmetz=SteinmetzFit(
+            2.5000000004,
+            1.4000000004,
+            2.3000000004,
+            0.0100000004,
+            0.0200000004,
+        ),
+        series=(
+            replace(
+                series,
+                conditions=CurveConditions(None, 25.0000000004, 0.0000000004),
+                points=(CurvePoint(0.0000000004, 0.0000000004),),
+                extraction=replace(
+                    extraction,
+                    x_axis=AxisCalibration(
+                        AxisScale.LINEAR,
+                        10.0000000004,
+                        0.0000000004,
+                        310.0000000004,
+                        300.0000000004,
+                    ),
+                    pixel_points=(PixelPoint(10.0000000004, 220.0000000004),),
+                ),
+            ),
+            record.series[1],
+        ),
+    )
+
+    document = material_record_to_json(noncanonical)
+    first_series = document["series"][0]  # type: ignore[index]
+    assert document["relativePermeability"] == 60.0
+    assert document["steinmetz"] == {
+        "k": 2.5,
+        "alpha": 1.4,
+        "beta": 2.3,
+        "rmsRelativeResidual": 0.01,
+        "maxRelativeResidual": 0.02,
+    }
+    assert first_series["conditions"] == {  # type: ignore[index]
+        "frequencyHz": None,
+        "temperatureC": 25.0,
+        "dcBiasAPerM": 0.0,
+    }
+    assert first_series["points"] == [{"x": 0.0, "y": 0.0}]  # type: ignore[index]
+    assert first_series["extraction"]["xAxis"] == {  # type: ignore[index]
+        "scale": "linear",
+        "pixelA": 10.0,
+        "valueA": 0.0,
+        "pixelB": 310.0,
+        "valueB": 300.0,
+    }
+    assert first_series["extraction"]["pixelPoints"] == [  # type: ignore[index]
+        {"xPx": 10.0, "yPx": 220.0}
+    ]
+
+
+def test_sub_nanodifference_has_same_canonical_json_and_revision_id() -> None:
+    first = replace(_record(), relative_permeability=60.0000000001)
+    second = replace(_record(), relative_permeability=60.0000000002)
+
+    assert material_record_json(first) == material_record_json(second)
+    assert revision_id_for(first) == revision_id_for(second)
+
+
+def test_deserialization_rejects_empty_revision_for_reviewed_record() -> None:
+    document = material_record_to_json(review_record(_record(), "reviewer@example.com"))
+    document["revisionId"] = ""
+
+    with pytest.raises(ValueError, match="revision_id"):
+        material_record_from_json(document)

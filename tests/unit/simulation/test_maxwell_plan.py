@@ -88,6 +88,16 @@ def make_approved_material_record(
                 source_filename=source.filename,
                 extraction=None,
             ),
+            PointSeries(
+                series_id="loss_100khz",
+                kind=SeriesKind.LOSS_TABLE,
+                x_unit="T",
+                y_unit="W/m3",
+                conditions=CurveConditions(100_000.0, 25.0, None),
+                points=(CurvePoint(0.05, 1200.0), CurvePoint(0.1, 4500.0)),
+                source_filename=source.filename,
+                extraction=None,
+            ),
         ),
         relative_permeability=relative_permeability,
         steinmetz=SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02),
@@ -156,3 +166,10 @@ def test_multiple_bh_series_are_refused_as_ambiguous() -> None:
 
     with pytest.raises(PlanBuildError, match="multiple B-H"):
         material_spec_from_material_record(make_core_record(), ambiguous)
+
+
+def test_approved_physically_invalid_material_record_is_refused() -> None:
+    invalid = make_approved_material_record(relative_permeability=0.5)
+
+    with pytest.raises(PlanBuildError, match="relative permeability"):
+        material_spec_from_material_record(make_core_record(), invalid)

@@ -4,6 +4,13 @@ from dataclasses import replace
 
 import pytest
 
+from inductor_designer.materials.calibration import (
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
+)
 from inductor_designer.materials.fitting import MU0
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -76,6 +83,7 @@ def _loss_series(
 
 def _record(
     *,
+    sources: tuple[SourceProvenance, ...] | None = None,
     series: tuple[PointSeries, ...] | None = None,
     relative_permeability: float | None = 60.0,
     steinmetz: SteinmetzFit | None = None,
@@ -87,7 +95,7 @@ def _record(
         created_at="2026-07-17T12:00:00+00:00",
         reviewed_by=None,
         approved_by=None,
-        sources=(_source(),),
+        sources=(_source(),) if sources is None else sources,
         series=(_bh_series(),) if series is None else series,
         relative_permeability=relative_permeability,
         steinmetz=steinmetz,
@@ -261,3 +269,33 @@ def test_validate_record_includes_series_issues_in_series_order() -> None:
         ("unit-family", IssueSeverity.ERROR),
         ("loss-frequency-missing", IssueSeverity.ERROR),
     )
+
+
+def _extraction() -> ExtractionRecord:
+    return ExtractionRecord(
+        crop=CropRegion(0, 0, 10, 10),
+        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 10.0, 1.0),
+        y_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 0.0, 1.0),
+        pixel_points=(PixelPoint(0.0, 10.0), PixelPoint(10.0, 0.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("source_kind", "extraction", "expected_code"),
+    [
+        (SourceKind.IMAGE, None, "image-extraction-missing"),
+        (SourceKind.CSV, _extraction(), "csv-extraction-present"),
+    ],
+)
+def test_validate_record_rejects_series_source_provenance_mismatch(
+    source_kind: SourceKind,
+    extraction: ExtractionRecord | None,
+    expected_code: str,
+) -> None:
+    source = replace(_source(), kind=source_kind)
+    series = replace(_bh_series(), extraction=extraction)
+
+    assert expected_code in {
+        issue.code
+        for issue in validate_record(_record(sources=(source,), series=(series,)))
+    }

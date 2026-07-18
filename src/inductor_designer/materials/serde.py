@@ -32,6 +32,10 @@ def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _canonical_float(value: float | None) -> float | None:
+    return round(value, 9) if value is not None else None
+
+
 def canonicalize_points(
     points: Iterable[tuple[float, float]], x_unit: str, y_unit: str
 ) -> tuple[CurvePoint, ...]:
@@ -53,10 +57,10 @@ def canonicalize_points(
 def _axis_to_json(axis: AxisCalibration) -> dict[str, object]:
     return {
         "scale": axis.scale.value,
-        "pixelA": axis.pixel_a,
-        "valueA": axis.value_a,
-        "pixelB": axis.pixel_b,
-        "valueB": axis.value_b,
+        "pixelA": _canonical_float(axis.pixel_a),
+        "valueA": _canonical_float(axis.value_a),
+        "pixelB": _canonical_float(axis.pixel_b),
+        "valueB": _canonical_float(axis.value_b),
     }
 
 
@@ -71,7 +75,11 @@ def _extraction_to_json(extraction: ExtractionRecord) -> dict[str, object]:
         "xAxis": _axis_to_json(extraction.x_axis),
         "yAxis": _axis_to_json(extraction.y_axis),
         "pixelPoints": [
-            {"xPx": point.x_px, "yPx": point.y_px} for point in extraction.pixel_points
+            {
+                "xPx": _canonical_float(point.x_px),
+                "yPx": _canonical_float(point.y_px),
+            }
+            for point in extraction.pixel_points
         ],
     }
 
@@ -119,11 +127,17 @@ def material_record_to_json(
                 "xUnit": series.x_unit,
                 "yUnit": series.y_unit,
                 "conditions": {
-                    "frequencyHz": series.conditions.frequency_hz,
-                    "temperatureC": series.conditions.temperature_c,
-                    "dcBiasAPerM": series.conditions.dc_bias_a_per_m,
+                    "frequencyHz": _canonical_float(series.conditions.frequency_hz),
+                    "temperatureC": _canonical_float(series.conditions.temperature_c),
+                    "dcBiasAPerM": _canonical_float(series.conditions.dc_bias_a_per_m),
                 },
-                "points": [{"x": point.x, "y": point.y} for point in series.points],
+                "points": [
+                    {
+                        "x": _canonical_float(point.x),
+                        "y": _canonical_float(point.y),
+                    }
+                    for point in series.points
+                ],
                 "sourceFilename": series.source_filename,
                 "extraction": (
                     _extraction_to_json(series.extraction)
@@ -133,14 +147,18 @@ def material_record_to_json(
             }
             for series in record.series
         ],
-        "relativePermeability": record.relative_permeability,
+        "relativePermeability": _canonical_float(record.relative_permeability),
         "steinmetz": (
             {
-                "k": record.steinmetz.k,
-                "alpha": record.steinmetz.alpha,
-                "beta": record.steinmetz.beta,
-                "rmsRelativeResidual": record.steinmetz.rms_relative_residual,
-                "maxRelativeResidual": record.steinmetz.max_relative_residual,
+                "k": _canonical_float(record.steinmetz.k),
+                "alpha": _canonical_float(record.steinmetz.alpha),
+                "beta": _canonical_float(record.steinmetz.beta),
+                "rmsRelativeResidual": _canonical_float(
+                    record.steinmetz.rms_relative_residual
+                ),
+                "maxRelativeResidual": _canonical_float(
+                    record.steinmetz.max_relative_residual
+                ),
             }
             if record.steinmetz is not None
             else None

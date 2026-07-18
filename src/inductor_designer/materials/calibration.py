@@ -65,7 +65,24 @@ class ExtractionRecord:
 
 def extract_points(record: ExtractionRecord) -> tuple[tuple[float, float], ...]:
     """Map pixel points to raw-unit coordinate pairs while preserving order."""
+    x_axis = AxisCalibration(
+        record.x_axis.scale,
+        round(record.x_axis.pixel_a, 9),
+        round(record.x_axis.value_a, 9),
+        round(record.x_axis.pixel_b, 9),
+        round(record.x_axis.value_b, 9),
+    )
+    y_axis = AxisCalibration(
+        record.y_axis.scale,
+        round(record.y_axis.pixel_a, 9),
+        round(record.y_axis.value_a, 9),
+        round(record.y_axis.pixel_b, 9),
+        round(record.y_axis.value_b, 9),
+    )
     return tuple(
-        (round(record.x_axis.value_at(point.x_px), 9), round(record.y_axis.value_at(point.y_px), 9))
+        (
+            round(x_axis.value_at(round(point.x_px, 9)), 9),
+            round(y_axis.value_at(round(point.y_px, 9)), 9),
+        )
         for point in record.pixel_points
     )

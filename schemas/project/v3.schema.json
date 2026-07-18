@@ -160,7 +160,7 @@
         "required": ["ref", "revisionId", "snapshot"],
         "properties": {
           "ref": {"$ref": "#/$defs/materialRef"},
-          "revisionId": {"type": "string"},
+          "revisionId": {"type": "string", "pattern": "^[0-9a-f]{12}$"},
           "snapshot": {"type": "object"}
         }
       }

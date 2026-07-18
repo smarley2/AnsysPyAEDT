@@ -87,6 +87,16 @@ class MaterialRecord:
     notes: str
 
     def __post_init__(self) -> None:
+        valid_revision = len(self.revision_id) == 12 and all(
+            char in "0123456789abcdef" for char in self.revision_id
+        )
+        if not valid_revision and not (
+            self.status is MaterialStatus.DRAFT and self.revision_id == ""
+        ):
+            raise ValueError(
+                "revision_id must be 12 lowercase hexadecimal characters "
+                "or empty for a transient draft"
+            )
         if self.status is MaterialStatus.REVIEWED and not self.reviewed_by:
             raise ValueError("reviewed material requires reviewed_by")
         if self.status is MaterialStatus.APPROVED and (

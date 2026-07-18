@@ -52,6 +52,7 @@ def _series(
 
 def _record(
     *,
+    revision_id: str = "0123456789ab",
     status: MaterialStatus = MaterialStatus.DRAFT,
     reviewed_by: str | None = None,
     approved_by: str | None = None,
@@ -60,7 +61,7 @@ def _record(
 ) -> MaterialRecord:
     return MaterialRecord(
         ref=MaterialRef("Magnetics", "Kool Mu", "60"),
-        revision_id="0123456789ab",
+        revision_id=revision_id,
         status=status,
         created_at="2026-07-17T12:00:00+00:00",
         reviewed_by=reviewed_by,
@@ -151,3 +152,20 @@ def test_record_rejects_duplicate_series_ids() -> None:
 def test_record_rejects_dangling_source_link() -> None:
     with pytest.raises(ValueError, match="source_filename"):
         _record(series=(_series(source_filename="missing.csv"),))
+
+
+def test_record_allows_empty_revision_only_for_transient_draft() -> None:
+    assert _record(revision_id="").revision_id == ""
+
+    with pytest.raises(ValueError, match="revision_id"):
+        _record(
+            revision_id="",
+            status=MaterialStatus.REVIEWED,
+            reviewed_by="reviewer@example.com",
+        )
+
+
+@pytest.mark.parametrize("revision_id", ["short", "0123456789AB", "0123456789ag"])
+def test_record_requires_twelve_lowercase_hex_revision(revision_id: str) -> None:
+    with pytest.raises(ValueError, match="revision_id"):
+        _record(revision_id=revision_id)

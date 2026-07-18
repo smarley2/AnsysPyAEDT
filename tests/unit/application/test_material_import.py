@@ -11,6 +11,13 @@ from inductor_designer.application.services.material_import import (
     new_draft_record,
     review_material,
 )
+from inductor_designer.materials.calibration import (
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
+)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -209,3 +216,37 @@ def test_new_draft_revision_id_changes_when_series_content_changes() -> None:
     )
 
     assert changed.revision_id != original.revision_id
+
+
+def _extraction() -> ExtractionRecord:
+    return ExtractionRecord(
+        crop=CropRegion(0, 0, 10, 10),
+        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 10.0, 1.0),
+        y_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 0.0, 1.0),
+        pixel_points=(PixelPoint(0.0, 10.0), PixelPoint(10.0, 0.0)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("source_kind", "extraction", "message"),
+    [
+        (SourceKind.IMAGE, None, "image-backed series requires extraction metadata"),
+        (SourceKind.CSV, _extraction(), "CSV-backed series must not include extraction metadata"),
+    ],
+)
+def test_approval_rejects_series_source_provenance_mismatch(
+    source_kind: SourceKind,
+    extraction: ExtractionRecord | None,
+    message: str,
+) -> None:
+    source = replace(_source("bh.csv"), kind=source_kind)
+    draft = new_draft_record(
+        MaterialRef("Example", "Ferrite", "F1"),
+        series=(replace(_bh_series(), extraction=extraction),),
+        sources=(source,),
+        created_at="2026-07-17T12:00:00+00:00",
+    )
+    reviewed = replace(draft, status=MaterialStatus.REVIEWED, reviewed_by="reviewer@example.com")
+
+    with pytest.raises(MaterialImportError, match=message):
+        approve_material(reviewed, "approver@example.com")

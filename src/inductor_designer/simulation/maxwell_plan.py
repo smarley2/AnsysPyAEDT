@@ -14,6 +14,7 @@ from inductor_designer.materials.records import (
     SeriesKind,
     SteinmetzFit,
 )
+from inductor_designer.materials.validation import IssueSeverity, validate_record
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 
 SOLUTION_TYPE = "EddyCurrent"
@@ -162,6 +163,13 @@ def material_spec_from_material_record(
         raise PlanBuildError(("Only approved material records can be exported.",))
     if material.ref != core_record.material:
         raise PlanBuildError(("Material record identity does not match the selected core.",))
+    errors = tuple(
+        issue.message
+        for issue in validate_record(material)
+        if issue.severity is IssueSeverity.ERROR
+    )
+    if errors:
+        raise PlanBuildError(errors)
 
     bh_series = tuple(
         series for series in material.series if series.kind is SeriesKind.BH_CURVE
