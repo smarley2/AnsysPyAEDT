@@ -1,0 +1,8 @@
+manufacturer,material_name,grade,source_url,source_page,captured_at,source_description,series_id,curve_kind,frequency_hz,temperature_c,dc_bias_a_per_m,x_unit,y_unit,x,y
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,bh-25c,bh-curve,,25,,Oe,kG,0,0
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,bh-25c,bh-curve,,25,,Oe,kG,1,1
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,bh-25c,bh-curve,,25,,Oe,kG,2,1.6
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,loss-100khz,loss-table,100000,25,0,kG,mW/cm3,0.5,100
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,loss-100khz,loss-table,100000,25,0,kG,mW/cm3,1,240
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,loss-200khz,loss-table,200000,25,0,kG,mW/cm3,0.5,180
+Example Magnetics,Synthetic Ferrite,F1,https://example.com/materials/f1,7,UTC 2026-07-18 12:00:00,Synthetic example data - replace before review,loss-200khz,loss-table,200000,25,0,kG,mW/cm3,1,430
