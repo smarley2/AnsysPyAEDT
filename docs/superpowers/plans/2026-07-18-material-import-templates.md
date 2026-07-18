@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship self-describing CSV and Excel templates plus validated import paths that turn multi-series B-H and loss tables into canonical material-record inputs.
+**Goal:** Ship self-describing CSV and Excel templates, validated import paths, and an editable Excel export for the selected material revision.
 
-**Architecture:** A pure application service groups format-neutral rows and reuses the existing single-series importer. CSV/XLSX decoding and packaged-resource access live in `adapters/materials`; Excel parsing uses `openpyxl`, while the committed workbook is authored and visually verified with the bundled spreadsheet artifact workflow. Each uploaded series receives a deterministic generated CSV source for replay, and the original upload is retained and hashed as supplemental provenance.
+**Architecture:** A pure application service groups format-neutral rows and reuses the existing single-series importer. CSV/XLSX decoding, packaged-resource access, and dynamic editable-workbook export live in `adapters/materials`; Excel parsing/export uses `openpyxl`, while the committed blank workbook is authored and visually verified with the bundled spreadsheet artifact workflow. Each uploaded series receives a deterministic generated CSV source for replay, and the original upload is retained and hashed as supplemental provenance.
 
 **Tech Stack:** Python 3.10–3.13, stdlib `csv`/`io`/`importlib.resources`, `openpyxl>=3.1,<4`, bundled `@oai/artifact-tool` for workbook authoring, pytest, Ruff, strict mypy.
 
@@ -19,6 +19,7 @@
 - Uploaded points convert through `import_curve_csv`; do not duplicate unit conversion, sorting, rounding, or series physics checks.
 - The uploaded file and every generated per-series CSV have SHA-256 provenance. Series link to generated CSV sources so existing replay remains deterministic.
 - No upload creates a reviewed or approved record.
+- Reimporting an exported material creates a new draft and never mutates the selected base revision.
 - The Material Studio UI buttons remain M5b scope; this plan provides stable import/template services for them.
 - Gates: `.venv/bin/python -m pytest tests -q -m "not aedt and not femm" --cov=inductor_designer --cov-report=term-missing`, Ruff, strict mypy over `src tools`, architecture check, and `git diff --check`.
 
@@ -29,11 +30,12 @@
 | `src/inductor_designer/application/services/material_table_import.py` | Format-neutral metadata/row DTOs, grouping, consistency checks, generated replay CSVs |
 | `src/inductor_designer/adapters/materials/table_file.py` | Strict `.csv`/`.xlsx` decoding and formula rejection |
 | `src/inductor_designer/adapters/materials/templates.py` | Packaged template lookup and immutable download bytes |
+| `src/inductor_designer/domain/units.py` | Inverse conversion from canonical SI to retained datasheet units |
 | `src/inductor_designer/resources/material_templates/material-import-template.csv` | Flat multi-series CSV template |
 | `src/inductor_designer/resources/material_templates/material-import-template.xlsx` | Styled workbook with dropdown validation |
 | `tests/unit/application/test_material_table_import.py` | Grouping, canonicalization, provenance, validation |
 | `tests/unit/adapters/test_material_table_file.py` | CSV/XLSX equivalence and file-shape errors |
-| `tests/unit/adapters/test_material_templates.py` | Resource and workbook contract |
+| `tests/unit/adapters/test_material_templates.py` | Resource, workbook, and editable-export contract |
 | `docs/development/material-records.md` | User-facing template/import instructions |
 
 ---
@@ -222,7 +224,8 @@ load_workbook(BytesIO(data), read_only=False, data_only=False)
 ```
 
 Require exactly the four documented visible sheets while permitting a hidden
-`_Lists` sheet. Reject formula cells before reading values. Read `Material`
+`_Lists` sheet in externally authored compatible workbooks. Reject formula
+cells before reading values. Read `Material`
 labels by exact key, read table headers by exact name, skip fully blank rows,
 map B-H columns to `(x_unit=h_unit, y_unit=b_unit, x=h, y=b)`, map loss columns
 to `(x_unit=b_unit, y_unit=loss_unit, x=b, y=loss)`, and call
@@ -296,8 +299,8 @@ Node runtime and `@oai/artifact-tool` paths for workbook authoring.
 Assert `material_import_template("csv")` and `("xlsx")` return the exact
 filenames/content types, nonempty immutable bytes, and reject other formats.
 Open the returned CSV through `import_material_file`. Open the XLSX with
-`openpyxl` and assert visible sheets, exact headers, frozen panes, filters,
-hidden `_Lists`, and dropdown validations covering populated input rows.
+`openpyxl` and assert exactly four visible sheets with no extras, exact headers,
+filters, and embedded dropdown validations covering populated input rows.
 
 - [ ] **Step 3: Run resource tests and verify RED**
 
@@ -322,9 +325,14 @@ return:
 - [ ] **Step 5: Author the XLSX workbook with the artifact workflow**
 
 Create one auditable `.mjs` builder in a temporary/output directory, not in the
-package. Produce `Instructions`, `Material`, `B-H Curves`, `Loss Curves`, and
-hidden `_Lists`. Apply readable title/header styles, frozen panes, filters,
-input fills, number formats, explanatory notes, and data validations:
+package. Produce exactly four visible sheets: `Instructions`, `Material`,
+`B-H Curves`, and `Loss Curves`. Do not create `_Lists`; embed the short unit
+choices directly in each data validation because the approved artifact-tool
+API does not expose worksheet visibility controls. Apply readable title/header
+styles, filters, input fills, number formats, explanatory notes, and data
+validations. Do not require frozen panes: artifact-tool 2.8.6 does not persist
+its documented freeze setting during XLSX export, and the user approved this
+compact workbook without it.
 
 - B-H `h_unit`: `A/m`, `kA/m`, `Oe`;
 - B-H/loss `b_unit`: `T`, `mT`, `G`, `kG`;
@@ -362,7 +370,113 @@ git commit -m "feat(materials): package CSV and Excel import templates"
 
 ---
 
-### Task 4: Documentation and end-to-end proof
+### Task 4: Editable export and draft reimport
+
+**Files:**
+- Modify: `src/inductor_designer/domain/units.py`
+- Modify: `src/inductor_designer/adapters/materials/templates.py`
+- Modify: `src/inductor_designer/adapters/materials/table_file.py`
+- Modify: `src/inductor_designer/adapters/materials/__init__.py`
+- Modify: `tests/unit/domain/test_units.py`
+- Modify: `tests/unit/adapters/test_material_templates.py`
+- Modify: `tests/unit/adapters/test_material_table_file.py`
+
+**Interfaces:**
+
+```python
+def from_canonical(value: float, unit: str) -> float: ...
+
+class MaterialTemplateExportError(ValueError): ...
+
+@dataclass(frozen=True, slots=True)
+class ImportedMaterialDraft:
+    record: MaterialRecord
+    source_files: tuple[tuple[str, bytes], ...]
+
+def export_material_record_xlsx(record: MaterialRecord) -> MaterialTemplateDownload: ...
+
+def import_material_file_as_draft(
+    filename: str,
+    data: bytes,
+    *,
+    created_at: str,
+    notes: str = "",
+) -> ImportedMaterialDraft: ...
+```
+
+- [ ] **Step 1: Write inverse-unit RED tests**
+
+For every material unit already accepted by `to_canonical`, assert
+`from_canonical(to_canonical(value, unit), unit) == pytest.approx(value)`.
+Cover `T`, `mT`, `G`, `kG`, `A/m`, `kA/m`, `Oe`, `W/m3`, `kW/m3`, and
+`mW/cm3`; unknown units raise the same `ValueError` family as `to_canonical`.
+
+- [ ] **Step 2: Verify inverse-unit RED, then implement minimally**
+
+Run: `.venv/bin/python -m pytest tests/unit/domain/test_units.py -q`
+
+Expected: import fails because `from_canonical` does not exist. Implement it
+from the same `_CONVERSIONS` factor table (`canonical / factor`) so the two
+directions cannot drift.
+
+- [ ] **Step 3: Write editable-workbook export RED tests**
+
+Build an approved record containing multiple B-H/loss series in mixed retained
+units and conditions. Assert export:
+
+- returns `material-<sanitized-ref>-<revision>.xlsx` with the XLSX content type;
+- has exactly the official four sheets, styles, headers, filters, and dropdowns;
+- removes every synthetic example row;
+- fills identity and a source description naming the base revision;
+- emits all series and conditions; and
+- converts canonical points back to each series' retained units.
+
+Also assert a record with only scalar permeability raises
+`MaterialTemplateExportError` with an actionable no-curves message.
+
+- [ ] **Step 4: Verify export RED, then implement from the packaged template**
+
+Confirm the tests fail because `export_material_record_xlsx` is missing. Load
+the packaged workbook through `openpyxl`, clear only synthetic data rows,
+populate typed cells, preserve styles/filters/validations, set stable workbook
+properties from the record where supported, and save to `BytesIO`. Do not
+rebuild the workbook or copy the old fit; edited loss curves are refitted on
+reimport.
+
+- [ ] **Step 5: Write and satisfy draft-reimport RED tests**
+
+Export an approved record, modify one workbook point with `openpyxl`, then call
+`import_material_file_as_draft`. Assert the returned record is `DRAFT`, has a
+new valid revision ID, contains the edited canonical point, recomputes its loss
+fit when sufficient loss data exists, returns every source file needed by the
+overlay/replay path, and leaves the original frozen approved dataclass equal to
+its pre-import value.
+
+Implement by calling `import_material_file`, then `new_draft_record`; do not
+duplicate parsing, conversion, fitting, validation, or revision hashing.
+
+- [ ] **Step 6: Run Task 4 gates**
+
+```console
+.venv/bin/python -m pytest tests/unit/domain/test_units.py tests/unit/adapters/test_material_templates.py tests/unit/adapters/test_material_table_file.py -q
+.venv/bin/python -m ruff check src/inductor_designer/domain/units.py src/inductor_designer/adapters/materials tests/unit/domain/test_units.py tests/unit/adapters/test_material_templates.py tests/unit/adapters/test_material_table_file.py
+.venv/bin/python -m mypy src tools
+.venv/bin/python tools/check_architecture.py
+git diff --check
+```
+
+Expected: all exit 0.
+
+- [ ] **Step 7: Commit Task 4**
+
+```console
+git add src/inductor_designer/domain/units.py src/inductor_designer/adapters/materials tests/unit/domain/test_units.py tests/unit/adapters/test_material_templates.py tests/unit/adapters/test_material_table_file.py
+git commit -m "feat(materials): export editable material workbooks"
+```
+
+---
+
+### Task 5: Documentation and end-to-end proof
 
 **Files:**
 - Modify: `docs/development/material-records.md`
@@ -371,6 +485,7 @@ git commit -m "feat(materials): package CSV and Excel import templates"
 - Create: `tests/integration/test_material_table_upload.py`
 
 **Interfaces:** Uses `material_import_template`, `import_material_file`,
+`export_material_record_xlsx`, `import_material_file_as_draft`,
 `new_draft_record`, `review_material`, `approve_material`,
 `FileOverlayMaterialRepository`, and `reproduce_record` without new production
 interfaces.
@@ -381,6 +496,8 @@ For both template formats, load packaged bytes, import them, build a draft from
 the returned series/sources, review and approve it, save all returned source
 files to a fresh overlay, reload it, and assert `reproduce_record(...).matches`.
 Also assert the CSV and XLSX paths produce equivalent canonical series.
+Export the approved record, edit and reimport it, assert a new draft revision,
+then approve/save/reload/reproduce that revision while the base stays unchanged.
 
 - [ ] **Step 2: Run the integration test and verify RED**
 
@@ -398,8 +515,10 @@ the existing lifecycle/replay services.
 Add links to both packaged templates, sheet/column tables, supported dropdown
 units, the H/B and B/loss column meanings, multiple-series grouping rules,
 Excel/CSV equivalence, formula rejection, and a short API example using
-`material_import_template` and `import_material_file`. State clearly that M5b
-will wire download/upload buttons and revision UI.
+`material_import_template` and `import_material_file`. Document downloading the
+selected material workbook, editing it, and importing it as a new draft via
+`export_material_record_xlsx` and `import_material_file_as_draft`. State clearly
+that M5b will wire download/upload buttons and revision UI.
 
 Update ROADMAP/README status to say template resources and upload parsers are
 implemented while Material Studio UI remains pending.
@@ -416,7 +535,7 @@ git diff --check
 
 Expected: tests and diff check exit 0; searches show the new documentation.
 
-- [ ] **Step 6: Commit Task 4**
+- [ ] **Step 6: Commit Task 5**
 
 ```console
 git add docs/development/material-records.md docs/development/ROADMAP.md README.md tests/integration/test_material_table_upload.py
@@ -425,7 +544,7 @@ git commit -m "docs: explain material template upload workflow"
 
 ---
 
-### Task 5: Whole-change review, verification, merge, and push
+### Task 6: Whole-change review, verification, merge, and push
 
 **Files:** Review all changes from base `587a416` to branch HEAD.
 
