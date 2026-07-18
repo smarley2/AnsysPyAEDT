@@ -14,29 +14,45 @@ legally be redistributed.
 
 ```text
 materials-overlay/
-  <manufacturer>/
-    <material-name>/
-      <grade>/
-        <revision-id>/
+  <sanitized-manufacturer>/
+    <sanitized-material-name>/
+      <sanitized-grade>/
+        <sanitized-revision-id>/
           record.json
-          points-<series-id>.csv
+          points-<sanitized-series-id>.csv
           sources/
-            <source-file>
+            <sanitized-source-filename>
 ```
 
-Path components are sanitized for solver and filesystem safety. `record.json`
-is deterministic JSON and embeds the canonical points; each `points-*.csv` is
-the corresponding reviewable canonical series. The repository verifies all of
-the following on save or load:
+Every material identity segment, revision identifier, series identifier, and
+source filename is passed independently through `sanitize_identifier` for its
+physical path. Non-alphanumeric characters other than `_` become `_`, and a
+component beginning with a digit gains a `W` prefix. For example, the worked
+record below is stored under
+`Example_Manufacturer/Example_Material/W60/<sanitized-revision-id>/`;
+revision `0123456789ab` would use directory `W0123456789ab`, series
+`bh-room-temperature` would use `points-bh_room_temperature.csv`, and source
+`loss-100khz.csv` would use `sources/loss_100khz_csv`.
 
-- source filenames match the provenance entries exactly;
-- each source byte stream matches its recorded SHA-256 hash;
-- CSV and JSON points agree exactly;
-- points already satisfy the nine-decimal canonical rounding contract; and
-- an approved revision is never overwritten.
+Sanitizing applies only to physical names. The `sources` mapping passed to
+`save` and returned by `source_bytes` is keyed by each raw
+`SourceProvenance.filename`, such as `"loss-100khz.csv"`. Its keys must match
+the raw provenance filenames exactly; the repository translates those names at
+the filesystem boundary.
 
-Draft and reviewed records with the same revision identifier may be replaced
-atomically. Approval makes the stored revision immutable.
+`record.json` is deterministic JSON and embeds the canonical points; each
+`points-*.csv` is the corresponding reviewable canonical series. Save-time
+checks require:
+
+- exact raw source-mapping keys and matching source SHA-256 hashes;
+- points that already satisfy the nine-decimal canonical rounding contract;
+- no physical source or series filename collision after sanitizing; and
+- no overwrite of an existing approved revision.
+
+Saving stages and verifies the rendered record, source hashes, and CSV/JSON
+point agreement before installation. Draft and reviewed records with the same
+revision identifier may be replaced atomically; an approved stored revision is
+immutable. Normal loads recheck source hashes and CSV/JSON point agreement.
 
 ## Worked CSV import in datasheet units
 
@@ -146,9 +162,15 @@ real material record.
 The lifecycle is `draft` → `reviewed` → `approved`; transitions cannot be
 skipped or reversed. Review and approval run material validation first and are
 blocked by errors. Checks cover unit families, physical ranges, B-H origin and
-strict monotonicity, duplicate H values, required loss frequency, permeability
-range, and consistency between loss data and a fitted model. Applicable slope
-findings are retained as warnings.
+strict B monotonicity, decreasing or duplicate H values, positive loss density,
+required loss frequency, relative-permeability range, nonempty records, and the
+presence of loss-series data when a Steinmetz fit is attached. A B-H slope below
+vacuum permeability is retained as a warning.
+
+Lifecycle validation does not recompute fitted coefficients or check their
+residuals against the loss points. When a stored record has a Steinmetz fit, the
+reproduction flow independently rebuilds its loss samples, recomputes the fit,
+and compares the complete stored and recomputed fit values.
 
 Approval records both reviewer and approver identities. It does not replace
 engineering review of the source, curve conditions, units, transcription,
