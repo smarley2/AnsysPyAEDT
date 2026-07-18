@@ -278,3 +278,32 @@ def test_export_single_row_combines_first_and_last_boundaries() -> None:
         assert actual.border.top.color.rgb == last.border.top.color.rgb
         assert actual.border.bottom.style == first.border.bottom.style
         assert actual.border.bottom.color.rgb == first.border.bottom.color.rgb
+
+
+def test_export_preserves_formula_like_text_as_literal_strings_on_round_trip() -> None:
+    base = _approved_record()
+    source = replace(
+        base.sources[0],
+        url="@https://example.com/material",
+        captured_at="-2026-07-18T12:00:00+00:00",
+    )
+    record = replace(
+        base,
+        ref=MaterialRef("=2+2", "+Ferrite", "-F1"),
+        sources=(source,),
+        series=(replace(base.series[0], series_id="=bh"),),
+    )
+
+    download = export_material_record_xlsx(record)
+    workbook = load_workbook(io.BytesIO(download.data), data_only=False)
+
+    for coordinate in ("B2", "B3", "B4", "B5", "B7", "B8"):
+        assert workbook["Material"][coordinate].data_type == "s"
+    for coordinate in ("A2", "D2", "E2"):
+        assert workbook["B-H Curves"][coordinate].data_type == "s"
+
+    imported = import_material_file(download.filename, download.data)
+    assert imported.ref == record.ref
+    assert imported.sources[0].url == source.url
+    assert imported.sources[0].captured_at == source.captured_at
+    assert imported.series[0].series_id == "=bh"

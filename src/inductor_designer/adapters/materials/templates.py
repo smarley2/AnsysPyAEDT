@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 
 from openpyxl import load_workbook  # type: ignore[import-untyped]
+from openpyxl.cell.cell import Cell  # type: ignore[import-untyped]
 from openpyxl.worksheet.worksheet import Worksheet  # type: ignore[import-untyped]
 
 from inductor_designer.domain.units import from_canonical
@@ -43,6 +44,12 @@ def material_import_template(file_format: str) -> MaterialTemplateDownload:
     return MaterialTemplateDownload(filename, content_type, data)
 
 
+def _set_cell_value(cell: Cell, value: object) -> None:
+    cell.value = value
+    if isinstance(value, str):
+        cell.data_type = "s"
+
+
 def _replace_rows(sheet: Worksheet, rows: list[tuple[object, ...]], table_name: str) -> None:
     column_count = sheet.max_column
     first_styles = tuple(
@@ -77,7 +84,8 @@ def _replace_rows(sheet: Worksheet, rows: list[tuple[object, ...]], table_name: 
             else middle_styles
         )
         for column, value in enumerate(values, start=1):
-            cell = sheet.cell(row=row_number, column=column, value=value)
+            cell = sheet.cell(row=row_number, column=column)
+            _set_cell_value(cell, value)
             cell._style = copy(styles[column - 1])
             if len(rows) == 1:
                 border = copy(first_borders[column - 1])
@@ -150,7 +158,7 @@ def export_material_record_xlsx(record: MaterialRecord) -> MaterialTemplateDownl
     material = workbook["Material"]
     for row in range(2, material.max_row + 1):
         field = str(material.cell(row=row, column=1).value)
-        material.cell(row=row, column=2, value=metadata[field])
+        _set_cell_value(material.cell(row=row, column=2), metadata[field])
 
     bh_rows = [
         row

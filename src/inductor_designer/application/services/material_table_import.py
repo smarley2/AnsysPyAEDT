@@ -65,6 +65,10 @@ def _source(
     )
 
 
+def _source_filename_key(filename: str) -> str:
+    return sanitize_identifier(filename).casefold()
+
+
 def import_material_rows(
     metadata: MaterialTableMetadata,
     rows: tuple[MaterialTableRow, ...],
@@ -106,17 +110,19 @@ def import_material_rows(
                 issues.append(f"series '{series_id}' has inconsistent {field}")
 
     filenames: dict[str, str] = {}
+    upload_filename_key = _source_filename_key(upload_filename)
     for series_id in grouped:
         filename = f"series-{sanitize_identifier(series_id)}.csv"
-        if previous_id := filenames.get(filename):
+        filename_key = _source_filename_key(filename)
+        if previous_id := filenames.get(filename_key):
             issues.append(
                 f"series IDs '{previous_id}' and '{series_id}' generate the same "
                 f"source filename '{filename}'"
             )
-        elif filename == upload_filename:
+        elif filename_key == upload_filename_key:
             issues.append(f"generated source filename '{filename}' conflicts with upload filename")
         else:
-            filenames[filename] = series_id
+            filenames[filename_key] = series_id
     if issues:
         raise MaterialImportError(tuple(issues))
 

@@ -181,6 +181,30 @@ def test_import_material_rows_rejects_generated_filename_matching_upload() -> No
     )
 
 
+def test_import_material_rows_rejects_case_insensitive_generated_filename_collision() -> None:
+    with pytest.raises(MaterialImportError) as caught:
+        _import((_bh_row("BH"), _bh_row("bh")))
+
+    assert caught.value.issues == (
+        "series IDs 'BH' and 'bh' generate the same source filename 'series-bh.csv'",
+    )
+
+
+def test_import_material_rows_rejects_case_insensitive_upload_filename_collision() -> None:
+    with pytest.raises(MaterialImportError) as caught:
+        import_material_rows(
+            _metadata(),
+            (_bh_row("bh"),),
+            upload_filename="series-BH.csv",
+            upload_kind=SourceKind.CSV,
+            upload_bytes=b"upload",
+        )
+
+    assert caught.value.issues == (
+        "generated source filename 'series-bh.csv' conflicts with upload filename",
+    )
+
+
 def test_import_material_rows_rejects_unsupported_upload_kind() -> None:
     with pytest.raises(MaterialImportError) as caught:
         import_material_rows(
