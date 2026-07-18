@@ -219,3 +219,62 @@ def test_export_material_record_xlsx_rejects_scalar_only_record() -> None:
 
     with pytest.raises(MaterialTemplateExportError, match="curve.*B-H.*loss"):
         export_material_record_xlsx(record)
+
+
+def test_export_extends_ranges_and_preserves_first_middle_last_style_roles() -> None:
+    record = _approved_record()
+    many_points = tuple(
+        CurvePoint(index * 79.57747154594767, index * 0.001) for index in range(205)
+    )
+    record = replace(record, series=(replace(record.series[0], points=many_points),))
+    packaged = load_workbook(io.BytesIO(material_import_template("xlsx").data))
+
+    workbook = load_workbook(io.BytesIO(export_material_record_xlsx(record).data))
+
+    bh = workbook["B-H Curves"]
+    loss = workbook["Loss Curves"]
+    assert bh.tables["BHCurvesTable"].ref == "A1:G206"
+    assert bh.tables["BHCurvesTable"].autoFilter.ref == "A1:G206"
+    assert loss.tables["LossCurvesTable"].ref == "A1:H1"
+    assert loss.tables["LossCurvesTable"].autoFilter.ref == "A1:H1"
+    assert {
+        str(validation.sqref) for validation in bh.data_validations.dataValidation
+    } == {"D2:D206", "E2:E206"}
+    assert {
+        str(validation.sqref) for validation in loss.data_validations.dataValidation
+    } == {"E2:E200", "F2:F200"}
+    assert [cell.style_id for cell in bh[2]] == [
+        cell.style_id for cell in packaged["B-H Curves"][2]
+    ]
+    assert [cell.style_id for cell in bh[3]] == [
+        cell.style_id for cell in packaged["B-H Curves"][3]
+    ]
+    assert [cell.style_id for cell in bh[206]] == [
+        cell.style_id for cell in packaged["B-H Curves"][4]
+    ]
+
+
+def test_export_single_row_combines_first_and_last_boundaries() -> None:
+    record = _approved_record()
+    record = replace(
+        record,
+        series=(replace(record.series[0], points=(record.series[0].points[0],)),),
+    )
+    packaged = load_workbook(io.BytesIO(material_import_template("xlsx").data))
+
+    workbook = load_workbook(io.BytesIO(export_material_record_xlsx(record).data))
+
+    exported = workbook["B-H Curves"]
+    template = packaged["B-H Curves"]
+    for column in range(1, exported.max_column + 1):
+        actual = exported.cell(2, column)
+        first = template.cell(2, column)
+        last = template.cell(template.max_row, column)
+        assert actual._style.fontId == first._style.fontId
+        assert actual._style.fillId == first._style.fillId
+        assert actual._style.alignmentId == first._style.alignmentId
+        assert actual._style.numFmtId == first._style.numFmtId
+        assert actual.border.top.style == last.border.top.style
+        assert actual.border.top.color.rgb == last.border.top.color.rgb
+        assert actual.border.bottom.style == first.border.bottom.style
+        assert actual.border.bottom.color.rgb == first.border.bottom.color.rgb

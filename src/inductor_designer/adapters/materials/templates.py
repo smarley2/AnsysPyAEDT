@@ -45,18 +45,56 @@ def material_import_template(file_format: str) -> MaterialTemplateDownload:
 
 def _replace_rows(sheet: Worksheet, rows: list[tuple[object, ...]], table_name: str) -> None:
     column_count = sheet.max_column
-    template_styles = tuple(
+    first_styles = tuple(
         copy(sheet.cell(row=2, column=column)._style)
+        for column in range(1, column_count + 1)
+    )
+    middle_styles = tuple(
+        copy(sheet.cell(row=3, column=column)._style)
+        for column in range(1, column_count + 1)
+    )
+    last_styles = tuple(
+        copy(sheet.cell(row=sheet.max_row, column=column)._style)
+        for column in range(1, column_count + 1)
+    )
+    first_borders = tuple(
+        copy(sheet.cell(row=2, column=column).border)
+        for column in range(1, column_count + 1)
+    )
+    last_borders = tuple(
+        copy(sheet.cell(row=sheet.max_row, column=column).border)
         for column in range(1, column_count + 1)
     )
     if sheet.max_row > 1:
         sheet.delete_rows(2, sheet.max_row - 1)
     for row_number, values in enumerate(rows, start=2):
+        index = row_number - 2
+        styles = (
+            first_styles
+            if index == 0
+            else last_styles
+            if index == len(rows) - 1
+            else middle_styles
+        )
         for column, value in enumerate(values, start=1):
             cell = sheet.cell(row=row_number, column=column, value=value)
-            cell._style = copy(template_styles[column - 1])
+            cell._style = copy(styles[column - 1])
+            if len(rows) == 1:
+                border = copy(first_borders[column - 1])
+                border.top = copy(last_borders[column - 1].top)
+                cell.border = border
     last_row = max(1, len(rows) + 1)
-    sheet.tables[table_name].ref = f"A1:{sheet.cell(row=last_row, column=column_count).coordinate}"
+    table_ref = f"A1:{sheet.cell(row=last_row, column=column_count).coordinate}"
+    table = sheet.tables[table_name]
+    table.ref = table_ref
+    table.autoFilter.ref = table_ref
+    validation_last_row = max(200, last_row)
+    for validation in sheet.data_validations.dataValidation:
+        first_cell = str(validation.sqref).partition(":")[0]
+        validation_column = first_cell.rstrip("0123456789")
+        validation.sqref = (
+            f"{validation_column}2:{validation_column}{validation_last_row}"
+        )
 
 
 def _bh_rows(series: PointSeries) -> list[tuple[object, ...]]:
