@@ -8,6 +8,29 @@
 
 **Tech Stack:** Python 3.10–3.13, stdlib `csv`/`io`/`importlib.resources`, `openpyxl>=3.1,<4`, bundled `@oai/artifact-tool` for workbook authoring, pytest, Ruff, strict mypy.
 
+## Completion Status
+
+**Status:** Complete and merged to `main` on 2026-07-18.
+
+**Implementation head:** `29cc691` (`fix(materials): harden workbook export and source names`), confirmed on `origin/main` before this status update.
+
+**Where work stopped:** Tasks 1–6 are complete. The implementation ends at the tested application/adapter services for packaged CSV/XLSX templates, strict upload, editable export of the selected material revision, and reimport as a new immutable-base `DRAFT`. Material Studio buttons and revision navigation remain intentionally deferred to M5b.
+
+**Completed validation:**
+
+- Main checkout: 611 tests passed and 4 live-solver tests were deselected.
+- Coverage: 91.43%, above the required 80%.
+- Ruff, strict mypy over 92 source files, architecture checks, and `git diff --check` passed.
+- CSV/XLSX canonical equivalence, multi-series replay, approval persistence, editable export/reimport, base-revision immutability, formula-safe XLSX text, and case-insensitive source-name collisions have automated coverage.
+- The packaged workbook was inspected and rendered sheet-by-sheet; the final merge and remote `main` commit were verified.
+
+**Validation still pending outside this plan:**
+
+- Live AEDT tests on a licensed Windows installation: Maxwell 2D ready-to-solve export, Maxwell 3D ready-to-solve export, and real AEDT create/save in both dimensions.
+- Live FEMM 4.2 solve of the sample project on a supported Windows installation.
+- M5b implementation and user acceptance of Material Studio download/upload buttons, selected-revision export, and multi-revision navigation.
+- Optional manual compatibility check by opening the packaged workbook in the target Microsoft Excel version; automated parsing, validations, and visual QA are already complete.
+
 ## Global Constraints
 
 - Follow `docs/superpowers/specs/2026-07-18-material-import-templates-design.md` and `AGENTS.md`.
@@ -94,7 +117,7 @@ def import_material_rows(
 ) -> ImportedMaterialTable: ...
 ```
 
-- [ ] **Step 1: Write failing tests for grouping and canonical output**
+- [x] **Step 1: Write failing tests for grouping and canonical output**
 
 Create tests with two B-H series and two loss series. Assert one returned
 `PointSeries` per `series_id`, canonical SI points, sorted x values, conditions
@@ -120,14 +143,14 @@ assert result.sources[0].filename == "material.xlsx"
 assert dict(result.source_files)["material.xlsx"] == b"workbook"
 ```
 
-- [ ] **Step 2: Run the grouping test and verify RED**
+- [x] **Step 2: Run the grouping test and verify RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/application/test_material_table_import.py -q`
 
 Expected: collection fails because `material_table_import` and
 `SourceKind.SPREADSHEET` do not exist.
 
-- [ ] **Step 3: Add source kind and minimal grouping implementation**
+- [x] **Step 3: Add source kind and minimal grouping implementation**
 
 Group rows by first-seen `series_id`. For each group, require identical kind,
 conditions, and units. Render its raw points as deterministic `x,y\n` CSV,
@@ -137,21 +160,21 @@ the existing `import_curve_csv` with that generated source.
 Use `sanitize_identifier` only at the filename boundary. Reject a generated
 name collision before importing.
 
-- [ ] **Step 4: Add failing validation tests**
+- [x] **Step 4: Add failing validation tests**
 
 Cover empty rows, blank series IDs, mixed metadata in one series, filename
 collision after sanitization, unsupported upload kind, and `SPREADSHEET`
 provenance referenced directly by a `PointSeries`. Assert actionable
 `MaterialImportError.issues` strings.
 
-- [ ] **Step 5: Verify validation RED, then implement minimal checks**
+- [x] **Step 5: Verify validation RED, then implement minimal checks**
 
 Run the focused test file after adding tests. Confirm each new case fails for
 missing validation, then add only the required checks. Extend record validation
 so spreadsheet provenance is allowed as supplemental provenance but cannot be
 the direct source of a series.
 
-- [ ] **Step 6: Run focused GREEN and static checks**
+- [x] **Step 6: Run focused GREEN and static checks**
 
 Run:
 
@@ -164,7 +187,7 @@ Run:
 
 Expected: all exit 0.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 ```console
 git add src/inductor_designer/materials/records.py src/inductor_designer/materials/validation.py src/inductor_designer/application/services/material_table_import.py tests/unit/application/test_material_table_import.py tests/unit/materials/test_records.py tests/unit/materials/test_material_validation.py
@@ -188,19 +211,19 @@ def import_material_file(filename: str, data: bytes) -> ImportedMaterialTable:
     """Decode a .csv or .xlsx upload and import all contained series."""
 ```
 
-- [ ] **Step 1: Add failing CSV acceptance tests**
+- [x] **Step 1: Add failing CSV acceptance tests**
 
 Build an in-memory flat CSV using the exact 16-column schema from the design.
 Assert B-H and loss rows group correctly, optional blank numeric fields become
 `None`, and source metadata creates the expected `MaterialRef` and provenance.
 
-- [ ] **Step 2: Run CSV tests and verify RED**
+- [x] **Step 2: Run CSV tests and verify RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/adapters/test_material_table_file.py -q`
 
 Expected: collection fails because `table_file` does not exist.
 
-- [ ] **Step 3: Implement the CSV reader**
+- [x] **Step 3: Implement the CSV reader**
 
 Use `csv.DictReader(io.StringIO(data.decode("utf-8-sig")), strict=True)`.
 Require the exact documented header set, parse finite floats with row-numbered
@@ -208,14 +231,14 @@ errors, require repeated material/source metadata to be identical, convert
 `curve_kind` through `SeriesKind`, and call `import_material_rows` with
 `SourceKind.CSV`.
 
-- [ ] **Step 4: Add failing XLSX equivalence and formula tests**
+- [x] **Step 4: Add failing XLSX equivalence and formula tests**
 
 Create workbooks in memory with `openpyxl.Workbook`. Use the four exact sheet
 names and columns. Assert an equivalent CSV/XLSX pair produces equal `ref` and
 `series`. Put `=1+1` in each metadata/data region in parametrized cases and
 assert the import is rejected with sheet and cell coordinates.
 
-- [ ] **Step 5: Add the dependency and implement XLSX decoding**
+- [x] **Step 5: Add the dependency and implement XLSX decoding**
 
 Add `openpyxl>=3.1,<4` to `[project].dependencies`. Load with:
 
@@ -231,14 +254,14 @@ map B-H columns to `(x_unit=h_unit, y_unit=b_unit, x=h, y=b)`, map loss columns
 to `(x_unit=b_unit, y_unit=loss_unit, x=b, y=loss)`, and call
 `import_material_rows` with `SourceKind.SPREADSHEET`.
 
-- [ ] **Step 6: Add failing boundary tests, then make them GREEN**
+- [x] **Step 6: Add failing boundary tests, then make them GREEN**
 
 Cover unsupported extension, invalid UTF-8, malformed CSV, missing/extra
 columns, missing sheets, bad enum values, booleans where numbers are expected,
 nonfinite numbers, inconsistent metadata, and an empty workbook/table. Errors
 must identify filename plus row or sheet/cell.
 
-- [ ] **Step 7: Run Task 2 gates**
+- [x] **Step 7: Run Task 2 gates**
 
 Run:
 
@@ -252,7 +275,7 @@ uv sync --python 3.13 --extra dev --extra ui
 
 Expected: all exit 0.
 
-- [ ] **Step 8: Commit Task 2**
+- [x] **Step 8: Commit Task 2**
 
 ```console
 git add pyproject.toml src/inductor_designer/adapters/materials tests/unit/adapters/test_material_table_file.py
@@ -283,7 +306,7 @@ class MaterialTemplateDownload:
 def material_import_template(file_format: str) -> MaterialTemplateDownload: ...
 ```
 
-- [ ] **Step 1: Read the spreadsheet authoring instructions before generation**
+- [x] **Step 1: Read the spreadsheet authoring instructions before generation**
 
 Read completely:
 
@@ -294,7 +317,7 @@ Read completely:
 Call `codex_app__load_workspace_dependencies` and use only the returned bundled
 Node runtime and `@oai/artifact-tool` paths for workbook authoring.
 
-- [ ] **Step 2: Write failing packaged-resource tests**
+- [x] **Step 2: Write failing packaged-resource tests**
 
 Assert `material_import_template("csv")` and `("xlsx")` return the exact
 filenames/content types, nonempty immutable bytes, and reject other formats.
@@ -302,14 +325,14 @@ Open the returned CSV through `import_material_file`. Open the XLSX with
 `openpyxl` and assert exactly four visible sheets with no extras, exact headers,
 filters, and embedded dropdown validations covering populated input rows.
 
-- [ ] **Step 3: Run resource tests and verify RED**
+- [x] **Step 3: Run resource tests and verify RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/adapters/test_material_templates.py -q`
 
 Expected: collection fails because `templates.py` and packaged resources do not
 exist.
 
-- [ ] **Step 4: Create the CSV template and resource service**
+- [x] **Step 4: Create the CSV template and resource service**
 
 The CSV header is the exact 16-column schema. Include synthetic rows for one
 B-H series in `Oe`/`kG` and two loss series in `kG`/`mW/cm3`, with repeated
@@ -322,7 +345,7 @@ return:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
 ```
 
-- [ ] **Step 5: Author the XLSX workbook with the artifact workflow**
+- [x] **Step 5: Author the XLSX workbook with the artifact workflow**
 
 Create one auditable `.mjs` builder in a temporary/output directory, not in the
 package. Produce exactly four visible sheets: `Instructions`, `Material`,
@@ -342,14 +365,14 @@ Use synthetic examples equivalent to the CSV. Export first under the required
 conversation `outputs/<thread-id>/` location, then copy the verified workbook
 to the package resource path.
 
-- [ ] **Step 6: Inspect and render every sheet**
+- [x] **Step 6: Inspect and render every sheet**
 
 Use artifact-tool inspection to verify values and scan formula errors. Render
 all four visible sheets and inspect the PNGs. Fix clipped headers, unreadable
 instructions, oversized columns, validation ranges, or default blank sheets.
 Do not proceed until the workbook is legible and formula-error free.
 
-- [ ] **Step 7: Run template and import equivalence tests GREEN**
+- [x] **Step 7: Run template and import equivalence tests GREEN**
 
 Run:
 
@@ -361,7 +384,7 @@ Run:
 
 Expected: all exit 0.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 ```console
 git add src/inductor_designer/resources src/inductor_designer/adapters/materials/templates.py tests/unit/adapters/test_material_templates.py
@@ -404,14 +427,14 @@ def import_material_file_as_draft(
 ) -> ImportedMaterialDraft: ...
 ```
 
-- [ ] **Step 1: Write inverse-unit RED tests**
+- [x] **Step 1: Write inverse-unit RED tests**
 
 For every material unit already accepted by `to_canonical`, assert
 `from_canonical(to_canonical(value, unit), unit) == pytest.approx(value)`.
 Cover `T`, `mT`, `G`, `kG`, `A/m`, `kA/m`, `Oe`, `W/m3`, `kW/m3`, and
 `mW/cm3`; unknown units raise the same `ValueError` family as `to_canonical`.
 
-- [ ] **Step 2: Verify inverse-unit RED, then implement minimally**
+- [x] **Step 2: Verify inverse-unit RED, then implement minimally**
 
 Run: `.venv/bin/python -m pytest tests/unit/domain/test_units.py -q`
 
@@ -419,7 +442,7 @@ Expected: import fails because `from_canonical` does not exist. Implement it
 from the same `_CONVERSIONS` factor table (`canonical / factor`) so the two
 directions cannot drift.
 
-- [ ] **Step 3: Write editable-workbook export RED tests**
+- [x] **Step 3: Write editable-workbook export RED tests**
 
 Build an approved record containing multiple B-H/loss series in mixed retained
 units and conditions. Assert export:
@@ -434,7 +457,7 @@ units and conditions. Assert export:
 Also assert a record with only scalar permeability raises
 `MaterialTemplateExportError` with an actionable no-curves message.
 
-- [ ] **Step 4: Verify export RED, then implement from the packaged template**
+- [x] **Step 4: Verify export RED, then implement from the packaged template**
 
 Confirm the tests fail because `export_material_record_xlsx` is missing. Load
 the packaged workbook through `openpyxl`, clear only synthetic data rows,
@@ -443,7 +466,7 @@ properties from the record where supported, and save to `BytesIO`. Do not
 rebuild the workbook or copy the old fit; edited loss curves are refitted on
 reimport.
 
-- [ ] **Step 5: Write and satisfy draft-reimport RED tests**
+- [x] **Step 5: Write and satisfy draft-reimport RED tests**
 
 Export an approved record, modify one workbook point with `openpyxl`, then call
 `import_material_file_as_draft`. Assert the returned record is `DRAFT`, has a
@@ -455,7 +478,7 @@ its pre-import value.
 Implement by calling `import_material_file`, then `new_draft_record`; do not
 duplicate parsing, conversion, fitting, validation, or revision hashing.
 
-- [ ] **Step 6: Run Task 4 gates**
+- [x] **Step 6: Run Task 4 gates**
 
 ```console
 .venv/bin/python -m pytest tests/unit/domain/test_units.py tests/unit/adapters/test_material_templates.py tests/unit/adapters/test_material_table_file.py -q
@@ -467,7 +490,7 @@ git diff --check
 
 Expected: all exit 0.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 7: Commit Task 4**
 
 ```console
 git add src/inductor_designer/domain/units.py src/inductor_designer/adapters/materials tests/unit/domain/test_units.py tests/unit/adapters/test_material_templates.py tests/unit/adapters/test_material_table_file.py
@@ -490,7 +513,7 @@ git commit -m "feat(materials): export editable material workbooks"
 `FileOverlayMaterialRepository`, and `reproduce_record` without new production
 interfaces.
 
-- [ ] **Step 1: Write a failing end-to-end integration test**
+- [x] **Step 1: Write a failing end-to-end integration test**
 
 For both template formats, load packaged bytes, import them, build a draft from
 the returned series/sources, review and approve it, save all returned source
@@ -499,18 +522,24 @@ Also assert the CSV and XLSX paths produce equivalent canonical series.
 Export the approved record, edit and reimport it, assert a new draft revision,
 then approve/save/reload/reproduce that revision while the base stays unchanged.
 
-- [ ] **Step 2: Run the integration test and verify RED**
+- [x] **Step 2: Run the integration test and verify RED**
 
 Run: `.venv/bin/python -m pytest tests/integration/test_material_table_upload.py -q`
 
 Expected: FAIL on the first missing or inconsistent end-to-end contract.
 
-- [ ] **Step 3: Make the smallest production/template correction needed**
+Actual: the complete contract already passed after Tasks 1–4. A controlled
+edited-value assertion was then proven RED before the final GREEN test.
+
+- [x] **Step 3: Make the smallest production/template correction needed**
 
 Fix the boundary revealed by the RED test without adding UI code or bypassing
 the existing lifecycle/replay services.
 
-- [ ] **Step 4: Document the exact user workflow**
+Actual: no production correction was required by the initial end-to-end run;
+only the missing edited-value regression assertion was added.
+
+- [x] **Step 4: Document the exact user workflow**
 
 Add links to both packaged templates, sheet/column tables, supported dropdown
 units, the H/B and B/loss column meanings, multiple-series grouping rules,
@@ -523,7 +552,7 @@ that M5b will wire download/upload buttons and revision UI.
 Update ROADMAP/README status to say template resources and upload parsers are
 implemented while Material Studio UI remains pending.
 
-- [ ] **Step 5: Run focused integration and documentation checks**
+- [x] **Step 5: Run focused integration and documentation checks**
 
 Run:
 
@@ -535,7 +564,7 @@ git diff --check
 
 Expected: tests and diff check exit 0; searches show the new documentation.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 ```console
 git add docs/development/material-records.md docs/development/ROADMAP.md README.md tests/integration/test_material_table_upload.py
@@ -548,14 +577,14 @@ git commit -m "docs: explain material template upload workflow"
 
 **Files:** Review all changes from base `587a416` to branch HEAD.
 
-- [ ] **Step 1: Request whole-change code review**
+- [x] **Step 1: Request whole-change code review**
 
 Review against the design spec, this plan, `AGENTS.md`, architecture boundaries,
 replay/provenance integrity, CSV/XLSX parity, template usability, error messages,
 and package-resource behavior. Fix every Critical or Important finding with a
 new RED test and focused commit, then re-review.
 
-- [ ] **Step 2: Run fresh final verification**
+- [x] **Step 2: Run fresh final verification**
 
 ```console
 .venv/bin/python -m pytest tests -q -m "not aedt and not femm" --cov=inductor_designer --cov-report=term-missing
@@ -569,13 +598,13 @@ git status --short --branch
 Expected: zero failures, coverage at least 80%, all static gates exit 0, and
 only the three pre-existing untracked `.DS_Store` files remain.
 
-- [ ] **Step 3: Merge and verify `main`**
+- [x] **Step 3: Merge and verify `main`**
 
 Fetch `origin/main`, require it still descends from base `587a416`, fast-forward
 `main` to the feature branch, and rerun the non-live suite plus static gates in
 the main checkout. Preserve `.DS_Store` files.
 
-- [ ] **Step 4: Push and confirm remote**
+- [x] **Step 4: Push and confirm remote**
 
 Push `main` to `origin`, then confirm `git ls-remote origin refs/heads/main`
 equals local HEAD. Do not push generated QA previews or authoring scripts.
