@@ -68,6 +68,8 @@ def _workbook_bytes(
     cell_value: tuple[str, str, object] | None = None,
     remove_sheet: str | None = None,
     empty_tables: bool = False,
+    remove_material_value_column: bool = False,
+    reorder_sheets: bool = False,
 ) -> bytes:
     workbook = Workbook()
     instructions = workbook.active
@@ -121,6 +123,8 @@ def _workbook_bytes(
     if empty_tables:
         bh.delete_rows(2, bh.max_row)
         loss.delete_rows(2, loss.max_row)
+    if remove_material_value_column:
+        material.delete_cols(2)
 
     if formula_cell is not None:
         sheet, coordinate = formula_cell
@@ -130,6 +134,8 @@ def _workbook_bytes(
         workbook[sheet][coordinate] = value
     if remove_sheet is not None:
         del workbook[remove_sheet]
+    if reorder_sheets:
+        workbook.move_sheet(loss, offset=-3)
 
     stream = io.BytesIO()
     workbook.save(stream)
@@ -227,6 +233,34 @@ def test_equivalent_csv_and_xlsx_produce_equal_ref_and_series() -> None:
     assert xlsx_result.ref == csv_result.ref
     assert xlsx_result.series == csv_result.series
     assert xlsx_result.sources[0].kind is SourceKind.SPREADSHEET
+
+
+def test_xlsx_accepts_documented_sheets_in_any_tab_order() -> None:
+    result = import_material_file("reordered.xlsx", _workbook_bytes(reorder_sheets=True))
+
+    assert result.ref == MaterialRef("Example", "Ferrite", "F1")
+
+
+def test_xlsx_rejects_missing_material_value_column() -> None:
+    _assert_import_error(
+        "missing-material-column.xlsx",
+        _workbook_bytes(remove_material_value_column=True),
+        "Material!A1",
+        "field, value",
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("unexpected", "exactly two columns"), ("=1+1", "formulas are not allowed")],
+)
+def test_xlsx_rejects_extra_material_column(value: str, expected: str) -> None:
+    _assert_import_error(
+        "extra-material-column.xlsx",
+        _workbook_bytes(cell_value=("Material", "C2", value)),
+        "Material!C2",
+        expected,
+    )
 
 
 @pytest.mark.parametrize(

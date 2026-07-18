@@ -257,7 +257,21 @@ def _check_header(filename: str, sheet: Worksheet, expected: tuple[str, ...]) ->
 
 
 def _material_metadata(filename: str, sheet: Worksheet) -> MaterialTableMetadata:
-    _reject_formulas(filename, sheet, 2)
+    _reject_formulas(filename, sheet, sheet.max_column)
+    if sheet.max_column != 2:
+        location = "Material!A1"
+        if sheet.max_column > 2:
+            extra_cell = next(
+                (
+                    cell
+                    for row in sheet.iter_rows(min_col=3, max_col=sheet.max_column)
+                    for cell in row
+                    if cell.value is not None or cell.has_style
+                ),
+                sheet.cell(row=1, column=3),
+            )
+            location = f"Material!{extra_cell.coordinate}"
+        raise _fail(filename, location, "expected exactly two columns: field, value")
     if (sheet["A1"].value, sheet["B1"].value) != ("field", "value"):
         raise _fail(filename, "Material!A1", "expected columns: field, value")
 
@@ -374,12 +388,14 @@ def _import_xlsx(filename: str, data: bytes) -> ImportedMaterialTable:
     except (BadZipFile, InvalidFileException, OSError, ValueError) as error:
         raise _fail(filename, "workbook", "file is not a valid .xlsx workbook") from error
 
-    visible = tuple(sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible")
-    extras = tuple(title for title in workbook.sheetnames if title not in _VISIBLE_SHEETS)
-    valid_lists = extras in ((), ("_Lists",)) and (
-        not extras or workbook["_Lists"].sheet_state != "visible"
+    visible = frozenset(
+        sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"
     )
-    if visible != _VISIBLE_SHEETS or not valid_lists:
+    extras = tuple(sheet for sheet in workbook.worksheets if sheet.title not in _VISIBLE_SHEETS)
+    valid_lists = not extras or (
+        len(extras) == 1 and extras[0].title == "_Lists" and extras[0].sheet_state != "visible"
+    )
+    if visible != frozenset(_VISIBLE_SHEETS) or not valid_lists:
         raise _fail(
             filename,
             "workbook sheets",
