@@ -66,6 +66,30 @@ def test_main_prints_match_and_uses_requested_identity(
     assert repository.revision == "0123456789ab"
 
 
+def test_main_uses_default_overlay_root_when_option_is_omitted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = StubRepository(tmp_path)
+    received_roots: list[Path] = []
+
+    def repository_factory(root: Path) -> StubRepository:
+        received_roots.append(root)
+        return repository
+
+    monkeypatch.setattr(
+        reproduce_material, "FileOverlayMaterialRepository", repository_factory
+    )
+    monkeypatch.setattr(
+        reproduce_material,
+        "reproduce_record",
+        lambda record, sources: ReproductionReport(True, ()),
+    )
+    arguments = _arguments(tmp_path)[2:]
+
+    assert reproduce_material.main(arguments) == 0
+    assert received_roots == [Path("materials-overlay")]
+
+
 def test_main_prints_each_replay_mismatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

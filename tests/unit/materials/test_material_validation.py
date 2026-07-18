@@ -149,6 +149,15 @@ def _summary(issues: tuple[MaterialIssue, ...]) -> tuple[tuple[str, IssueSeverit
             ),
         ),
         (
+            _bh_series(
+                points=((0.0, 0.0), (1.0, 3.0 * MU0), (2.0, 2.0 * MU0))
+            ),
+            (
+                ("monotonic-b", IssueSeverity.ERROR),
+                ("slope-below-mu0", IssueSeverity.WARNING),
+            ),
+        ),
+        (
             _bh_series(points=((1.0, 2.0 * MU0), (2.0, 4.0 * MU0))),
             (("origin", IssueSeverity.ERROR),),
         ),
@@ -171,6 +180,7 @@ def _summary(issues: tuple[MaterialIssue, ...]) -> tuple[tuple[str, IssueSeverit
         "duplicate-h",
         "monotonic-h",
         "monotonic-b",
+        "decreasing-b",
         "origin",
         "slope-below-mu0",
         "loss-frequency-missing",
