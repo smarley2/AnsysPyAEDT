@@ -54,6 +54,115 @@ point agreement before installation. Draft and reviewed records with the same
 revision identifier may be replaced atomically; an approved stored revision is
 immutable. Normal loads recheck source hashes and CSV/JSON point agreement.
 
+## Material table templates and uploads
+
+Two synthetic, self-describing templates are packaged with the application:
+
+- [material-import-template.xlsx](../../src/inductor_designer/resources/material_templates/material-import-template.xlsx)
+- [material-import-template.csv](../../src/inductor_designer/resources/material_templates/material-import-template.csv)
+
+Replace the synthetic example values before review. The workbook and CSV are
+equivalent input formats: both produce the same canonical point series when
+they contain the same material data. The original upload is retained and
+hashed as supplemental provenance, while each series receives a generated CSV
+source so replay remains deterministic.
+
+The Excel workbook has four visible sheets:
+
+| Sheet | Columns | Purpose |
+|---|---|---|
+| `Instructions` | explanatory text | Describes required fields, units, grouping, and replacement of synthetic rows. |
+| `Material` | `field`, `value` | Stores manufacturer, material name, grade, source URL/page, capture timestamp, and source description. |
+| `B-H Curves` | `series_id`, `temperature_c`, `dc_bias_a_per_m`, `h_unit`, `b_unit`, `h`, `b` | Stores H on the x-axis and B on the y-axis. |
+| `Loss Curves` | `series_id`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `b_unit`, `loss_unit`, `b`, `loss` | Stores B on the x-axis and loss density on the y-axis. |
+
+Workbook dropdowns offer these retained datasheet units:
+
+| Quantity | Choices | Canonical unit after import |
+|---|---|---|
+| H | `A/m`, `kA/m`, `Oe` | `A/m` |
+| B | `T`, `mT`, `G`, `kG` | `T` |
+| Loss density | `W/m3`, `kW/m3`, `mW/cm3` | `W/m3` |
+
+The flat CSV uses these exact columns:
+
+| Metadata | Series and point data |
+|---|---|
+| `manufacturer`, `material_name`, `grade`, `source_url`, `source_page`, `captured_at`, `source_description` | `series_id`, `curve_kind`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `x_unit`, `y_unit`, `x`, `y` |
+
+For CSV B-H rows, `curve_kind` is `bh-curve`, `x` is H, and `y` is B. For
+loss rows, `curve_kind` is `loss-table`, `x` is B, and `y` is loss density.
+Material metadata repeats on every CSV row. Rows sharing a `series_id` must
+repeat identical curve kind, conditions, and units. Loss frequency is required
+and positive; optional temperature and DC bias cells may be blank.
+
+Spreadsheet dropdowns are guidance only. Python validation remains
+authoritative for supported units, finite values, required metadata, consistent
+series, and physical checks. Formulas are rejected in material metadata and
+curve cells; enter typed values instead. A workbook must retain the four named
+visible sheets and their exact column headers.
+
+Use the packaged-resource and upload APIs without depending on repository
+paths:
+
+```python
+from pathlib import Path
+
+from inductor_designer.adapters.materials import (
+    import_material_file,
+    material_import_template,
+)
+
+download = material_import_template("xlsx")  # use "csv" for the flat template
+Path(download.filename).write_bytes(download.data)
+
+uploaded_bytes = Path(download.filename).read_bytes()
+imported = import_material_file(download.filename, uploaded_bytes)
+print(imported.ref, tuple(series.series_id for series in imported.series))
+```
+
+Use the returned `sources` to build the record with `new_draft_record`, and pass
+the returned `source_files` to the overlay repository save, as shown by
+`tests/integration/test_material_table_upload.py`. Import never reviews or
+approves a record automatically.
+
+## Download and edit the selected material
+
+Any record with B-H or loss curves can be exported into a populated copy of
+the verified Excel template. Canonical points are converted back to each
+series' retained units, all conditions are included, and the source description
+names the selected base revision.
+
+```python
+from pathlib import Path
+
+from inductor_designer.adapters.materials import (
+    export_material_record_xlsx,
+    import_material_file_as_draft,
+)
+
+download = export_material_record_xlsx(selected_record)
+Path(download.filename).write_bytes(download.data)
+
+# Edit the saved workbook in Excel, then import its updated bytes.
+edited = import_material_file_as_draft(
+    download.filename,
+    Path(download.filename).read_bytes(),
+    created_at="2026-07-18T13:00:00+00:00",
+    notes=f"Edited from base revision {selected_record.revision_id}",
+)
+assert edited.record.status.value == "draft"
+```
+
+Reimport always creates a new draft revision and recomputes any supported loss
+fit from the edited tables. It does not overwrite, review, or approve the base
+revision. Scalar-only records have no editable curves and cannot be exported
+to this workbook.
+
+The service and resource APIs are implemented. Milestone M5b still owns the
+Material Studio download/upload buttons, revision browser, explicit condition
+selection, review, and approval UI.
+
 ## Worked CSV import in datasheet units
 
 The importer expects a two-column CSV headed `x,y`. Units are passed separately.

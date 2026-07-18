@@ -8,9 +8,11 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). Milestone 5a (material records pipeline and approved nonlinear solver export) is implementation complete as of 2026-07-18, and its automated exit proof is green. It is not accepted yet: a real approved datasheet record and live AEDT/FEMM material handoff remain pending. Material Studio UI, OCR, the optional GPL importer, and MCP material tools are planned for Milestone 5b.
+Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). Milestone 5a (material records pipeline and approved nonlinear solver export) is implementation complete as of 2026-07-18, and its automated exit proof is green. Packaged `material-import-template.csv` and `material-import-template.xlsx` resources, strict CSV/XLSX upload parsers, and editable selected-material workbook reimport are implemented for `A/m`, `Oe`, `mW/cm3`, and the other documented material units. It is not accepted yet: a real approved datasheet record and live AEDT/FEMM material handoff remain pending. Material Studio download/upload and revision UI, OCR, the optional GPL importer, and MCP material tools are planned for M5b.
 
 - [Material records pipeline procedure](docs/development/material-records.md)
+- [CSV material import template](src/inductor_designer/resources/material_templates/material-import-template.csv)
+- [Excel material import template](src/inductor_designer/resources/material_templates/material-import-template.xlsx)
 - [Milestone 5a material records plan](docs/superpowers/plans/2026-07-17-material-records-pipeline.md)
 - [MCP server and FEMM 2D backend automation](docs/development/automation-mcp-femm.md)
 - [Maxwell 2D generation procedure](docs/development/maxwell2d-generation.md)

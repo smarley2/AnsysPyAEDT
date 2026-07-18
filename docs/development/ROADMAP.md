@@ -326,6 +326,15 @@ The FEMM adapter uses the verified pyFEMM API spelling: singular
 sets nonlinear permeability with `(B, H)` pairs and requires a truthy result
 from `set_power_ferrite_coreloss(cm, x, y)`.
 
+Packaged `material-import-template.csv` and `material-import-template.xlsx`
+resources, strict CSV/XLSX upload parsers, editable current-material workbook
+export, and new-draft reimport are implemented. They accept retained datasheet
+units including `A/m`, `Oe`, and `mW/cm3` while normalizing points to canonical
+SI units. The end-to-end integration test covers template import,
+review/approval, overlay persistence, replay, export, edit, and immutable-base
+reimport. M5b still owns the Material Studio download/upload buttons, revision
+browser, condition selection, review, and approval UI.
+
 Automated evidence covers fresh overlay save/load/replay, tampered record and
 source failures, schema v3 snapshot propagation, and recording-fake Maxwell 3D
 and FEMM manifests with a pinned revision and nonzero B-H point count. Full
