@@ -15,6 +15,7 @@ from inductor_designer.materials.calibration import (
     PixelPoint,
 )
 from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.materials.numerics import canonical_float
 from inductor_designer.materials.records import (
     CurveConditions,
     CurvePoint,
@@ -33,7 +34,7 @@ def sha256_hex(data: bytes) -> str:
 
 
 def _canonical_float(value: float | None) -> float | None:
-    return round(value, 9) if value is not None else None
+    return canonical_float(value) if value is not None else None
 
 
 def canonicalize_points(

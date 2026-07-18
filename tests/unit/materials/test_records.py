@@ -4,6 +4,13 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from inductor_designer.materials.calibration import (
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
+)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -14,6 +21,7 @@ from inductor_designer.materials.records import (
     SeriesKind,
     SourceKind,
     SourceProvenance,
+    SteinmetzFit,
     approve_record,
     review_record,
 )
@@ -127,6 +135,63 @@ def test_source_provenance_rejects_invalid_sha256() -> None:
             captured_at="2026-07-17T12:00:00+00:00",
             description="Example image",
         )
+
+
+def test_material_record_canonicalizes_all_nested_floats_in_memory() -> None:
+    extraction = ExtractionRecord(
+        crop=CropRegion(0, 0, 10, 10),
+        x_axis=AxisCalibration(
+            AxisScale.LINEAR,
+            0.0000000004,
+            1.0000000004,
+            10.0000000004,
+            2.0000000004,
+        ),
+        y_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 0.0, 1.0),
+        pixel_points=(PixelPoint(1.0000000004, 2.0000000004),),
+    )
+    series = PointSeries(
+        series_id="loss",
+        kind=SeriesKind.LOSS_TABLE,
+        x_unit="T",
+        y_unit="W/m3",
+        conditions=CurveConditions(10_000.0000000004, 25.0000000004, 0.0000000004),
+        points=(CurvePoint(0.1000000004, 1000.0000000004),),
+        source_filename="curve.csv",
+        extraction=extraction,
+    )
+    record = _record(
+        series=(series,),
+    )
+    record = MaterialRecord(
+        ref=record.ref,
+        revision_id=record.revision_id,
+        status=record.status,
+        created_at=record.created_at,
+        reviewed_by=record.reviewed_by,
+        approved_by=record.approved_by,
+        sources=record.sources,
+        series=record.series,
+        relative_permeability=60.0000000004,
+        steinmetz=SteinmetzFit(
+            2.5000000004,
+            1.4000000004,
+            2.3000000004,
+            0.0100000004,
+            0.0200000004,
+        ),
+        notes=record.notes,
+    )
+
+    assert record.relative_permeability == 60.0
+    assert record.steinmetz == SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02)
+    assert record.series[0].conditions == CurveConditions(10_000.0, 25.0, 0.0)
+    assert record.series[0].points == (CurvePoint(0.1, 1000.0),)
+    assert record.series[0].extraction is not None
+    assert record.series[0].extraction.x_axis == AxisCalibration(
+        AxisScale.LINEAR, 0.0, 1.0, 10.0, 2.0
+    )
+    assert record.series[0].extraction.pixel_points == (PixelPoint(1.0, 2.0),)
 
 
 @pytest.mark.parametrize(

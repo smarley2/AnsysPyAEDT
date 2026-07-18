@@ -200,6 +200,14 @@ def test_validate_series_reports_each_d6_violation(
     assert _summary(validate_series(series)) == expected
 
 
+def test_validate_loss_rejects_frequency_rounded_to_zero() -> None:
+    series = _loss_series(frequency_hz=0.0000000004)
+
+    assert ("loss-frequency-missing", IssueSeverity.ERROR) in _summary(
+        validate_series(series)
+    )
+
+
 @pytest.mark.parametrize(
     "series",
     [

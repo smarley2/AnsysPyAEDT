@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
+from inductor_designer.adapters.materials.overlay_repository import FileOverlayMaterialRepository
 from inductor_designer.application.services.material_import import (
     import_curve_csv,
     new_draft_record,
@@ -101,6 +103,43 @@ def test_reproduce_record_matches_task_8_csv_and_image_paths() -> None:
 
     assert reproduce_record(record, sources).matches
     assert reproduce_record(record, sources).mismatches == ()
+
+
+def test_save_load_replay_matches_noncanonical_nested_values(tmp_path: Path) -> None:
+    record, sources = _record_fixture()
+    image = record.series[-1]
+    assert image.extraction is not None
+    extraction = replace(
+        image.extraction,
+        x_axis=AxisCalibration(
+            AxisScale.LINEAR,
+            0.0000000004,
+            0.0000000004,
+            100.0000000004,
+            2.0000000004,
+        ),
+        pixel_points=(PixelPoint(0.0000000004, 100.0000000004), PixelPoint(50.0, 50.0)),
+    )
+    record = replace(
+        record,
+        relative_permeability=60.0000000004,
+        series=(
+            *record.series[:-1],
+            replace(
+                image,
+                conditions=CurveConditions(None, 25.0000000004, 0.0000000004),
+                extraction=extraction,
+            ),
+        ),
+    )
+    record = _with_current_revision(record)
+    repository = FileOverlayMaterialRepository(tmp_path / "overlay")
+
+    repository.save(record, sources)
+    loaded = repository.get(record.ref, record.revision_id)
+
+    assert loaded == record
+    assert reproduce_record(loaded, repository.source_bytes(loaded.ref, loaded.revision_id)).matches
 
 
 def test_source_tamper_reports_only_hash_mismatch() -> None:

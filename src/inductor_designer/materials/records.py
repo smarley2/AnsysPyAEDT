@@ -5,6 +5,7 @@ from enum import Enum
 
 from inductor_designer.materials.calibration import ExtractionRecord
 from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.materials.numerics import canonical_float
 
 
 class MaterialStatus(str, Enum):
@@ -44,11 +45,21 @@ class CurveConditions:
     temperature_c: float | None
     dc_bias_a_per_m: float | None
 
+    def __post_init__(self) -> None:
+        for name in ("frequency_hz", "temperature_c", "dc_bias_a_per_m"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, canonical_float(value))
+
 
 @dataclass(frozen=True, slots=True)
 class CurvePoint:
     x: float
     y: float
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", canonical_float(self.x))
+        object.__setattr__(self, "y", canonical_float(self.y))
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +82,16 @@ class SteinmetzFit:
     rms_relative_residual: float
     max_relative_residual: float
 
+    def __post_init__(self) -> None:
+        for name in (
+            "k",
+            "alpha",
+            "beta",
+            "rms_relative_residual",
+            "max_relative_residual",
+        ):
+            object.__setattr__(self, name, canonical_float(getattr(self, name)))
+
 
 @dataclass(frozen=True, slots=True)
 class MaterialRecord:
@@ -87,6 +108,12 @@ class MaterialRecord:
     notes: str
 
     def __post_init__(self) -> None:
+        if self.relative_permeability is not None:
+            object.__setattr__(
+                self,
+                "relative_permeability",
+                canonical_float(self.relative_permeability),
+            )
         valid_revision = len(self.revision_id) == 12 and all(
             char in "0123456789abcdef" for char in self.revision_id
         )

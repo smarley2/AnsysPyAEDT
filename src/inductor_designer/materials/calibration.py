@@ -4,6 +4,8 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
+from inductor_designer.materials.numerics import canonical_float
+
 
 class AxisScale(str, Enum):
     LINEAR = "linear"
@@ -19,6 +21,8 @@ class AxisCalibration:
     value_b: float
 
     def __post_init__(self) -> None:
+        for name in ("pixel_a", "value_a", "pixel_b", "value_b"):
+            object.__setattr__(self, name, canonical_float(getattr(self, name)))
         if self.pixel_a == self.pixel_b:
             raise ValueError("pixel anchors must differ")
         if self.value_a == self.value_b:
@@ -54,6 +58,10 @@ class PixelPoint:
     x_px: float
     y_px: float
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x_px", canonical_float(self.x_px))
+        object.__setattr__(self, "y_px", canonical_float(self.y_px))
+
 
 @dataclass(frozen=True, slots=True)
 class ExtractionRecord:
@@ -65,24 +73,10 @@ class ExtractionRecord:
 
 def extract_points(record: ExtractionRecord) -> tuple[tuple[float, float], ...]:
     """Map pixel points to raw-unit coordinate pairs while preserving order."""
-    x_axis = AxisCalibration(
-        record.x_axis.scale,
-        round(record.x_axis.pixel_a, 9),
-        round(record.x_axis.value_a, 9),
-        round(record.x_axis.pixel_b, 9),
-        round(record.x_axis.value_b, 9),
-    )
-    y_axis = AxisCalibration(
-        record.y_axis.scale,
-        round(record.y_axis.pixel_a, 9),
-        round(record.y_axis.value_a, 9),
-        round(record.y_axis.pixel_b, 9),
-        round(record.y_axis.value_b, 9),
-    )
     return tuple(
         (
-            round(x_axis.value_at(round(point.x_px, 9)), 9),
-            round(y_axis.value_at(round(point.y_px, 9)), 9),
+            canonical_float(record.x_axis.value_at(point.x_px)),
+            canonical_float(record.y_axis.value_at(point.y_px)),
         )
         for point in record.pixel_points
     )

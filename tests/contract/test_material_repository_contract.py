@@ -145,19 +145,32 @@ def test_save_requires_exact_source_keys(
     assert repository.list_revisions(record.ref) == ()
 
 
-def test_save_rejects_points_that_cannot_round_trip(repository: MaterialRepository) -> None:
+def test_save_get_canonicalization_matches_between_file_and_memory(tmp_path: Path) -> None:
     source = b"h,b\n0,0\n100,0.2\n"
     record = _record(source)
     noncanonical = replace(
         record.series[0],
+        conditions=CurveConditions(None, 25.0000000004, 0.0000000004),
         points=(record.series[0].points[0], CurvePoint(100.0, 0.1234567894)),
     )
-    record = replace(record, series=(noncanonical,))
+    record = replace(
+        record,
+        series=(noncanonical,),
+        relative_permeability=1600.0000000004,
+    )
+    repositories: tuple[MaterialRepository, ...] = (
+        FileOverlayMaterialRepository(tmp_path / "overlay"),
+        InMemoryMaterialRepository(),
+    )
 
-    with pytest.raises(ValueError, match=r"round\(9\)"):
+    for repository in repositories:
         repository.save(record, {"bh-source.csv": source})
 
-    assert repository.list_revisions(record.ref) == ()
+    loaded = tuple(repository.get(record.ref, record.revision_id) for repository in repositories)
+    assert loaded[0] == loaded[1] == record
+    assert loaded[0].series[0].points[-1].y == 0.123456789
+    assert loaded[0].series[0].conditions == CurveConditions(None, 25.0, 0.0)
+    assert loaded[0].relative_permeability == 1600.0
 
 
 def test_latest_approved_uses_created_at(repository: MaterialRepository) -> None:

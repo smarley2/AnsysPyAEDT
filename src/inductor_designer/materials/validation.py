@@ -74,9 +74,15 @@ def validate_series(series: PointSeries) -> tuple[MaterialIssue, ...]:
             issues.append(_error("range-b", "flux density must be between 0 and 5 T"))
         if any(not point.y > 0.0 for point in series.points):
             issues.append(_error("loss-positive", "loss density must be positive"))
-        if series.conditions.frequency_hz is None:
+        if (
+            series.conditions.frequency_hz is None
+            or series.conditions.frequency_hz <= 0.0
+        ):
             issues.append(
-                _error("loss-frequency-missing", "loss series requires a frequency condition")
+                _error(
+                    "loss-frequency-missing",
+                    "loss series requires a positive frequency condition",
+                )
             )
     return tuple(issues)
 
