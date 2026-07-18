@@ -1,7 +1,7 @@
 # Material Import Templates and Workbook Design
 
-**Date:** 2026-07-18  
-**Owner:** Codex  
+**Date:** 2026-07-18
+**Owner:** Codex
 **Status:** Approved for implementation planning
 
 ## Goal
