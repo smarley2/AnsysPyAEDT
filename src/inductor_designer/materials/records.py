@@ -17,6 +17,7 @@ class MaterialStatus(str, Enum):
 class SourceKind(str, Enum):
     IMAGE = "image"
     CSV = "csv"
+    SPREADSHEET = "spreadsheet"
 
 
 class SeriesKind(str, Enum):

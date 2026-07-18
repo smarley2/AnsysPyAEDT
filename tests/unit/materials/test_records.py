@@ -219,6 +219,22 @@ def test_record_rejects_dangling_source_link() -> None:
         _record(series=(_series(source_filename="missing.csv"),))
 
 
+def test_record_allows_supplemental_spreadsheet_provenance() -> None:
+    spreadsheet = SourceProvenance(
+        kind=SourceKind.SPREADSHEET,
+        filename="material.xlsx",
+        sha256="b" * 64,
+        url="https://example.com/material.xlsx",
+        page=7,
+        captured_at="2026-07-18T12:00:00+00:00",
+        description="Original workbook",
+    )
+
+    record = _record(sources=(spreadsheet, _source()))
+
+    assert record.sources[0].kind is SourceKind.SPREADSHEET
+
+
 def test_record_allows_empty_revision_only_for_transient_draft() -> None:
     assert _record(revision_id="").revision_id == ""
 

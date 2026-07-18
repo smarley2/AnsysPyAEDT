@@ -307,3 +307,11 @@ def test_validate_record_rejects_series_source_provenance_mismatch(
         issue.code
         for issue in validate_record(_record(sources=(source,), series=(series,)))
     }
+
+
+def test_validate_record_rejects_spreadsheet_as_direct_series_source() -> None:
+    source = replace(_source(), kind=SourceKind.SPREADSHEET)
+
+    assert {issue.message for issue in validate_record(_record(sources=(source,)))} == {
+        "spreadsheet provenance cannot directly back a point series"
+    }

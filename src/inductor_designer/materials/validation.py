@@ -107,6 +107,13 @@ def validate_record(record: MaterialRecord) -> tuple[MaterialIssue, ...]:
                     "CSV-backed series must not include extraction metadata",
                 )
             )
+        elif source_kind is SourceKind.SPREADSHEET:
+            issues.append(
+                _error(
+                    "spreadsheet-series-source",
+                    "spreadsheet provenance cannot directly back a point series",
+                )
+            )
     if record.relative_permeability is not None and not 1.0 <= record.relative_permeability <= 1e6:
         issues.append(
             _error("permeability-range", "relative permeability must be between 1 and 1e6")
