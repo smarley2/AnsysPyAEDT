@@ -86,9 +86,14 @@ def test_nonlinear_bh_points_are_added_after_material(tmp_path: Path) -> None:
     solver.solve(request)
 
     material_name = plan.core.material.name
-    assert ("mi_addbhpoints", (material_name, [[0.0, 0.0], [0.025132741, 100.0]])) in module.calls
+    assert [
+        args for name, args in module.calls if name == "mi_addbhpoint"
+    ] == [
+        (material_name, 0.0, 0.0),
+        (material_name, 0.025132741, 100.0),
+    ]
     names = [name for name, _ in module.calls]
-    assert names.index("mi_addmaterial") < names.index("mi_addbhpoints")
+    assert names.index("mi_addmaterial") < names.index("mi_addbhpoint")
 
 
 def test_resistance_and_inductance_math(tmp_path: Path) -> None:

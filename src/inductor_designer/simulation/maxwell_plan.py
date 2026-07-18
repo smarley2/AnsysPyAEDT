@@ -163,11 +163,15 @@ def material_spec_from_material_record(
     if material.ref != core_record.material:
         raise PlanBuildError(("Material record identity does not match the selected core.",))
 
-    bh_series = next(
-        (series for series in material.series if series.kind is SeriesKind.BH_CURVE), None
+    bh_series = tuple(
+        series for series in material.series if series.kind is SeriesKind.BH_CURVE
     )
+    if len(bh_series) > 1:
+        raise PlanBuildError(
+            ("Approved material has multiple B-H series; select one condition before export.",)
+        )
     bh_points = (
-        tuple((point.x, point.y) for point in bh_series.points) if bh_series is not None else ()
+        tuple((point.x, point.y) for point in bh_series[0].points) if bh_series else ()
     )
     if material.relative_permeability is not None:
         relative_permeability = material.relative_permeability

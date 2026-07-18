@@ -48,9 +48,15 @@ class _Recorder:
 
 
 class _FakeMaterial:
-    def __init__(self, log: list[tuple[str, dict[str, Any]]], name: str) -> None:
+    def __init__(
+        self,
+        log: list[tuple[str, dict[str, Any]]],
+        name: str,
+        coreloss_result: bool,
+    ) -> None:
         self._log = log
         self._name = name
+        self._coreloss_result = coreloss_result
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_"):
@@ -58,19 +64,23 @@ class _FakeMaterial:
         else:
             self._log.append((f"material.set.{name}", {"material": self._name, "value": value}))
 
-    def set_power_ferrite_coreloss(self, **kwargs: Any) -> None:
+    def set_power_ferrite_coreloss(self, **kwargs: Any) -> bool:
         self._log.append(
             ("material.set_power_ferrite_coreloss", {"material": self._name, **kwargs})
         )
+        return self._coreloss_result
 
 
 class _FakeMaterials:
-    def __init__(self, log: list[tuple[str, dict[str, Any]]]) -> None:
+    def __init__(
+        self, log: list[tuple[str, dict[str, Any]]], coreloss_result: bool
+    ) -> None:
         self._log = log
+        self._coreloss_result = coreloss_result
 
     def add_material(self, name: str) -> _FakeMaterial:
         self._log.append(("materials.add_material", {"name": name}))
-        return _FakeMaterial(self._log, name)
+        return _FakeMaterial(self._log, name, self._coreloss_result)
 
 
 class _FakeSetup:
@@ -129,14 +139,19 @@ class _FakeODesign:
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
-    def __init__(self, raise_on: str | None = None, falsy_on: str | None = None) -> None:
+    def __init__(
+        self,
+        raise_on: str | None = None,
+        falsy_on: str | None = None,
+        coreloss_result: bool = True,
+    ) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.raise_on = raise_on
         self.falsy_on = falsy_on
         self.modeler = _Recorder(self.calls, "modeler.", falsy_on=falsy_on)
         self.mesh = _Recorder(self.calls, "mesh.")
         self.post = _Recorder(self.calls, "post.")
-        self.materials = _FakeMaterials(self.calls)
+        self.materials = _FakeMaterials(self.calls, coreloss_result)
         self.odesign = _FakeODesign(self.calls, raise_on=raise_on, falsy_on=falsy_on)
         self.released: list[tuple[bool, bool]] = []
 

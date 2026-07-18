@@ -89,6 +89,24 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
     ) in app.calls
 
 
+def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp(coreloss_result=False)
+    request = replace(
+        make_request(tmp_path),
+        plan=build2d(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+    exporter = PyaedtMaxwell2dExporter(app_factory=FakeMaxwell2dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert not result.succeeded()
+    material_stage = next(stage for stage in result.stages if stage.name == "materials")
+    assert material_stage.succeeded is False
+    assert "core-loss" in material_stage.message
+
+
 def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp(raise_on="assign_matrix")
     result = run(tmp_path, app)

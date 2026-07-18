@@ -84,14 +84,19 @@ def _validated_model(
 def _selected_material(
     project: InductorProject, core_selection: CatalogCoreSelection
 ) -> MaterialRecord | None:
-    return next(
-        (
-            selection.snapshot
-            for selection in project.materials
-            if selection.ref == core_selection.snapshot.material
-        ),
-        None,
+    matches = tuple(
+        selection.snapshot
+        for selection in project.materials
+        if selection.ref == core_selection.snapshot.material
     )
+    if len(matches) > 1:
+        raise MaxwellExportBlocked(
+            (
+                "Project contains multiple material revisions for the selected core; "
+                "pin exactly one revision before export.",
+            )
+        )
+    return matches[0] if matches else None
 
 
 def export_maxwell3d(

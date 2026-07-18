@@ -102,6 +102,23 @@ def test_export_refuses_matching_non_approved_material_snapshot(tmp_path: Path) 
         )
 
 
+def test_export_refuses_multiple_material_revisions_for_selected_core(tmp_path: Path) -> None:
+    first = make_approved_material_record()
+    second = replace(first, revision_id="abcdef012345")
+    project = replace(
+        three_d_project(),
+        materials=(
+            MaterialRevisionSelection(first.ref, first.revision_id, first),
+            MaterialRevisionSelection(second.ref, second.revision_id, second),
+        ),
+    )
+
+    with pytest.raises(MaxwellExportBlocked, match="multiple"):
+        export_maxwell3d(
+            project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT
+        )
+
+
 def test_two_d_project_is_blocked(tmp_path: Path) -> None:
     project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
     with pytest.raises(MaxwellExportBlocked, match="3d"):

@@ -77,11 +77,13 @@ def _stage_materials(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     )
     material.conductivity = spec.conductivity_s_per_m
     if spec.steinmetz is not None:
-        material.set_power_ferrite_coreloss(
+        accepted = material.set_power_ferrite_coreloss(
             cm=spec.steinmetz.k,
             x=spec.steinmetz.alpha,
             y=spec.steinmetz.beta,
         )
+        if not accepted:
+            raise RuntimeError("PyAEDT rejected the ferrite core-loss model.")
     return f"Material {spec.name} created (draft={spec.draft})."
 
 

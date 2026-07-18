@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from inductor_designer.domain.catalog_records import (
@@ -145,3 +147,12 @@ def test_non_approved_material_record_is_refused() -> None:
         material_spec_from_material_record(
             make_core_record(), make_approved_material_record(status=MaterialStatus.REVIEWED)
         )
+
+
+def test_multiple_bh_series_are_refused_as_ambiguous() -> None:
+    record = make_approved_material_record()
+    second_bh = replace(record.series[0], series_id="bh_second_condition")
+    ambiguous = replace(record, series=(*record.series, second_bh))
+
+    with pytest.raises(PlanBuildError, match="multiple B-H"):
+        material_spec_from_material_record(make_core_record(), ambiguous)
