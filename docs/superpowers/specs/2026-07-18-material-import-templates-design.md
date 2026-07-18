@@ -102,9 +102,13 @@ The sheet may contain multiple series. Rows sharing a `series_id` must repeat
 identical metadata. Frequency is required and positive. `b_unit` uses the B
 dropdown above; `loss_unit` contains `W/m3`, `kW/m3`, and `mW/cm3`.
 
-The workbook uses a hidden support sheet only for validation lists. Frozen
-headers, filters, input highlighting, concise instructions, and sensible
-column widths make the template usable without changing its schema.
+The workbook embeds the short unit choices directly in each list validation
+and contains no support sheet. This decision avoids relying on worksheet
+visibility controls that the approved artifact-tool authoring API does not
+expose. Filters, input highlighting, concise instructions, and sensible column
+widths make the template usable without changing its schema. Headers are not
+frozen because artifact-tool 2.8.6 does not persist its documented freeze-pane
+setting during XLSX export; this compact template remains usable without it.
 
 ## CSV Template
 
@@ -154,6 +158,39 @@ from a save-file dialog without knowing repository paths.
 The templates are also linked from the material-record documentation for
 developers and pre-UI testing.
 
+## Exporting and Updating an Existing Material
+
+The template service also exports a selected `MaterialRecord` as an editable
+Excel workbook. It starts from the verified packaged workbook so styling,
+instructions, columns, and dropdown validations stay identical to the blank
+template. It removes the synthetic example rows and fills:
+
+- manufacturer, material name, and grade;
+- every B-H and loss series;
+- each series identifier, unit choices, frequency, temperature, and DC bias;
+  and
+- a source description identifying the exported base revision.
+
+Stored curve points are canonical SI values, while each series retains the
+units used at import. Export converts canonical points back to those retained
+units so the workbook displays the selected material in its original unit
+system. A new `from_canonical(value, unit)` unit helper is the inverse of the
+existing conversion path and supports only the already-approved material
+units.
+
+The exported workbook itself becomes the source artifact when uploaded again.
+The original approved revision remains immutable. A high-level import service
+creates a new `draft` record and returns its source files; it never overwrites,
+reviews, or approves the selected base revision. Loss fits are recomputed from
+the edited loss tables rather than copied from the old revision. Image-derived
+series are exported as editable tabular points and therefore become
+spreadsheet-derived series in the new draft.
+
+Records without any B-H or loss series cannot produce an editable curve
+workbook and are rejected with an actionable export error. Material Studio M5b
+will call this export service from “Download current material” and the draft
+import service from its upload action.
+
 ## Error Handling
 
 All file-shape and content failures raise `MaterialImportError` with actionable
@@ -175,10 +212,14 @@ Tests are written before implementation and cover:
 - missing columns, unknown units, formulas, nonfinite values, inconsistent
   repeated metadata, and unsupported extensions are rejected clearly;
 - packaged-resource access works from an installed-package-style path; and
+- exporting a record preserves all series, original unit selections, and
+  conditions, while converting canonical points back to those units;
+- reimporting an exported workbook creates a different draft revision and
+  leaves the base approved revision unchanged;
+- scalar-only records are rejected by editable-workbook export; and
 - workbook rendering is visually inspected for clipping and readability.
 
 The full non-live test suite, Ruff, strict mypy, the architecture checker, and
 diff checks remain required before merge and push. Live Ansys and FEMM are not
 required because this feature ends at canonical material records and uses the
 already-tested solver boundary.
-
