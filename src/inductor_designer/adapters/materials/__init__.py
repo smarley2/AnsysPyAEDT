@@ -3,6 +3,25 @@ from __future__ import annotations
 from inductor_designer.adapters.materials.overlay_repository import (
     FileOverlayMaterialRepository,
 )
-from inductor_designer.adapters.materials.table_file import import_material_file
+from inductor_designer.adapters.materials.table_file import (
+    ImportedMaterialDraft,
+    import_material_file,
+    import_material_file_as_draft,
+)
+from inductor_designer.adapters.materials.templates import (
+    MaterialTemplateDownload,
+    MaterialTemplateExportError,
+    export_material_record_xlsx,
+    material_import_template,
+)
 
-__all__ = ["FileOverlayMaterialRepository", "import_material_file"]
+__all__ = [
+    "FileOverlayMaterialRepository",
+    "ImportedMaterialDraft",
+    "MaterialTemplateDownload",
+    "MaterialTemplateExportError",
+    "export_material_record_xlsx",
+    "import_material_file",
+    "import_material_file_as_draft",
+    "material_import_template",
+]

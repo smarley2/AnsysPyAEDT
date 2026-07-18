@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from inductor_designer.domain.units import awg_bare_diameter_m, to_canonical
+from inductor_designer.domain.units import awg_bare_diameter_m, from_canonical, to_canonical
 
 
 @pytest.mark.parametrize(
@@ -50,6 +50,19 @@ def test_field_strength_units() -> None:
 def test_loss_density_units() -> None:
     assert to_canonical(1.0, "mW/cm3") == pytest.approx(1000.0)
     assert to_canonical(1.0, "kW/m3") == pytest.approx(1000.0)
+
+
+@pytest.mark.parametrize(
+    "unit",
+    ("T", "mT", "G", "kG", "A/m", "kA/m", "Oe", "W/m3", "kW/m3", "mW/cm3"),
+)
+def test_material_unit_conversion_round_trips(unit: str) -> None:
+    assert from_canonical(to_canonical(12.5, unit), unit) == pytest.approx(12.5)
+
+
+def test_from_canonical_rejects_unknown_unit() -> None:
+    with pytest.raises(ValueError, match="Unknown unit"):
+        from_canonical(1.0, "furlong")
 
 
 def test_awg_formula() -> None:

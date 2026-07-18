@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import math
+from dataclasses import dataclass
 from pathlib import PurePath
 from zipfile import BadZipFile
 
@@ -11,7 +12,10 @@ from openpyxl.cell.cell import Cell  # type: ignore[import-untyped]
 from openpyxl.utils.exceptions import InvalidFileException  # type: ignore[import-untyped]
 from openpyxl.worksheet.worksheet import Worksheet  # type: ignore[import-untyped]
 
-from inductor_designer.application.services.material_import import MaterialImportError
+from inductor_designer.application.services.material_import import (
+    MaterialImportError,
+    new_draft_record,
+)
 from inductor_designer.application.services.material_table_import import (
     ImportedMaterialTable,
     MaterialTableMetadata,
@@ -19,7 +23,7 @@ from inductor_designer.application.services.material_table_import import (
     import_material_rows,
 )
 from inductor_designer.materials.identity import MaterialRef
-from inductor_designer.materials.records import SeriesKind, SourceKind
+from inductor_designer.materials.records import MaterialRecord, SeriesKind, SourceKind
 
 _CSV_COLUMNS = (
     "manufacturer",
@@ -67,6 +71,12 @@ _LOSS_COLUMNS = (
     "b",
     "loss",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ImportedMaterialDraft:
+    record: MaterialRecord
+    source_files: tuple[tuple[str, bytes], ...]
 
 
 def _fail(filename: str, location: str, message: str) -> MaterialImportError:
@@ -430,3 +440,24 @@ def import_material_file(filename: str, data: bytes) -> ImportedMaterialTable:
     if extension == ".xlsx":
         return _import_xlsx(filename, data)
     raise _fail(filename, "extension", "expected .csv or .xlsx")
+
+
+def import_material_file_as_draft(
+    filename: str,
+    data: bytes,
+    *,
+    created_at: str,
+    notes: str = "",
+) -> ImportedMaterialDraft:
+    """Import a material file and create a new draft record from its curves."""
+    imported = import_material_file(filename, data)
+    return ImportedMaterialDraft(
+        record=new_draft_record(
+            imported.ref,
+            series=imported.series,
+            sources=imported.sources,
+            created_at=created_at,
+            notes=notes,
+        ),
+        source_files=imported.source_files,
+    )

@@ -2,14 +2,28 @@ from __future__ import annotations
 
 import csv
 import io
+from copy import deepcopy
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
-from inductor_designer.adapters.materials.table_file import import_material_file
+from inductor_designer.adapters.materials.table_file import (
+    import_material_file,
+    import_material_file_as_draft,
+)
+from inductor_designer.adapters.materials.templates import export_material_record_xlsx
 from inductor_designer.application.services.material_import import MaterialImportError
 from inductor_designer.materials.identity import MaterialRef
-from inductor_designer.materials.records import CurveConditions, CurvePoint, SeriesKind, SourceKind
+from inductor_designer.materials.records import (
+    CurveConditions,
+    CurvePoint,
+    MaterialRecord,
+    MaterialStatus,
+    PointSeries,
+    SeriesKind,
+    SourceKind,
+    SourceProvenance,
+)
 
 CSV_COLUMNS = (
     "manufacturer",
@@ -371,3 +385,68 @@ def test_xlsx_rejects_empty_curve_tables() -> None:
     _assert_import_error(
         "empty.xlsx", _workbook_bytes(empty_tables=True), "B-H Curves!A2", "data row"
     )
+
+
+def test_import_exported_workbook_as_draft_recomputes_fit_and_preserves_base() -> None:
+    source = SourceProvenance(
+        SourceKind.CSV,
+        "base.csv",
+        "a" * 64,
+        "https://example.com/base",
+        2,
+        "2026-07-18T12:00:00+00:00",
+        "Base source",
+    )
+    loss_series = tuple(
+        PointSeries(
+            f"loss-{frequency // 1000}khz",
+            SeriesKind.LOSS_TABLE,
+            "kG",
+            "mW/cm3",
+            CurveConditions(float(frequency), 25.0, 0.0),
+            (CurvePoint(0.05, first), CurvePoint(0.1, second)),
+            source.filename,
+            None,
+        )
+        for frequency, first, second in (
+            (100_000, 1000.0, 2000.0),
+            (200_000, 2000.0, 4000.0),
+        )
+    )
+    base = MaterialRecord(
+        MaterialRef("Example", "Ferrite", "F1"),
+        "0123456789ab",
+        MaterialStatus.APPROVED,
+        "2026-07-18T12:00:00+00:00",
+        "reviewer@example.com",
+        "approver@example.com",
+        (source,),
+        loss_series,
+        None,
+        None,
+        "Approved base",
+    )
+    unchanged = deepcopy(base)
+    exported = export_material_record_xlsx(base)
+    workbook = load_workbook(io.BytesIO(exported.data))
+    workbook["Loss Curves"]["H2"] = 4.0
+    stream = io.BytesIO()
+    workbook.save(stream)
+
+    imported = import_material_file_as_draft(
+        exported.filename,
+        stream.getvalue(),
+        created_at="2026-07-18T13:00:00+00:00",
+        notes="Edited workbook",
+    )
+
+    assert imported.record.status is MaterialStatus.DRAFT
+    assert imported.record.revision_id != base.revision_id
+    assert len(imported.record.revision_id) == 12
+    assert imported.record.series[0].points[0] == CurvePoint(0.05, 4000.0)
+    assert imported.record.steinmetz is not None
+    assert imported.record.notes == "Edited workbook"
+    assert {name for name, _ in imported.source_files} == {
+        source.filename for source in imported.record.sources
+    }
+    assert base == unchanged

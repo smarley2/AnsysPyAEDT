@@ -43,6 +43,16 @@ def to_canonical(value: float, unit: str) -> float:
     return value * factor
 
 
+def from_canonical(value: float, unit: str) -> float:
+    """Convert a canonical value to a supported unit of its dimension."""
+    factor = _CONVERSIONS.get(unit)
+    if factor is None:
+        raise ValueError(f"Unknown unit: {unit!r}")
+    if not math.isfinite(value):
+        raise ValueError(f"Value must be finite, got {value!r}")
+    return value / factor
+
+
 def awg_bare_diameter_m(gauge: int) -> float:
     """Bare copper diameter for an AWG gauge: d = 0.127 mm * 92**((36 - n) / 39)."""
     if type(gauge) is not int or not 1 <= gauge <= 40:
