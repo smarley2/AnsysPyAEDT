@@ -8,12 +8,14 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestone 0 is accepted as of 2026-07-13, scoped to the AEDT 2025 R2 Commercial release verified on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them. Milestone 1 (toroid domain and catalogs) is accepted as of 2026-07-14, with powder-core records reviewed against the 2025 Magnetics catalog and ferrite records still draft. Milestone 2 (geometry and live preview) is accepted as of 2026-07-15, with the one-closed-loop-per-turn winding model confirmed in the interactive preview; the five ferrite core records remain draft. Milestone 3 (Maxwell 3D MVP) is accepted as of 2026-07-16, with all 15 export stages succeeding on AEDT 2025 R2 Commercial and the generated project passing design validation. Milestone 4 (Maxwell 2D and DC operating-point compatibility) is accepted as of 2026-07-17, verified live on AEDT 2025 R2 Commercial across four fix-and-reverify rounds. Milestone 4.5 (MCP server and FEMM 2D backend) is implementation complete and live-verified on FEMM 4.2 the same day, pending Fabio Posser's engineering sanity check of the FEMM results and a Guided Studio click-through before acceptance (see [ROADMAP](docs/development/ROADMAP.md)).
+Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). Milestone 5a (material records pipeline and approved nonlinear solver export) is implementation complete as of 2026-07-18, and its automated exit proof is green. It is not accepted yet: a real approved datasheet record and live AEDT/FEMM material handoff remain pending. Material Studio UI, OCR, the optional GPL importer, and MCP material tools are planned for Milestone 5b.
 
+- [Material records pipeline procedure](docs/development/material-records.md)
+- [Milestone 5a material records plan](docs/superpowers/plans/2026-07-17-material-records-pipeline.md)
 - [MCP server and FEMM 2D backend automation](docs/development/automation-mcp-femm.md)
 - [Maxwell 2D generation procedure](docs/development/maxwell2d-generation.md)
 - [DC operating-point compatibility](docs/development/dc-bias-compatibility.md)
-- [Active implementation plan (Milestone 3)](docs/superpowers/plans/2026-07-16-maxwell3d-mvp.md)
+- [Milestone 3 plan](docs/superpowers/plans/2026-07-16-maxwell3d-mvp.md)
 - [Maxwell 3D generation procedure](docs/development/maxwell3d-generation.md)
 - [Milestone 2 plan](docs/superpowers/plans/2026-07-14-geometry-and-live-preview.md)
 - [Milestone 1 plan](docs/superpowers/plans/2026-07-13-toroid-domain-and-catalogs.md)

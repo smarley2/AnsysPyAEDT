@@ -6,19 +6,24 @@ Implementation plans are deliberately written one milestone at a time. Each mile
 
 Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commercial release available on the development machine. The 2024 R2 and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them; see the [validation plan](../../development/VALIDATION_PLAN.md).
 
-Milestone 1 status: **Accepted 2026-07-14**. Powder-core records reviewed against the 2025 Magnetics catalog; ferrite records stay `draft` until their catalog review. Milestone 2 is the active milestone.
+Milestone 1 status: **Accepted 2026-07-14**. Powder-core records reviewed against the 2025 Magnetics catalog; ferrite records stay `draft` until their catalog review.
 
-Milestone 2 status: **Accepted 2026-07-15** (exit tests green; interactive preview reviewed; one-closed-loop-per-turn model confirmed). Milestone 3 planning is next.
+Milestone 2 status: **Accepted 2026-07-15** (exit tests green; interactive preview reviewed; one-closed-loop-per-turn model confirmed).
+
+Milestones 3, 4, and 4.5 status: **Accepted 2026-07-16**, **Accepted 2026-07-17**, and **Accepted 2026-07-17**, respectively. See the roadmap for the exact live-verification scope.
+
+Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record and live AEDT/FEMM material handoff remain required. Milestone 5b planning is next.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
 | 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Approved product design | Non-AEDT CI passes; controlled runs create and save trivial Maxwell 2D and 3D projects; capability results are recorded for the release matrix |
 | 1 | Toroid domain and catalogs | [2026-07-13-toroid-domain-and-catalogs.md](2026-07-13-toroid-domain-and-catalogs.md) | Milestone 0 contracts accepted | Versioned project round trip with reviewed commercial core and multiple windings |
 | 2 | Geometry and live preview | [2026-07-14-geometry-and-live-preview.md](2026-07-14-geometry-and-live-preview.md) | Project and catalog schemas accepted | Deterministic toroid/winding geometry passes property and golden-manifest tests |
-| 3 | Maxwell 3D MVP | Written after Milestone 2 review | Geometry intermediate representation accepted | Supported AEDT installation opens a generated ready-to-solve Maxwell 3D project |
-| 4 | Maxwell 2D and DC operating point | Written after Milestone 3 review | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |
+| 3 | Maxwell 3D MVP | [2026-07-16-maxwell3d-mvp.md](2026-07-16-maxwell3d-mvp.md) | Geometry intermediate representation accepted | Supported AEDT installation opens a generated ready-to-solve Maxwell 3D project |
+| 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |
 | 4.5 | Automation interfaces — MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Maxwell 2D and DC-bias generation accepted | MCP client creates a valid project, generates a ready-to-solve Maxwell design, runs a FEMM solve of the 2D equivalent, and reads back per-winding R/L, with the backend chosen per call |
-| 5 | Material Studio | Written after Milestone 4 review | Material interface and solver export requirements accepted | Traceable human-approved material revision can be reproduced and exported |
+| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Material interface and solver export requirements accepted | Automated source replay is green; real datasheet approval and live solver handoff remain pending |
+| 5b | Material Studio UI and material tools | Plan pending M5a acceptance | M5a live handoff accepted | Reviewer can import/edit image curves, choose conditions and revisions explicitly, and use the planned OCR, GPL-import, and MCP material workflows |
 | 6 | Productization | Written after Milestone 5 review | Desktop and extension workflows accepted | Installer and extension pass Commercial and Student release validation |
 | 7 | Additional core families | One plan per core family after toroid release criteria pass | Toroid workflow released | Each family has independent schemas, invariants, previews, adapters, and fixtures |
 

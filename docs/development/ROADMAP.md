@@ -298,6 +298,52 @@ follow-up validation and does not gate the milestone.
 
 Exit criterion: a reviewer can reproduce a material record from its stored source metadata and transformation history.
 
+### Current state
+
+Milestone 5a is **implementation complete but not accepted** as of 2026-07-18.
+The automated exit-criterion integration proof is green; a real approved
+datasheet record and live AEDT/FEMM handoff are still pending. No real material
+datasheet has been approved and no solver behavior from this milestone is
+claimed as live-verified.
+
+Implemented Tasks 1–12 deliver:
+
+1. canonical T/mT/G/kG, A/m/kA/m/Oe, and W/m³/kW/m³/mW/cm³ conversions;
+2. immutable material records with provenance and draft/reviewed/approved states;
+3. replayable linear/log axis calibration, crop, and pixel extraction records;
+4. stdlib Steinmetz fitting and B-H-derived mean relative permeability;
+5. unit-family, range, origin, monotonicity, duplication, slope, condition, and fit validation;
+6. deterministic JSON and CSV serde, SHA-256 provenance, and content-derived revision IDs;
+7. the repository port, in-memory fake, and atomic filesystem overlay with approved immutability, source-hash checks, and CSV/JSON agreement checks;
+8. canonical CSV import, draft construction, validation-gated review/approval, and optional loss fitting;
+9. full replay of source hashes, CSV/image transformations, fitted values, and revision identity;
+10. project schema v3 with exact material revision snapshots and v2 migration;
+11. approved nonlinear material export to Maxwell 2D/3D and FEMM, including ferrite unblock, explicit revision arbitration, manifest evidence, and rejection of ambiguous multiple B-H series; and
+12. the reproduction CLI plus an end-to-end integration test covering tamper detection and solver-manifest propagation.
+
+The FEMM adapter uses the verified pyFEMM API spelling: singular
+`mi_addbhpoint(name, b, h)` once per point, not `mi_addbhpoints`. PyAEDT export
+sets nonlinear permeability with `(B, H)` pairs and requires a truthy result
+from `set_power_ferrite_coreloss(cm, x, y)`.
+
+Automated evidence covers fresh overlay save/load/replay, tampered record and
+source failures, schema v3 snapshot propagation, and recording-fake Maxwell 3D
+and FEMM manifests with a pinned revision and nonzero B-H point count. Full
+non-live quality evidence is recorded in the Task 13 handoff commit.
+
+Remaining acceptance work and risks:
+
+- Import, review, and approve a real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
+- Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.
+- Confirm source licensing and redistribution rights before committing real datasheet bytes.
+- Resolve multiple B-H condition selection in M5b; M5a deliberately blocks ambiguous records.
+- Keep revision choice explicit: M5b must list all revisions, may suggest the latest approved one, and must persist the chosen revision. Export must never silently select latest.
+
+Material Studio UI, explicit-formula records, OCR proposals, the optional
+attributed GPL importer, and MCP material tools are M5b scope. See the
+[material records procedure](material-records.md) and the
+[Milestone 5a implementation plan](../superpowers/plans/2026-07-17-material-records-pipeline.md).
+
 ## Milestone 6: Productization
 
 - Package the Windows application with PyInstaller and Inno Setup.
