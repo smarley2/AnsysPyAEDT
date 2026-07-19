@@ -1477,3 +1477,105 @@ def test_failed_series_management_is_atomic_for_every_lifecycle_base(
         "canReview": controller.canReview,
         "canApprove": controller.canApprove,
     } == snapshot
+
+
+def _selection_state(controller: MaterialStudioController) -> dict[str, object]:
+    return {
+        "selectedMaterial": controller.selectedMaterial,
+        "selectedRevision": controller.selectedRevision,
+        "series": controller.series,
+        "points": controller.points,
+        "sourcePoints": controller.sourcePoints,
+        "source": controller.source,
+        "imageEditing": controller.imageEditing,
+        "dirty": controller.dirty,
+        "canSave": controller.canSave,
+        "snapshots": dict(controller._source_point_snapshots),  # noqa: SLF001
+    }
+
+
+@pytest.mark.ui
+def test_select_image_revision_render_failure_does_not_publish_prepared_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    ref = MaterialRef("Atomic", "Image", "Render")
+    first = _image_session(
+        ref,
+        "first.png",
+        _IMAGE.read_bytes(),
+        url="https://example.com/first.png",
+        page=None,
+        series_id="bh-first",
+    )
+    second = _image_session(
+        ref,
+        "second.png",
+        _IMAGE.read_bytes(),
+        url="https://example.com/second.png",
+        page=None,
+        series_id="bh-second",
+    )
+    repository.save(first.record, dict(first.source_files))
+    repository.save(second.record, dict(second.source_files))
+    controller, _ = _controller(repository, with_project=False)
+    controller.selectMaterial(ref.manufacturer, ref.name, ref.grade)
+    assert controller.selectRevision(first.record.revision_id) is True
+    snapshot = _selection_state(controller)
+    resets: list[None] = []
+    controller.editorReset.connect(lambda: resets.append(None))
+    real_render = controller_module.render_material_source
+    monkeypatch.setattr(
+        controller_module,
+        "render_material_source",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("render failed")),
+    )
+
+    assert controller.selectRevision(second.record.revision_id) is False
+    assert resets == []
+    assert _selection_state(controller) == snapshot
+
+    monkeypatch.setattr(controller_module, "render_material_source", real_render)
+    assert controller.selectRevision(second.record.revision_id) is True
+    assert resets == [None]
+
+
+@pytest.mark.ui
+def test_select_table_revision_library_failure_does_not_publish_prepared_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    template = material_import_template("csv")
+    first = _session_from_upload(
+        template.filename,
+        template.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    second = _session_from_upload(
+        template.filename,
+        template.data.replace(b"0.16", b"0.19"),
+        created_at="2026-07-19T11:00:00+00:00",
+    )
+    repository.save(first.record, dict(first.source_files))
+    repository.save(second.record, dict(second.source_files))
+    controller, _ = _controller(repository, with_project=False)
+    ref = first.record.ref
+    controller.selectMaterial(ref.manufacturer, ref.name, ref.grade)
+    assert controller.selectRevision(first.record.revision_id) is True
+    snapshot = _selection_state(controller)
+    resets: list[None] = []
+    controller.editorReset.connect(lambda: resets.append(None))
+    real_list = repository.list_materials
+    monkeypatch.setattr(
+        repository,
+        "list_materials",
+        lambda: (_ for _ in ()).throw(ValueError("library failed")),
+    )
+
+    assert controller.selectRevision(second.record.revision_id) is False
+    assert resets == []
+    assert _selection_state(controller) == snapshot
+
+    monkeypatch.setattr(repository, "list_materials", real_list)
+    assert controller.selectRevision(second.record.revision_id) is True
+    assert resets == [None]

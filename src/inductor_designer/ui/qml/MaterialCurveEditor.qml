@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 Pane {
     id: materialCurveEditor
+    objectName: "materialCurveEditor"
     property var controller: null
     property var pointModel: controller !== null ? controller.points : []
     property var sourcePointModel: controller !== null ? controller.sourcePoints : []

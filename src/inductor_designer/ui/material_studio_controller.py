@@ -683,7 +683,10 @@ class MaterialStudioController(QObject):
             _LOGGER.exception("Material Studio action failed")
             self._set_status(str(error))
 
-    def _initialize_source_snapshots(self, session: MaterialDraftSession) -> None:
+    def _source_snapshots(
+        self,
+        session: MaterialDraftSession,
+    ) -> dict[str, tuple[CurvePoint, ...] | None]:
         snapshots: dict[str, tuple[CurvePoint, ...] | None] = {}
         base: MaterialRecord | None = None
         if session.base_revision_id is not None:
@@ -716,8 +719,7 @@ class MaterialStudioController(QObject):
                 snapshots[series.series_id] = series.points
             else:
                 snapshots[series.series_id] = None
-        self._source_point_snapshots = snapshots
-        self.editorReset.emit()
+        return snapshots
 
     @staticmethod
     def _atomic_write_bytes(destination: Path, data: bytes) -> None:
@@ -848,7 +850,7 @@ class MaterialStudioController(QObject):
                 self._repository.source_bytes(self._selected_ref, revision_id).items()
             )
             session = MaterialDraftSession(record, source_files, None)
-            self._initialize_source_snapshots(session)
+            source_snapshots = self._source_snapshots(session)
             active = record.series[0] if record.series else None
             source_state = (
                 ({}, None, "", None)
@@ -856,6 +858,7 @@ class MaterialStudioController(QObject):
                 else self._rendered_source_state(session, active)
             )
             materials, revisions = self._library_values(record.ref)
+            self._source_point_snapshots = source_snapshots
             self._active_series_id = "" if active is None else active.series_id
             self._set_session(
                 session,
@@ -866,6 +869,7 @@ class MaterialStudioController(QObject):
                 revisions=revisions,
                 source_state=source_state,
             )
+            self.editorReset.emit()
             self._set_status("")
             self._set_clean_state()
             selected = True
@@ -941,12 +945,12 @@ class MaterialStudioController(QObject):
                 created_at=self._now(),
             )
             session = session_from_import(imported.record, imported.source_files)
-            self._initialize_source_snapshots(session)
-            self._source_point_snapshots = {
+            source_snapshots: dict[str, tuple[CurvePoint, ...] | None] = {
                 item.series_id: item.points for item in session.record.series
             }
             materials, revisions = self._library_values(session.record.ref)
             self._remember_clean_state()
+            self._source_point_snapshots = source_snapshots
             self._set_session(
                 session,
                 dirty=True,
@@ -955,6 +959,7 @@ class MaterialStudioController(QObject):
                 materials=materials,
                 revisions=revisions,
             )
+            self.editorReset.emit()
             self._set_status(success_message)
 
         self._run_action(action)
@@ -1014,9 +1019,10 @@ class MaterialStudioController(QObject):
                 imported.record,
                 imported.source_files,
             )
-            self._initialize_source_snapshots(session)
+            source_snapshots = self._source_snapshots(session)
             materials, revisions = self._library_values(session.record.ref)
             self._remember_clean_state()
+            self._source_point_snapshots = source_snapshots
             self._set_session(
                 session,
                 dirty=True,
@@ -1025,6 +1031,7 @@ class MaterialStudioController(QObject):
                 materials=materials,
                 revisions=revisions,
             )
+            self.editorReset.emit()
             self._set_status("Imported edited workbook as a draft.")
 
         self._run_action(action)
@@ -1457,8 +1464,9 @@ class MaterialStudioController(QObject):
                     created_at=stamp,
                 )
             )
-            self._initialize_source_snapshots(session)
+            source_snapshots = self._source_snapshots(session)
             materials, revisions = self._library_values(session.record.ref)
+            self._source_point_snapshots = source_snapshots
             self._active_series_id = session.record.series[0].series_id
             self._set_session(
                 session,
@@ -1468,6 +1476,7 @@ class MaterialStudioController(QObject):
                 materials=materials,
                 revisions=revisions,
             )
+            self.editorReset.emit()
             self._set_status("Image material draft created.")
 
         self._run_action(action)

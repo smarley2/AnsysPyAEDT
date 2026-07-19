@@ -1631,3 +1631,58 @@ def test_revision_replacement_never_reuses_same_key_pending_point_text() -> None
     assert float(field.property("text")) == controller.points[0]["x"]
     assert field.property("text") != "999"
     assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_failed_revision_prepare_keeps_qml_buffer_until_successful_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    template = material_import_template("csv")
+    first = import_material_file_as_draft(
+        template.filename,
+        template.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    second = import_material_file_as_draft(
+        template.filename,
+        template.data.replace(b"0.16", b"0.19"),
+        created_at="2026-07-19T11:00:00+00:00",
+    )
+    repository.save(first.record, dict(first.source_files))
+    repository.save(second.record, dict(second.source_files))
+    controller = MaterialStudioController(repository)
+    ref = first.record.ref
+    controller.selectMaterial(ref.manufacturer, ref.name, ref.grade)
+    assert controller.selectRevision(first.record.revision_id) is True
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    editor = root.findChild(QObject, "materialCurveEditor")
+    editor.setProperty(
+        "pendingCanonicalPoints",
+        {"bh-25c:0": {"x": "999", "y": "0"}},
+    )
+    app.processEvents()
+    field = _accessible_object(root, "Point 1 canonical X value")
+    assert field.property("text") == "999"
+    resets: list[None] = []
+    controller.editorReset.connect(lambda: resets.append(None))
+    real_list = repository.list_materials
+    monkeypatch.setattr(
+        repository,
+        "list_materials",
+        lambda: (_ for _ in ()).throw(ValueError("library failed")),
+    )
+
+    assert controller.selectRevision(second.record.revision_id) is False
+    app.processEvents()
+    assert resets == []
+    assert _accessible_object(root, "Point 1 canonical X value").property("text") == "999"
+
+    monkeypatch.setattr(repository, "list_materials", real_list)
+    assert controller.selectRevision(second.record.revision_id) is True
+    app.processEvents()
+    assert resets == [None]
+    field = _accessible_object(root, "Point 1 canonical X value")
+    assert field.property("text") != "999"
+    assert editor.property("pendingCanonicalPoints").toVariant() == {}
+    assert engine.rootObjects()
