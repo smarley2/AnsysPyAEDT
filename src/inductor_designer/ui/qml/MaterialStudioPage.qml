@@ -178,6 +178,29 @@ Page {
         }
     }
 
+    function syncLibrarySelectionFromController() {
+        if (controller === null) {
+            return
+        }
+        const selected = controller.selectedRevision || ({})
+        const materialSelection = [
+            selected.manufacturer, selected.name, selected.grade
+        ]
+        if (materialSelection.every(function(value) {
+            return value !== undefined && value !== null && String(value).length > 0
+        }) && selectionIndex("material", materialSelection) >= 0) {
+            confirmedMaterialSelection = materialSelection
+            restoreLibrarySelection("material", materialSelection)
+        }
+        const revisionSelection = [selected.revisionId]
+        if (selected.revisionId !== undefined && selected.revisionId !== null
+                && String(selected.revisionId).length > 0
+                && selectionIndex("revision", revisionSelection) >= 0) {
+            confirmedRevisionSelection = revisionSelection
+            restoreLibrarySelection("revision", revisionSelection)
+        }
+    }
+
     function performPendingLibrarySelection() {
         const selectionKind = pendingLibrarySelectionKind
         const selectionArguments = pendingLibrarySelectionArguments
@@ -217,6 +240,19 @@ Page {
     Component.onCompleted: {
         confirmedMaterialSelection = selectionArgumentsAt("material", 0)
         confirmedRevisionSelection = selectionArgumentsAt("revision", 0)
+        syncLibrarySelectionFromController()
+    }
+
+    Connections {
+        target: materialStudioPage.controller
+
+        function onLibraryChanged() {
+            Qt.callLater(materialStudioPage.syncLibrarySelectionFromController)
+        }
+
+        function onSelectionChanged() {
+            Qt.callLater(materialStudioPage.syncLibrarySelectionFromController)
+        }
     }
 
     QtObject {

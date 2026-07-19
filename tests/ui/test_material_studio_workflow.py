@@ -148,23 +148,11 @@ class WorkflowController(QObject):
                 "isLatestApproved": True,
             },
         ]
-        self.save_succeeds = True
-        self.reorder_on_save = False
-        self.selection_succeeds = True
-        self.can_save = True
-        self.can_review = True
-        self.can_approve = True
-        self.can_use = True
-        self.calls: list[tuple[object, ...]] = []
-
-    materials = Property(list, lambda self: self._materials, notify=libraryChanged)
-    revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
-    selectedRevision = Property(
-        dict,
-        lambda self: {
+        self._selected_revision = {
             "manufacturer": "Example",
             "name": "Ferrite",
             "grade": "N87",
+            "revisionId": "111111111111",
             "status": "approved",
             "sources": [
                 {
@@ -186,7 +174,21 @@ class WorkflowController(QObject):
                     "description": "Vendor material table",
                 },
             ],
-        },
+        }
+        self.save_succeeds = True
+        self.reorder_on_save = False
+        self.selection_succeeds = True
+        self.can_save = True
+        self.can_review = True
+        self.can_approve = True
+        self.can_use = True
+        self.calls: list[tuple[object, ...]] = []
+
+    materials = Property(list, lambda self: self._materials, notify=libraryChanged)
+    revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
+    selectedRevision = Property(
+        dict,
+        lambda self: self._selected_revision,
         notify=selectionChanged,
     )
     series = Property(list, lambda self: self._series, notify=selectionChanged)
@@ -320,11 +322,20 @@ class WorkflowController(QObject):
     @Slot(str, str, str, result=bool)
     def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
         self.calls.append(("selectMaterial", manufacturer, name, grade))
+        if self.selection_succeeds:
+            self._selected_revision = {}
+            self.selectionChanged.emit()
         return self.selection_succeeds
 
     @Slot(str, result=bool)
     def selectRevision(self, revision_id: str) -> bool:
         self.calls.append(("selectRevision", revision_id))
+        if self.selection_succeeds:
+            self._selected_revision = {
+                **self._selected_revision,
+                "revisionId": revision_id,
+            }
+            self.selectionChanged.emit()
         return self.selection_succeeds
 
     @Slot(str, str)
@@ -849,6 +860,84 @@ def test_real_controller_resolves_invalid_groups_without_erasing_sibling_text() 
 
     assert crop_width.property("text") == "12"
     assert controller.canSave is True
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_source_only_editor_resolves_invalid_groups_without_erasing_sibling_text() -> None:
+    controller = MaterialStudioController(
+        InMemoryMaterialRepository(),
+        now=lambda: "2026-07-19T10:00:00+00:00",
+    )
+    controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+    controller.addPixelPoint(1.0, 7.0)
+    controller.addPixelPoint(11.0, 1.0)
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    crop_width = root.findChild(QObject, "cropWidthField")
+    frequency = root.findChild(QObject, "frequencyConditionField")
+
+    _replace_field_text(root, crop_width, "x")
+    _replace_field_text(root, frequency, "10khz")
+    _replace_field_text(root, frequency, "10")
+    _press(root.findChild(QObject, "applySeriesMetadataButton"))
+    app.processEvents()
+
+    assert crop_width.property("text") == "x"
+    assert controller.canSave is False
+
+    _replace_field_text(root, crop_width, "12")
+    _press(root.findChild(QObject, "applyCropButton"))
+    app.processEvents()
+
+    assert crop_width.property("text") == "12"
+    assert controller.canSave is False
+    controller.createImageDraft("Source", "Only", "R1", "Sequential correction")
+    assert controller.canSave is True
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_controller_refresh_selects_new_material_and_revision_identities() -> None:
+    repository = InMemoryMaterialRepository()
+    controller = MaterialStudioController(
+        repository,
+        now=lambda: "2026-07-19T10:00:00+00:00",
+    )
+
+    def create_and_save(manufacturer: str, name: str, grade: str) -> None:
+        controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+        controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+        controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+        controller.addPixelPoint(1.0, 7.0)
+        controller.addPixelPoint(11.0, 1.0)
+        controller.createImageDraft(manufacturer, name, grade, "Identity refresh")
+        controller.saveDraft()
+
+    create_and_save("Example", "Ferrite", "N87")
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    material_list = root.findChild(QQuickItem, "materialList")
+    revision_list = root.findChild(QQuickItem, "revisionList")
+    assert material_list.property("currentIndex") == 0
+
+    create_and_save("Zulu", "New", "Z9")
+    app.processEvents()
+
+    selected = controller.selectedRevision
+    assert (selected["manufacturer"], selected["name"], selected["grade"]) == (
+        "Zulu",
+        "New",
+        "Z9",
+    )
+    material = controller.materials[material_list.property("currentIndex")]
+    revision = controller.revisions[revision_list.property("currentIndex")]
+    assert (material["manufacturer"], material["name"], material["grade"]) == (
+        "Zulu",
+        "New",
+        "Z9",
+    )
+    assert revision["revisionId"] == selected["revisionId"]
     assert engine.rootObjects()
 
 

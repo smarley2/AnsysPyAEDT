@@ -1028,7 +1028,8 @@ class MaterialStudioController(QObject):
             else:
                 self._invalid_editor_groups = remaining_groups
                 self._editor_valid = not remaining_groups
-                self._emit_editor_change()
+                if not (remaining_groups - {"source"}):
+                    self._emit_editor_change()
             self._invalid_editor_groups = remaining_groups
             self._editor_valid = not self._invalid_editor_groups
             self._set_status(success_message)
