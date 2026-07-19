@@ -105,6 +105,18 @@ def make_approved_material_record(
     )
 
 
+def make_multi_bh_material_record() -> MaterialRecord:
+    record = make_approved_material_record()
+    bh_25c = replace(record.series[0], series_id="bh-25c")
+    bh_100c = replace(
+        record.series[0],
+        series_id="bh-100c",
+        conditions=CurveConditions(None, 100.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(120.0, 0.03)),
+    )
+    return replace(record, series=(bh_25c, bh_100c, record.series[1]))
+
+
 def test_powder_grade_becomes_linear_material() -> None:
     spec = core_material_spec(make_core_record())
     assert spec.name == "Magnetics_Kool_Mu_60"
@@ -142,6 +154,19 @@ def test_approved_record_becomes_nonlinear_material_with_scalar_fallback() -> No
     assert spec.bh_curve == ((0.0, 0.0), (0.025132741, 100.0))
     assert spec.steinmetz is record.steinmetz
     assert spec.material_revision == record.revision_id
+    assert spec.bh_series_id is None
+
+
+def test_selected_bh_series_is_exported_without_changing_record() -> None:
+    record = make_multi_bh_material_record()
+
+    spec = material_spec_from_material_record(
+        make_core_record(), record, bh_series_id="bh-100c"
+    )
+
+    assert spec.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+    assert spec.bh_series_id == "bh-100c"
+    assert record == make_multi_bh_material_record()
 
 
 def test_approved_record_prefers_explicit_scalar_permeability() -> None:
@@ -160,12 +185,27 @@ def test_non_approved_material_record_is_refused() -> None:
 
 
 def test_multiple_bh_series_are_refused_as_ambiguous() -> None:
-    record = make_approved_material_record()
-    second_bh = replace(record.series[0], series_id="bh_second_condition")
-    ambiguous = replace(record, series=(*record.series, second_bh))
+    with pytest.raises(PlanBuildError, match="multiple B-H.*bh_series_id"):
+        material_spec_from_material_record(make_core_record(), make_multi_bh_material_record())
 
-    with pytest.raises(PlanBuildError, match="multiple B-H"):
-        material_spec_from_material_record(make_core_record(), ambiguous)
+
+@pytest.mark.parametrize(
+    ("series_id", "message"),
+    (("missing", "unknown B-H series"), ("loss_100khz", "does not name a B-H series")),
+)
+def test_invalid_selected_bh_series_is_refused(series_id: str, message: str) -> None:
+    with pytest.raises(PlanBuildError, match=message):
+        material_spec_from_material_record(
+            make_core_record(), make_multi_bh_material_record(), bh_series_id=series_id
+        )
+
+
+def test_explicit_single_bh_series_is_recorded() -> None:
+    spec = material_spec_from_material_record(
+        make_core_record(), make_approved_material_record(), bh_series_id="bh"
+    )
+
+    assert spec.bh_series_id == "bh"
 
 
 def test_approved_physically_invalid_material_record_is_refused() -> None:

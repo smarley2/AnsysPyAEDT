@@ -195,14 +195,16 @@ def test_material_sources_reproduce_through_project_and_recording_exports(
     project_repository.save(
         replace(
             make_project(),
-            materials=(MaterialRevisionSelection(loaded.ref, loaded.revision_id, loaded),),
+            materials=(MaterialRevisionSelection(loaded.ref, loaded.revision_id, loaded, "bh"),),
         ),
         project_path,
     )
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
-    assert persisted_document["schemaVersion"] == 3
+    assert persisted_document["schemaVersion"] == 4
+    assert persisted_document["materials"][0]["bhSeriesId"] == "bh"
     fresh_project = project_repository.load(project_path)
     assert fresh_project.materials[0].snapshot == loaded
+    assert fresh_project.materials[0].bh_series_id == "bh"
 
     maxwell_outcome = export_maxwell3d(
         fresh_project,
@@ -224,6 +226,7 @@ def test_material_sources_reproduce_through_project_and_recording_exports(
         json.loads(femm_manifest_json(femm_outcome)),
     ):
         assert manifest["coreMaterial"]["materialRevision"] == loaded.revision_id
+        assert manifest["coreMaterial"]["bhSeriesId"] == "bh"
         assert manifest["coreMaterial"]["bhPointCount"] > 0
 
     record_tamper = tmp_path / "record-tamper"

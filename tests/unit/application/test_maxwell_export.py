@@ -8,6 +8,7 @@ import pytest
 
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    _selected_material_selection,
     export_femm2d,
     export_maxwell2d,
     export_maxwell3d,
@@ -15,7 +16,11 @@ from inductor_designer.application.services.maxwell_export import (
     generation_manifest_json,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
-from inductor_designer.domain.project import ManualCoreSelection, MaterialRevisionSelection
+from inductor_designer.domain.project import (
+    CatalogCoreSelection,
+    ManualCoreSelection,
+    MaterialRevisionSelection,
+)
 from inductor_designer.materials.records import MaterialStatus
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
@@ -26,7 +31,10 @@ from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
 from tests.unit.domain.test_project import make_project, make_winding
-from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
+from tests.unit.simulation.test_maxwell_plan import (
+    make_approved_material_record,
+    make_multi_bh_material_record,
+)
 
 SNAPSHOT = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
@@ -72,21 +80,29 @@ def test_export_builds_plan_and_calls_exporter(tmp_path: Path) -> None:
 
 
 def test_export_resolves_matching_approved_material_snapshot(tmp_path: Path) -> None:
-    material = make_approved_material_record()
+    material = make_multi_bh_material_record()
+    selection = MaterialRevisionSelection(
+        material.ref, material.revision_id, material, "bh-100c"
+    )
     project = replace(
         three_d_project(),
-        materials=(MaterialRevisionSelection(material.ref, material.revision_id, material),),
+        materials=(selection,),
     )
+    assert isinstance(project.core, CatalogCoreSelection)
+
+    assert _selected_material_selection(project, project.core) is selection  # type: ignore[arg-type]
 
     outcome = export_maxwell3d(
         project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT
     )
 
-    assert outcome.plan.core.material.bh_curve
+    assert outcome.plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+    assert outcome.plan.core.material.bh_series_id == "bh-100c"
     payload = json.loads(generation_manifest_json(outcome))
     assert payload["coreMaterial"]["bhPointCount"] == 2
     assert payload["coreMaterial"]["steinmetz"] == {"k": 2.5, "alpha": 1.4, "beta": 2.3}
     assert payload["coreMaterial"]["materialRevision"] == "0123456789ab"
+    assert payload["coreMaterial"]["bhSeriesId"] == "bh-100c"
 
 
 def test_export_refuses_matching_non_approved_material_snapshot(tmp_path: Path) -> None:
@@ -159,6 +175,7 @@ def test_manifest_is_deterministic_and_carries_stages(tmp_path: Path) -> None:
     assert payload["coreMaterial"]["bhPointCount"] == 0
     assert payload["coreMaterial"]["steinmetz"] is None
     assert payload["coreMaterial"]["materialRevision"] is None
+    assert payload["coreMaterial"]["bhSeriesId"] is None
 
 
 def test_3d_manifest_v2_identifies_blocked_dc(tmp_path: Path) -> None:
@@ -201,11 +218,13 @@ def test_2d_export_blocked_dc_and_conductor_count(tmp_path: Path) -> None:
 
 
 def test_2d_export_resolves_matching_material_snapshot(tmp_path: Path) -> None:
-    material = make_approved_material_record()
+    material = make_multi_bh_material_record()
     project = replace(
         three_d_project(),
         dimension_mode=ModelDimension.TWO_D,
-        materials=(MaterialRevisionSelection(material.ref, material.revision_id, material),),
+        materials=(
+            MaterialRevisionSelection(material.ref, material.revision_id, material, "bh-100c"),
+        ),
     )
 
     outcome = export_maxwell2d(
@@ -213,6 +232,11 @@ def test_2d_export_resolves_matching_material_snapshot(tmp_path: Path) -> None:
     )
 
     assert outcome.plan.core.material.material_revision == material.revision_id
+    assert outcome.plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+    assert outcome.plan.core.material.bh_series_id == "bh-100c"
+    assert json.loads(generation_manifest_json(outcome))["coreMaterial"]["bhSeriesId"] == (
+        "bh-100c"
+    )
 
 
 def test_2d_refuses_3d_project(tmp_path: Path) -> None:
@@ -249,11 +273,13 @@ def test_femm_export_happy_path(tmp_path: Path) -> None:
 
 
 def test_femm_export_resolves_bh_points_from_matching_snapshot(tmp_path: Path) -> None:
-    material = make_approved_material_record()
+    material = make_multi_bh_material_record()
     project = replace(
         three_d_project(),
         dimension_mode=ModelDimension.TWO_D,
-        materials=(MaterialRevisionSelection(material.ref, material.revision_id, material),),
+        materials=(
+            MaterialRevisionSelection(material.ref, material.revision_id, material, "bh-100c"),
+        ),
     )
 
     outcome = export_femm2d(
@@ -264,8 +290,10 @@ def test_femm_export_resolves_bh_points_from_matching_snapshot(tmp_path: Path) -
         item for item in outcome.problem.materials if item.name == outcome.plan.core.material.name
     )
     assert core_material.bh_points == outcome.plan.core.material.bh_curve
+    assert core_material.bh_points == ((0.0, 0.0), (0.03, 120.0))
     manifest_material = json.loads(femm_manifest_json(outcome))["coreMaterial"]
     assert manifest_material["materialRevision"] == material.revision_id
+    assert manifest_material["bhSeriesId"] == "bh-100c"
 
 
 def test_femm_export_not_analyzed_has_no_results(tmp_path: Path) -> None:

@@ -61,6 +61,8 @@ def build_maxwell2d_plan(
     bare_diameter_m: Mapping[str, float],
     dc_bias_decision: DcBiasDecision | None = None,
     material_record: MaterialRecord | None = None,
+    *,
+    material_bh_series_id: str | None = None,
 ) -> Maxwell2dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -77,7 +79,9 @@ def build_maxwell2d_plan(
     material = (
         core_material_spec(core_record)
         if material_record is None
-        else material_spec_from_material_record(core_record, material_record)
+        else material_spec_from_material_record(
+            core_record, material_record, bh_series_id=material_bh_series_id
+        )
     )
 
     identifiers = unique_identifiers([w.winding_id for w in planar.windings])

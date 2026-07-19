@@ -25,9 +25,12 @@ from inductor_designer.application.services.geometry_model import (
     build_geometry_model,
 )
 from inductor_designer.domain.aedt_target import ModelDimension
-from inductor_designer.domain.project import CatalogCoreSelection, InductorProject
+from inductor_designer.domain.project import (
+    CatalogCoreSelection,
+    InductorProject,
+    MaterialRevisionSelection,
+)
 from inductor_designer.geometry.naming import sanitize_identifier
-from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import (
     CapabilitySnapshot,
     DcBiasDecision,
@@ -81,11 +84,11 @@ def _validated_model(
     return core_selection, model
 
 
-def _selected_material(
+def _selected_material_selection(
     project: InductorProject, core_selection: CatalogCoreSelection
-) -> MaterialRecord | None:
+) -> MaterialRevisionSelection | None:
     matches = tuple(
-        selection.snapshot
+        selection
         for selection in project.materials
         if selection.ref == core_selection.snapshot.material
     )
@@ -110,6 +113,9 @@ def export_maxwell3d(
 ) -> MaxwellExportOutcome:
     core_selection, model = _validated_model(project, catalog, ModelDimension.THREE_D)
     decision = select_dc_bias_strategy(capabilities, ModelDimension.THREE_D)
+    selection = _selected_material_selection(project, core_selection)
+    record = selection.snapshot if selection is not None else None
+    series_id = selection.bh_series_id if selection is not None else None
     try:
         plan = build_maxwell3d_plan(
             model.core,
@@ -118,7 +124,8 @@ def export_maxwell3d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
-            material_record=_selected_material(project, core_selection),
+            material_record=record,
+            material_bh_series_id=series_id,
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -150,6 +157,9 @@ def export_maxwell2d(
 ) -> MaxwellExportOutcome:
     core_selection, model = _validated_model(project, catalog, ModelDimension.TWO_D)
     decision = select_dc_bias_strategy(capabilities, ModelDimension.TWO_D)
+    selection = _selected_material_selection(project, core_selection)
+    record = selection.snapshot if selection is not None else None
+    series_id = selection.bh_series_id if selection is not None else None
     try:
         plan = build_maxwell2d_plan(
             model.planar,
@@ -157,7 +167,8 @@ def export_maxwell2d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
-            material_record=_selected_material(project, core_selection),
+            material_record=record,
+            material_bh_series_id=series_id,
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -198,6 +209,9 @@ def export_femm2d(
 ) -> FemmExportOutcome:
     core_selection, model = _validated_model(project, catalog, ModelDimension.TWO_D)
     decision = select_dc_bias_strategy(capabilities, ModelDimension.TWO_D)
+    selection = _selected_material_selection(project, core_selection)
+    record = selection.snapshot if selection is not None else None
+    series_id = selection.bh_series_id if selection is not None else None
     try:
         plan = build_maxwell2d_plan(
             model.planar,
@@ -205,7 +219,8 @@ def export_femm2d(
             project.windings,
             model.bare_diameter_m,
             dc_bias_decision=decision,
-            material_record=_selected_material(project, core_selection),
+            material_record=record,
+            material_bh_series_id=series_id,
         )
     except PlanBuildError as error:
         raise MaxwellExportBlocked(error.issues) from error
@@ -285,6 +300,7 @@ def _core_material_block(plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan) -> dic
             else {"k": steinmetz.k, "alpha": steinmetz.alpha, "beta": steinmetz.beta}
         ),
         "materialRevision": plan.core.material.material_revision,
+        "bhSeriesId": plan.core.material.bh_series_id,
     }
 
 

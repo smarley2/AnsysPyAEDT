@@ -48,6 +48,7 @@ class MaterialSpec:
     bh_curve: tuple[tuple[float, float], ...] = ()
     steinmetz: SteinmetzFit | None = None
     material_revision: str | None = None
+    bh_series_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +157,10 @@ def core_material_spec(record: CoreRecord) -> MaterialSpec:
 
 
 def material_spec_from_material_record(
-    core_record: CoreRecord, material: MaterialRecord
+    core_record: CoreRecord,
+    material: MaterialRecord,
+    *,
+    bh_series_id: str | None = None,
 ) -> MaterialSpec:
     """Build solver material data from an approved project snapshot."""
     if material.status is not MaterialStatus.APPROVED:
@@ -174,12 +178,29 @@ def material_spec_from_material_record(
     bh_series = tuple(
         series for series in material.series if series.kind is SeriesKind.BH_CURVE
     )
-    if len(bh_series) > 1:
-        raise PlanBuildError(
-            ("Approved material has multiple B-H series; select one condition before export.",)
+    if bh_series_id is None:
+        if len(bh_series) > 1:
+            raise PlanBuildError(
+                (
+                    "Approved material has multiple B-H series; provide an explicit "
+                    "bh_series_id before export.",
+                )
+            )
+        selected_bh = bh_series[0] if bh_series else None
+    else:
+        selected_bh = next(
+            (series for series in material.series if series.series_id == bh_series_id), None
         )
+        if selected_bh is None:
+            raise PlanBuildError((f"Selected unknown B-H series {bh_series_id!r}.",))
+        if selected_bh.kind is not SeriesKind.BH_CURVE:
+            raise PlanBuildError(
+                (f"Selected series {bh_series_id!r} does not name a B-H series.",)
+            )
     bh_points = (
-        tuple((point.x, point.y) for point in bh_series[0].points) if bh_series else ()
+        tuple((point.x, point.y) for point in selected_bh.points)
+        if selected_bh is not None
+        else ()
     )
     if material.relative_permeability is not None:
         relative_permeability = material.relative_permeability
@@ -205,6 +226,7 @@ def material_spec_from_material_record(
         ),
         steinmetz=material.steinmetz,
         material_revision=material.revision_id,
+        bh_series_id=bh_series_id,
     )
 
 

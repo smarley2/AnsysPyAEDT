@@ -22,6 +22,7 @@ from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
 from tests.unit.simulation.test_maxwell_plan import (
     make_approved_material_record,
     make_core_record,
+    make_multi_bh_material_record,
 )
 
 CORE = FinishedCore(
@@ -189,6 +190,22 @@ def test_approved_record_unblocks_ferrite_and_drops_linear_dc_note() -> None:
 
     assert plan.core.material.bh_curve
     assert not any("linear material" in note for note in plan.notes)
+
+
+def test_selected_bh_series_is_threaded_to_3d_plan() -> None:
+    definitions = (make_definition(),)
+    plan = build_maxwell3d_plan(
+        CORE,
+        make_core_record(),
+        tuple(pack(d) for d in definitions),
+        definitions,
+        {"w1": BARE},
+        material_record=make_multi_bh_material_record(),
+        material_bh_series_id="bh-100c",
+    )
+
+    assert plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+    assert plan.core.material.bh_series_id == "bh-100c"
 
 
 def test_setup_mesh_reports_and_notes() -> None:
