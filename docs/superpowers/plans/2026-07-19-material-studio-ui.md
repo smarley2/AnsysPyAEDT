@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Tasks 1-9 implemented with focused automated/non-live gates passing; Task 10 whole review, fresh complete gates, native Windows manual acceptance, merge, and push pending.
+**Status:** Tasks 1-9 implemented; Task 10 whole review and fresh complete gates pass. Native Windows manual acceptance, merge, and push remain pending.
 
 **Approved specification:** `docs/superpowers/specs/2026-07-19-material-studio-ui-design.md`
 
@@ -1007,7 +1007,7 @@ draft/review/approve, all-revision browser, latest-approved suggestion semantics
 explicit B-H selection, schema v4 migration, dirty-discard behavior, and the M5c
 optional decision. Keep M5a live gates visibly pending until real evidence exists.
 
-- [ ] **Step 2: Request whole-change review**
+- [x] **Step 2: Request whole-change review**
 
 Review from the M5b base commit through HEAD against the approved spec,
 architecture rules, provenance/replay integrity, immutable approval, project
@@ -1015,7 +1015,7 @@ schema migration, explicit selection, QML accessibility, error paths, and M5c
 exclusion. Fix every Critical or Important finding with a new RED test and
 focused commit, then re-review.
 
-- [ ] **Step 3: Run fresh complete verification**
+- [x] **Step 3: Run fresh complete verification**
 
 ```console
 .venv/bin/python -m pytest tests -q -m "not aedt and not femm" --cov=inductor_designer --cov-report=term-missing
@@ -1038,7 +1038,7 @@ focus, scaling, PNG/JPEG/PDF page rendering, template download, workbook edit an
 reimport, all-revision visibility, lifecycle actions, and explicit B-H selection
 work. This check needs Excel or a compatible workbook editor but not AEDT/FEMM.
 
-- [ ] **Step 5: Record acceptance split**
+- [x] **Step 5: Record acceptance split**
 
 Mark M5b **implementation complete** only when Steps 1–4 pass. Keep M5a/M5b
 **formal acceptance pending** until the real approved material produces `MATCH`
@@ -1046,7 +1046,7 @@ and the exact pinned revision is verified live in AEDT and FEMM. Record whether
 M5c is unnecessary, deferred, or separately approved; do not create an M5c plan
 by default.
 
-- [ ] **Step 6: Commit documentation and handoff**
+- [x] **Step 6: Commit documentation and handoff**
 
 ```console
 git add docs/development/material-records.md docs/development/ROADMAP.md docs/superpowers/plans/README.md README.md docs/superpowers/plans/2026-07-19-material-studio-ui.md

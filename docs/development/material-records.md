@@ -2,10 +2,10 @@
 
 Milestone 5a provides a traceable, deterministic path from source bytes to an
 approved magnetic-material revision and solver export. Milestone 5b exposes that
-path in the Guided Studio `Materials` page. M5b Tasks 1-9 and their focused
-automated/non-live gates are implemented. The whole-change review, fresh complete
-verification, and native Windows manual acceptance remain pending, so M5b is not
-yet implementation-complete. Formal M5a/M5b acceptance also remains pending until
+path in the Guided Studio `Materials` page. The final M5b whole-change review is
+clean and the fresh complete non-live verification passes (822 tests, 119 UI
+tests, and 91.80% coverage). Native Windows manual acceptance remains pending,
+so M5b is not yet implementation-complete. Formal M5a/M5b acceptance also remains pending until
 a reviewer imports a real datasheet, obtains `MATCH`, and checks the exact pinned
 revision in live AEDT and FEMM; no live material handoff is claimed here.
 
@@ -397,12 +397,12 @@ OCR proposals, automatic curve tracing, the optional attributed GPL
 are deferred to optional M5c. M5c has no plan or scaffold and will be considered
 only if Windows user acceptance shows that the M5b workflow is insufficient.
 
-Tasks 1-9 have automated evidence for library/revision listing, immutable draft
+M5b has automated evidence for library/revision listing, immutable draft
 editing, image/PDF replay, schema v3-to-v4 migration, explicit B-H selection,
 recording-fake Maxwell/FEMM manifests, controller behavior, and offscreen QML
 flows. This is not native Windows, Excel/FileDialog, high-DPI, or live-solver
-evidence. Before M5b can be marked implementation-complete, perform the pending
-whole-change review and fresh complete gates, then record native Windows manual
+evidence. The final whole-change review and fresh complete gates pass. Before
+M5b can be marked implementation-complete, record native Windows manual
 acceptance for keyboard/focus, scaling, PNG/JPEG/PDF pages, file dialogs,
 template download, workbook edit/reimport, revision visibility, lifecycle, and
 explicit B-H selection.

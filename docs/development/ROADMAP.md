@@ -339,8 +339,9 @@ source failures, schema v3 snapshot propagation, and recording-fake Maxwell 3D
 and FEMM manifests with a pinned revision and nonzero B-H point count. Full
 M5a non-live quality evidence is recorded in the Task 13 handoff commit.
 
-M5b Tasks 1-9 are implemented as of 2026-07-19, with their focused automated
-and non-live gates passing. Material Studio now downloads CSV/XLSX templates,
+M5b is implemented and independently reviewed as of 2026-07-19. Fresh complete
+verification passes with 822 non-live tests, 119 UI tests, 91.80% coverage, and
+clean Ruff, mypy, architecture, and diff gates. Material Studio now downloads CSV/XLSX templates,
 exports any selected revision as editable XLSX, reimports edits as a distinct
 draft, imports PNG/JPEG or one PDF page for manual crop/axis/point digitization,
 shows validation and fit results, lists every lifecycle revision, and performs
@@ -350,9 +351,9 @@ user must explicitly pin one approved revision and B-H series when multiple
 series exist. Recording Maxwell 2D/3D and FEMM exports consume only that pinned
 snapshot and series.
 
-M5b is **implementation ready but pending acceptance evidence**, not complete:
-the whole-change review, fresh complete suite/static gates, and native Windows
-manual UI acceptance have not yet been recorded. This computer cannot provide
+M5b is **implementation ready but pending native acceptance evidence**, not complete:
+the whole-change review and fresh complete suite/static gates pass, while native
+Windows manual UI acceptance has not yet been recorded. This computer cannot provide
 the required native Windows/high-DPI/FileDialog and manual Excel-compatible
 workbook evidence. It also has no live Ansys AEDT or FEMM material-validation
 run for this milestone.
@@ -362,7 +363,6 @@ Remaining acceptance work and risks:
 - Import, review, and approve a real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
 - Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.
 - Confirm source licensing and redistribution rights before committing real datasheet bytes.
-- Run and close the M5b whole-change review and fresh complete non-live gates.
 - On Windows, manually verify keyboard/focus, scaling, PNG/JPEG/PDF rendering,
   file dialogs, template download, Excel-compatible workbook edit/reimport, all
   revisions, lifecycle actions, and explicit B-H selection.
