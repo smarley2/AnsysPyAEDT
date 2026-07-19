@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
@@ -17,7 +19,16 @@ from inductor_designer.domain.winding import (
     WindingDirection,
 )
 from inductor_designer.materials.identity import MaterialRef
-from inductor_designer.materials.records import MaterialRecord, MaterialStatus
+from inductor_designer.materials.records import (
+    CurveConditions,
+    CurvePoint,
+    MaterialRecord,
+    MaterialStatus,
+    PointSeries,
+    SeriesKind,
+    SourceKind,
+    SourceProvenance,
+)
 from tests.unit.domain.test_catalog_records import make_core
 
 
@@ -75,6 +86,43 @@ def make_material_record() -> MaterialRecord:
     )
 
 
+def make_material_series(
+    series_id: str = "bh-25c",
+    kind: SeriesKind = SeriesKind.BH_CURVE,
+) -> PointSeries:
+    if kind is SeriesKind.BH_CURVE:
+        x_unit, y_unit = "A/m", "T"
+        conditions = CurveConditions(None, 25.0, None)
+        points = (CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.025))
+    else:
+        x_unit, y_unit = "T", "W/m3"
+        conditions = CurveConditions(100_000.0, 25.0, None)
+        points = (CurvePoint(0.05, 1200.0), CurvePoint(0.1, 4500.0))
+    return PointSeries(
+        series_id=series_id,
+        kind=kind,
+        x_unit=x_unit,
+        y_unit=y_unit,
+        conditions=conditions,
+        points=points,
+        source_filename="curve.csv",
+        extraction=None,
+    )
+
+
+def material_record_with_series(*series: PointSeries) -> MaterialRecord:
+    source = SourceProvenance(
+        kind=SourceKind.CSV,
+        filename="curve.csv",
+        sha256="0" * 64,
+        url="https://example.com/material.pdf",
+        page=1,
+        captured_at="2026-07-17T08:32:00+00:00",
+        description="Material curves",
+    )
+    return replace(make_material_record(), sources=(source,), series=series)
+
+
 def test_project_aggregate_holds_selection_and_windings() -> None:
     project = make_project()
     assert isinstance(project.core, CatalogCoreSelection)
@@ -113,6 +161,86 @@ def test_material_revision_selection_matches_snapshot_identity() -> None:
     selection = MaterialRevisionSelection(snapshot.ref, snapshot.revision_id, snapshot)
 
     assert selection.snapshot is snapshot
+
+
+def test_material_revision_selection_preserves_explicit_bh_series() -> None:
+    snapshot = material_record_with_series(
+        make_material_series(),
+        make_material_series("loss-100khz", SeriesKind.LOSS_TABLE),
+    )
+
+    selection = MaterialRevisionSelection(
+        snapshot.ref,
+        snapshot.revision_id,
+        snapshot,
+        bh_series_id="bh-25c",
+    )
+
+    assert selection.bh_series_id == "bh-25c"
+
+
+@pytest.mark.parametrize("bh_series_id", ["", "  "])
+def test_material_revision_selection_rejects_blank_bh_series_id(
+    bh_series_id: str,
+) -> None:
+    snapshot = material_record_with_series(make_material_series())
+
+    with pytest.raises(ValueError, match="bh_series_id cannot be blank"):
+        MaterialRevisionSelection(
+            snapshot.ref,
+            snapshot.revision_id,
+            snapshot,
+            bh_series_id=bh_series_id,
+        )
+
+
+def test_material_revision_selection_rejects_unknown_bh_series_id() -> None:
+    snapshot = material_record_with_series(make_material_series())
+
+    with pytest.raises(ValueError, match="must name a series in snapshot"):
+        MaterialRevisionSelection(
+            snapshot.ref,
+            snapshot.revision_id,
+            snapshot,
+            bh_series_id="missing",
+        )
+
+
+def test_material_revision_selection_rejects_non_bh_series_id() -> None:
+    snapshot = material_record_with_series(
+        make_material_series("loss-100khz", SeriesKind.LOSS_TABLE)
+    )
+
+    with pytest.raises(ValueError, match="must name a B-H curve"):
+        MaterialRevisionSelection(
+            snapshot.ref,
+            snapshot.revision_id,
+            snapshot,
+            bh_series_id="loss-100khz",
+        )
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        (),
+        (make_material_series(),),
+        (make_material_series(), make_material_series("bh-100c")),
+    ],
+)
+def test_material_revision_selection_allows_null_bh_series_id(
+    series: tuple[PointSeries, ...],
+) -> None:
+    snapshot = material_record_with_series(*series) if series else make_material_record()
+
+    selection = MaterialRevisionSelection(
+        snapshot.ref,
+        snapshot.revision_id,
+        snapshot,
+        bh_series_id=None,
+    )
+
+    assert selection.bh_series_id is None
 
 
 def test_material_revision_selection_rejects_mismatched_ref() -> None:

@@ -116,7 +116,7 @@ def _core_from_json(data: Mapping[str, Any] | None) -> CoreSelection | None:
 
 def project_to_document(project: InductorProject) -> dict[str, object]:
     return {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "projectId": project.project_id,
         "metadata": {"name": project.name, "description": project.description},
         "target": {
@@ -134,6 +134,7 @@ def project_to_document(project: InductorProject) -> dict[str, object]:
                     "grade": material.ref.grade,
                 },
                 "revisionId": material.revision_id,
+                "bhSeriesId": material.bh_series_id,
                 "snapshot": material_record_to_json(material.snapshot),
             }
             for material in project.materials
@@ -162,6 +163,7 @@ def project_from_document(document: Mapping[str, Any]) -> InductorProject:
                 ),
                 revision_id=item["revisionId"],
                 snapshot=material_record_from_json(item["snapshot"]),
+                bh_series_id=item.get("bhSeriesId"),
             )
             for item in document.get("materials", [])
         ),

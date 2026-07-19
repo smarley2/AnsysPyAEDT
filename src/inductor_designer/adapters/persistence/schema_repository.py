@@ -7,7 +7,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-LATEST_PROJECT_SCHEMA_VERSION = 3
+LATEST_PROJECT_SCHEMA_VERSION = 4
 
 
 def _migrate_v1_to_v2(document: dict[str, object]) -> dict[str, object]:
@@ -30,9 +30,23 @@ def _migrate_v2_to_v3(document: dict[str, object]) -> dict[str, object]:
     return migrated
 
 
+def _migrate_v3_to_v4(document: dict[str, object]) -> dict[str, object]:
+    raw_materials = document.get("materials", [])
+    assert isinstance(raw_materials, list)
+    materials: list[dict[str, object]] = []
+    for item in raw_materials:
+        assert isinstance(item, dict)
+        materials.append({**item, "bhSeriesId": None})
+    migrated = dict(document)
+    migrated["schemaVersion"] = 4
+    migrated["materials"] = materials
+    return migrated
+
+
 _MIGRATIONS: dict[int, Callable[[dict[str, object]], dict[str, object]]] = {
     1: _migrate_v1_to_v2,
     2: _migrate_v2_to_v3,
+    3: _migrate_v3_to_v4,
 }
 
 

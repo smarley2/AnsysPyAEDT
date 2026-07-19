@@ -10,7 +10,13 @@ from inductor_designer.adapters.persistence.project_repository import (
 )
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.domain.project import ManualCoreSelection, MaterialRevisionSelection
-from tests.unit.domain.test_project import make_material_record, make_project, make_winding
+from tests.unit.domain.test_project import (
+    make_material_record,
+    make_material_series,
+    make_project,
+    make_winding,
+    material_record_with_series,
+)
 
 SCHEMAS = Path(__file__).resolve().parents[4] / "schemas"
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures"
@@ -31,9 +37,16 @@ def test_document_round_trip_preserves_project() -> None:
 
 
 def test_approved_material_snapshot_round_trips_byte_identically(tmp_path: Path) -> None:
-    snapshot = make_material_record()
+    snapshot = material_record_with_series(make_material_series())
     project = make_project(
-        materials=(MaterialRevisionSelection(snapshot.ref, snapshot.revision_id, snapshot),)
+        materials=(
+            MaterialRevisionSelection(
+                snapshot.ref,
+                snapshot.revision_id,
+                snapshot,
+                bh_series_id="bh-25c",
+            ),
+        )
     )
     repo = repository()
     first = tmp_path / "first.inductor.json"
@@ -46,7 +59,8 @@ def test_approved_material_snapshot_round_trips_byte_identically(tmp_path: Path)
 
     assert restored_project == project
     assert first.read_bytes() == second.read_bytes()
-    assert document["schemaVersion"] == 3
+    assert document["schemaVersion"] == 4
+    assert document["materials"][0]["bhSeriesId"] == "bh-25c"
     assert document["materials"][0]["snapshot"]["status"] == "approved"
 
 
@@ -81,13 +95,16 @@ def test_save_is_deterministic(tmp_path: Path) -> None:
     assert first.read_bytes() == second.read_bytes()
 
 
-def test_sample_fixture_save_is_byte_identical(tmp_path: Path) -> None:
+def test_sample_v3_fixture_saves_as_migrated_v4(tmp_path: Path) -> None:
     source = FIXTURES / "sample_geometry_project.inductor.json"
     saved = tmp_path / source.name
 
     repository().save(repository().load(source), saved)
 
-    assert saved.read_bytes() == source.read_bytes()
+    source_document = json.loads(source.read_text(encoding="utf-8"))
+    assert json.loads(saved.read_text(encoding="utf-8")) == SchemaRepository(
+        SCHEMAS
+    ).migrate_project(source_document)
 
 
 def test_load_migrates_v1_documents(tmp_path: Path) -> None:
@@ -113,3 +130,23 @@ def test_load_migrates_v2_documents_with_empty_materials(tmp_path: Path) -> None
     project = repository().load(path)
 
     assert project.materials == ()
+
+
+def test_load_migrates_v3_material_with_null_bh_series_id(tmp_path: Path) -> None:
+    snapshot = make_material_record()
+    document = project_to_document(
+        make_project(
+            materials=(
+                MaterialRevisionSelection(snapshot.ref, snapshot.revision_id, snapshot),
+            )
+        )
+    )
+    document["schemaVersion"] = 3
+    for material in document["materials"]:
+        material.pop("bhSeriesId", None)
+    path = tmp_path / "project-v3.inductor.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    restored = repository().load(path)
+
+    assert restored.materials[0].bh_series_id is None
