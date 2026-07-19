@@ -356,9 +356,20 @@ remains a hard gate for accepting either milestone and for making live-solver
 claims. Source licensing must be confirmed before real datasheet bytes are
 committed or redistributed.
 
-Material Studio UI, explicit-formula records, OCR proposals, the optional
-attributed GPL importer, and MCP material tools are M5b scope. See the
-[material records procedure](material-records.md) and the
+The approved M5b scope is the Guided Studio manual/spreadsheet workflow:
+download CSV/XLSX templates, export any selected revision to editable XLSX,
+reimport edits as a new draft, manually digitize PNG/JPEG/PDF sources, browse all
+revisions, perform review/approval, and pin one exact approved revision and B-H
+series. See the [M5b specification](../superpowers/specs/2026-07-19-material-studio-ui-design.md)
+and [implementation plan](../superpowers/plans/2026-07-19-material-studio-ui.md).
+
+OCR proposals, automatic curve tracing, the optional attributed GPL importer,
+material MCP tools, and explicit-formula records are deferred to optional M5c.
+No M5c plan or scaffold is created unless M5b user acceptance demonstrates that
+the spreadsheet and manual-digitization workflow is insufficient and the scope
+is explicitly approved.
+
+See also the [material records procedure](material-records.md) and the
 [Milestone 5a implementation plan](../superpowers/plans/2026-07-17-material-records-pipeline.md).
 
 ## Milestone 6: Productization

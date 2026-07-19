@@ -1,6 +1,6 @@
 # Milestone 5b: Material Studio UI Design
 
-- Status: Design approved; written specification pending final review
+- Status: Approved 2026-07-19
 - Date: 2026-07-19
 - Owner: Codex
 - Target platform: Windows desktop application
