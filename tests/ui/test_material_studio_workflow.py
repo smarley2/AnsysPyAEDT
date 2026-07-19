@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import math
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QGuiApplicati
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
+from inductor_designer.materials.records import MaterialRecord  # noqa: E402
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.material_source import render_material_source  # noqa: E402
 from inductor_designer.ui.material_studio_controller import (  # noqa: E402
@@ -35,6 +37,17 @@ from inductor_designer.ui.material_studio_controller import (  # noqa: E402
 from tests.fakes.material_repository import InMemoryMaterialRepository  # noqa: E402
 
 _IMAGE = Path(__file__).parents[1] / "fixtures" / "materials" / "manual-bh.png"
+
+
+class FailingSaveMaterialRepository(InMemoryMaterialRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_save = False
+
+    def save(self, record: MaterialRecord, sources: Mapping[str, bytes]) -> None:
+        if self.fail_save:
+            raise ValueError("controlled material save failure")
+        super().save(record, sources)
 
 
 class WorkflowController(QObject):
@@ -1250,4 +1263,89 @@ def test_dirty_library_selection_resolves_identity_after_save_reorders_model(
         }
     assert all(current[key] == value for key, value in expected.items())
     assert root.findChild(QObject, "dirtyLibrarySelectionDialog").property("visible") is False
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize("selection_kind", ["material", "revision"])
+@pytest.mark.parametrize("outcome", ["cancel", "failed-save", "save", "discard"])
+def test_empty_confirmed_identity_dirty_transaction_restores_or_commits_selection(
+    selection_kind: str,
+    outcome: str,
+) -> None:
+    repository = FailingSaveMaterialRepository()
+    controller = MaterialStudioController(
+        repository,
+        now=lambda: "2026-07-19T10:00:00+00:00",
+    )
+
+    def load_source() -> None:
+        controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+        controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+        controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+        controller.addPixelPoint(1.0, 7.0)
+        controller.addPixelPoint(11.0, 1.0)
+
+    load_source()
+    controller.createImageDraft("Example", "Ferrite", "N87", "Confirmed base")
+    controller.saveDraft()
+    confirmed_revision_id = str(controller.selectedRevision["revisionId"])
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+
+    load_source()
+    if selection_kind == "revision":
+        controller.setSeriesMetadata(
+            "bh-manual",
+            "bh-curve",
+            "A/m",
+            "T",
+            123.0,
+            float("nan"),
+            float("nan"),
+        )
+        controller.createImageDraft("Example", "Ferrite", "N87", "New revision")
+    else:
+        controller.createImageDraft("Zulu", "New", "Z9", "New material")
+    app.processEvents()
+
+    material_list = root.findChild(QQuickItem, "materialList")
+    revision_list = root.findChild(QQuickItem, "revisionList")
+    selection_list = material_list if selection_kind == "material" else revision_list
+    assert selection_list.property("currentIndex") == -1
+    selection_list.setProperty("currentIndex", 0)
+    selection_list.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_Return)
+    app.processEvents()
+
+    dialog = root.findChild(QObject, "dirtyLibrarySelectionDialog")
+    assert dialog.property("visible") is True
+    if outcome == "cancel":
+        _press(root.findChild(QObject, "dirtyLibrarySelectionCancelButton"))
+    elif outcome == "failed-save":
+        repository.fail_save = True
+        _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+    elif outcome == "save":
+        _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+    else:
+        _press(root.findChild(QObject, "dirtyLibrarySelectionDiscardButton"))
+    app.processEvents()
+
+    if outcome in {"cancel", "failed-save"}:
+        assert selection_list.property("currentIndex") == -1
+        assert controller.dirty is True
+        assert dialog.property("visible") is (outcome == "failed-save")
+    else:
+        assert selection_list.property("currentIndex") >= 0
+        assert controller.dirty is False
+        assert dialog.property("visible") is False
+        if selection_kind == "material":
+            material = controller.materials[selection_list.property("currentIndex")]
+            assert (material["manufacturer"], material["name"], material["grade"]) == (
+                "Example",
+                "Ferrite",
+                "N87",
+            )
+        else:
+            revision = controller.revisions[selection_list.property("currentIndex")]
+            assert revision["revisionId"] == confirmed_revision_id
     assert engine.rootObjects()

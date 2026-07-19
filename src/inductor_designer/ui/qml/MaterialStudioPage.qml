@@ -173,7 +173,7 @@ Page {
     function restoreLibrarySelection(kind, selectionArguments) {
         const list = libraryList(kind)
         const index = selectionIndex(kind, selectionArguments)
-        if (list !== null && index >= 0) {
+        if (list !== null) {
             list.currentIndex = index
         }
     }
