@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,11 +11,13 @@ if TYPE_CHECKING:
 
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.ui.generation_controller import GenerationController
+    from inductor_designer.ui.material_studio_controller import MaterialStudioController
     from inductor_designer.ui.preview_geometry import PreviewEntry
 
 _DEFAULT_CATALOG = Path("artifacts/catalog/catalog.sqlite")
 _DEFAULT_SCHEMAS = Path("schemas")
 _DEFAULT_MATRIX = Path("compatibility/aedt-matrix.yml")
+_DEFAULT_MATERIAL_OVERLAY = Path("materials-overlay")
 
 
 def qml_directory() -> Path:
@@ -26,6 +29,7 @@ def create_engine(
     simulation_summary: list[str] | None = None,
     generation_controller: GenerationController | None = None,
     backend_choices: list[str] | None = None,
+    material_studio_controller: MaterialStudioController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -36,6 +40,9 @@ def create_engine(
     engine.rootContext().setContextProperty("simulationSummary", simulation_summary or [])
     engine.rootContext().setContextProperty("generationController", generation_controller)
     engine.rootContext().setContextProperty("backendChoices", backend_choices or [])
+    engine.rootContext().setContextProperty(
+        "materialStudioController", material_studio_controller
+    )
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -137,6 +144,7 @@ def main() -> int:
     simulation_summary: list[str] = []
     generation_controller: GenerationController | None = None
     backend_choices: list[str] = []
+    project: InductorProject | None = None
     if args.project is not None:
         from inductor_designer.application.services.geometry_model import GeometryModelError
         from inductor_designer.ui.generation_lines import GenerationBackend
@@ -168,8 +176,37 @@ def main() -> int:
             flush=True,
         )
 
+    from inductor_designer.adapters.materials import FileOverlayMaterialRepository
+    from inductor_designer.ui.material_studio_controller import MaterialStudioController
+
+    project_save_callback: Callable[[InductorProject], None] | None = None
+    if project is not None and args.project is not None:
+        from inductor_designer.adapters.persistence.project_repository import (
+            ProjectRepository,
+        )
+        from inductor_designer.adapters.persistence.schema_repository import (
+            SchemaRepository,
+        )
+
+        project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
+
+        def save_project(updated_project: InductorProject) -> None:
+            project_repository.save(updated_project, args.project)
+
+        project_save_callback = save_project
+
+    material_studio_controller = MaterialStudioController(
+        FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY),
+        project=project,
+        project_save_callback=project_save_callback,
+    )
+
     engine = create_engine(
-        preview_entries, simulation_summary, generation_controller, backend_choices
+        preview_entries,
+        simulation_summary,
+        generation_controller,
+        backend_choices,
+        material_studio_controller,
     )
     roots = engine.rootObjects()
     if not roots:
