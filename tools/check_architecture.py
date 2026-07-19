@@ -48,13 +48,32 @@ class Violation:
     inner_package: str
 
 
-def _imported_names(node: ast.Import | ast.ImportFrom) -> tuple[str, ...]:
+def _resolve_from_module(node: ast.ImportFrom, package: str) -> str:
+    if not node.level:
+        return node.module or ""
+    package_parts = package.split(".")
+    keep = len(package_parts) - (node.level - 1)
+    base = package_parts[: max(keep, 0)]
+    if node.module:
+        base.extend(node.module.split("."))
+    return ".".join(base)
+
+
+def _imported_names(
+    node: ast.Import | ast.ImportFrom,
+    *,
+    package: str,
+) -> tuple[str, ...]:
     if isinstance(node, ast.Import):
         return tuple(alias.name for alias in node.names)
-    module = node.module or ""
-    if module == "inductor_designer":
+    module = _resolve_from_module(node, package)
+    if node.module is None or module == "inductor_designer":
         return tuple(f"{module}.{alias.name}" for alias in node.names)
     return (module,)
+
+
+def _is_module_or_child(imported: str, forbidden: str) -> bool:
+    return imported == forbidden or imported.startswith(f"{forbidden}.")
 
 
 def find_forbidden_imports(source_root: Path) -> tuple[Violation, ...]:
@@ -64,14 +83,16 @@ def find_forbidden_imports(source_root: Path) -> tuple[Violation, ...]:
         forbidden = PACKAGE_FORBIDDEN_ROOTS[inner_package]
         for path in sorted((package_root / inner_package).rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            package = ".".join(path.parent.relative_to(source_root).parts)
             for node in ast.walk(tree):
                 if not isinstance(node, (ast.Import, ast.ImportFrom)):
                     continue
-                for imported in _imported_names(node):
+                for imported in _imported_names(node, package=package):
                     is_forbidden = imported.split(".", maxsplit=1)[0] in forbidden
                     if inner_package == "application":
-                        is_forbidden = is_forbidden or imported.startswith(
-                            _APPLICATION_FORBIDDEN_PREFIXES
+                        is_forbidden = is_forbidden or any(
+                            _is_module_or_child(imported, prefix)
+                            for prefix in _APPLICATION_FORBIDDEN_PREFIXES
                         )
                     if is_forbidden:
                         violations.append(

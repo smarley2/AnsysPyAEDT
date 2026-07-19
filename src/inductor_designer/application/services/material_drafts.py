@@ -7,6 +7,7 @@ from inductor_designer.application.ports.material_repository import (
     MaterialRepository,
 )
 from inductor_designer.application.services.material_import import (
+    GENERATED_SERIES_SOURCE_DESCRIPTION,
     MaterialImportError,
     approve_material,
     import_curve_csv,
@@ -178,6 +179,20 @@ def _rebuild_session(
     return MaterialDraftSession(draft, source_files, session.base_revision_id)
 
 
+def _is_owned_generated_source(
+    provenance: SourceProvenance | None,
+    filename: str,
+) -> bool:
+    return (
+        provenance is not None
+        and provenance.kind is SourceKind.CSV
+        and provenance.filename == filename
+        and provenance.url == ""
+        and provenance.page is None
+        and provenance.description == GENERATED_SERIES_SOURCE_DESCRIPTION
+    )
+
+
 def add_table_series(
     session: MaterialDraftSession,
     *,
@@ -214,7 +229,7 @@ def add_table_series(
         url="",
         page=None,
         captured_at=captured_at,
-        description="Material Studio direct table series",
+        description=GENERATED_SERIES_SOURCE_DESCRIPTION,
     )
     added = import_curve_csv(
         source_text,
@@ -299,8 +314,7 @@ def remove_series(
     )
     generated_filename = f"series-{sanitize_identifier(series_id)}.csv"
     remove_generated_source = (
-        provenance is not None
-        and provenance.kind is SourceKind.CSV
+        _is_owned_generated_source(provenance, generated_filename)
         and target.source_filename == generated_filename
         and not any(
             item.source_filename == target.source_filename for item in retained_series
@@ -399,6 +413,29 @@ def session_from_import(
     source_files: tuple[tuple[str, bytes], ...],
 ) -> MaterialDraftSession:
     """Wrap format-neutral imported material data in a draft session."""
+    if record.status is not MaterialStatus.DRAFT:
+        raise MaterialImportError(("Imported material session requires a draft record.",))
+    if record.revision_id != revision_id_for(record):
+        raise MaterialImportError(("Imported material revision does not match its content.",))
+    source_names = tuple(source.filename for source in record.sources)
+    file_names = tuple(name for name, _ in source_files)
+    if (
+        len(source_names) != len(set(source_names))
+        or len(file_names) != len(set(file_names))
+        or set(source_names) != set(file_names)
+    ):
+        raise MaterialImportError(
+            ("Imported source filenames must match provenance exactly.",)
+        )
+    if source_names != file_names:
+        raise MaterialImportError(
+            ("Imported source file order must match provenance order.",)
+        )
+    for source, (_, data) in zip(record.sources, source_files, strict=True):
+        if source.sha256 != sha256_hex(data):
+            raise MaterialImportError(
+                (f"Imported source hash does not match '{source.filename}'.",)
+            )
     return MaterialDraftSession(record, source_files, None)
 
 
@@ -480,7 +517,7 @@ def replace_table_series(
     disposable_filename = f"series-{sanitize_identifier(target_series_id)}.csv"
     disposable_source = (
         target.source_filename == disposable_filename
-        and old_provenance.kind is SourceKind.CSV
+        and _is_owned_generated_source(old_provenance, disposable_filename)
         and not any(
             item.source_filename == target.source_filename for item in other_series
         )
@@ -511,6 +548,9 @@ def replace_table_series(
         kind=SourceKind.CSV,
         filename=source_filename,
         sha256=sha256_hex(source_bytes),
+        url="",
+        page=None,
+        description=GENERATED_SERIES_SOURCE_DESCRIPTION,
     )
     replacement = import_curve_csv(
         source_text,

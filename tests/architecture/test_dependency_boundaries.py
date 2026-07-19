@@ -64,6 +64,18 @@ def test_application_rejects_infrastructure_but_allows_pathlib(tmp_path: Path) -
             "from inductor_designer import adapters\n",
             "inductor_designer.adapters",
         ),
+        (
+            "from inductor_designer import adapters as infrastructure\n",
+            "inductor_designer.adapters",
+        ),
+        (
+            "from ...adapters.materials import import_material_file\n",
+            "inductor_designer.adapters.materials",
+        ),
+        (
+            "from ... import adapters\n",
+            "inductor_designer.adapters",
+        ),
     ],
 )
 def test_application_rejects_adapter_dependencies(
@@ -78,6 +90,25 @@ def test_application_rejects_adapter_dependencies(
     assert find_forbidden_imports(tmp_path) == (
         Violation(source, 1, imported, "application"),
     )
+
+
+def test_application_accepts_neighbor_and_inner_relative_modules(tmp_path: Path) -> None:
+    source = tmp_path / "inductor_designer" / "application" / "services" / "drafts.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "\n".join(
+            (
+                "import inductor_designer.adapters_extra",
+                "from inductor_designer import adapters_extra as helper",
+                "from ... import adapters_extra",
+                "from ..ports import material_repository",
+                "from . import helpers",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    assert find_forbidden_imports(tmp_path) == ()
 
 
 def test_repository_inner_packages_respect_boundaries() -> None:

@@ -27,6 +27,8 @@ from inductor_designer.materials.validation import (
     validate_series,
 )
 
+GENERATED_SERIES_SOURCE_DESCRIPTION = "Material Studio generated per-series CSV"
+
 
 class MaterialImportError(ValueError):
     def __init__(self, issues: tuple[str, ...]) -> None:

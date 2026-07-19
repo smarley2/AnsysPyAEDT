@@ -92,6 +92,12 @@ def test_import_material_rows_groups_series_and_preserves_replay_sources() -> No
     assert all(
         source.sha256 == sha256_hex(source_files[source.filename]) for source in result.sources[1:]
     )
+    assert all(source.url == "" for source in result.sources[1:])
+    assert all(source.page is None for source in result.sources[1:])
+    assert all(
+        source.description == "Material Studio generated per-series CSV"
+        for source in result.sources[1:]
+    )
     assert tuple(series.source_filename for series in result.series) == tuple(
         source.filename for source in result.sources[1:]
     )

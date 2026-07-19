@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from inductor_designer.application.services.material_import import (
+    GENERATED_SERIES_SOURCE_DESCRIPTION,
     MaterialImportError,
     import_curve_csv,
 )
@@ -62,6 +63,22 @@ def _source(
         page=metadata.source_page,
         captured_at=metadata.captured_at,
         description=metadata.source_description,
+    )
+
+
+def _generated_source(
+    metadata: MaterialTableMetadata,
+    filename: str,
+    data: bytes,
+) -> SourceProvenance:
+    return SourceProvenance(
+        kind=SourceKind.CSV,
+        filename=filename,
+        sha256=sha256_hex(data),
+        url="",
+        page=None,
+        captured_at=metadata.captured_at,
+        description=GENERATED_SERIES_SOURCE_DESCRIPTION,
     )
 
 
@@ -133,7 +150,7 @@ def import_material_rows(
         first = group[0]
         filename = f"series-{sanitize_identifier(series_id)}.csv"
         data = ("x,y\n" + "".join(f"{row.x},{row.y}\n" for row in group)).encode()
-        source = _source(metadata, SourceKind.CSV, filename, data)
+        source = _generated_source(metadata, filename, data)
         sources.append(source)
         source_files.append((filename, data))
         series.append(

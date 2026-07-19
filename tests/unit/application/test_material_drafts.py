@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -105,11 +105,15 @@ def _approved_repository() -> tuple[
     return repository, approved, imported.source_files
 
 
-def _external_source_session(*, shared: bool) -> MaterialDraftSession:
+def _external_source_session(
+    *,
+    shared: bool,
+    filename: str = "external.csv",
+) -> MaterialDraftSession:
     data = b"x,y\n0.0,0.0\n100.0,0.2\n"
     source = SourceProvenance(
         kind=SourceKind.CSV,
-        filename="shared.csv" if shared else "external.csv",
+        filename="shared.csv" if shared else filename,
         sha256=sha256_hex(data),
         url="https://example.com/source.csv",
         page=None,
@@ -146,6 +150,48 @@ def test_session_from_import_wraps_existing_import_result_exactly() -> None:
     assert session.record == imported.record
     assert session.source_files == imported.source_files
     assert session.base_revision_id is None
+
+
+def test_session_from_import_rejects_non_draft_record() -> None:
+    _, imported = _uploaded_draft()
+    reviewed = review_material(imported.record, "reviewer@example.com")
+
+    with pytest.raises(MaterialImportError, match="draft"):
+        session_from_import(reviewed, imported.source_files)
+
+
+def test_session_from_import_rejects_revision_mismatch() -> None:
+    _, imported = _uploaded_draft()
+    mismatched = replace(imported.record, revision_id="000000000000")
+
+    with pytest.raises(MaterialImportError, match="revision"):
+        session_from_import(mismatched, imported.source_files)
+
+
+@pytest.mark.parametrize(
+    ("source_files", "message"),
+    [
+        (lambda files: files[:-1], "filenames"),
+        (lambda files: (*files, ("extra.csv", b"x,y\n")), "filenames"),
+        (lambda files: tuple(reversed(files)), "order"),
+        (
+            lambda files: ((files[0][0], b"changed"), *files[1:]),
+            "hash",
+        ),
+        (lambda files: (*files, files[0]), "filenames"),
+    ],
+)
+def test_session_from_import_rejects_inconsistent_source_files(
+    source_files: Callable[
+        [tuple[tuple[str, bytes], ...]],
+        tuple[tuple[str, bytes], ...],
+    ],
+    message: str,
+) -> None:
+    _, imported = _uploaded_draft()
+
+    with pytest.raises(MaterialImportError, match=message):
+        session_from_import(imported.record, source_files(imported.source_files))
 
 
 @pytest.mark.parametrize("status", [MaterialStatus.REVIEWED, MaterialStatus.APPROVED])
@@ -362,6 +408,30 @@ def test_replace_table_series_retains_direct_external_source() -> None:
     assert replacement.source_filename in dict(edited.source_files)
 
 
+def test_replace_table_series_preserves_vendor_source_with_generated_style_name() -> None:
+    session = _external_source_session(
+        shared=False,
+        filename="series-bh_first.csv",
+    )
+    vendor_source = session.record.sources[0]
+    vendor_file = session.source_files[0]
+
+    edited = replace_table_series(
+        session,
+        "bh-first",
+        series_id="bh-updated",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 30.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(125.0, 0.25)),
+    )
+
+    assert vendor_source in edited.record.sources
+    assert vendor_file in edited.source_files
+    assert edited.record.series[0].source_filename == "series-bh_updated.csv"
+
+
 def test_replace_table_series_retains_source_shared_by_sibling() -> None:
     session = _external_source_session(shared=True)
     source = session.record.sources[0]
@@ -482,7 +552,7 @@ def test_add_table_series_is_immutable_replayable_and_retains_lineage() -> None:
         url="",
         page=None,
         captured_at="2026-07-20T09:00:00+00:00",
-        description="Material Studio direct table series",
+        description="Material Studio generated per-series CSV",
     )
     assert added.source_files[:-1] == original.source_files
     assert reproduce_record(added.record, dict(added.source_files)).matches
@@ -577,6 +647,78 @@ def test_remove_series_drops_only_unreferenced_generated_source() -> None:
     )
     assert removed.record.revision_id == revision_id_for(removed.record)
     assert reproduce_record(removed.record, dict(removed.source_files)).matches
+
+
+def test_remove_series_preserves_vendor_csv_that_matches_generated_filename() -> None:
+    vendor_data = b"x,y\n0.0,0.0\n100.0,0.2\n"
+    sibling_data = b"x,y\n0.0,0.0\n200.0,0.3\n"
+    vendor_source = SourceProvenance(
+        kind=SourceKind.CSV,
+        filename="series-vendor.csv",
+        sha256=sha256_hex(vendor_data),
+        url="https://vendor.example/material.csv",
+        page=None,
+        captured_at=_CREATED_AT,
+        description="Vendor characterization data",
+    )
+    sibling_source = replace(
+        vendor_source,
+        filename="sibling.csv",
+        sha256=sha256_hex(sibling_data),
+    )
+    target = PointSeries(
+        series_id="vendor",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 25.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.2)),
+        source_filename=vendor_source.filename,
+        extraction=None,
+    )
+    sibling = replace(
+        target,
+        series_id="sibling",
+        points=(CurvePoint(0.0, 0.0), CurvePoint(200.0, 0.3)),
+        source_filename=sibling_source.filename,
+    )
+    record = new_draft_record(
+        MaterialRef("Vendor", "Ferrite", "CSV"),
+        series=(target, sibling),
+        sources=(vendor_source, sibling_source),
+        created_at=_CREATED_AT,
+    )
+    session = MaterialDraftSession(
+        record,
+        ((vendor_source.filename, vendor_data), (sibling_source.filename, sibling_data)),
+        None,
+    )
+
+    removed = remove_series(session, "vendor")
+
+    assert vendor_source in removed.record.sources
+    assert (vendor_source.filename, vendor_data) in removed.source_files
+
+
+def test_remove_series_cleans_owned_generated_table_source() -> None:
+    base = _external_source_session(shared=False)
+    added = add_table_series(
+        base,
+        series_id="added",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 80.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(150.0, 0.25)),
+        captured_at=_CREATED_AT,
+    )
+
+    removed = remove_series(added, "added")
+
+    assert all(source.filename != "series-added.csv" for source in removed.record.sources)
+    assert "series-added.csv" not in dict(removed.source_files)
+    assert removed.record.sources == base.record.sources
+    assert removed.source_files == base.source_files
 
 
 def test_remove_series_retains_generated_source_still_used_by_sibling() -> None:
