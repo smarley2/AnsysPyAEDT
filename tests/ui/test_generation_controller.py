@@ -4,6 +4,7 @@ import os
 import threading
 import time
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -165,4 +166,6 @@ def test_generation_resolves_provider_release_edition_and_output_name_at_invocat
 
     assert capability_calls == [(AedtRelease(2025, 1), AedtEdition.STUDENT)]
     assert generation_calls[0][0] is updated
-    assert str(generation_calls[0][1]).endswith("artifacts/studio/provider_changed_project")
+    assert generation_calls[0][1] == (
+        Path("artifacts") / "studio" / "provider_changed_project"
+    )
