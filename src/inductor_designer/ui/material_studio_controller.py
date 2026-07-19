@@ -25,7 +25,6 @@ from inductor_designer.application.services.material_drafts import (
     approve_material_session,
     clone_revision_as_draft,
     image_draft_session,
-    replace_image_extraction,
     replace_image_series,
     replace_table_series,
     review_material_session,
@@ -118,7 +117,8 @@ class MaterialStudioController(QObject):
         self._pixel_points: list[PixelPoint] = []
         self._metadata_values: dict[str, Any] = {}
         self._active_series_id = ""
-        self._image_edit_valid = True
+        self._invalid_editor_groups: set[str] = set()
+        self._editor_valid = True
         self._dirty = False
         self._status_message = ""
         self._clean_state: dict[str, Any] | None = None
@@ -196,7 +196,7 @@ class MaterialStudioController(QObject):
             and self._session.record.status is MaterialStatus.DRAFT
             and self._dirty
             and bool(self._session.source_files)
-            and self._image_edit_valid
+            and self._editor_valid
         )
 
     canSave = Property(bool, _get_can_save, notify=selectionChanged)
@@ -427,7 +427,8 @@ class MaterialStudioController(QObject):
             "pixel_points": list(self._pixel_points),
             "metadata": deepcopy(self._metadata_values),
             "active_series_id": self._active_series_id,
-            "image_edit_valid": self._image_edit_valid,
+            "invalid_editor_groups": set(self._invalid_editor_groups),
+            "editor_valid": self._editor_valid,
         }
 
     def _set_clean_state(self) -> None:
@@ -461,7 +462,8 @@ class MaterialStudioController(QObject):
         self._pixel_points = list(values["pixel_points"])
         self._metadata_values = deepcopy(values["metadata"])
         self._active_series_id = str(values["active_series_id"])
-        self._image_edit_valid = bool(values["image_edit_valid"])
+        self._invalid_editor_groups = set(values["invalid_editor_groups"])
+        self._editor_valid = bool(values["editor_valid"])
 
     def _mark_edit(self) -> None:
         self._remember_clean_state()
@@ -510,6 +512,8 @@ class MaterialStudioController(QObject):
         self._source_url = ""
         self._source_page = None
         self._reset_editor()
+        self._invalid_editor_groups.clear()
+        self._editor_valid = True
         self._set_dirty(False)
         self.selectionChanged.emit()
         self.sourceChanged.emit()
@@ -523,6 +527,8 @@ class MaterialStudioController(QObject):
         clear_source: bool,
         materials: list[dict[str, object]] | None = None,
         revisions: list[dict[str, object]] | None = None,
+        source_state: tuple[dict[str, object], bytes | None, str, int | None]
+        | None = None,
     ) -> None:
         record = session.record
         self._sync_editor_from_record(record)
@@ -559,12 +565,20 @@ class MaterialStudioController(QObject):
         self._points = points
         self._issues = issue_values
         self._fit = fit_value
-        self._image_edit_valid = True
+        self._invalid_editor_groups.clear()
+        self._editor_valid = True
         if materials is not None:
             self._materials = materials
         if revisions is not None:
             self._revisions = revisions
-        if clear_source:
+        if source_state is not None:
+            (
+                self._source,
+                self._source_data,
+                self._source_url,
+                self._source_page,
+            ) = source_state
+        elif clear_source:
             self._source = {}
             self._source_data = None
             self._source_url = ""
@@ -606,6 +620,19 @@ class MaterialStudioController(QObject):
             _LOGGER.exception("Material Studio action failed")
             self._set_status(str(error))
 
+    def _reject_dirty_library_selection(self) -> bool:
+        if not self._dirty:
+            return False
+        self._set_status(
+            "Save or discard unsaved material changes before changing library "
+            "selection."
+        )
+        return True
+
+    def _require_editor_valid(self) -> None:
+        if not self._editor_valid:
+            raise ValueError("Apply or correct the visible editor input first.")
+
     @staticmethod
     def _local_path(url: str) -> Path:
         parsed = QUrl(url)
@@ -616,9 +643,49 @@ class MaterialStudioController(QObject):
             raise ValueError("A local file URL is required.")
         return Path(local_file)
 
+    @staticmethod
+    def _rendered_source_state(
+        session: MaterialDraftSession,
+        series: PointSeries,
+    ) -> tuple[dict[str, object], bytes | None, str, int | None]:
+        if series.extraction is None:
+            return {}, None, "", None
+        provenance = next(
+            source
+            for source in session.record.sources
+            if source.filename == series.source_filename
+        )
+        source_data = dict(session.source_files)[series.source_filename]
+        rendered = render_material_source(
+            provenance.filename,
+            source_data,
+            page_index=provenance.page or 0,
+        )
+        return (
+            {
+                "dataUrl": "data:image/png;base64,"
+                + base64.b64encode(rendered.png_data).decode("ascii"),
+                "filename": provenance.filename,
+                "width": rendered.width_px,
+                "height": rendered.height_px,
+                "pageCount": rendered.page_count,
+                "pageIndex": rendered.page_index,
+                "url": provenance.url,
+                "page": provenance.page,
+                "capturedAt": provenance.captured_at,
+                "description": provenance.description,
+                "sha256": provenance.sha256,
+            },
+            source_data,
+            provenance.url,
+            provenance.page,
+        )
+
     @Slot(str, str, str)
     def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None:
         def action() -> None:
+            if self._reject_dirty_library_selection():
+                return
             ref = MaterialRef(manufacturer, name, grade)
             revisions = [
                 self._summary_dict(summary)
@@ -636,20 +703,31 @@ class MaterialStudioController(QObject):
     @Slot(str)
     def selectRevision(self, revision_id: str) -> None:
         def action() -> None:
+            if self._reject_dirty_library_selection():
+                return
             if self._selected_ref is None:
                 raise ValueError("Select a material before selecting a revision.")
             record = self._repository.get(self._selected_ref, revision_id)
             source_files = tuple(
                 self._repository.source_bytes(self._selected_ref, revision_id).items()
             )
+            session = MaterialDraftSession(record, source_files, None)
+            active = record.series[0] if record.series else None
+            source_state = (
+                ({}, None, "", None)
+                if active is None
+                else self._rendered_source_state(session, active)
+            )
             materials, revisions = self._library_values(record.ref)
+            self._active_series_id = "" if active is None else active.series_id
             self._set_session(
-                MaterialDraftSession(record, source_files, None),
+                session,
                 dirty=False,
                 saved=True,
-                clear_source=True,
+                clear_source=False,
                 materials=materials,
                 revisions=revisions,
+                source_state=source_state,
             )
             self._set_status("")
             self._set_clean_state()
@@ -659,6 +737,7 @@ class MaterialStudioController(QObject):
     @Slot(str)
     def selectSeries(self, series_id: str) -> None:
         def action() -> None:
+            self._require_editor_valid()
             if self._session is None:
                 raise ValueError("Select a material revision before selecting a series.")
             target = next(
@@ -671,12 +750,21 @@ class MaterialStudioController(QObject):
             )
             if target is None:
                 raise ValueError(f"Series '{series_id}' does not exist.")
+            source_state = self._rendered_source_state(self._session, target)
             self._active_series_id = target.series_id
             self._sync_editor_from_record(self._session.record)
             self._points = self._point_dicts(target)
+            (
+                self._source,
+                self._source_data,
+                self._source_url,
+                self._source_page,
+            ) = source_state
             self.selectionChanged.emit()
             self.sourceChanged.emit()
             self._set_status("")
+            if not self._dirty:
+                self._set_clean_state()
 
         self._run_action(action)
 
@@ -823,46 +911,101 @@ class MaterialStudioController(QObject):
             self._session.record.revision_id,
         )
 
-    def _apply_image_extraction(self, success_message: str) -> None:
-        extraction = self._current_extraction()
-        if self._session is None or not self._active_series_id:
+    def _replacement_editor_series(
+        self,
+        target_series_id: str,
+    ) -> MaterialDraftSession | None:
+        series_kind = SeriesKind(str(self._metadata_values["kind"]))
+        conditions = self._current_conditions()
+        if self._session is None or not target_series_id:
             self._set_status("")
-            return
+            return None
+        draft = self._draft_for_edit()
         target = next(
             (
                 item
-                for item in self._session.record.series
-                if item.series_id == self._active_series_id
+                for item in draft.record.series
+                if item.series_id == target_series_id
             ),
             None,
         )
         if target is None:
-            self._set_status("")
-            return
+            raise ValueError(f"Series '{target_series_id}' does not exist.")
+        series_id = str(self._metadata_values["seriesId"])
+        x_unit = str(self._metadata_values["xUnit"])
+        y_unit = str(self._metadata_values["yUnit"])
         if target.extraction is None:
-            self._set_status(
-                "This series is a direct table edit; image crop and pixel edits no "
-                "longer change its canonical values."
+            return replace_table_series(
+                draft,
+                target_series_id,
+                series_id=series_id,
+                kind=series_kind,
+                x_unit=x_unit,
+                y_unit=y_unit,
+                conditions=conditions,
+                points=target.points,
             )
-            return
-        updated = replace_image_extraction(
-            self._draft_for_edit(),
-            target.series_id,
-            extraction,
+        return replace_image_series(
+            draft,
+            target_series_id,
+            series_id=series_id,
+            kind=series_kind,
+            x_unit=x_unit,
+            y_unit=y_unit,
+            conditions=conditions,
+            extraction=self._current_extraction(),
         )
-        self._set_session(updated, dirty=True, saved=False, clear_source=False)
-        self._set_status(success_message)
 
-    def _edit_extraction(self, mutation: Callable[[], None]) -> None:
+    def _edit_editor(
+        self,
+        mutation: Callable[[], None],
+        replacement: Callable[[], MaterialDraftSession | None],
+        success_message: str,
+        resolved_group: str,
+    ) -> None:
+        self._mark_edit()
+        pending_groups = set(self._invalid_editor_groups)
         try:
-            self._mark_edit()
             mutation()
             self._emit_editor_change()
-            self._apply_image_extraction("Image extraction updated.")
-            self._image_edit_valid = True
+            updated = replacement()
+            if updated is not None:
+                self._set_session(
+                    updated,
+                    dirty=True,
+                    saved=False,
+                    clear_source=False,
+                )
+            self._invalid_editor_groups = pending_groups - {resolved_group}
+            self._editor_valid = not self._invalid_editor_groups
+            self._set_status(success_message)
         except _KNOWN_ACTION_ERRORS as error:
-            self._image_edit_valid = False
+            _LOGGER.exception("Material Studio editor mutation failed")
+            self._invalid_editor_groups = pending_groups or {resolved_group}
+            self._editor_valid = False
             self._set_status(str(error))
+        self.selectionChanged.emit()
+
+    def _edit_extraction(
+        self,
+        mutation: Callable[[], None],
+        resolved_group: str,
+    ) -> None:
+        target_series_id = self._active_series_id
+        self._edit_editor(
+            mutation,
+            lambda: self._replacement_editor_series(target_series_id),
+            "Image extraction updated.",
+            resolved_group,
+        )
+
+    @Slot(str, str)
+    def invalidateEditorInput(self, group: str, message: str) -> None:
+        self._mark_edit()
+        self._invalid_editor_groups.add(group)
+        self._editor_valid = False
+        _LOGGER.warning("Material Studio editor input is pending or invalid: %s", message)
+        self._set_status(message)
         self.selectionChanged.emit()
 
     @Slot(int, int, int, int)
@@ -873,7 +1016,8 @@ class MaterialStudioController(QObject):
                 top=top,
                 width=width,
                 height=height,
-            )
+            ),
+            "crop",
         )
 
     @Slot(str, float, float, float, float)
@@ -892,7 +1036,8 @@ class MaterialStudioController(QObject):
                 valueA=value_a,
                 pixelB=pixel_b,
                 valueB=value_b,
-            )
+            ),
+            "x-axis",
         )
 
     @Slot(str, float, float, float, float)
@@ -911,13 +1056,15 @@ class MaterialStudioController(QObject):
                 valueA=value_a,
                 pixelB=pixel_b,
                 valueB=value_b,
-            )
+            ),
+            "y-axis",
         )
 
     @Slot(float, float)
     def addPixelPoint(self, x_px: float, y_px: float) -> None:
         self._edit_extraction(
-            lambda: self._pixel_points.append(PixelPoint(x_px, y_px))
+            lambda: self._pixel_points.append(PixelPoint(x_px, y_px)),
+            "points",
         )
 
     @Slot(int, float, float)
@@ -927,7 +1074,7 @@ class MaterialStudioController(QObject):
                 raise ValueError("Point index is out of range.")
             self._pixel_points[index] = PixelPoint(x_px, y_px)
 
-        self._edit_extraction(mutation)
+        self._edit_extraction(mutation, "points")
 
     @Slot(int)
     def deletePoint(self, index: int) -> None:
@@ -945,6 +1092,7 @@ class MaterialStudioController(QObject):
         )
         if target is not None and target.extraction is None:
             def action() -> None:
+                self._require_editor_valid()
                 draft = self._draft_for_edit()
                 current = next(
                     item
@@ -984,7 +1132,7 @@ class MaterialStudioController(QObject):
                 raise ValueError("Point index is out of range.")
             del self._pixel_points[index]
 
-        self._edit_extraction(mutation)
+        self._edit_extraction(mutation, "points")
 
     @Slot(str, str, str, str, float, float, float)
     def setSeriesMetadata(
@@ -998,62 +1146,29 @@ class MaterialStudioController(QObject):
         dc_bias_a_per_m: float,
     ) -> None:
         target_series_id = self._active_series_id
-        self._mark_edit()
-        self._metadata_values = {
-            "seriesId": series_id,
-            "kind": kind,
-            "xUnit": x_unit,
-            "yUnit": y_unit,
-            "frequencyHz": self._optional_condition(frequency_hz),
-            "temperatureC": self._optional_condition(temperature_c),
-            "dcBiasAPerM": self._optional_condition(dc_bias_a_per_m),
-        }
-        self._emit_editor_change()
+        def mutation() -> None:
+            self._metadata_values = {
+                "seriesId": series_id,
+                "kind": kind,
+                "xUnit": x_unit,
+                "yUnit": y_unit,
+                "frequencyHz": self._optional_condition(frequency_hz),
+                "temperatureC": self._optional_condition(temperature_c),
+                "dcBiasAPerM": self._optional_condition(dc_bias_a_per_m),
+            }
 
-        def action() -> None:
-            series_kind = SeriesKind(kind)
-            conditions = self._current_conditions()
-            if self._session is None or not target_series_id:
-                self._set_status("")
-                return
-            draft = self._draft_for_edit()
-            target = next(
-                (
-                    item
-                    for item in draft.record.series
-                    if item.series_id == target_series_id
-                ),
-                None,
-            )
-            if target is None:
-                raise ValueError(f"Series '{target_series_id}' does not exist.")
-            if target.extraction is not None:
-                updated = replace_image_series(
-                    draft,
-                    target_series_id,
-                    series_id=series_id,
-                    kind=series_kind,
-                    x_unit=x_unit,
-                    y_unit=y_unit,
-                    conditions=conditions,
-                    extraction=self._current_extraction(),
-                )
-            else:
-                updated = replace_table_series(
-                    draft,
-                    target_series_id,
-                    series_id=series_id,
-                    kind=series_kind,
-                    x_unit=x_unit,
-                    y_unit=y_unit,
-                    conditions=conditions,
-                    points=target.points,
-                )
-            self._active_series_id = series_id
-            self._set_session(updated, dirty=True, saved=False, clear_source=False)
-            self._set_status("Series metadata updated.")
+        def replacement() -> MaterialDraftSession | None:
+            updated = self._replacement_editor_series(target_series_id)
+            if updated is not None:
+                self._active_series_id = series_id
+            return updated
 
-        self._run_action(action)
+        self._edit_editor(
+            mutation,
+            replacement,
+            "Series metadata updated.",
+            "metadata",
+        )
 
     @Slot(str, str, str, str)
     def createImageDraft(
@@ -1064,6 +1179,7 @@ class MaterialStudioController(QObject):
         source_description: str,
     ) -> None:
         def action() -> None:
+            self._require_editor_valid()
             if self._source_data is None or not self._source:
                 raise ValueError("Load an image or PDF page before creating a draft.")
             stamp = self._now()
@@ -1108,6 +1224,7 @@ class MaterialStudioController(QObject):
         y: float,
     ) -> None:
         def action() -> None:
+            self._require_editor_valid()
             draft = self._draft_for_edit()
             target = next(
                 (item for item in draft.record.series if item.series_id == series_id),
@@ -1161,8 +1278,8 @@ class MaterialStudioController(QObject):
         def action() -> None:
             if self._session is None:
                 raise ValueError("No material draft is selected.")
-            if not self._image_edit_valid:
-                raise ValueError("Resolve the invalid image edit before saving.")
+            if not self._editor_valid:
+                raise ValueError("Resolve the invalid editor input before saving.")
             saved = save_material_session(self._repository, self._session)
             self._finish_persisted_session(saved, "Material draft saved.")
 

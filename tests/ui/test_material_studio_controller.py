@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,16 +13,18 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QUrl  # noqa: E402
-from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtCore import QBuffer, QIODevice, QRectF, QUrl  # noqa: E402
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPdfWriter  # noqa: E402
 
 from inductor_designer.adapters.materials import (  # noqa: E402
     export_material_record_xlsx,
     material_import_template,
 )
 from inductor_designer.application.services.material_drafts import (  # noqa: E402
+    ImageSeriesInput,
     MaterialDraftSession,
     approve_material_session,
+    image_draft_session,
     review_material_session,
     save_material_session,
     session_from_upload,
@@ -30,8 +33,16 @@ from inductor_designer.application.services.material_selection import (  # noqa:
     pin_material_revision as authoritative_pin_material_revision,
 )
 from inductor_designer.domain.project import InductorProject  # noqa: E402
+from inductor_designer.materials.calibration import (  # noqa: E402
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
+)
 from inductor_designer.materials.identity import MaterialRef  # noqa: E402
 from inductor_designer.materials.records import (  # noqa: E402
+    CurveConditions,
     MaterialRecord,
     MaterialStatus,
     SeriesKind,
@@ -51,6 +62,70 @@ _IMAGE = Path(__file__).parents[1] / "fixtures" / "materials" / "manual-bh.png"
 
 def _file_url(path: Path) -> str:
     return QUrl.fromLocalFile(str(path)).toString()
+
+
+def _two_page_pdf() -> bytes:
+    output = QBuffer()
+    assert output.open(QIODevice.OpenModeFlag.WriteOnly)
+    writer = QPdfWriter(output)
+    writer.setResolution(72)
+    painter = QPainter(writer)
+    painter.fillRect(QRectF(0.0, 0.0, writer.width(), writer.height()), QColor("red"))
+    assert writer.newPage()
+    painter.fillRect(QRectF(0.0, 0.0, writer.width(), writer.height()), QColor("blue"))
+    painter.end()
+    return bytes(output.data())
+
+
+def _image_session(
+    ref: MaterialRef,
+    filename: str,
+    data: bytes,
+    *,
+    url: str,
+    page: int | None,
+    series_id: str,
+) -> MaterialDraftSession:
+    rendered = render_material_source(filename, data, page_index=page or 0)
+    extraction = ExtractionRecord(
+        CropRegion(0, 0, rendered.width_px, rendered.height_px),
+        AxisCalibration(
+            AxisScale.LINEAR,
+            0.0,
+            0.0,
+            float(rendered.width_px),
+            1.0,
+        ),
+        AxisCalibration(
+            AxisScale.LINEAR,
+            float(rendered.height_px),
+            0.0,
+            0.0,
+            1.0,
+        ),
+        (
+            PixelPoint(0.0, float(rendered.height_px)),
+            PixelPoint(float(rendered.width_px), 0.0),
+        ),
+    )
+    return image_draft_session(
+        ImageSeriesInput(
+            ref=ref,
+            source_filename=filename,
+            source_data=data,
+            source_url=url,
+            source_page=page,
+            captured_at=_CREATED_AT,
+            source_description=f"Stored {filename}",
+            series_id=series_id,
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, 0.0),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
 
 
 def _approved_material(
@@ -393,6 +468,127 @@ def test_image_import_exposes_rendered_png_and_preserves_selection_on_error() ->
 
 
 @pytest.mark.ui
+@pytest.mark.parametrize(
+    ("filename", "data_factory", "page"),
+    [
+        ("stored.png", lambda: _IMAGE.read_bytes(), None),
+        ("stored.pdf", _two_page_pdf, 1),
+    ],
+)
+def test_select_revision_restores_exact_stored_image_source_and_editor_snapshot(
+    filename: str,
+    data_factory: Callable[[], bytes],
+    page: int | None,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    data = data_factory()
+    ref = MaterialRef("Stored", "Image", filename)
+    url = f"https://example.com/{filename}"
+    session = _image_session(
+        ref,
+        filename,
+        data,
+        url=url,
+        page=page,
+        series_id="bh-stored",
+    )
+    save_material_session(repository, session)
+    rendered = render_material_source(filename, data, page_index=page or 0)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(ref.manufacturer, ref.name, ref.grade)
+
+    controller.selectRevision(session.record.revision_id)
+
+    assert controller.source["dataUrl"] == (
+        "data:image/png;base64,"
+        + base64.b64encode(rendered.png_data).decode("ascii")
+    )
+    assert controller.source["width"] == rendered.width_px
+    assert controller.source["height"] == rendered.height_px
+    assert controller.source["pageIndex"] == (page or 0)
+    assert controller.source["url"] == url
+    assert controller.source["page"] == page
+    assert controller.source["capturedAt"] == _CREATED_AT
+    assert controller.source["description"] == f"Stored {filename}"
+    assert controller.source["sha256"] == session.record.sources[0].sha256
+    assert controller.imageEditing["crop"] == {
+        "left": 0,
+        "top": 0,
+        "width": rendered.width_px,
+        "height": rendered.height_px,
+    }
+
+    source_snapshot = controller.source
+    extraction_snapshot = controller.imageEditing
+    controller.setCrop(1, 1, rendered.width_px - 1, rendered.height_px - 1)
+    assert controller.discardChanges() is True
+    assert controller.source == source_snapshot
+    assert controller.imageEditing == extraction_snapshot
+
+
+@pytest.mark.ui
+def test_series_switch_restores_matching_source_and_fails_atomically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    ref = MaterialRef("Stored", "Mixed", "Sources")
+    image = _image_session(
+        ref,
+        "stored.png",
+        _IMAGE.read_bytes(),
+        url="https://example.com/stored.png",
+        page=None,
+        series_id="bh-image",
+    )
+    table_template = material_import_template("csv")
+    table = session_from_upload(
+        table_template.filename,
+        table_template.data,
+        created_at=_CREATED_AT,
+    )
+    table_series = replace(
+        table.record.series[0],
+        series_id="bh-table",
+    )
+    mixed_record = replace(
+        image.record,
+        revision_id="dddddddddddd",
+        sources=(*image.record.sources, *table.record.sources),
+        series=(*image.record.series, table_series),
+    )
+    repository.save(
+        mixed_record,
+        dict((*image.source_files, *table.source_files)),
+    )
+    controller, _ = _controller(repository)
+    controller.selectMaterial(ref.manufacturer, ref.name, ref.grade)
+    controller.selectRevision(mixed_record.revision_id)
+    image_source = controller.source
+
+    controller.selectSeries("bh-table")
+
+    assert controller.source == {}
+    assert controller.imageEditing["metadata"]["seriesId"] == "bh-table"
+    table_snapshot = controller.imageEditing
+
+    monkeypatch.setattr(
+        controller_module,
+        "render_material_source",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("render failed")),
+    )
+    controller.selectSeries("bh-image")
+
+    assert controller.source == {}
+    assert controller.imageEditing == table_snapshot
+    assert controller.statusMessage == "render failed"
+
+    monkeypatch.undo()
+    controller.selectSeries("bh-image")
+    assert controller.source == image_source
+    assert controller.imageEditing["metadata"]["seriesId"] == "bh-image"
+
+
+@pytest.mark.ui
 def test_new_record_clears_source_while_lifecycle_preserves_it(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
@@ -478,7 +674,7 @@ def test_image_edit_state_builds_draft_and_invalid_axis_keeps_last_valid_session
     controller.saveDraft()
     assert controller.dirty is True
     assert controller.selectedRevision["revisionId"] == last_valid_revision
-    assert controller.statusMessage == "Resolve the invalid image edit before saving."
+    assert controller.statusMessage == "Resolve the invalid editor input before saving."
 
     controller.setXAxis("linear", 10.0, 0.0, 110.0, 2.0)
 
@@ -554,6 +750,130 @@ def test_table_metadata_edit_treats_only_nan_as_an_absent_condition(tmp_path: Pa
     assert bh["dcBiasAPerM"] == 0.0
     assert bh["imageBacked"] is False
     assert controller.dirty is True
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("series_id", "x_unit", "message"),
+    [
+        ("", "A/m", "must not be blank"),
+        ("loss-100khz", "A/m", "already exists"),
+        ("bh-renamed", "s", "unit"),
+    ],
+)
+def test_invalid_visible_metadata_blocks_save_without_replacing_last_valid_session(
+    tmp_path: Path,
+    series_id: str,
+    x_unit: str,
+    message: str,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    controller, _ = _controller(repository)
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+    controller.setXAxis("linear", 0.0, 0.0, 1.0, 1.0)
+    controller.setYAxis("linear", 1.0, 0.0, 0.0, 1.0)
+    last_valid_revision = controller.selectedRevision["revisionId"]
+
+    controller.setSeriesMetadata(
+        series_id,
+        "bh-curve",
+        x_unit,
+        "T",
+        float("nan"),
+        25.0,
+        float("nan"),
+    )
+
+    assert controller.imageEditing["metadata"]["seriesId"] == series_id
+    assert controller.imageEditing["metadata"]["xUnit"] == x_unit
+    assert controller.selectedRevision["revisionId"] == last_valid_revision
+    assert message in controller.statusMessage
+    assert controller.dirty is True
+    assert controller.canSave is False
+
+    controller.saveDraft()
+
+    assert repository.list_materials() == ()
+    assert controller.imageEditing["metadata"]["seriesId"] == series_id
+    assert controller.imageEditing["metadata"]["xUnit"] == x_unit
+    assert controller.dirty is True
+    assert controller.canSave is False
+
+    controller.setCrop(0, 0, 1, 1)
+
+    assert controller.imageEditing["metadata"]["seriesId"] == series_id
+    assert controller.imageEditing["metadata"]["xUnit"] == x_unit
+    assert controller.selectedRevision["revisionId"] == last_valid_revision
+    assert controller.canSave is False
+
+    controller.setSeriesMetadata(
+        "bh-corrected",
+        "bh-curve",
+        "A/m",
+        "T",
+        float("nan"),
+        25.0,
+        float("nan"),
+    )
+
+    assert controller.series[0]["seriesId"] == "bh-corrected"
+    assert controller.canSave is True
+
+
+@pytest.mark.ui
+def test_pending_visible_editor_input_blocks_stale_save(tmp_path: Path) -> None:
+    repository = InMemoryMaterialRepository()
+    controller, _ = _controller(repository)
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+
+    controller.invalidateEditorInput(
+        "metadata",
+        "Apply or correct the visible editor input.",
+    )
+    controller.saveDraft()
+
+    assert repository.list_materials() == ()
+    assert controller.dirty is True
+    assert controller.canSave is False
+    assert controller.statusMessage == "Resolve the invalid editor input before saving."
+
+
+@pytest.mark.ui
+def test_direct_library_selection_refuses_to_replace_dirty_state(tmp_path: Path) -> None:
+    repository = InMemoryMaterialRepository()
+    first = _approved_material(repository)
+    second_record = replace(
+        first.record,
+        ref=MaterialRef("Other", "Ferrite", "N97"),
+        revision_id="eeeeeeeeeeee",
+    )
+    repository.save(second_record, dict(first.source_files))
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        first.record.ref.manufacturer,
+        first.record.ref.name,
+        first.record.ref.grade,
+    )
+    controller.selectRevision(first.record.revision_id)
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    selected_before = controller.selectedRevision
+    source_before = controller.source
+
+    controller.selectRevision("missing")
+    controller.selectMaterial("Other", "Ferrite", "N97")
+
+    assert controller.selectedRevision == selected_before
+    assert controller.source == source_before
+    assert controller.dirty is True
+    assert controller.statusMessage == (
+        "Save or discard unsaved material changes before changing library selection."
+    )
 
 
 @pytest.mark.ui

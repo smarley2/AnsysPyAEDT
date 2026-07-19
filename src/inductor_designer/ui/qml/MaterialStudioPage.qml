@@ -6,11 +6,31 @@ import QtQuick.Layouts
 Page {
     id: materialStudioPage
     property var controller: null
+    property string pendingLibrarySelectionKind: ""
+    property var pendingLibrarySelectionArguments: []
     property var editing: controller !== null ? controller.imageEditing : ({})
     property var metadata: editing.metadata || ({})
+    property var revisionSources: controller !== null
+        ? (controller.selectedRevision["sources"] || []) : []
     property var bhSeries: controller !== null
         ? controller.series.filter(function(item) { return item.kind === "bh-curve" })
         : []
+    property var bhSeriesOptions: bhSeries.map(function(item) {
+        return {
+            "seriesId": item.seriesId,
+            "label": qsTr("%1 — temperature %2 — DC bias %3")
+                .arg(item.seriesId)
+                .arg(conditionText(item.temperatureC, qsTr("°C")))
+                .arg(conditionText(item.dcBiasAPerM, qsTr("A/m")))
+        }
+    })
+    property bool seriesMetadataInputsValid:
+        seriesIdField.text.trim().length > 0
+        && xUnitField.text.trim().length > 0
+        && yUnitField.text.trim().length > 0
+        && frequencyConditionField.parseValid
+        && temperatureConditionField.parseValid
+        && dcBiasConditionField.parseValid
 
     function fieldText(value) {
         return value === undefined || value === null ? "" : String(value)
@@ -18,6 +38,88 @@ Page {
 
     function optionalNumber(text) {
         return text.trim().length === 0 ? Number.NaN : Number(text)
+    }
+
+    function optionalNumberValid(text) {
+        return text.trim().length === 0 || Number.isFinite(Number(text))
+    }
+
+    function conditionText(value, unit) {
+        return value === undefined || value === null
+            ? qsTr("unspecified")
+            : qsTr("%1 %2").arg(value).arg(unit)
+    }
+
+    function sourceTraceText(source) {
+        const page = source.page === undefined || source.page === null
+            ? qsTr("unspecified") : String(source.page)
+        return [
+            qsTr("Source: %1").arg(source.filename),
+            qsTr("URL: %1").arg(source.url),
+            qsTr("Page: %1").arg(page),
+            qsTr("Captured: %1").arg(source.capturedAt),
+            qsTr("Description: %1").arg(source.description),
+            qsTr("SHA-256: %1").arg(source.sha256)
+        ].join("\n")
+    }
+
+    function sourcesTraceText() {
+        return revisionSources.map(function(source) {
+            return sourceTraceText(source)
+        }).join("\n\n")
+    }
+
+    function markPendingEditorInput(group) {
+        if (controller !== null) {
+            controller.invalidateEditorInput(
+                group,
+                qsTr("Apply or correct the visible editor input before saving.")
+            )
+        }
+    }
+
+    function performPendingLibrarySelection() {
+        const selectionArguments = pendingLibrarySelectionArguments
+        if (pendingLibrarySelectionKind === "material") {
+            controller.selectMaterial(
+                selectionArguments[0], selectionArguments[1], selectionArguments[2]
+            )
+        } else if (pendingLibrarySelectionKind === "revision") {
+            controller.selectRevision(selectionArguments[0])
+        }
+        pendingLibrarySelectionKind = ""
+        pendingLibrarySelectionArguments = []
+        dirtyLibrarySelectionDialog.close()
+    }
+
+    function requestLibrarySelection(kind, selectionArguments) {
+        if (controller !== null && controller.dirty) {
+            pendingLibrarySelectionKind = kind
+            pendingLibrarySelectionArguments = selectionArguments
+            dirtyLibrarySelectionDialog.open()
+            return
+        }
+        pendingLibrarySelectionKind = kind
+        pendingLibrarySelectionArguments = selectionArguments
+        performPendingLibrarySelection()
+    }
+
+    QtObject {
+        id: libraryController
+        property var materials: materialStudioPage.controller !== null
+            ? materialStudioPage.controller.materials : []
+        property var revisions: materialStudioPage.controller !== null
+            ? materialStudioPage.controller.revisions : []
+
+        function selectMaterial(manufacturer, name, grade) {
+            materialStudioPage.requestLibrarySelection(
+                "material", [manufacturer, name, grade]
+            )
+        }
+
+        function selectRevision(revisionId) {
+            materialStudioPage.requestLibrarySelection("revision", [revisionId])
+        }
     }
 
     padding: 10
@@ -107,7 +209,7 @@ Page {
                 objectName: "materialLibraryPane"
                 Layout.preferredWidth: 300
                 Layout.fillHeight: true
-                controller: materialStudioPage.controller
+                controller: libraryController
             }
 
             Pane {
@@ -219,6 +321,21 @@ Page {
                             Accessible.name: qsTr("Approver identity")
                         }
                     }
+                    ScrollView {
+                        objectName: "materialTraceabilityRegion"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 74
+                        clip: true
+                        Accessible.name: qsTr("Selected revision source traceability")
+
+                        Label {
+                            objectName: "materialSourceTraceabilityDetails"
+                            width: parent.width
+                            text: materialStudioPage.sourcesTraceText()
+                            wrapMode: Text.WrapAnywhere
+                            Accessible.name: text
+                        }
+                    }
                     RowLayout {
                         Layout.fillWidth: true
                         Button {
@@ -226,6 +343,7 @@ Page {
                             text: qsTr("Save Draft")
                             enabled: materialStudioPage.controller !== null
                                 && materialStudioPage.controller.canSave
+                                && materialStudioPage.seriesMetadataInputsValid
                             activeFocusOnTab: true
                             Accessible.name: text
                             onClicked: materialStudioPage.controller.saveDraft()
@@ -263,8 +381,9 @@ Page {
                         id: projectBhSeriesChoice
                         objectName: "projectBhSeriesChoice"
                         Layout.fillWidth: true
-                        model: materialStudioPage.bhSeries
-                        textRole: "seriesId"
+                        model: materialStudioPage.bhSeriesOptions
+                        textRole: "label"
+                        valueRole: "seriesId"
                         currentIndex: count === 1 ? 0 : -1
                         activeFocusOnTab: true
                         Accessible.name: qsTr("Explicit B-H series for project")
@@ -281,10 +400,7 @@ Page {
                         Accessible.name: qsTr("Use approved B-H material in project")
                         onClicked: materialStudioPage.controller.useInProject(
                             projectBhSeriesChoice.currentIndex >= 0
-                                ? materialStudioPage.bhSeries[
-                                    projectBhSeriesChoice.currentIndex
-                                ].seriesId
-                                : ""
+                                ? projectBhSeriesChoice.currentValue : ""
                         )
                     }
                 }
@@ -391,6 +507,7 @@ Page {
                             objectName: "seriesIdField"
                             text: materialStudioPage.fieldText(materialStudioPage.metadata.seriesId)
                             placeholderText: qsTr("Series ID")
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Series ID")
                         }
@@ -408,12 +525,14 @@ Page {
                                 : 0
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Series kind")
+                            onActivated: materialStudioPage.markPendingEditorInput("metadata")
                         }
                         TextField {
                             id: xUnitField
                             objectName: "xUnitField"
                             text: materialStudioPage.fieldText(materialStudioPage.metadata.xUnit)
                             placeholderText: qsTr("X unit")
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("X unit")
                         }
@@ -422,42 +541,53 @@ Page {
                             objectName: "yUnitField"
                             text: materialStudioPage.fieldText(materialStudioPage.metadata.yUnit)
                             placeholderText: qsTr("Y unit")
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Y unit")
                         }
                         TextField {
                             id: frequencyConditionField
                             objectName: "frequencyConditionField"
+                            property bool parseValid: materialStudioPage.optionalNumberValid(text)
                             text: materialStudioPage.fieldText(
                                 materialStudioPage.metadata.frequencyHz
                             )
                             placeholderText: qsTr("Frequency (Hz)")
+                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Series frequency in hertz")
                         }
                         TextField {
                             id: temperatureConditionField
                             objectName: "temperatureConditionField"
+                            property bool parseValid: materialStudioPage.optionalNumberValid(text)
                             text: materialStudioPage.fieldText(
                                 materialStudioPage.metadata.temperatureC
                             )
                             placeholderText: qsTr("Temperature (°C)")
+                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Series temperature in degrees Celsius")
                         }
                         TextField {
                             id: dcBiasConditionField
                             objectName: "dcBiasConditionField"
+                            property bool parseValid: materialStudioPage.optionalNumberValid(text)
                             text: materialStudioPage.fieldText(
                                 materialStudioPage.metadata.dcBiasAPerM
                             )
                             placeholderText: qsTr("DC bias (A/m)")
+                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                            onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Series DC bias in amperes per metre")
                         }
                         Button {
                             objectName: "applySeriesMetadataButton"
                             text: qsTr("Apply series")
+                            enabled: materialStudioPage.seriesMetadataInputsValid
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Apply series metadata and conditions")
                             onClicked: materialStudioPage.controller.setSeriesMetadata(
@@ -472,6 +602,20 @@ Page {
                         }
                     }
 
+                    Label {
+                        objectName: "seriesMetadataInputError"
+                        Layout.fillWidth: true
+                        visible: !materialStudioPage.seriesMetadataInputsValid
+                        color: palette.text
+                        font.bold: true
+                        text: qsTr(
+                            "Series ID and units are required; each nonblank condition must be a valid number."
+                        )
+                        wrapMode: Text.WordWrap
+                        Accessible.name: text
+                        Accessible.ignored: !visible
+                    }
+
                     RowLayout {
                         Layout.fillWidth: true
                         Label { text: qsTr("Crop") }
@@ -483,6 +627,7 @@ Page {
                                 (materialStudioPage.editing.crop || ({})).left
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
                             Accessible.name: qsTr("Crop left")
                         }
                         TextField {
@@ -493,6 +638,7 @@ Page {
                                 (materialStudioPage.editing.crop || ({})).top
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
                             Accessible.name: qsTr("Crop top")
                         }
                         TextField {
@@ -503,6 +649,7 @@ Page {
                                 (materialStudioPage.editing.crop || ({})).width
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
                             Accessible.name: qsTr("Crop width")
                         }
                         TextField {
@@ -513,6 +660,7 @@ Page {
                                 (materialStudioPage.editing.crop || ({})).height
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
                             Accessible.name: qsTr("Crop height")
                         }
                         Button {
@@ -545,6 +693,7 @@ Page {
                             currentIndex: (materialStudioPage.editing.xAxis || ({})).scale
                                 === "log" ? 1 : 0
                             activeFocusOnTab: true
+                            onActivated: materialStudioPage.markPendingEditorInput("x-axis")
                             Accessible.name: qsTr("X axis scale")
                         }
                         TextField {
@@ -555,6 +704,7 @@ Page {
                                 (materialStudioPage.editing.xAxis || ({})).pixelA
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
                             Accessible.name: qsTr("X axis anchor A pixel")
                         }
                         TextField {
@@ -565,6 +715,7 @@ Page {
                                 (materialStudioPage.editing.xAxis || ({})).valueA
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
                             Accessible.name: qsTr("X axis anchor A value")
                         }
                         TextField {
@@ -575,6 +726,7 @@ Page {
                                 (materialStudioPage.editing.xAxis || ({})).pixelB
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
                             Accessible.name: qsTr("X axis anchor B pixel")
                         }
                         TextField {
@@ -585,6 +737,7 @@ Page {
                                 (materialStudioPage.editing.xAxis || ({})).valueB
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
                             Accessible.name: qsTr("X axis anchor B value")
                         }
                         Button {
@@ -618,6 +771,7 @@ Page {
                             currentIndex: (materialStudioPage.editing.yAxis || ({})).scale
                                 === "log" ? 1 : 0
                             activeFocusOnTab: true
+                            onActivated: materialStudioPage.markPendingEditorInput("y-axis")
                             Accessible.name: qsTr("Y axis scale")
                         }
                         TextField {
@@ -628,6 +782,7 @@ Page {
                                 (materialStudioPage.editing.yAxis || ({})).pixelA
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
                             Accessible.name: qsTr("Y axis anchor A pixel")
                         }
                         TextField {
@@ -638,6 +793,7 @@ Page {
                                 (materialStudioPage.editing.yAxis || ({})).valueA
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
                             Accessible.name: qsTr("Y axis anchor A value")
                         }
                         TextField {
@@ -648,6 +804,7 @@ Page {
                                 (materialStudioPage.editing.yAxis || ({})).pixelB
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
                             Accessible.name: qsTr("Y axis anchor B pixel")
                         }
                         TextField {
@@ -658,6 +815,7 @@ Page {
                                 (materialStudioPage.editing.yAxis || ({})).valueB
                             )
                             activeFocusOnTab: true
+                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
                             Accessible.name: qsTr("Y axis anchor B value")
                         }
                         Button {
@@ -714,6 +872,66 @@ Page {
             Accessible.name: text.length > 0
                 ? qsTr("Material Studio status: %1").arg(text)
                 : qsTr("Material Studio status")
+        }
+    }
+
+    Dialog {
+        id: dirtyLibrarySelectionDialog
+        objectName: "dirtyLibrarySelectionDialog"
+        anchors.centerIn: parent
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        title: qsTr("Unsaved material changes")
+
+        ColumnLayout {
+            Label {
+                Layout.preferredWidth: 420
+                text: qsTr(
+                    "Save the material draft, discard unsaved changes, or cancel the library selection."
+                )
+                wrapMode: Text.WordWrap
+                Accessible.name: text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    objectName: "dirtyLibrarySelectionSaveButton"
+                    text: qsTr("Save")
+                    enabled: materialStudioPage.controller !== null
+                        && materialStudioPage.controller.canSave
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Save material changes and change selection")
+                    onClicked: {
+                        materialStudioPage.controller.saveDraft()
+                        if (!materialStudioPage.controller.dirty) {
+                            materialStudioPage.performPendingLibrarySelection()
+                        }
+                    }
+                }
+                Button {
+                    objectName: "dirtyLibrarySelectionDiscardButton"
+                    text: qsTr("Discard")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Discard material changes and change selection")
+                    onClicked: {
+                        if (materialStudioPage.controller.discardChanges()
+                                && !materialStudioPage.controller.dirty) {
+                            materialStudioPage.performPendingLibrarySelection()
+                        }
+                    }
+                }
+                Button {
+                    objectName: "dirtyLibrarySelectionCancelButton"
+                    text: qsTr("Cancel")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Cancel library selection and keep editing")
+                    onClicked: {
+                        materialStudioPage.pendingLibrarySelectionKind = ""
+                        materialStudioPage.pendingLibrarySelectionArguments = []
+                        dirtyLibrarySelectionDialog.close()
+                    }
+                }
+            }
         }
     }
 }

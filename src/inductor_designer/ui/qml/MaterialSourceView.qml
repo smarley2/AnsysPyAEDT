@@ -33,6 +33,26 @@ Item {
         return sourceOffsetY + originalY * sourceScale
     }
 
+    function clamp(value, low, high) {
+        return Math.max(low, Math.min(value, high))
+    }
+
+    function setCropTopLeft(originalX, originalY) {
+        const crop = editing.crop || ({})
+        const right = crop.left + crop.width
+        const bottom = crop.top + crop.height
+        const left = Math.round(clamp(originalX, 0, Math.max(0, right - 1)))
+        const top = Math.round(clamp(originalY, 0, Math.max(0, bottom - 1)))
+        controller.setCrop(left, top, right - left, bottom - top)
+    }
+
+    function setCropBottomRight(originalX, originalY) {
+        const crop = editing.crop || ({})
+        const right = Math.round(clamp(originalX, crop.left + 1, sourceWidth))
+        const bottom = Math.round(clamp(originalY, crop.top + 1, sourceHeight))
+        controller.setCrop(crop.left, crop.top, right - crop.left, bottom - crop.top)
+    }
+
     Rectangle {
         anchors.fill: parent
         color: "transparent"
@@ -156,9 +176,41 @@ Item {
         height: 14
         color: palette.highlight
         border.color: palette.windowText
+        border.width: activeFocus ? 4 : 2
         x: materialSourceView.displayX((materialSourceView.editing.crop || ({})).left || 0) - width / 2
         y: materialSourceView.displayY((materialSourceView.editing.crop || ({})).top || 0) - height / 2
+        activeFocusOnTab: true
         Accessible.name: qsTr("Crop top-left handle")
+        Accessible.description: qsTr(
+            "Drag the crop corner or use arrow keys; coordinates use original source pixels."
+        )
+
+        function moveBy(deltaX, deltaY) {
+            const crop = materialSourceView.editing.crop || ({})
+            materialSourceView.setCropTopLeft(
+                crop.left + deltaX, crop.top + deltaY
+            )
+        }
+
+        Keys.onLeftPressed: moveBy(-1, 0)
+        Keys.onRightPressed: moveBy(1, 0)
+        Keys.onUpPressed: moveBy(0, -1)
+        Keys.onDownPressed: moveBy(0, 1)
+
+        DragHandler {
+            target: null
+            onActiveChanged: {
+                if (!active && materialSourceView.controller !== null) {
+                    const point = cropHandleTopLeft.mapToItem(
+                        materialSourceView, centroid.position.x, centroid.position.y
+                    )
+                    materialSourceView.setCropTopLeft(
+                        materialSourceView.originalX(point.x),
+                        materialSourceView.originalY(point.y)
+                    )
+                }
+            }
+        }
     }
 
     Rectangle {
@@ -169,6 +221,7 @@ Item {
         height: 14
         color: palette.highlight
         border.color: palette.windowText
+        border.width: activeFocus ? 4 : 2
         x: {
             const crop = materialSourceView.editing.crop || ({})
             return materialSourceView.displayX((crop.left || 0) + (crop.width || 0)) - width / 2
@@ -177,7 +230,39 @@ Item {
             const crop = materialSourceView.editing.crop || ({})
             return materialSourceView.displayY((crop.top || 0) + (crop.height || 0)) - height / 2
         }
+        activeFocusOnTab: true
         Accessible.name: qsTr("Crop bottom-right handle")
+        Accessible.description: qsTr(
+            "Drag the crop corner or use arrow keys; coordinates use original source pixels."
+        )
+
+        function moveBy(deltaX, deltaY) {
+            const crop = materialSourceView.editing.crop || ({})
+            materialSourceView.setCropBottomRight(
+                crop.left + crop.width + deltaX,
+                crop.top + crop.height + deltaY
+            )
+        }
+
+        Keys.onLeftPressed: moveBy(-1, 0)
+        Keys.onRightPressed: moveBy(1, 0)
+        Keys.onUpPressed: moveBy(0, -1)
+        Keys.onDownPressed: moveBy(0, 1)
+
+        DragHandler {
+            target: null
+            onActiveChanged: {
+                if (!active && materialSourceView.controller !== null) {
+                    const point = cropHandleBottomRight.mapToItem(
+                        materialSourceView, centroid.position.x, centroid.position.y
+                    )
+                    materialSourceView.setCropBottomRight(
+                        materialSourceView.originalX(point.x),
+                        materialSourceView.originalY(point.y)
+                    )
+                }
+            }
+        }
     }
 
     Repeater {
@@ -188,6 +273,7 @@ Item {
             ["yAxisAnchorB", qsTr("Y axis anchor B"), "yAxis", "pixelB", 1]
         ]
         delegate: Rectangle {
+            id: axisHandle
             required property var modelData
             objectName: modelData[0]
             width: 12
@@ -195,7 +281,7 @@ Item {
             radius: 6
             color: "transparent"
             border.color: palette.highlight
-            border.width: 3
+            border.width: activeFocus ? 5 : 3
             x: modelData[4] === 0
                 ? materialSourceView.displayX(
                     ((materialSourceView.editing[modelData[2]] || ({}))[modelData[3]]) || 0
@@ -207,7 +293,67 @@ Item {
                 ) - height / 2
                 : materialSourceView.sourceOffsetY + materialSourceView.sourceHeight
                     * materialSourceView.sourceScale - height / 2
+            activeFocusOnTab: true
             Accessible.name: modelData[1]
+            Accessible.description: qsTr(
+                "Drag the axis anchor or use arrow keys; coordinates use original source pixels."
+            )
+
+            function setPixel(pixel) {
+                const axis = materialSourceView.editing[modelData[2]] || ({})
+                const bounded = materialSourceView.clamp(
+                    pixel,
+                    0,
+                    modelData[4] === 0
+                        ? materialSourceView.sourceWidth
+                        : materialSourceView.sourceHeight
+                )
+                const pixelA = modelData[3] === "pixelA" ? bounded : axis.pixelA
+                const pixelB = modelData[3] === "pixelB" ? bounded : axis.pixelB
+                if (modelData[2] === "xAxis") {
+                    materialSourceView.controller.setXAxis(
+                        axis.scale,
+                        pixelA,
+                        axis.valueA,
+                        pixelB,
+                        axis.valueB
+                    )
+                } else {
+                    materialSourceView.controller.setYAxis(
+                        axis.scale,
+                        pixelA,
+                        axis.valueA,
+                        pixelB,
+                        axis.valueB
+                    )
+                }
+            }
+
+            function moveBy(delta) {
+                const axis = materialSourceView.editing[modelData[2]] || ({})
+                setPixel(axis[modelData[3]] + delta)
+            }
+
+            Keys.onLeftPressed: if (modelData[4] === 0) moveBy(-1)
+            Keys.onRightPressed: if (modelData[4] === 0) moveBy(1)
+            Keys.onUpPressed: if (modelData[4] === 1) moveBy(-1)
+            Keys.onDownPressed: if (modelData[4] === 1) moveBy(1)
+
+            DragHandler {
+                target: null
+                onActiveChanged: {
+                    if (!active && materialSourceView.controller !== null) {
+                        const point = axisHandle.mapToItem(
+                            materialSourceView, centroid.position.x, centroid.position.y
+                        )
+                        axisHandle.setPixel(
+                            axisHandle.modelData[4] === 0
+                                ? materialSourceView.originalX(point.x)
+                                : materialSourceView.originalY(point.y)
+                        )
+                    }
+                }
+            }
         }
     }
 

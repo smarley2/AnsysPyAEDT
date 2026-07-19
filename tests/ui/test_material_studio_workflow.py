@@ -12,7 +12,17 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Property, QObject, QPoint, QPointF, Qt, Signal, Slot  # noqa: E402
+from PySide6.QtCore import (  # noqa: E402
+    Property,
+    QMetaObject,
+    QObject,
+    QPoint,
+    QPointF,
+    Qt,
+    QUrl,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -51,21 +61,21 @@ class WorkflowController(QObject):
             },
             "xAxis": {
                 "scale": "linear",
-                "pixelA": 10.0,
+                "pixelA": 1.0,
                 "valueA": 0.0,
-                "pixelB": 110.0,
+                "pixelB": 11.0,
                 "valueB": 2.0,
             },
             "yAxis": {
                 "scale": "linear",
-                "pixelA": 70.0,
+                "pixelA": 7.0,
                 "valueA": 0.0,
-                "pixelB": 10.0,
+                "pixelB": 1.0,
                 "valueB": 2.0,
             },
             "pixelPoints": [
-                {"xPx": 10.0, "yPx": 70.0},
-                {"xPx": 110.0, "yPx": 10.0},
+                {"xPx": 1.0, "yPx": 7.0},
+                {"xPx": 11.0, "yPx": 1.0},
             ],
             "metadata": {
                 "seriesId": "bh-25c",
@@ -96,7 +106,7 @@ class WorkflowController(QObject):
                 "yUnit": "T",
                 "frequencyHz": None,
                 "temperatureC": 100.0,
-                "dcBiasAPerM": 0.0,
+                "dcBiasAPerM": None,
                 "pointCount": 2,
                 "imageBacked": False,
             },
@@ -106,6 +116,34 @@ class WorkflowController(QObject):
             {"seriesId": "bh-25c", "index": 1, "x": 100.0, "y": 0.2},
         ]
         self._dirty = False
+        self._materials = [
+            {"manufacturer": "Example", "name": "Ferrite", "grade": "N87"},
+            {"manufacturer": "Other", "name": "Ferrite", "grade": "N97"},
+        ]
+        self._revisions = [
+            {
+                "revisionId": "111111111111",
+                "status": "draft",
+                "createdAt": "2026-07-19T10:00:00+00:00",
+                "reviewedBy": "",
+                "approvedBy": "",
+                "seriesCount": 2,
+                "validationErrors": 0,
+                "validationWarnings": 0,
+                "isLatestApproved": False,
+            },
+            {
+                "revisionId": "222222222222",
+                "status": "approved",
+                "createdAt": "2026-07-19T11:00:00+00:00",
+                "reviewedBy": "reviewer@example.com",
+                "approvedBy": "approver@example.com",
+                "seriesCount": 2,
+                "validationErrors": 0,
+                "validationWarnings": 0,
+                "isLatestApproved": True,
+            },
+        ]
         self.save_succeeds = True
         self.can_save = True
         self.can_review = True
@@ -113,8 +151,8 @@ class WorkflowController(QObject):
         self.can_use = True
         self.calls: list[tuple[object, ...]] = []
 
-    materials = Property(list, lambda self: [], notify=libraryChanged)
-    revisions = Property(list, lambda self: [], notify=libraryChanged)
+    materials = Property(list, lambda self: self._materials, notify=libraryChanged)
+    revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
     selectedRevision = Property(
         dict,
         lambda self: {
@@ -122,7 +160,26 @@ class WorkflowController(QObject):
             "name": "Ferrite",
             "grade": "N87",
             "status": "approved",
-            "sources": [],
+            "sources": [
+                {
+                    "kind": "image",
+                    "filename": "manual.png",
+                    "sha256": "a" * 64,
+                    "url": "https://example.com/manual.png",
+                    "page": 0,
+                    "capturedAt": "2026-07-19T09:00:00+00:00",
+                    "description": "Manual B-H graph",
+                },
+                {
+                    "kind": "spreadsheet",
+                    "filename": "catalog.xlsx",
+                    "sha256": "b" * 64,
+                    "url": "https://example.com/catalog.xlsx",
+                    "page": None,
+                    "capturedAt": "2026-07-19T09:30:00+00:00",
+                    "description": "Vendor material table",
+                },
+            ],
         },
         notify=selectionChanged,
     )
@@ -150,14 +207,37 @@ class WorkflowController(QObject):
     @Slot(int, int, int, int)
     def setCrop(self, left: int, top: int, width: int, height: int) -> None:
         self.calls.append(("setCrop", left, top, width, height))
+        self._editing["crop"] = {
+            "left": left,
+            "top": top,
+            "width": width,
+            "height": height,
+        }
+        self.sourceChanged.emit()
 
     @Slot(str, float, float, float, float)
     def setXAxis(self, *values: object) -> None:
         self.calls.append(("setXAxis", *values))
+        self._editing["xAxis"] = {
+            "scale": values[0],
+            "pixelA": values[1],
+            "valueA": values[2],
+            "pixelB": values[3],
+            "valueB": values[4],
+        }
+        self.sourceChanged.emit()
 
     @Slot(str, float, float, float, float)
     def setYAxis(self, *values: object) -> None:
         self.calls.append(("setYAxis", *values))
+        self._editing["yAxis"] = {
+            "scale": values[0],
+            "pixelA": values[1],
+            "valueA": values[2],
+            "pixelB": values[3],
+            "valueB": values[4],
+        }
+        self.sourceChanged.emit()
 
     @Slot(int, float, float)
     def movePixelPoint(self, index: int, x_px: float, y_px: float) -> None:
@@ -226,6 +306,21 @@ class WorkflowController(QObject):
     @Slot(str)
     def selectSeries(self, series_id: str) -> None:
         self.calls.append(("selectSeries", series_id))
+
+    @Slot(str, str, str)
+    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None:
+        self.calls.append(("selectMaterial", manufacturer, name, grade))
+
+    @Slot(str)
+    def selectRevision(self, revision_id: str) -> None:
+        self.calls.append(("selectRevision", revision_id))
+
+    @Slot(str, str)
+    def invalidateEditorInput(self, group: str, message: str) -> None:
+        self.calls.append(("invalidateEditorInput", group, message))
+        self.can_save = False
+        self.set_dirty(True)
+        self.selectionChanged.emit()
 
 
 def _press(item: QObject) -> None:
@@ -303,6 +398,46 @@ def test_material_workflow_has_five_regions_and_accessible_file_actions() -> Non
         assert label in names
     assert app is not None
     assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_all_file_dialogs_forward_controlled_urls_with_exact_semantics(
+    tmp_path: Path,
+) -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    page = root.findChild(QObject, "materialStudioPage")
+    pdf_page = root.findChild(QObject, "pdfPageField")
+    pdf_page.setProperty("value", 7)
+    cases = [
+        ("templateCsvDialog", "template.csv", ("downloadTemplate", "csv")),
+        ("templateXlsxDialog", "template.xlsx", ("downloadTemplate", "xlsx")),
+        ("tableUploadDialog", "source.csv", ("importTable",)),
+        ("revisionExportDialog", "revision.xlsx", ("exportSelectedWorkbook",)),
+        ("workbookReimportDialog", "edited.xlsx", ("importEditedWorkbook",)),
+        ("imageSourceDialog", "source.pdf", ("importSourceImage",)),
+    ]
+
+    for dialog_name, filename, prefix in cases:
+        dialog = root.findChild(QObject, dialog_name)
+        path = tmp_path / filename
+        if dialog_name in {
+            "tableUploadDialog",
+            "workbookReimportDialog",
+            "imageSourceDialog",
+        }:
+            path.write_bytes(b"controlled input")
+        url = QUrl.fromLocalFile(str(path)).toString()
+        assert dialog.setProperty("selectedFile", QUrl(url))
+        assert QMetaObject.invokeMethod(dialog, "accepted")
+        app.processEvents()
+        expected = (*prefix, url)
+        if dialog_name == "imageSourceDialog":
+            expected = (*expected, 7)
+        assert controller.calls[-1] == expected
+
+    assert page is not None
+    assert engine.rootObjects()
 @pytest.mark.ui
 def test_curve_workspace_converts_display_clicks_and_forwards_numeric_edits() -> None:
     controller = WorkflowController()
@@ -341,7 +476,7 @@ def test_curve_workspace_converts_display_clicks_and_forwards_numeric_edits() ->
     app.processEvents()
     QTest.keyClick(root, Qt.Key.Key_Right)
     app.processEvents()
-    assert controller.calls[-1] == ("movePixelPoint", 1, 111.0, 10.0)
+    assert controller.calls[-1] == ("movePixelPoint", 1, 12.0, 1.0)
 
     point_x.setProperty("text", "200")
     point_y.setProperty("text", "0.3")
@@ -351,6 +486,74 @@ def test_curve_workspace_converts_display_clicks_and_forwards_numeric_edits() ->
         ("setCanonicalPoint", "bh-25c", 1, 200.0, 0.3),
         ("deletePoint", 1),
     ]
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_crop_and_every_axis_handle_support_mouse_drag_and_keyboard() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    source_view = root.findChild(QQuickItem, "materialSourceView")
+    scale = float(source_view.property("sourceScale"))
+
+    def handle(name: str) -> QQuickItem:
+        item = root.findChild(QQuickItem, name)
+        if item is None:
+            accessible_names = {
+                "xAxisAnchorA": "X axis anchor A",
+                "xAxisAnchorB": "X axis anchor B",
+                "yAxisAnchorA": "Y axis anchor A",
+                "yAxisAnchorB": "Y axis anchor B",
+            }
+            item = _accessible_object(root, accessible_names[name])
+        assert item is not None
+        assert isinstance(item, QQuickItem)
+        return item
+
+    def drag(item: QQuickItem, dx: float, dy: float) -> None:
+        center = item.mapToScene(QPointF(item.width() / 2, item.height() / 2))
+        start = QPoint(round(center.x()), round(center.y()))
+        finish = QPoint(round(center.x() + dx), round(center.y() + dy))
+        QTest.mousePress(root, Qt.MouseButton.LeftButton, pos=start)
+        QTest.mouseMove(root, finish, delay=40)
+        QTest.mouseRelease(root, Qt.MouseButton.LeftButton, pos=finish)
+        app.processEvents()
+
+    def key(item: QQuickItem, value: Qt.Key) -> None:
+        item.forceActiveFocus()
+        app.processEvents()
+        QTest.keyClick(root, value)
+        app.processEvents()
+
+    crop_bottom_right = handle("cropHandleBottomRight")
+    drag(crop_bottom_right, -scale, -scale)
+    assert controller.calls[-1] == ("setCrop", 0, 0, 11, 7)
+    key(crop_bottom_right, Qt.Key.Key_Left)
+    assert controller.calls[-1] == ("setCrop", 0, 0, 10, 7)
+
+    crop_top_left = handle("cropHandleTopLeft")
+    drag(crop_top_left, scale, scale)
+    assert controller.calls[-1] == ("setCrop", 1, 1, 9, 6)
+    key(crop_top_left, Qt.Key.Key_Down)
+    assert controller.calls[-1] == ("setCrop", 1, 2, 9, 5)
+
+    axis_cases = [
+        ("xAxisAnchorA", scale, 0.0, Qt.Key.Key_Right, "setXAxis", 3.0),
+        ("xAxisAnchorB", -scale, 0.0, Qt.Key.Key_Left, "setXAxis", 9.0),
+        ("yAxisAnchorA", 0.0, -scale, Qt.Key.Key_Up, "setYAxis", 5.0),
+        ("yAxisAnchorB", 0.0, scale, Qt.Key.Key_Down, "setYAxis", 3.0),
+    ]
+    for name, dx, dy, arrow, slot_name, expected_pixel in axis_cases:
+        item = handle(name)
+        drag(item, dx, dy)
+        assert controller.calls[-1][0] == slot_name
+        key(item, arrow)
+        call = controller.calls[-1]
+        assert call[0] == slot_name
+        pixel_index = 2 if name.endswith("A") else 4
+        assert call[pixel_index] == pytest.approx(expected_pixel, abs=0.05)
+
+    assert source_view is not None
     assert engine.rootObjects()
 
 
@@ -393,6 +596,55 @@ def test_lifecycle_requires_actor_and_explicit_multi_bh_selection() -> None:
 
 
 @pytest.mark.ui
+def test_bh_choice_displays_exact_id_and_condition_context() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    choice = root.findChild(QObject, "projectBhSeriesChoice")
+
+    choice.setProperty("currentIndex", 0)
+    app.processEvents()
+    assert choice.property("currentText") == (
+        "bh-25c — temperature 25 °C — DC bias 0 A/m"
+    )
+
+    choice.setProperty("currentIndex", 1)
+    app.processEvents()
+    assert choice.property("currentText") == (
+        "bh-100c — temperature 100 °C — DC bias unspecified"
+    )
+    _press(root.findChild(QObject, "useInProjectButton"))
+    assert controller.calls[-1] == ("useInProject", "bh-100c")
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_lifecycle_displays_all_source_traceability_fields() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    region = root.findChild(QObject, "materialTraceabilityRegion")
+    details = root.findChild(QObject, "materialSourceTraceabilityDetails")
+
+    assert region is not None
+    assert details.property("text") == (
+        "Source: manual.png\n"
+        "URL: https://example.com/manual.png\n"
+        "Page: 0\n"
+        "Captured: 2026-07-19T09:00:00+00:00\n"
+        "Description: Manual B-H graph\n"
+        f"SHA-256: {'a' * 64}\n\n"
+        "Source: catalog.xlsx\n"
+        "URL: https://example.com/catalog.xlsx\n"
+        "Page: unspecified\n"
+        "Captured: 2026-07-19T09:30:00+00:00\n"
+        "Description: Vendor material table\n"
+        f"SHA-256: {'b' * 64}"
+    )
+    assert details.property("visible") is True
+    assert app is not None
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
 def test_blank_conditions_forward_nan_while_physical_zero_is_preserved() -> None:
     controller = WorkflowController()
     app, engine, root = _root(controller)
@@ -411,6 +663,56 @@ def test_blank_conditions_forward_nan_while_physical_zero_is_preserved() -> None
     assert call[6] == 0.0
     assert math.isnan(call[7])
     assert app is not None
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_malformed_optional_condition_stays_visible_and_never_applies() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    frequency = root.findChild(QObject, "frequencyConditionField")
+    apply_metadata = root.findChild(QObject, "applySeriesMetadataButton")
+    save = root.findChild(QObject, "saveDraftButton")
+    error = root.findChild(QObject, "seriesMetadataInputError")
+    frequency.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    for key, modifier in (
+        (Qt.Key.Key_1, Qt.KeyboardModifier.NoModifier),
+        (Qt.Key.Key_0, Qt.KeyboardModifier.NoModifier),
+        (Qt.Key.Key_K, Qt.KeyboardModifier.NoModifier),
+        (Qt.Key.Key_H, Qt.KeyboardModifier.ShiftModifier),
+        (Qt.Key.Key_Z, Qt.KeyboardModifier.NoModifier),
+    ):
+        QTest.keyClick(root, key, modifier)
+    app.processEvents()
+
+    assert frequency.property("text") == "10khz"
+    assert apply_metadata.property("enabled") is False
+    assert save.property("enabled") is False
+    assert error.property("visible") is True
+    assert "valid number" in error.property("text")
+    _press(apply_metadata)
+    assert any(call[0] == "invalidateEditorInput" for call in controller.calls)
+    assert not any(call[0] == "setSeriesMetadata" for call in controller.calls)
+    assert app is not None
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_pending_calibration_text_disables_stale_save() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    crop_width = root.findChild(QObject, "cropWidthField")
+    save = root.findChild(QObject, "saveDraftButton")
+
+    crop_width.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClick(root, Qt.Key.Key_X)
+    app.processEvents()
+
+    assert crop_width.property("text") == "x"
+    assert controller.calls[-1][0] == "invalidateEditorInput"
+    assert save.property("enabled") is False
     assert engine.rootObjects()
 
 
@@ -509,4 +811,72 @@ def test_dirty_navigation_save_discard_and_cancel_are_transactional() -> None:
     app.processEvents()
     assert steps.property("currentIndex") == 0
     assert controller.calls[-1] == ("discardChanges",)
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("selection_name", "selection_call"),
+    [
+        (
+            "Select material Other, Ferrite, N97",
+            ("selectMaterial", "Other", "Ferrite", "N97"),
+        ),
+        ("Select revision 222222222222", ("selectRevision", "222222222222")),
+    ],
+)
+def test_dirty_library_selection_save_discard_cancel_transaction(
+    selection_name: str,
+    selection_call: tuple[object, ...],
+) -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    selection = (
+        None
+        if selection_name.startswith("Select revision")
+        else _accessible_object(root, selection_name)
+    )
+    revision_list = root.findChild(QQuickItem, "revisionList")
+    dialog = root.findChild(QObject, "dirtyLibrarySelectionDialog")
+    save = root.findChild(QObject, "dirtyLibrarySelectionSaveButton")
+    discard = root.findChild(QObject, "dirtyLibrarySelectionDiscardButton")
+    cancel = root.findChild(QObject, "dirtyLibrarySelectionCancelButton")
+
+    def activate_selection() -> None:
+        if selection is not None:
+            _press(selection)
+            return
+        assert revision_list is not None
+        revision_list.setProperty("currentIndex", 1)
+        revision_list.forceActiveFocus()
+        QTest.keyClick(root, Qt.Key.Key_Return)
+
+    controller.set_dirty(True)
+    activate_selection()
+    app.processEvents()
+    assert dialog.property("visible") is True
+    assert selection_call not in controller.calls
+    _press(cancel)
+    assert dialog.property("visible") is False
+    assert selection_call not in controller.calls
+
+    controller.save_succeeds = False
+    activate_selection()
+    _press(save)
+    app.processEvents()
+    assert dialog.property("visible") is True
+    assert selection_call not in controller.calls
+
+    controller.save_succeeds = True
+    _press(save)
+    app.processEvents()
+    assert dialog.property("visible") is False
+    assert controller.calls[-1] == selection_call
+
+    controller.set_dirty(True)
+    activate_selection()
+    _press(discard)
+    app.processEvents()
+    assert controller.calls[-2:] == [("discardChanges",), selection_call]
+    assert dialog.property("visible") is False
     assert engine.rootObjects()
