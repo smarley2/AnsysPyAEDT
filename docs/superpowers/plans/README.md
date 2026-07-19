@@ -14,7 +14,7 @@ Milestones 3, 4, and 4.5 status: **Accepted 2026-07-16**, **Accepted 2026-07-17*
 
 Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record, `MATCH` reproduction, and live AEDT/FEMM material handoff remain required. M5b implementation may start now, but those checks must pass before either milestone is accepted.
 
-Milestone 5b status: **Implementation reviewed and complete non-live gates passing; native Windows manual acceptance pending 2026-07-19**. Fresh evidence is 822 non-live tests, 119 UI tests, 91.80% coverage, and clean static/architecture gates. Formal M5a/M5b acceptance also awaits a real approved record with `MATCH` and live exact-revision/B-H-series verification in AEDT and FEMM. M5c is optional/deferred and will receive a separate plan only if M5b user acceptance demonstrates a need beyond the spreadsheet/manual workflow.
+Milestone 5b status: **Implementation reviewed, verified, merged, and pushed; native Windows manual acceptance pending 2026-07-19**. Fresh evidence is 822 non-live tests, 119 UI tests, 91.80% coverage, and clean static/architecture gates. Formal M5a/M5b acceptance also awaits a real approved record with `MATCH` and live exact-revision/B-H-series verification in AEDT and FEMM. M5c is optional/deferred and will receive a separate plan only if M5b user acceptance demonstrates a need beyond the spreadsheet/manual workflow.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |

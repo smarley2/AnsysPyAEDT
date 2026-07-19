@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Tasks 1-9 implemented; Task 10 whole review and fresh complete gates pass. Native Windows manual acceptance, merge, and push remain pending.
+**Status:** Implemented, reviewed, verified, merged to `main`, and pushed on 2026-07-19. Native Windows manual acceptance remains pending, so M5b is not yet implementation-complete or formally accepted.
 
 **Approved specification:** `docs/superpowers/specs/2026-07-19-material-studio-ui-design.md`
 
@@ -1053,7 +1053,7 @@ git add docs/development/material-records.md docs/development/ROADMAP.md docs/su
 git commit -m "docs: record Material Studio implementation handoff"
 ```
 
-- [ ] **Step 7: Merge, verify, push, and confirm remote**
+- [x] **Step 7: Merge, verify, push, and confirm remote**
 
 Fetch `origin/main`, integrate the reviewed feature branch according to the
 finishing workflow, rerun the non-live suite plus static gates on merged `main`,
