@@ -5,10 +5,33 @@ import QtQml.Models
 
 ApplicationWindow {
     id: window
+    property int pendingStepIndex: -1
     width: 1200
     height: 760
     visible: true
     title: qsTr("PyAEDT Inductor Designer")
+
+    function requestStep(index) {
+        if (index === guidedStepList.currentIndex) {
+            return
+        }
+        if (guidedStepList.currentIndex === 2
+                && materialStudioController !== null
+                && materialStudioController.dirty) {
+            pendingStepIndex = index
+            dirtyNavigationDialog.open()
+            return
+        }
+        guidedStepList.currentIndex = index
+    }
+
+    function completePendingNavigation() {
+        if (pendingStepIndex >= 0) {
+            guidedStepList.currentIndex = pendingStepIndex
+        }
+        pendingStepIndex = -1
+        dirtyNavigationDialog.close()
+    }
 
     ObjectModel {
         id: guidedStepsModel
@@ -21,10 +44,10 @@ ApplicationWindow {
             highlighted: guidedStepList.currentIndex === 0
             activeFocusOnTab: true
             Accessible.name: text
-            onClicked: guidedStepList.currentIndex = 0
-            Keys.onReturnPressed: guidedStepList.currentIndex = 0
-            Keys.onEnterPressed: guidedStepList.currentIndex = 0
-            Keys.onSpacePressed: guidedStepList.currentIndex = 0
+            onClicked: window.requestStep(0)
+            Keys.onReturnPressed: window.requestStep(0)
+            Keys.onEnterPressed: window.requestStep(0)
+            Keys.onSpacePressed: window.requestStep(0)
         }
         ItemDelegate {
             objectName: "windingsStep"
@@ -34,10 +57,10 @@ ApplicationWindow {
             highlighted: guidedStepList.currentIndex === 1
             activeFocusOnTab: true
             Accessible.name: text
-            onClicked: guidedStepList.currentIndex = 1
-            Keys.onReturnPressed: guidedStepList.currentIndex = 1
-            Keys.onEnterPressed: guidedStepList.currentIndex = 1
-            Keys.onSpacePressed: guidedStepList.currentIndex = 1
+            onClicked: window.requestStep(1)
+            Keys.onReturnPressed: window.requestStep(1)
+            Keys.onEnterPressed: window.requestStep(1)
+            Keys.onSpacePressed: window.requestStep(1)
         }
         ItemDelegate {
             objectName: "materialsStep"
@@ -47,10 +70,10 @@ ApplicationWindow {
             highlighted: guidedStepList.currentIndex === 2
             activeFocusOnTab: true
             Accessible.name: text
-            onClicked: guidedStepList.currentIndex = 2
-            Keys.onReturnPressed: guidedStepList.currentIndex = 2
-            Keys.onEnterPressed: guidedStepList.currentIndex = 2
-            Keys.onSpacePressed: guidedStepList.currentIndex = 2
+            onClicked: window.requestStep(2)
+            Keys.onReturnPressed: window.requestStep(2)
+            Keys.onEnterPressed: window.requestStep(2)
+            Keys.onSpacePressed: window.requestStep(2)
         }
         ItemDelegate {
             objectName: "simulationStep"
@@ -60,10 +83,10 @@ ApplicationWindow {
             highlighted: guidedStepList.currentIndex === 3
             activeFocusOnTab: true
             Accessible.name: text
-            onClicked: guidedStepList.currentIndex = 3
-            Keys.onReturnPressed: guidedStepList.currentIndex = 3
-            Keys.onEnterPressed: guidedStepList.currentIndex = 3
-            Keys.onSpacePressed: guidedStepList.currentIndex = 3
+            onClicked: window.requestStep(3)
+            Keys.onReturnPressed: window.requestStep(3)
+            Keys.onEnterPressed: window.requestStep(3)
+            Keys.onSpacePressed: window.requestStep(3)
         }
         ItemDelegate {
             objectName: "reviewStep"
@@ -73,10 +96,10 @@ ApplicationWindow {
             highlighted: guidedStepList.currentIndex === 4
             activeFocusOnTab: true
             Accessible.name: text
-            onClicked: guidedStepList.currentIndex = 4
-            Keys.onReturnPressed: guidedStepList.currentIndex = 4
-            Keys.onEnterPressed: guidedStepList.currentIndex = 4
-            Keys.onSpacePressed: guidedStepList.currentIndex = 4
+            onClicked: window.requestStep(4)
+            Keys.onReturnPressed: window.requestStep(4)
+            Keys.onEnterPressed: window.requestStep(4)
+            Keys.onSpacePressed: window.requestStep(4)
         }
     }
 
@@ -103,11 +126,11 @@ ApplicationWindow {
                     Accessible.name: qsTr("Guided Studio steps")
 
                     Keys.onDownPressed: function(event) {
-                        currentIndex = Math.min(currentIndex + 1, count - 1)
+                        window.requestStep(Math.min(currentIndex + 1, count - 1))
                         event.accepted = true
                     }
                     Keys.onUpPressed: function(event) {
-                        currentIndex = Math.max(currentIndex - 1, 0)
+                        window.requestStep(Math.max(currentIndex - 1, 0))
                         event.accepted = true
                     }
                 }
@@ -185,6 +208,64 @@ ApplicationWindow {
                 }
                 Item { objectName: "simulationPage" }
                 Item { objectName: "reviewPage" }
+            }
+        }
+    }
+
+    Dialog {
+        id: dirtyNavigationDialog
+        objectName: "dirtyNavigationDialog"
+        anchors.centerIn: parent
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        title: qsTr("Unsaved material changes")
+
+        ColumnLayout {
+            Label {
+                Layout.preferredWidth: 420
+                text: qsTr(
+                    "Save the material draft, discard unsaved changes, or cancel navigation."
+                )
+                wrapMode: Text.WordWrap
+                Accessible.name: text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    objectName: "dirtyNavigationSaveButton"
+                    text: qsTr("Save")
+                    enabled: materialStudioController !== null
+                        && materialStudioController.canSave
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Save material changes and leave")
+                    onClicked: {
+                        materialStudioController.saveDraft()
+                        if (!materialStudioController.dirty) {
+                            window.completePendingNavigation()
+                        }
+                    }
+                }
+                Button {
+                    objectName: "dirtyNavigationDiscardButton"
+                    text: qsTr("Discard")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Discard material changes and leave")
+                    onClicked: {
+                        if (materialStudioController.discardChanges()) {
+                            window.completePendingNavigation()
+                        }
+                    }
+                }
+                Button {
+                    objectName: "dirtyNavigationCancelButton"
+                    text: qsTr("Cancel")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Cancel navigation and keep editing")
+                    onClicked: {
+                        window.pendingStepIndex = -1
+                        dirtyNavigationDialog.close()
+                    }
+                }
             }
         }
     }

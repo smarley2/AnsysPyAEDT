@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 import logging
+import math
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
@@ -18,8 +20,14 @@ from inductor_designer.application.ports.material_repository import (
     MaterialRepository,
 )
 from inductor_designer.application.services.material_drafts import (
+    ImageSeriesInput,
     MaterialDraftSession,
     approve_material_session,
+    clone_revision_as_draft,
+    image_draft_session,
+    replace_image_extraction,
+    replace_image_series,
+    replace_table_series,
     review_material_session,
     save_material_session,
     session_from_upload,
@@ -34,11 +42,21 @@ from inductor_designer.application.services.material_selection import (
     pin_material_revision,
 )
 from inductor_designer.domain.project import InductorProject
+from inductor_designer.materials.calibration import (
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
+)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
+    CurveConditions,
+    CurvePoint,
     MaterialRecord,
     MaterialStatus,
     PointSeries,
+    SeriesKind,
 )
 from inductor_designer.materials.validation import MaterialIssue, validate_record
 from inductor_designer.ui.material_source import render_material_source
@@ -91,9 +109,22 @@ class MaterialStudioController(QObject):
         self._issues: list[dict[str, object]] = []
         self._fit: dict[str, object] = {}
         self._source: dict[str, object] = {}
+        self._source_data: bytes | None = None
+        self._source_url = ""
+        self._source_page: int | None = None
+        self._crop_values: dict[str, Any] = {}
+        self._x_axis_values: dict[str, Any] = {}
+        self._y_axis_values: dict[str, Any] = {}
+        self._pixel_points: list[PixelPoint] = []
+        self._metadata_values: dict[str, Any] = {}
+        self._active_series_id = ""
+        self._image_edit_valid = True
         self._dirty = False
         self._status_message = ""
+        self._clean_state: dict[str, Any] | None = None
+        self._reset_editor()
         self._refresh_materials()
+        self._set_clean_state()
 
     def _get_materials(self) -> list[dict[str, object]]:
         return deepcopy(self._materials)
@@ -135,6 +166,20 @@ class MaterialStudioController(QObject):
 
     source = Property(dict, _get_source, notify=sourceChanged)
 
+    def _get_image_editing(self) -> dict[str, Any]:
+        return {
+            "crop": deepcopy(self._crop_values),
+            "xAxis": deepcopy(self._x_axis_values),
+            "yAxis": deepcopy(self._y_axis_values),
+            "pixelPoints": [
+                {"xPx": point.x_px, "yPx": point.y_px}
+                for point in self._pixel_points
+            ],
+            "metadata": deepcopy(self._metadata_values),
+        }
+
+    imageEditing = Property(dict, _get_image_editing, notify=sourceChanged)
+
     def _get_dirty(self) -> bool:
         return self._dirty
 
@@ -151,6 +196,7 @@ class MaterialStudioController(QObject):
             and self._session.record.status is MaterialStatus.DRAFT
             and self._dirty
             and bool(self._session.source_files)
+            and self._image_edit_valid
         )
 
     canSave = Property(bool, _get_can_save, notify=selectionChanged)
@@ -222,6 +268,7 @@ class MaterialStudioController(QObject):
             "temperatureC": series.conditions.temperature_c,
             "dcBiasAPerM": series.conditions.dc_bias_a_per_m,
             "pointCount": len(series.points),
+            "imageBacked": series.extraction is not None,
         }
 
     @staticmethod
@@ -231,6 +278,18 @@ class MaterialStudioController(QObject):
             "severity": issue.severity.value,
             "message": issue.message,
         }
+
+    @staticmethod
+    def _point_dicts(series: PointSeries) -> list[dict[str, object]]:
+        return [
+            {
+                "seriesId": series.series_id,
+                "index": index,
+                "x": point.x,
+                "y": point.y,
+            }
+            for index, point in enumerate(series.points)
+        ]
 
     @classmethod
     def _record_dict(cls, record: MaterialRecord) -> dict[str, object]:
@@ -268,6 +327,151 @@ class MaterialStudioController(QObject):
             for summary in list_material_revision_summaries(self._repository, ref)
         ]
 
+    def _reset_editor(self) -> None:
+        self._crop_values = {"left": 0, "top": 0, "width": 0, "height": 0}
+        axis = {
+            "scale": AxisScale.LINEAR.value,
+            "pixelA": 0.0,
+            "valueA": 0.0,
+            "pixelB": 0.0,
+            "valueB": 0.0,
+        }
+        self._x_axis_values = dict(axis)
+        self._y_axis_values = dict(axis)
+        self._pixel_points = []
+        self._metadata_values = {
+            "seriesId": "bh-manual",
+            "kind": SeriesKind.BH_CURVE.value,
+            "xUnit": "A/m",
+            "yUnit": "T",
+            "frequencyHz": None,
+            "temperatureC": None,
+            "dcBiasAPerM": None,
+        }
+        self._active_series_id = ""
+
+    def _sync_editor_from_record(self, record: MaterialRecord) -> None:
+        if not record.series:
+            self._reset_editor()
+            return
+        target = next(
+            (
+                item
+                for item in record.series
+                if item.series_id == self._active_series_id
+            ),
+            record.series[0],
+        )
+        self._active_series_id = target.series_id
+        self._metadata_values = {
+            "seriesId": target.series_id,
+            "kind": target.kind.value,
+            "xUnit": target.x_unit,
+            "yUnit": target.y_unit,
+            "frequencyHz": target.conditions.frequency_hz,
+            "temperatureC": target.conditions.temperature_c,
+            "dcBiasAPerM": target.conditions.dc_bias_a_per_m,
+        }
+        extraction = target.extraction
+        if extraction is None:
+            self._crop_values = {"left": 0, "top": 0, "width": 0, "height": 0}
+            self._x_axis_values = {
+                "scale": AxisScale.LINEAR.value,
+                "pixelA": 0.0,
+                "valueA": 0.0,
+                "pixelB": 0.0,
+                "valueB": 0.0,
+            }
+            self._y_axis_values = dict(self._x_axis_values)
+            self._pixel_points = []
+            return
+        self._crop_values = {
+            "left": extraction.crop.left,
+            "top": extraction.crop.top,
+            "width": extraction.crop.width,
+            "height": extraction.crop.height,
+        }
+        self._x_axis_values = self._axis_dict(extraction.x_axis)
+        self._y_axis_values = self._axis_dict(extraction.y_axis)
+        self._pixel_points = list(extraction.pixel_points)
+
+    @staticmethod
+    def _axis_dict(axis: AxisCalibration) -> dict[str, Any]:
+        return {
+            "scale": axis.scale.value,
+            "pixelA": axis.pixel_a,
+            "valueA": axis.value_a,
+            "pixelB": axis.pixel_b,
+            "valueB": axis.value_b,
+        }
+
+    def _state_values(self) -> dict[str, Any]:
+        return {
+            "selected_ref": self._selected_ref,
+            "session": self._session,
+            "saved": self._saved,
+            "materials": deepcopy(self._materials),
+            "revisions": deepcopy(self._revisions),
+            "selected_revision": deepcopy(self._selected_revision),
+            "series": deepcopy(self._series),
+            "points": deepcopy(self._points),
+            "issues": deepcopy(self._issues),
+            "fit": deepcopy(self._fit),
+            "source": deepcopy(self._source),
+            "source_data": self._source_data,
+            "source_url": self._source_url,
+            "source_page": self._source_page,
+            "crop": deepcopy(self._crop_values),
+            "x_axis": deepcopy(self._x_axis_values),
+            "y_axis": deepcopy(self._y_axis_values),
+            "pixel_points": list(self._pixel_points),
+            "metadata": deepcopy(self._metadata_values),
+            "active_series_id": self._active_series_id,
+            "image_edit_valid": self._image_edit_valid,
+        }
+
+    def _set_clean_state(self) -> None:
+        self._clean_state = self._state_values()
+
+    def _remember_clean_state(self) -> None:
+        if not self._dirty:
+            self._set_clean_state()
+
+    def _restore_clean_state(self) -> None:
+        if self._clean_state is None:
+            return
+        values = self._clean_state
+        self._selected_ref = values["selected_ref"]
+        self._session = values["session"]
+        self._saved = bool(values["saved"])
+        self._materials = deepcopy(values["materials"])
+        self._revisions = deepcopy(values["revisions"])
+        self._selected_revision = deepcopy(values["selected_revision"])
+        self._series = deepcopy(values["series"])
+        self._points = deepcopy(values["points"])
+        self._issues = deepcopy(values["issues"])
+        self._fit = deepcopy(values["fit"])
+        self._source = deepcopy(values["source"])
+        self._source_data = values["source_data"]
+        self._source_url = str(values["source_url"])
+        self._source_page = values["source_page"]
+        self._crop_values = deepcopy(values["crop"])
+        self._x_axis_values = deepcopy(values["x_axis"])
+        self._y_axis_values = deepcopy(values["y_axis"])
+        self._pixel_points = list(values["pixel_points"])
+        self._metadata_values = deepcopy(values["metadata"])
+        self._active_series_id = str(values["active_series_id"])
+        self._image_edit_valid = bool(values["image_edit_valid"])
+
+    def _mark_edit(self) -> None:
+        self._remember_clean_state()
+        self._saved = False
+        self._set_dirty(True)
+
+    def _emit_editor_change(self) -> None:
+        self.selectionChanged.emit()
+        self.sourceChanged.emit()
+
     def _library_values(
         self,
         ref: MaterialRef,
@@ -302,6 +506,10 @@ class MaterialStudioController(QObject):
         self._issues = []
         self._fit = {}
         self._source = {}
+        self._source_data = None
+        self._source_url = ""
+        self._source_page = None
+        self._reset_editor()
         self._set_dirty(False)
         self.selectionChanged.emit()
         self.sourceChanged.emit()
@@ -317,19 +525,19 @@ class MaterialStudioController(QObject):
         revisions: list[dict[str, object]] | None = None,
     ) -> None:
         record = session.record
+        self._sync_editor_from_record(record)
         issues = validate_record(record)
         selected_revision = self._record_dict(record)
         series = [self._series_dict(item) for item in record.series]
-        points = [
-            {
-                "seriesId": item.series_id,
-                "index": index,
-                "x": point.x,
-                "y": point.y,
-            }
-            for item in record.series
-            for index, point in enumerate(item.points)
-        ]
+        active = next(
+            (
+                item
+                for item in record.series
+                if item.series_id == self._active_series_id
+            ),
+            None,
+        )
+        points = [] if active is None else self._point_dicts(active)
         issue_values = [self._issue_dict(issue) for issue in issues]
         fit = record.steinmetz
         fit_value: dict[str, object] = (
@@ -351,18 +559,21 @@ class MaterialStudioController(QObject):
         self._points = points
         self._issues = issue_values
         self._fit = fit_value
+        self._image_edit_valid = True
         if materials is not None:
             self._materials = materials
         if revisions is not None:
             self._revisions = revisions
         if clear_source:
             self._source = {}
+            self._source_data = None
+            self._source_url = ""
+            self._source_page = None
         self._set_dirty(dirty)
         if materials is not None or revisions is not None:
             self.libraryChanged.emit()
         self.selectionChanged.emit()
-        if clear_source:
-            self.sourceChanged.emit()
+        self.sourceChanged.emit()
 
     def _finish_persisted_session(
         self,
@@ -375,6 +586,7 @@ class MaterialStudioController(QObject):
             saved=True,
             clear_source=False,
         )
+        self._set_clean_state()
         try:
             materials, revisions = self._library_values(session.record.ref)
         except _KNOWN_ACTION_ERRORS as error:
@@ -383,6 +595,7 @@ class MaterialStudioController(QObject):
             return
         self._materials = materials
         self._revisions = revisions
+        self._set_clean_state()
         self.libraryChanged.emit()
         self._set_status(success_message)
 
@@ -416,6 +629,7 @@ class MaterialStudioController(QObject):
             self._clear_selection()
             self.libraryChanged.emit()
             self._set_status("")
+            self._set_clean_state()
 
         self._run_action(action)
 
@@ -437,6 +651,31 @@ class MaterialStudioController(QObject):
                 materials=materials,
                 revisions=revisions,
             )
+            self._set_status("")
+            self._set_clean_state()
+
+        self._run_action(action)
+
+    @Slot(str)
+    def selectSeries(self, series_id: str) -> None:
+        def action() -> None:
+            if self._session is None:
+                raise ValueError("Select a material revision before selecting a series.")
+            target = next(
+                (
+                    item
+                    for item in self._session.record.series
+                    if item.series_id == series_id
+                ),
+                None,
+            )
+            if target is None:
+                raise ValueError(f"Series '{series_id}' does not exist.")
+            self._active_series_id = target.series_id
+            self._sync_editor_from_record(self._session.record)
+            self._points = self._point_dicts(target)
+            self.selectionChanged.emit()
+            self.sourceChanged.emit()
             self._set_status("")
 
         self._run_action(action)
@@ -463,6 +702,7 @@ class MaterialStudioController(QObject):
             data = path.read_bytes()
             session = session_from_upload(path.name, data, created_at=self._now())
             materials, revisions = self._library_values(session.record.ref)
+            self._remember_clean_state()
             self._set_session(
                 session,
                 dirty=True,
@@ -516,17 +756,413 @@ class MaterialStudioController(QObject):
                 "pageCount": rendered.page_count,
                 "pageIndex": rendered.page_index,
             }
+            self._remember_clean_state()
             self._source = source
+            self._source_data = data
+            self._source_url = source_url
+            self._source_page = (
+                rendered.page_index if path.suffix.casefold() == ".pdf" else None
+            )
+            self._reset_editor()
+            self._crop_values = {
+                "left": 0,
+                "top": 0,
+                "width": rendered.width_px,
+                "height": rendered.height_px,
+            }
+            self._saved = False
+            self._set_dirty(True)
             self.sourceChanged.emit()
+            self.selectionChanged.emit()
             self._set_status(f"Loaded {path.name}.")
 
         self._run_action(action)
+
+    @staticmethod
+    def _optional_condition(value: float) -> float | None:
+        return None if math.isnan(value) else value
+
+    @staticmethod
+    def _axis_from_values(values: dict[str, Any]) -> AxisCalibration:
+        return AxisCalibration(
+            AxisScale(str(values["scale"])),
+            float(values["pixelA"]),
+            float(values["valueA"]),
+            float(values["pixelB"]),
+            float(values["valueB"]),
+        )
+
+    def _current_extraction(self) -> ExtractionRecord:
+        return ExtractionRecord(
+            CropRegion(
+                int(self._crop_values["left"]),
+                int(self._crop_values["top"]),
+                int(self._crop_values["width"]),
+                int(self._crop_values["height"]),
+            ),
+            self._axis_from_values(self._x_axis_values),
+            self._axis_from_values(self._y_axis_values),
+            tuple(self._pixel_points),
+        )
+
+    def _current_conditions(self) -> CurveConditions:
+        return CurveConditions(
+            self._metadata_values["frequencyHz"],
+            self._metadata_values["temperatureC"],
+            self._metadata_values["dcBiasAPerM"],
+        )
+
+    def _draft_for_edit(self) -> MaterialDraftSession:
+        if self._session is None:
+            raise ValueError("No material draft is selected.")
+        if self._session.record.status is MaterialStatus.DRAFT:
+            return self._session
+        return clone_revision_as_draft(
+            self._repository,
+            self._session.record.ref,
+            self._session.record.revision_id,
+        )
+
+    def _apply_image_extraction(self, success_message: str) -> None:
+        extraction = self._current_extraction()
+        if self._session is None or not self._active_series_id:
+            self._set_status("")
+            return
+        target = next(
+            (
+                item
+                for item in self._session.record.series
+                if item.series_id == self._active_series_id
+            ),
+            None,
+        )
+        if target is None:
+            self._set_status("")
+            return
+        if target.extraction is None:
+            self._set_status(
+                "This series is a direct table edit; image crop and pixel edits no "
+                "longer change its canonical values."
+            )
+            return
+        updated = replace_image_extraction(
+            self._draft_for_edit(),
+            target.series_id,
+            extraction,
+        )
+        self._set_session(updated, dirty=True, saved=False, clear_source=False)
+        self._set_status(success_message)
+
+    def _edit_extraction(self, mutation: Callable[[], None]) -> None:
+        try:
+            self._mark_edit()
+            mutation()
+            self._emit_editor_change()
+            self._apply_image_extraction("Image extraction updated.")
+            self._image_edit_valid = True
+        except _KNOWN_ACTION_ERRORS as error:
+            self._image_edit_valid = False
+            self._set_status(str(error))
+        self.selectionChanged.emit()
+
+    @Slot(int, int, int, int)
+    def setCrop(self, left: int, top: int, width: int, height: int) -> None:
+        self._edit_extraction(
+            lambda: self._crop_values.update(
+                left=left,
+                top=top,
+                width=width,
+                height=height,
+            )
+        )
+
+    @Slot(str, float, float, float, float)
+    def setXAxis(
+        self,
+        scale: str,
+        pixel_a: float,
+        value_a: float,
+        pixel_b: float,
+        value_b: float,
+    ) -> None:
+        self._edit_extraction(
+            lambda: self._x_axis_values.update(
+                scale=scale,
+                pixelA=pixel_a,
+                valueA=value_a,
+                pixelB=pixel_b,
+                valueB=value_b,
+            )
+        )
+
+    @Slot(str, float, float, float, float)
+    def setYAxis(
+        self,
+        scale: str,
+        pixel_a: float,
+        value_a: float,
+        pixel_b: float,
+        value_b: float,
+    ) -> None:
+        self._edit_extraction(
+            lambda: self._y_axis_values.update(
+                scale=scale,
+                pixelA=pixel_a,
+                valueA=value_a,
+                pixelB=pixel_b,
+                valueB=value_b,
+            )
+        )
+
+    @Slot(float, float)
+    def addPixelPoint(self, x_px: float, y_px: float) -> None:
+        self._edit_extraction(
+            lambda: self._pixel_points.append(PixelPoint(x_px, y_px))
+        )
+
+    @Slot(int, float, float)
+    def movePixelPoint(self, index: int, x_px: float, y_px: float) -> None:
+        def mutation() -> None:
+            if index < 0 or index >= len(self._pixel_points):
+                raise ValueError("Point index is out of range.")
+            self._pixel_points[index] = PixelPoint(x_px, y_px)
+
+        self._edit_extraction(mutation)
+
+    @Slot(int)
+    def deletePoint(self, index: int) -> None:
+        target = (
+            None
+            if self._session is None
+            else next(
+                (
+                    item
+                    for item in self._session.record.series
+                    if item.series_id == self._active_series_id
+                ),
+                None,
+            )
+        )
+        if target is not None and target.extraction is None:
+            def action() -> None:
+                draft = self._draft_for_edit()
+                current = next(
+                    item
+                    for item in draft.record.series
+                    if item.series_id == self._active_series_id
+                )
+                if index < 0 or index >= len(current.points):
+                    raise ValueError("Point index is out of range.")
+                self._mark_edit()
+                updated = replace_table_series(
+                    draft,
+                    current.series_id,
+                    series_id=current.series_id,
+                    kind=current.kind,
+                    x_unit=current.x_unit,
+                    y_unit=current.y_unit,
+                    conditions=current.conditions,
+                    points=tuple(
+                        point
+                        for point_index, point in enumerate(current.points)
+                        if point_index != index
+                    ),
+                )
+                self._set_session(
+                    updated,
+                    dirty=True,
+                    saved=False,
+                    clear_source=False,
+                )
+                self._set_status("Canonical point deleted.")
+
+            self._run_action(action)
+            return
+
+        def mutation() -> None:
+            if index < 0 or index >= len(self._pixel_points):
+                raise ValueError("Point index is out of range.")
+            del self._pixel_points[index]
+
+        self._edit_extraction(mutation)
+
+    @Slot(str, str, str, str, float, float, float)
+    def setSeriesMetadata(
+        self,
+        series_id: str,
+        kind: str,
+        x_unit: str,
+        y_unit: str,
+        frequency_hz: float,
+        temperature_c: float,
+        dc_bias_a_per_m: float,
+    ) -> None:
+        target_series_id = self._active_series_id
+        self._mark_edit()
+        self._metadata_values = {
+            "seriesId": series_id,
+            "kind": kind,
+            "xUnit": x_unit,
+            "yUnit": y_unit,
+            "frequencyHz": self._optional_condition(frequency_hz),
+            "temperatureC": self._optional_condition(temperature_c),
+            "dcBiasAPerM": self._optional_condition(dc_bias_a_per_m),
+        }
+        self._emit_editor_change()
+
+        def action() -> None:
+            series_kind = SeriesKind(kind)
+            conditions = self._current_conditions()
+            if self._session is None or not target_series_id:
+                self._set_status("")
+                return
+            draft = self._draft_for_edit()
+            target = next(
+                (
+                    item
+                    for item in draft.record.series
+                    if item.series_id == target_series_id
+                ),
+                None,
+            )
+            if target is None:
+                raise ValueError(f"Series '{target_series_id}' does not exist.")
+            if target.extraction is not None:
+                updated = replace_image_series(
+                    draft,
+                    target_series_id,
+                    series_id=series_id,
+                    kind=series_kind,
+                    x_unit=x_unit,
+                    y_unit=y_unit,
+                    conditions=conditions,
+                    extraction=self._current_extraction(),
+                )
+            else:
+                updated = replace_table_series(
+                    draft,
+                    target_series_id,
+                    series_id=series_id,
+                    kind=series_kind,
+                    x_unit=x_unit,
+                    y_unit=y_unit,
+                    conditions=conditions,
+                    points=target.points,
+                )
+            self._active_series_id = series_id
+            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            self._set_status("Series metadata updated.")
+
+        self._run_action(action)
+
+    @Slot(str, str, str, str)
+    def createImageDraft(
+        self,
+        manufacturer: str,
+        name: str,
+        grade: str,
+        source_description: str,
+    ) -> None:
+        def action() -> None:
+            if self._source_data is None or not self._source:
+                raise ValueError("Load an image or PDF page before creating a draft.")
+            stamp = self._now()
+            session = image_draft_session(
+                ImageSeriesInput(
+                    ref=MaterialRef(manufacturer, name, grade),
+                    source_filename=str(self._source["filename"]),
+                    source_data=self._source_data,
+                    source_url=self._source_url,
+                    source_page=self._source_page,
+                    captured_at=stamp,
+                    source_description=source_description,
+                    series_id=str(self._metadata_values["seriesId"]),
+                    kind=SeriesKind(str(self._metadata_values["kind"])),
+                    x_unit=str(self._metadata_values["xUnit"]),
+                    y_unit=str(self._metadata_values["yUnit"]),
+                    conditions=self._current_conditions(),
+                    extraction=self._current_extraction(),
+                    created_at=stamp,
+                )
+            )
+            materials, revisions = self._library_values(session.record.ref)
+            self._active_series_id = session.record.series[0].series_id
+            self._set_session(
+                session,
+                dirty=True,
+                saved=False,
+                clear_source=False,
+                materials=materials,
+                revisions=revisions,
+            )
+            self._set_status("Image material draft created.")
+
+        self._run_action(action)
+
+    @Slot(str, int, float, float)
+    def setCanonicalPoint(
+        self,
+        series_id: str,
+        index: int,
+        x: float,
+        y: float,
+    ) -> None:
+        def action() -> None:
+            draft = self._draft_for_edit()
+            target = next(
+                (item for item in draft.record.series if item.series_id == series_id),
+                None,
+            )
+            if target is None:
+                raise ValueError(f"Series '{series_id}' does not exist.")
+            if index < 0 or index >= len(target.points):
+                raise ValueError("Point index is out of range.")
+            points = list(target.points)
+            points[index] = CurvePoint(x, y)
+            self._mark_edit()
+            updated = replace_table_series(
+                draft,
+                series_id,
+                series_id=target.series_id,
+                kind=target.kind,
+                x_unit=target.x_unit,
+                y_unit=target.y_unit,
+                conditions=target.conditions,
+                points=tuple(points),
+            )
+            was_image = target.extraction is not None
+            self._active_series_id = target.series_id
+            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            if was_image:
+                self._set_status(
+                    "Numeric editing converted the image-backed series to a direct "
+                    "table edit; the original image/PDF remains as supplemental "
+                    "provenance."
+                )
+            else:
+                self._set_status("Canonical point updated.")
+
+        self._run_action(action)
+
+    @Slot(result=bool)
+    def discardChanges(self) -> bool:
+        if not self._dirty:
+            return True
+        self._restore_clean_state()
+        self._set_dirty(False)
+        self.libraryChanged.emit()
+        self.selectionChanged.emit()
+        self.sourceChanged.emit()
+        self._set_status("Unsaved changes discarded.")
+        return True
 
     @Slot()
     def saveDraft(self) -> None:
         def action() -> None:
             if self._session is None:
                 raise ValueError("No material draft is selected.")
+            if not self._image_edit_valid:
+                raise ValueError("Resolve the invalid image edit before saving.")
             saved = save_material_session(self._repository, self._session)
             self._finish_persisted_session(saved, "Material draft saved.")
 

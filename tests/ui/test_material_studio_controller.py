@@ -78,6 +78,30 @@ def _controller(
     return controller, saved_projects
 
 
+def _create_image_draft(controller: MaterialStudioController) -> None:
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    controller.setCrop(0, 0, 120, 80)
+    controller.setXAxis("linear", 10.0, 0.0, 110.0, 2.0)
+    controller.setYAxis("linear", 70.0, 0.0, 10.0, 2.0)
+    controller.setSeriesMetadata(
+        "bh-manual",
+        "bh-curve",
+        "Oe",
+        "kG",
+        float("nan"),
+        0.0,
+        float("nan"),
+    )
+    controller.addPixelPoint(10.0, 70.0)
+    controller.addPixelPoint(110.0, 10.0)
+    controller.createImageDraft(
+        "Example",
+        "Ferrite",
+        "Manual",
+        "Synthetic manual B-H curve",
+    )
+
+
 @pytest.mark.ui
 def test_library_refresh_and_latest_approved_are_advisory_only() -> None:
     repository = InMemoryMaterialRepository()
@@ -267,7 +291,10 @@ def test_qml_property_values_are_deep_copies() -> None:
 
 
 @pytest.mark.ui
-def test_downloads_require_local_destinations_and_use_exact_bytes(tmp_path: Path) -> None:
+def test_downloads_require_local_destinations_and_use_exact_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
     controller, _ = _controller(repository)
@@ -286,14 +313,18 @@ def test_downloads_require_local_destinations_and_use_exact_bytes(tmp_path: Path
     )
     controller.selectRevision(approved.record.revision_id)
     workbook_target = tmp_path / "selected.xlsx"
+    expected_workbook = export_material_record_xlsx(approved.record)
+    monkeypatch.setattr(
+        controller_module,
+        "export_material_record_xlsx",
+        lambda _record: expected_workbook,
+    )
 
     controller.exportSelectedWorkbook("")
     assert not workbook_target.exists()
     controller.exportSelectedWorkbook(_file_url(workbook_target))
 
-    assert workbook_target.read_bytes() == export_material_record_xlsx(
-        approved.record
-    ).data
+    assert workbook_target.read_bytes() == expected_workbook.data
 
 
 @pytest.mark.ui
@@ -396,6 +427,211 @@ def test_new_record_clears_source_while_lifecycle_preserves_it(tmp_path: Path) -
     controller.reviewDraft("reviewer-2@example.com")
 
     assert controller.source == rendered_source
+
+
+@pytest.mark.ui
+def test_image_edit_state_builds_draft_and_invalid_axis_keeps_last_valid_session() -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+
+    _create_image_draft(controller)
+
+    assert controller.selectedRevision["manufacturer"] == "Example"
+    assert controller.selectedRevision["createdAt"] == "2026-07-19T10:00:00+00:00"
+    assert controller.series == [
+        {
+            "seriesId": "bh-manual",
+            "kind": "bh-curve",
+            "xUnit": "Oe",
+            "yUnit": "kG",
+            "frequencyHz": None,
+            "temperatureC": 0.0,
+            "dcBiasAPerM": None,
+            "pointCount": 2,
+            "imageBacked": True,
+        }
+    ]
+    assert controller.points == [
+        {"seriesId": "bh-manual", "index": 0, "x": 0.0, "y": 0.0},
+        {
+            "seriesId": "bh-manual",
+            "index": 1,
+            "x": pytest.approx(159.154943092),
+            "y": 0.2,
+        },
+    ]
+    assert controller.imageEditing["pixelPoints"] == [
+        {"xPx": 10.0, "yPx": 70.0},
+        {"xPx": 110.0, "yPx": 10.0},
+    ]
+    assert controller.canSave is True
+    last_valid_revision = controller.selectedRevision["revisionId"]
+
+    controller.setXAxis("log", 10.0, 0.0, 110.0, 2.0)
+    controller.movePixelPoint(1, 100.0, 20.0)
+
+    assert controller.imageEditing["xAxis"]["scale"] == "log"
+    assert controller.imageEditing["xAxis"]["valueA"] == 0.0
+    assert controller.imageEditing["pixelPoints"][1] == {"xPx": 100.0, "yPx": 20.0}
+    assert controller.selectedRevision["revisionId"] == last_valid_revision
+    assert "logarithmic axis values must be positive" in controller.statusMessage
+    assert controller.canSave is False
+    controller.saveDraft()
+    assert controller.dirty is True
+    assert controller.selectedRevision["revisionId"] == last_valid_revision
+    assert controller.statusMessage == "Resolve the invalid image edit before saving."
+
+    controller.setXAxis("linear", 10.0, 0.0, 110.0, 2.0)
+
+    assert controller.selectedRevision["revisionId"] != last_valid_revision
+    assert controller.points[1]["x"] == pytest.approx(143.239448783)
+    assert controller.points[1]["y"] == pytest.approx(0.166666667)
+    assert controller.statusMessage == "Image extraction updated."
+    assert controller.canSave is True
+
+
+@pytest.mark.ui
+def test_image_metadata_and_canonical_point_edits_use_authoritative_replacements() -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+    _create_image_draft(controller)
+
+    controller.setSeriesMetadata(
+        "bh room",
+        "bh-curve",
+        "A/m",
+        "T",
+        0.0,
+        30.0,
+        0.0,
+    )
+
+    assert controller.series[0]["seriesId"] == "bh room"
+    assert controller.series[0]["imageBacked"] is True
+    assert controller.series[0]["frequencyHz"] == 0.0
+    assert controller.series[0]["temperatureC"] == 30.0
+    assert controller.series[0]["dcBiasAPerM"] == 0.0
+    assert controller.imageEditing["metadata"]["seriesId"] == "bh room"
+
+    controller.setCanonicalPoint("bh room", 1, 200.0, 0.3)
+
+    assert controller.series[0]["imageBacked"] is False
+    assert controller.points[1] == {
+        "seriesId": "bh room",
+        "index": 1,
+        "x": 200.0,
+        "y": 0.3,
+    }
+    assert [source["kind"] for source in controller.selectedRevision["sources"]] == [
+        "image",
+        "csv",
+    ]
+    assert controller.statusMessage == (
+        "Numeric editing converted the image-backed series to a direct table edit; "
+        "the original image/PDF remains as supplemental provenance."
+    )
+
+
+@pytest.mark.ui
+def test_table_metadata_edit_treats_only_nan_as_an_absent_condition(tmp_path: Path) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+
+    controller.setSeriesMetadata(
+        "bh-25c",
+        "bh-curve",
+        "A/m",
+        "T",
+        float("nan"),
+        0.0,
+        0.0,
+    )
+
+    bh = next(item for item in controller.series if item["seriesId"] == "bh-25c")
+    assert bh["frequencyHz"] is None
+    assert bh["temperatureC"] == 0.0
+    assert bh["dcBiasAPerM"] == 0.0
+    assert bh["imageBacked"] is False
+    assert controller.dirty is True
+
+
+@pytest.mark.ui
+def test_table_point_delete_edit_uses_authoritative_table_replacement(
+    tmp_path: Path,
+) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+    before = [item for item in controller.points if item["seriesId"] == "bh-25c"]
+
+    controller.deletePoint(1)
+
+    after = [item for item in controller.points if item["seriesId"] == "bh-25c"]
+    assert len(after) == len(before) - 1
+    assert controller.statusMessage == "Canonical point deleted."
+    assert controller.dirty is True
+
+
+@pytest.mark.ui
+def test_series_selector_changes_the_active_editor_without_marking_dirty(
+    tmp_path: Path,
+) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+    controller.saveDraft()
+
+    controller.selectSeries("loss-100khz")
+
+    assert controller.imageEditing["metadata"]["seriesId"] == "loss-100khz"
+    assert controller.imageEditing["metadata"]["kind"] == "loss-table"
+    assert controller.dirty is False
+
+    before = controller.imageEditing
+    controller.selectSeries("missing")
+    assert controller.imageEditing == before
+    assert controller.statusMessage == "Series 'missing' does not exist."
+
+
+@pytest.mark.ui
+def test_discard_edit_restores_last_saved_session_and_loaded_source() -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+    selected_before = controller.selectedRevision
+
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+
+    assert controller.dirty is True
+    assert controller.source
+    assert controller.discardChanges() is True
+    assert controller.dirty is False
+    assert controller.source == {}
+    assert controller.selectedRevision == selected_before
+    assert controller.statusMessage == "Unsaved changes discarded."
+
+    _create_image_draft(controller)
+    controller.saveDraft()
+    saved_revision = controller.selectedRevision["revisionId"]
+    saved_points = controller.points
+    controller.setCanonicalPoint("bh-manual", 1, 200.0, 0.3)
+
+    assert controller.dirty is True
+    assert controller.discardChanges() is True
+    assert controller.dirty is False
+    assert controller.selectedRevision["revisionId"] == saved_revision
+    assert controller.points == saved_points
 
 
 class _PostPersistenceListingFailureRepository(InMemoryMaterialRepository):

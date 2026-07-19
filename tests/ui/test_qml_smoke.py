@@ -17,6 +17,8 @@ from inductor_designer.ui.main import create_engine  # noqa: E402
 class RecordingMaterialStudioController(QObject):
     libraryChanged = Signal()
     selectionChanged = Signal()
+    sourceChanged = Signal()
+    dirtyChanged = Signal()
     statusMessageChanged = Signal()
 
     def __init__(
@@ -39,8 +41,28 @@ class RecordingMaterialStudioController(QObject):
 
     materials = Property(list, lambda self: self._materials, notify=libraryChanged)
     revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
+    selectedRevision = Property(dict, lambda self: {}, notify=selectionChanged)
+    series = Property(list, lambda self: [], notify=selectionChanged)
+    points = Property(list, lambda self: [], notify=selectionChanged)
     issues = Property(list, lambda self: self._issues, notify=selectionChanged)
     fit = Property(dict, lambda self: self._fit, notify=selectionChanged)
+    source = Property(dict, lambda self: {}, notify=sourceChanged)
+    imageEditing = Property(
+        dict,
+        lambda self: {
+            "crop": {},
+            "xAxis": {},
+            "yAxis": {},
+            "pixelPoints": [],
+            "metadata": {},
+        },
+        notify=sourceChanged,
+    )
+    dirty = Property(bool, lambda self: False, notify=dirtyChanged)
+    canSave = Property(bool, lambda self: False, notify=selectionChanged)
+    canReview = Property(bool, lambda self: False, notify=selectionChanged)
+    canApprove = Property(bool, lambda self: False, notify=selectionChanged)
+    canUseInProject = Property(bool, lambda self: False, notify=selectionChanged)
     statusMessage = Property(
         str, lambda self: self._status_message, notify=statusMessageChanged
     )
@@ -52,6 +74,10 @@ class RecordingMaterialStudioController(QObject):
     @Slot(str)
     def selectRevision(self, revision_id: str) -> None:
         self.selected_revisions.append(revision_id)
+
+    @Slot(result=bool)
+    def discardChanges(self) -> bool:
+        return True
 
 
 def _accessible_interfaces(root: QObject) -> list[object]:
@@ -234,8 +260,12 @@ def test_material_library_renders_every_revision_and_only_actions_select() -> No
 
     assert revision_list.property("count") == 3
     assert material_list.property("count") == 1
+    names: list[str] = []
+    for index in range(len(revisions)):
+        revision_list.setProperty("currentIndex", index)
+        app.processEvents()
+        names.extend(_accessible_name(item) for item in _accessible_interfaces(root))
     interfaces = _accessible_interfaces(root)
-    names = [_accessible_name(interface) for interface in interfaces]
     for revision in revisions:
         details = next(name for name in names if revision["revisionId"] in name)
         assert revision["status"].title() in details
@@ -272,17 +302,14 @@ def test_material_library_renders_every_revision_and_only_actions_select() -> No
     )
     assert controller.selected_revisions == []
 
-    select_actions = [
-        interface
-        for interface in interfaces
-        if _accessible_name(interface).startswith("Select revision ")
-    ]
-    assert [_accessible_name(interface) for interface in select_actions] == [
-        "Select revision rev-draft",
-        "Select revision rev-reviewed",
-        "Select revision rev-approved",
-    ]
-    assert all(interface.state().focusable for interface in select_actions)
+    assert all(f"Select revision {item['revisionId']}" in names for item in revisions)
+    assert all(
+        item.state().focusable
+        for item in interfaces
+        if _accessible_name(item).startswith("Select revision ")
+    )
+    revision_list.setProperty("currentIndex", 0)
+    app.processEvents()
     material_list.forceActiveFocus()
     app.processEvents()
     QTest.keyClick(root, Qt.Key.Key_Tab)
@@ -292,7 +319,14 @@ def test_material_library_renders_every_revision_and_only_actions_select() -> No
     app.processEvents()
     assert controller.selected_revisions == ["rev-draft"]
 
-    action = select_actions[2].actionInterface()
+    revision_list.setProperty("currentIndex", 2)
+    app.processEvents()
+    approved_action = next(
+        item
+        for item in _accessible_interfaces(root)
+        if _accessible_name(item) == "Select revision rev-approved"
+    )
+    action = approved_action.actionInterface()
     assert action is not None
     action.doAction(QAccessibleActionInterface.pressAction())
     app.processEvents()

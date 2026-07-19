@@ -20,6 +20,7 @@ from inductor_designer.application.services.material_drafts import (
     clone_revision_as_draft,
     image_draft_session,
     replace_image_extraction,
+    replace_image_series,
     replace_table_series,
     review_material_session,
     save_material_session,
@@ -671,6 +672,120 @@ def test_replace_image_extraction_rebuilds_draft_and_retains_original_sources() 
     assert edited.base_revision_id == session.base_revision_id
     assert reproduce_record(edited.record, dict(edited.source_files)).matches
     assert session == before
+
+
+def test_replace_image_series_changes_metadata_and_retains_sibling_and_sources() -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    session = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Multi image"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="https://example.com/manual-bh.png",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual curves",
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+    target = session.record.series[0]
+    sibling = replace(target, series_id="bh-sibling")
+    record = new_draft_record(
+        session.record.ref,
+        series=(target, sibling),
+        sources=session.record.sources,
+        created_at=session.record.created_at,
+    )
+    session = MaterialDraftSession(record, session.source_files, None)
+    before = deepcopy(session)
+
+    edited = replace_image_series(
+        session,
+        "bh-manual",
+        series_id="bh room",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="Oe",
+        y_unit="kG",
+        conditions=CurveConditions(0.0, 30.0, 0.0),
+        extraction=extraction,
+    )
+
+    replacement = next(item for item in edited.record.series if item.series_id == "bh room")
+    assert replacement.extraction == extraction
+    assert replacement.x_unit == "Oe"
+    assert replacement.y_unit == "kG"
+    assert replacement.conditions == CurveConditions(0.0, 30.0, 0.0)
+    assert replacement.points == (CurvePoint(0.0, 0.0), CurvePoint(159.154943092, 0.2))
+    assert edited.record.series[1] == sibling
+    assert edited.record.sources == session.record.sources
+    assert edited.source_files == session.source_files
+    assert edited.record.revision_id == revision_id_for(edited.record)
+    assert edited.record.revision_id != session.record.revision_id
+    assert session == before
+
+
+@pytest.mark.parametrize(
+    ("target_series_id", "series_id", "message"),
+    [
+        ("missing", "replacement", "does not exist"),
+        ("bh-manual", " ", "must not be blank"),
+        ("bh-manual", "bh-sibling", "already exists"),
+        ("bh-manual", "bh sibling", "collides"),
+    ],
+)
+def test_replace_image_series_validates_target_and_replacement_id(
+    target_series_id: str,
+    series_id: str,
+    message: str,
+) -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    session = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Validation"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual curve",
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+    target = session.record.series[0]
+    sibling = replace(target, series_id="bh-sibling")
+    record = new_draft_record(
+        session.record.ref,
+        series=(target, sibling),
+        sources=session.record.sources,
+        created_at=session.record.created_at,
+    )
+    session = MaterialDraftSession(record, session.source_files, None)
+
+    with pytest.raises(MaterialImportError, match=message):
+        replace_image_series(
+            session,
+            target_series_id,
+            series_id=series_id,
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=extraction,
+        )
 
 
 @pytest.mark.parametrize("status", [MaterialStatus.REVIEWED, MaterialStatus.APPROVED])

@@ -789,9 +789,26 @@ git commit -m "feat(ui): add Material Studio library page"
 - Create: `src/inductor_designer/ui/qml/MaterialSourceView.qml`
 - Create: `src/inductor_designer/ui/qml/MaterialCurveEditor.qml`
 - Modify: `src/inductor_designer/ui/qml/MaterialStudioPage.qml`
+- Modify: `src/inductor_designer/ui/qml/Main.qml`
 - Modify: `src/inductor_designer/ui/material_studio_controller.py`
+- Modify: `src/inductor_designer/application/services/material_drafts.py`
 - Modify: `tests/ui/test_material_studio_controller.py`
+- Modify: `tests/ui/test_qml_smoke.py`
 - Create: `tests/ui/test_material_studio_workflow.py`
+- Modify: `tests/unit/application/test_material_drafts.py`
+- Modify: this plan to record the reviewed interface/allowlist clarification
+
+`Main.qml` and its smoke test were added to the Task 8 allowlist because the
+approved Save/Discard/Cancel rule must intercept the existing Guided Studio
+step navigation. The controller interfaces below also make initial image-draft
+creation and numeric point editing explicit instead of leaving those approved
+workflows implicit in QML.
+
+The pure draft service/test were added after implementation review identified
+that changing image-series metadata through table replacement would silently
+discard extraction semantics, while reconstructing a one-series image session
+could discard sibling series. Task 8 therefore adds one focused immutable image
+series replacement service.
 
 **Interfaces:**
 - Adds controller slots for crop/calibration/point edits:
@@ -811,11 +828,37 @@ def movePixelPoint(self, index: int, x_px: float, y_px: float) -> None: ...
 def deletePoint(self, index: int) -> None: ...
 @Slot(str, str, str, str, float, float, float)
 def setSeriesMetadata(self, series_id: str, kind: str, x_unit: str, y_unit: str, frequency_hz: float, temperature_c: float, dc_bias_a_per_m: float) -> None: ...
+@Slot(str, str, str, str)
+def createImageDraft(self, manufacturer: str, name: str, grade: str, source_description: str) -> None: ...
+@Slot(str, int, float, float)
+def setCanonicalPoint(self, series_id: str, index: int, x: float, y: float) -> None: ...
+
+def replace_image_series(
+    session: MaterialDraftSession,
+    target_series_id: str,
+    *,
+    series_id: str,
+    kind: SeriesKind,
+    x_unit: str,
+    y_unit: str,
+    conditions: CurveConditions,
+    extraction: ExtractionRecord,
+) -> MaterialDraftSession: ...
 ```
 
 QML must pass `Number.NaN` for each blank optional condition. The controller
 converts a value to `None` only when `math.isnan(value)`; physical zero remains a
 real condition value.
+
+`createImageDraft` uses the currently loaded source bytes/page, current crop,
+axis calibrations, pixel points, series metadata, and controller clock. Numeric
+editing rebuilds the target through `replace_table_series`; for an image-backed
+series this deliberately becomes a direct table edit while retaining the
+original image/PDF as supplemental provenance, and the UI must state that
+transformation rather than performing it silently.
+`replace_image_series` replaces only the target image-backed series, retains
+every sibling series plus all source provenance/bytes, supports a validated
+series-ID rename, and rebuilds through `new_draft_record`.
 
 - [ ] **Step 1: Write controller edit-coordinate RED tests**
 
@@ -869,12 +912,12 @@ TapHandler { onTapped: controller.addPixelPoint(originalX(point.position.x), ori
 - [ ] **Step 6: Run Task 8 gates and commit**
 
 ```console
-QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py tests/ui/test_qml_smoke.py -q
-.venv/bin/python -m ruff check src/inductor_designer/ui/material_studio_controller.py tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py tests/ui/test_qml_smoke.py tests/unit/application/test_material_drafts.py -q
+.venv/bin/python -m ruff check src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/application/services/material_drafts.py tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py tests/ui/test_qml_smoke.py tests/unit/application/test_material_drafts.py
 .venv/bin/python -m mypy src tools
 .venv/bin/python tools/check_architecture.py
 git diff --check
-git add src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/ui/qml/MaterialStudioPage.qml src/inductor_designer/ui/qml/MaterialSourceView.qml src/inductor_designer/ui/qml/MaterialCurveEditor.qml tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py
+git add src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/application/services/material_drafts.py src/inductor_designer/ui/qml/Main.qml src/inductor_designer/ui/qml/MaterialStudioPage.qml src/inductor_designer/ui/qml/MaterialSourceView.qml src/inductor_designer/ui/qml/MaterialCurveEditor.qml tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py tests/ui/test_qml_smoke.py tests/unit/application/test_material_drafts.py docs/superpowers/plans/2026-07-19-material-studio-ui.md
 git commit -m "feat(ui): complete Material Studio editing workflow"
 ```
 

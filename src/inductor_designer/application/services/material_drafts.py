@@ -118,11 +118,10 @@ def image_draft_session(input_data: ImageSeriesInput) -> MaterialDraftSession:
     )
 
 
-def replace_image_extraction(
+def _image_target(
     session: MaterialDraftSession,
     series_id: str,
-    extraction: ExtractionRecord,
-) -> MaterialDraftSession:
+) -> PointSeries:
     if session.record.status is not MaterialStatus.DRAFT:
         raise MaterialImportError(("Image extraction can only be edited in a draft session.",))
     target = next((item for item in session.record.series if item.series_id == series_id), None)
@@ -140,18 +139,48 @@ def replace_image_extraction(
         raise MaterialImportError((f"Series '{series_id}' is not backed by an image source.",))
     if not any(name == target.source_filename for name, _ in session.source_files):
         raise MaterialImportError((f"Series '{series_id}' source bytes do not exist.",))
+    return target
+
+
+def replace_image_series(
+    session: MaterialDraftSession,
+    target_series_id: str,
+    *,
+    series_id: str,
+    kind: SeriesKind,
+    x_unit: str,
+    y_unit: str,
+    conditions: CurveConditions,
+    extraction: ExtractionRecord,
+) -> MaterialDraftSession:
+    target = _image_target(session, target_series_id)
+    if not series_id.strip():
+        raise MaterialImportError(("Replacement series ID must not be blank.",))
+    other_series = tuple(
+        item for item in session.record.series if item.series_id != target_series_id
+    )
+    if any(item.series_id == series_id for item in other_series):
+        raise MaterialImportError((f"Series ID '{series_id}' already exists.",))
+    sanitized_id = sanitize_identifier(series_id)
+    if any(
+        sanitize_identifier(item.series_id).casefold() == sanitized_id.casefold()
+        for item in other_series
+    ):
+        raise MaterialImportError(
+            (f"Series ID '{series_id}' collides after sanitizing.",)
+        )
 
     replacement = _image_series(
-        series_id=target.series_id,
-        kind=target.kind,
-        x_unit=target.x_unit,
-        y_unit=target.y_unit,
-        conditions=target.conditions,
+        series_id=series_id,
+        kind=kind,
+        x_unit=x_unit,
+        y_unit=y_unit,
+        conditions=conditions,
         source_filename=target.source_filename,
         extraction=extraction,
     )
     series = tuple(
-        replacement if item.series_id == series_id else item
+        replacement if item.series_id == target_series_id else item
         for item in session.record.series
     )
     draft = new_draft_record(
@@ -163,6 +192,24 @@ def replace_image_extraction(
         notes=session.record.notes,
     )
     return MaterialDraftSession(draft, session.source_files, session.base_revision_id)
+
+
+def replace_image_extraction(
+    session: MaterialDraftSession,
+    series_id: str,
+    extraction: ExtractionRecord,
+) -> MaterialDraftSession:
+    target = _image_target(session, series_id)
+    return replace_image_series(
+        session,
+        series_id,
+        series_id=target.series_id,
+        kind=target.kind,
+        x_unit=target.x_unit,
+        y_unit=target.y_unit,
+        conditions=target.conditions,
+        extraction=extraction,
+    )
 
 
 def session_from_upload(
