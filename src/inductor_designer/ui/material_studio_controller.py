@@ -3,8 +3,11 @@ from __future__ import annotations
 import base64
 import logging
 import math
+import os
+import tempfile
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,17 +26,23 @@ from inductor_designer.application.ports.material_repository import (
 from inductor_designer.application.services.material_drafts import (
     ImageSeriesInput,
     MaterialDraftSession,
+    add_image_series,
+    add_table_series,
     approve_material_session,
     clone_revision_as_draft,
     derive_workbook_draft,
     image_draft_session,
+    remove_series,
     replace_image_series,
     replace_table_series,
     review_material_session,
     save_material_session,
     session_from_import,
 )
-from inductor_designer.application.services.material_import import MaterialImportError
+from inductor_designer.application.services.material_import import (
+    GENERATED_SERIES_SOURCE_DESCRIPTION,
+    MaterialImportError,
+)
 from inductor_designer.application.services.material_library import (
     MaterialRevisionSummary,
     list_material_revision_summaries,
@@ -107,6 +116,8 @@ class MaterialStudioController(QObject):
         self._selected_revision: dict[str, object] = {}
         self._series: list[dict[str, object]] = []
         self._points: list[dict[str, object]] = []
+        self._source_points: list[dict[str, object]] = []
+        self._source_point_snapshots: dict[str, tuple[CurvePoint, ...] | None] = {}
         self._issues: list[dict[str, object]] = []
         self._fit: dict[str, object] = {}
         self._source: dict[str, object] = {}
@@ -159,6 +170,20 @@ class MaterialStudioController(QObject):
         return deepcopy(self._points)
 
     points = Property(list, _get_points, notify=selectionChanged)
+
+    def _get_source_points(self) -> list[dict[str, object]]:
+        return deepcopy(self._source_points)
+
+    sourcePoints = Property(list, _get_source_points, notify=selectionChanged)
+
+    def _get_source_comparison_available(self) -> bool:
+        return bool(self._source_points)
+
+    sourceComparisonAvailable = Property(
+        bool,
+        _get_source_comparison_available,
+        notify=selectionChanged,
+    )
 
     def _get_issues(self) -> list[dict[str, object]]:
         return deepcopy(self._issues)
@@ -424,6 +449,8 @@ class MaterialStudioController(QObject):
             "selected_revision": deepcopy(self._selected_revision),
             "series": deepcopy(self._series),
             "points": deepcopy(self._points),
+            "source_points": deepcopy(self._source_points),
+            "source_point_snapshots": deepcopy(self._source_point_snapshots),
             "issues": deepcopy(self._issues),
             "fit": deepcopy(self._fit),
             "source": deepcopy(self._source),
@@ -459,6 +486,8 @@ class MaterialStudioController(QObject):
         self._selected_revision = deepcopy(values["selected_revision"])
         self._series = deepcopy(values["series"])
         self._points = deepcopy(values["points"])
+        self._source_points = deepcopy(values["source_points"])
+        self._source_point_snapshots = deepcopy(values["source_point_snapshots"])
         self._issues = deepcopy(values["issues"])
         self._fit = deepcopy(values["fit"])
         self._source = deepcopy(values["source"])
@@ -514,6 +543,8 @@ class MaterialStudioController(QObject):
         self._selected_revision = {}
         self._series = []
         self._points = []
+        self._source_points = []
+        self._source_point_snapshots = {}
         self._issues = []
         self._fit = {}
         self._source = {}
@@ -566,6 +597,14 @@ class MaterialStudioController(QObject):
                 "beta": fit.beta,
                 "rmsRelativeResidual": fit.rms_relative_residual,
                 "maxRelativeResidual": fit.max_relative_residual,
+                "lossSeriesIds": [
+                    item.series_id
+                    for item in record.series
+                    if item.kind is SeriesKind.LOSS_TABLE
+                    and item.conditions.frequency_hz is not None
+                    and item.conditions.frequency_hz > 0
+                    and any(point.x > 0 and point.y > 0 for point in item.points)
+                ],
             }
         )
         self._session = session
@@ -574,6 +613,16 @@ class MaterialStudioController(QObject):
         self._selected_revision = selected_revision
         self._series = series
         self._points = points
+        snapshot = (
+            None
+            if active is None
+            else self._source_point_snapshots.get(active.series_id)
+        )
+        self._source_points = (
+            []
+            if active is None or snapshot is None
+            else self._point_dicts(replace(active, points=snapshot))
+        )
         self._issues = issue_values
         self._fit = fit_value
         self._invalid_editor_groups = set(pending_editor_groups or ())
@@ -631,6 +680,70 @@ class MaterialStudioController(QObject):
         except _KNOWN_ACTION_ERRORS as error:
             _LOGGER.exception("Material Studio action failed")
             self._set_status(str(error))
+
+    def _initialize_source_snapshots(self, session: MaterialDraftSession) -> None:
+        snapshots: dict[str, tuple[CurvePoint, ...] | None] = {}
+        base: MaterialRecord | None = None
+        if session.base_revision_id is not None:
+            try:
+                base = self._repository.get(
+                    session.record.ref,
+                    session.base_revision_id,
+                )
+            except MaterialLookupError:
+                base = None
+        provenance = {source.filename: source for source in session.record.sources}
+        for series in session.record.series:
+            base_series = (
+                None
+                if base is None
+                else next(
+                    (item for item in base.series if item.series_id == series.series_id),
+                    None,
+                )
+            )
+            source = provenance.get(series.source_filename)
+            if series.extraction is not None:
+                snapshots[series.series_id] = series.points
+            elif base_series is not None:
+                snapshots[series.series_id] = base_series.points
+            elif (
+                source is not None
+                and source.description != GENERATED_SERIES_SOURCE_DESCRIPTION
+            ):
+                snapshots[series.series_id] = series.points
+            else:
+                snapshots[series.series_id] = None
+        self._source_point_snapshots = snapshots
+
+    @staticmethod
+    def _atomic_write_bytes(destination: Path, data: bytes) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+            temporary = None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
+    def _reject_dirty_import(self) -> bool:
+        if not self._dirty:
+            return False
+        self._set_status(
+            "Save or discard unsaved material changes before importing another source."
+        )
+        return True
 
     def _reject_dirty_library_selection(self) -> bool:
         if not self._dirty:
@@ -732,6 +845,7 @@ class MaterialStudioController(QObject):
                 self._repository.source_bytes(self._selected_ref, revision_id).items()
             )
             session = MaterialDraftSession(record, source_files, None)
+            self._initialize_source_snapshots(session)
             active = record.series[0] if record.series else None
             source_state = (
                 ({}, None, "", None)
@@ -776,6 +890,12 @@ class MaterialStudioController(QObject):
             self._active_series_id = target.series_id
             self._sync_editor_from_record(self._session.record)
             self._points = self._point_dicts(target)
+            snapshot = self._source_point_snapshots.get(target.series_id)
+            self._source_points = (
+                []
+                if snapshot is None
+                else self._point_dicts(replace(target, points=snapshot))
+            )
             (
                 self._source,
                 self._source_data,
@@ -798,7 +918,7 @@ class MaterialStudioController(QObject):
         def action() -> None:
             destination = self._local_path(destination_url)
             download = material_import_template(file_format)
-            destination.write_bytes(download.data)
+            self._atomic_write_bytes(destination, download.data)
             self._set_status(f"Saved {download.filename}.")
 
         self._run_action(action)
@@ -808,6 +928,8 @@ class MaterialStudioController(QObject):
             return
 
         def action() -> None:
+            if self._reject_dirty_import():
+                return
             path = self._local_path(source_url)
             data = path.read_bytes()
             imported = import_material_file_as_draft(
@@ -816,6 +938,10 @@ class MaterialStudioController(QObject):
                 created_at=self._now(),
             )
             session = session_from_import(imported.record, imported.source_files)
+            self._initialize_source_snapshots(session)
+            self._source_point_snapshots = {
+                item.series_id: item.points for item in session.record.series
+            }
             materials, revisions = self._library_values(session.record.ref)
             self._remember_clean_state()
             self._set_session(
@@ -847,7 +973,7 @@ class MaterialStudioController(QObject):
                 self._session.record,
                 exported_at=self._now(),
             )
-            destination.write_bytes(download.data)
+            self._atomic_write_bytes(destination, download.data)
             self._set_status(f"Saved {download.filename}.")
 
         self._run_action(action)
@@ -885,6 +1011,7 @@ class MaterialStudioController(QObject):
                 imported.record,
                 imported.source_files,
             )
+            self._initialize_source_snapshots(session)
             materials, revisions = self._library_values(session.record.ref)
             self._remember_clean_state()
             self._set_session(
@@ -905,6 +1032,8 @@ class MaterialStudioController(QObject):
             return
 
         def action() -> None:
+            if self._reject_dirty_import():
+                return
             path = self._local_path(source_url)
             data = path.read_bytes()
             rendered = render_material_source(path.name, data, page_index=page_index)
@@ -1278,6 +1407,10 @@ class MaterialStudioController(QObject):
         def replacement() -> MaterialDraftSession | None:
             updated = self._replacement_editor_series(target_series_id)
             if updated is not None:
+                if series_id != target_series_id:
+                    self._source_point_snapshots[series_id] = (
+                        self._source_point_snapshots.pop(target_series_id, None)
+                    )
                 self._active_series_id = series_id
             return updated
 
@@ -1320,6 +1453,7 @@ class MaterialStudioController(QObject):
                     created_at=stamp,
                 )
             )
+            self._initialize_source_snapshots(session)
             materials, revisions = self._library_values(session.record.ref)
             self._active_series_id = session.record.series[0].series_id
             self._set_session(
@@ -1334,16 +1468,29 @@ class MaterialStudioController(QObject):
 
         self._run_action(action)
 
-    @Slot(str, int, float, float)
+    @Slot(str, int, float, float, result=bool)
     def setCanonicalPoint(
         self,
         series_id: str,
         index: int,
         x: float,
         y: float,
-    ) -> None:
+    ) -> bool:
+        group = f"canonical:{series_id}:{index}"
+        if self._invalid_editor_groups - {group}:
+            self._set_status("Apply or correct the visible editor input first.")
+            return False
+        if not math.isfinite(x) or not math.isfinite(y):
+            self._mark_edit()
+            self._invalid_editor_groups.add(group)
+            self._editor_valid = False
+            self._set_status("Canonical point values must be finite numbers.")
+            self.selectionChanged.emit()
+            return False
+        succeeded = False
+
         def action() -> None:
-            self._require_editor_valid()
+            nonlocal succeeded
             draft = self._draft_for_edit()
             target = next(
                 (item for item in draft.record.series if item.series_id == series_id),
@@ -1368,7 +1515,13 @@ class MaterialStudioController(QObject):
             )
             was_image = target.extraction is not None
             self._active_series_id = target.series_id
-            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            self._set_session(
+                updated,
+                dirty=True,
+                saved=False,
+                clear_source=False,
+                pending_editor_groups=self._invalid_editor_groups - {group},
+            )
             if was_image:
                 self._set_status(
                     "Numeric editing converted the image-backed series to a direct "
@@ -1377,8 +1530,131 @@ class MaterialStudioController(QObject):
                 )
             else:
                 self._set_status("Canonical point updated.")
+            succeeded = True
 
         self._run_action(action)
+        if not succeeded:
+            self._invalid_editor_groups.add(group)
+            self._editor_valid = False
+            self.selectionChanged.emit()
+        return succeeded
+
+    @Slot(str, str, str, str, float, float, float, list, result=bool)
+    def addTableSeries(
+        self,
+        series_id: str,
+        kind: str,
+        x_unit: str,
+        y_unit: str,
+        frequency_hz: float,
+        temperature_c: float,
+        dc_bias_a_per_m: float,
+        points: list[object],
+    ) -> bool:
+        succeeded = False
+
+        def action() -> None:
+            nonlocal succeeded
+            self._require_editor_valid()
+            draft = self._draft_for_edit()
+            parsed_points: list[CurvePoint] = []
+            for value in points:
+                if not isinstance(value, dict):
+                    raise ValueError("Each table point must contain numeric x and y values.")
+                x = float(value.get("x", math.nan))
+                y = float(value.get("y", math.nan))
+                if not math.isfinite(x) or not math.isfinite(y):
+                    raise ValueError("Each table point must contain finite x and y values.")
+                parsed_points.append(CurvePoint(x, y))
+            if not parsed_points:
+                raise ValueError("A table series requires at least one point.")
+            self._mark_edit()
+            updated = add_table_series(
+                draft,
+                series_id=series_id,
+                kind=SeriesKind(kind),
+                x_unit=x_unit,
+                y_unit=y_unit,
+                conditions=CurveConditions(
+                    self._optional_condition(frequency_hz),
+                    self._optional_condition(temperature_c),
+                    self._optional_condition(dc_bias_a_per_m),
+                ),
+                points=tuple(parsed_points),
+                captured_at=self._now(),
+            )
+            added = updated.record.series[-1]
+            self._source_point_snapshots[added.series_id] = added.points
+            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            self._set_status("Table series added.")
+            succeeded = True
+
+        self._run_action(action)
+        return succeeded
+
+    @Slot(str, str, str, str, float, float, float, result=bool)
+    def addImageSeries(
+        self,
+        series_id: str,
+        kind: str,
+        x_unit: str,
+        y_unit: str,
+        frequency_hz: float,
+        temperature_c: float,
+        dc_bias_a_per_m: float,
+    ) -> bool:
+        succeeded = False
+
+        def action() -> None:
+            nonlocal succeeded
+            self._require_editor_valid()
+            if self._source_data is None or not self._source:
+                raise ValueError("Load or select an image/PDF source before adding a series.")
+            source_filename = str(self._source.get("filename", ""))
+            draft = self._draft_for_edit()
+            self._mark_edit()
+            updated = add_image_series(
+                draft,
+                source_filename=source_filename,
+                series_id=series_id,
+                kind=SeriesKind(kind),
+                x_unit=x_unit,
+                y_unit=y_unit,
+                conditions=CurveConditions(
+                    self._optional_condition(frequency_hz),
+                    self._optional_condition(temperature_c),
+                    self._optional_condition(dc_bias_a_per_m),
+                ),
+                extraction=self._current_extraction(),
+            )
+            added = updated.record.series[-1]
+            self._source_point_snapshots[added.series_id] = added.points
+            self._active_series_id = added.series_id
+            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            self._set_status("Image series added.")
+            succeeded = True
+
+        self._run_action(action)
+        return succeeded
+
+    @Slot(str, result=bool)
+    def removeSeries(self, series_id: str) -> bool:
+        succeeded = False
+
+        def action() -> None:
+            nonlocal succeeded
+            self._require_editor_valid()
+            draft = self._draft_for_edit()
+            self._mark_edit()
+            updated = remove_series(draft, series_id)
+            self._source_point_snapshots.pop(series_id, None)
+            self._active_series_id = updated.record.series[0].series_id
+            self._set_session(updated, dirty=True, saved=False, clear_source=False)
+            self._set_status("Series removed.")
+            succeeded = True
+
+        self._run_action(action)
+        return succeeded
 
     @Slot(result=bool)
     def discardChanges(self) -> bool:

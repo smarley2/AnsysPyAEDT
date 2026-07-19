@@ -124,6 +124,17 @@ Pane {
                     Accessible.name: text
                     Accessible.ignored: !visible
                 }
+                Label {
+                    objectName: "fitLossSeriesIds"
+                    visible: materialValidationPane.hasFit()
+                    text: qsTr("Loss series used by fit: %1").arg(
+                        (materialValidationPane.fitData.lossSeriesIds || []).join(", ")
+                    )
+                    wrapMode: Text.WordWrap
+                    activeFocusOnTab: true
+                    Accessible.name: text
+                    Accessible.ignored: !visible
+                }
             }
         }
 

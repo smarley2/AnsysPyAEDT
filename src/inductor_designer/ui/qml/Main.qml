@@ -5,7 +5,9 @@ import QtQml.Models
 
 ApplicationWindow {
     id: window
-    property int pendingStepIndex: -1
+    property string pendingMaterialAction: ""
+    property var pendingMaterialArguments: []
+    property bool allowCloseOnce: false
     width: 1200
     height: 760
     visible: true
@@ -15,22 +17,49 @@ ApplicationWindow {
         if (index === guidedStepList.currentIndex) {
             return
         }
-        if (guidedStepList.currentIndex === 2
-                && materialStudioController !== null
-                && materialStudioController.dirty) {
-            pendingStepIndex = index
-            dirtyNavigationDialog.open()
-            return
-        }
-        guidedStepList.currentIndex = index
+        requestMaterialAction("navigate", [index])
     }
 
-    function completePendingNavigation() {
-        if (pendingStepIndex >= 0) {
-            guidedStepList.currentIndex = pendingStepIndex
+    function requestMaterialAction(action, arguments_) {
+        if (materialStudioController !== null
+                && materialStudioController.dirty) {
+            pendingMaterialAction = action
+            pendingMaterialArguments = arguments_
+            dirtyMaterialTransactionDialog.open()
+            return
         }
-        pendingStepIndex = -1
-        dirtyNavigationDialog.close()
+        executeMaterialAction(action, arguments_)
+    }
+
+    function executeMaterialAction(action, arguments_) {
+        if (action === "navigate") {
+            guidedStepList.currentIndex = arguments_[0]
+        } else if (action === "closeApplication") {
+            allowCloseOnce = true
+            window.close()
+        } else {
+            materialStudioPage.performTransactionAction(action, arguments_)
+        }
+    }
+
+    function completePendingMaterialAction() {
+        const action = pendingMaterialAction
+        const arguments_ = pendingMaterialArguments
+        pendingMaterialAction = ""
+        pendingMaterialArguments = []
+        dirtyMaterialTransactionDialog.close()
+        executeMaterialAction(action, arguments_)
+    }
+
+    onClosing: function(close) {
+        if (allowCloseOnce) {
+            allowCloseOnce = false
+            close.accepted = true
+        } else if (materialStudioController !== null
+                && materialStudioController.dirty) {
+            close.accepted = false
+            requestMaterialAction("closeApplication", [])
+        }
     }
 
     ObjectModel {
@@ -203,8 +232,10 @@ ApplicationWindow {
                 Item { objectName: "corePage" }
                 Item { objectName: "windingsPage" }
                 MaterialStudioPage {
+                    id: materialStudioPage
                     objectName: "materialStudioPage"
                     controller: materialStudioController
+                    transactionHost: window
                 }
                 Item { objectName: "simulationPage" }
                 Item { objectName: "reviewPage" }
@@ -213,8 +244,8 @@ ApplicationWindow {
     }
 
     Dialog {
-        id: dirtyNavigationDialog
-        objectName: "dirtyNavigationDialog"
+        id: dirtyMaterialTransactionDialog
+        objectName: "dirtyMaterialTransactionDialog"
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
@@ -224,7 +255,7 @@ ApplicationWindow {
             Label {
                 Layout.preferredWidth: 420
                 text: qsTr(
-                    "Save the material draft, discard unsaved changes, or cancel navigation."
+                    "Save the material draft, discard unsaved changes, or cancel the pending action."
                 )
                 wrapMode: Text.WordWrap
                 Accessible.name: text
@@ -232,38 +263,39 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 Button {
-                    objectName: "dirtyNavigationSaveButton"
+                    objectName: "dirtyMaterialTransactionSaveButton"
                     text: qsTr("Save")
                     enabled: materialStudioController !== null
                         && materialStudioController.canSave
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Save material changes and leave")
+                    Accessible.name: qsTr("Save material changes and continue")
                     onClicked: {
                         materialStudioController.saveDraft()
                         if (!materialStudioController.dirty) {
-                            window.completePendingNavigation()
+                            window.completePendingMaterialAction()
                         }
                     }
                 }
                 Button {
-                    objectName: "dirtyNavigationDiscardButton"
+                    objectName: "dirtyMaterialTransactionDiscardButton"
                     text: qsTr("Discard")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Discard material changes and leave")
+                    Accessible.name: qsTr("Discard material changes and continue")
                     onClicked: {
                         if (materialStudioController.discardChanges()) {
-                            window.completePendingNavigation()
+                            window.completePendingMaterialAction()
                         }
                     }
                 }
                 Button {
-                    objectName: "dirtyNavigationCancelButton"
+                    objectName: "dirtyMaterialTransactionCancelButton"
                     text: qsTr("Cancel")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Cancel navigation and keep editing")
+                    Accessible.name: qsTr("Cancel action and keep editing")
                     onClicked: {
-                        window.pendingStepIndex = -1
-                        dirtyNavigationDialog.close()
+                        window.pendingMaterialAction = ""
+                        window.pendingMaterialArguments = []
+                        dirtyMaterialTransactionDialog.close()
                     }
                 }
             }

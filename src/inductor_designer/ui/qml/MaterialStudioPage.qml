@@ -6,6 +6,7 @@ import QtQuick.Layouts
 Page {
     id: materialStudioPage
     property var controller: null
+    property var transactionHost: null
     property string pendingLibrarySelectionKind: ""
     property var pendingLibrarySelectionArguments: []
     property var confirmedMaterialSelection: []
@@ -44,6 +45,26 @@ Page {
 
     function optionalNumberValid(text) {
         return text.trim().length === 0 || Number.isFinite(Number(text))
+    }
+
+    function parseSeriesPoints(text) {
+        const lines = text.split(/\r?\n/).filter(function(line) {
+            return line.trim().length > 0
+        })
+        const points = []
+        for (let index = 0; index < lines.length; ++index) {
+            const values = lines[index].split(",")
+            if (values.length !== 2) {
+                return []
+            }
+            const x = Number(values[0].trim())
+            const y = Number(values[1].trim())
+            if (!Number.isFinite(x) || !Number.isFinite(y)) {
+                return []
+            }
+            points.push({"x": x, "y": y})
+        }
+        return points
     }
 
     function applyClampedCrop() {
@@ -222,9 +243,7 @@ Page {
         }
     }
 
-    function performPendingLibrarySelection() {
-        const selectionKind = pendingLibrarySelectionKind
-        const selectionArguments = pendingLibrarySelectionArguments
+    function performLibrarySelection(selectionKind, selectionArguments) {
         let selected = false
         if (selectionKind === "material") {
             selected = controller.selectMaterial(
@@ -240,22 +259,29 @@ Page {
             selectionKind,
             selected ? selectionArguments : confirmedLibrarySelection(selectionKind)
         )
-        pendingLibrarySelectionKind = ""
-        pendingLibrarySelectionArguments = []
-        dirtyLibrarySelectionDialog.close()
     }
 
     function requestLibrarySelection(kind, selectionArguments) {
-        if (controller !== null && controller.dirty) {
-            pendingLibrarySelectionKind = kind
-            pendingLibrarySelectionArguments = selectionArguments
-            restoreLibrarySelection(kind, confirmedLibrarySelection(kind))
-            dirtyLibrarySelectionDialog.open()
-            return
+        restoreLibrarySelection(kind, confirmedLibrarySelection(kind))
+        transactionHost.requestMaterialAction(
+            "librarySelection", [kind, selectionArguments]
+        )
+    }
+
+    function requestDestructiveAction(action, arguments_) {
+        transactionHost.requestMaterialAction(action, arguments_)
+    }
+
+    function performTransactionAction(action, arguments_) {
+        if (action === "librarySelection") {
+            performLibrarySelection(arguments_[0], arguments_[1])
+        } else if (action === "importTable") {
+            controller.importTable(arguments_[0])
+        } else if (action === "importEditedWorkbook") {
+            controller.importEditedWorkbook(arguments_[0])
+        } else if (action === "importSourceImage") {
+            controller.importSourceImage(arguments_[0], arguments_[1])
         }
-        pendingLibrarySelectionKind = kind
-        pendingLibrarySelectionArguments = selectionArguments
-        performPendingLibrarySelection()
     }
 
     Component.onCompleted: {
@@ -328,7 +354,9 @@ Page {
             qsTr("CSV files (*.csv)"),
             qsTr("Excel workbooks (*.xlsx)")
         ]
-        onAccepted: materialStudioPage.controller.importTable(selectedFile.toString())
+        onAccepted: materialStudioPage.requestDestructiveAction(
+            "importTable", [selectedFile.toString()]
+        )
     }
     FileDialog {
         id: revisionExportDialog
@@ -347,8 +375,8 @@ Page {
         title: qsTr("Reimport an edited material workbook")
         fileMode: FileDialog.OpenFile
         nameFilters: [qsTr("Excel workbooks (*.xlsx)")]
-        onAccepted: materialStudioPage.controller.importEditedWorkbook(
-            selectedFile.toString()
+        onAccepted: materialStudioPage.requestDestructiveAction(
+            "importEditedWorkbook", [selectedFile.toString()]
         )
     }
     FileDialog {
@@ -357,8 +385,8 @@ Page {
         title: qsTr("Import a material image or PDF page")
         fileMode: FileDialog.OpenFile
         nameFilters: [qsTr("Images and PDF files (*.png *.jpg *.jpeg *.pdf)")]
-        onAccepted: materialStudioPage.controller.importSourceImage(
-            selectedFile.toString(), pdfPageField.value
+        onAccepted: materialStudioPage.requestDestructiveAction(
+            "importSourceImage", [selectedFile.toString(), pdfPageField.value]
         )
     }
 
@@ -645,6 +673,84 @@ Page {
                                 materialNameField.text,
                                 gradeField.text,
                                 sourceDescriptionField.text
+                            )
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: qsTr("Series management")
+                            font.bold: true
+                        }
+                        TextField {
+                            id: newSeriesIdField
+                            objectName: "newSeriesIdField"
+                            Layout.preferredWidth: 115
+                            placeholderText: qsTr("New series ID")
+                            activeFocusOnTab: true
+                            Accessible.name: qsTr("New series ID")
+                        }
+                        TextArea {
+                            id: newSeriesPointsField
+                            objectName: "newSeriesPointsField"
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 46
+                            placeholderText: qsTr("Table points: one x,y pair per line")
+                            activeFocusOnTab: true
+                            Accessible.name: qsTr("New table series points")
+                        }
+                        Button {
+                            objectName: "addTableSeriesButton"
+                            text: qsTr("Add table")
+                            enabled: newSeriesIdField.text.trim().length > 0
+                                && materialStudioPage.seriesMetadataInputsValid
+                                && materialStudioPage.parseSeriesPoints(
+                                    newSeriesPointsField.text
+                                ).length > 0
+                            activeFocusOnTab: true
+                            Accessible.name: qsTr("Add table series with explicit points")
+                            onClicked: materialStudioPage.controller.addTableSeries(
+                                newSeriesIdField.text,
+                                seriesKindField.currentValue,
+                                xUnitField.text,
+                                yUnitField.text,
+                                materialStudioPage.optionalNumber(frequencyConditionField.text),
+                                materialStudioPage.optionalNumber(temperatureConditionField.text),
+                                materialStudioPage.optionalNumber(dcBiasConditionField.text),
+                                materialStudioPage.parseSeriesPoints(newSeriesPointsField.text)
+                            )
+                        }
+                        Button {
+                            objectName: "addImageSeriesButton"
+                            text: qsTr("Add image/PDF")
+                            enabled: newSeriesIdField.text.trim().length > 0
+                                && materialStudioPage.seriesMetadataInputsValid
+                                && materialStudioPage.controller !== null
+                                && Object.keys(materialStudioPage.controller.source).length > 0
+                            activeFocusOnTab: true
+                            Accessible.name: qsTr(
+                                "Add another digitized series from the current calibrated source"
+                            )
+                            onClicked: materialStudioPage.controller.addImageSeries(
+                                newSeriesIdField.text,
+                                seriesKindField.currentValue,
+                                xUnitField.text,
+                                yUnitField.text,
+                                materialStudioPage.optionalNumber(frequencyConditionField.text),
+                                materialStudioPage.optionalNumber(temperatureConditionField.text),
+                                materialStudioPage.optionalNumber(dcBiasConditionField.text)
+                            )
+                        }
+                        Button {
+                            objectName: "removeSeriesButton"
+                            text: qsTr("Remove selected")
+                            enabled: workspaceSeriesChoice.currentIndex >= 0
+                                && workspaceSeriesChoice.count > 1
+                            activeFocusOnTab: true
+                            Accessible.name: qsTr("Remove selected non-final series")
+                            onClicked: materialStudioPage.controller.removeSeries(
+                                workspaceSeriesChoice.currentValue
                             )
                         }
                     }
@@ -1043,63 +1149,4 @@ Page {
         }
     }
 
-    Dialog {
-        id: dirtyLibrarySelectionDialog
-        objectName: "dirtyLibrarySelectionDialog"
-        anchors.centerIn: parent
-        modal: true
-        closePolicy: Popup.NoAutoClose
-        title: qsTr("Unsaved material changes")
-
-        ColumnLayout {
-            Label {
-                Layout.preferredWidth: 420
-                text: qsTr(
-                    "Save the material draft, discard unsaved changes, or cancel the library selection."
-                )
-                wrapMode: Text.WordWrap
-                Accessible.name: text
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                Button {
-                    objectName: "dirtyLibrarySelectionSaveButton"
-                    text: qsTr("Save")
-                    enabled: materialStudioPage.controller !== null
-                        && materialStudioPage.controller.canSave
-                    activeFocusOnTab: true
-                    Accessible.name: qsTr("Save material changes and change selection")
-                    onClicked: {
-                        materialStudioPage.controller.saveDraft()
-                        if (!materialStudioPage.controller.dirty) {
-                            materialStudioPage.performPendingLibrarySelection()
-                        }
-                    }
-                }
-                Button {
-                    objectName: "dirtyLibrarySelectionDiscardButton"
-                    text: qsTr("Discard")
-                    activeFocusOnTab: true
-                    Accessible.name: qsTr("Discard material changes and change selection")
-                    onClicked: {
-                        if (materialStudioPage.controller.discardChanges()
-                                && !materialStudioPage.controller.dirty) {
-                            materialStudioPage.performPendingLibrarySelection()
-                        }
-                    }
-                }
-                Button {
-                    objectName: "dirtyLibrarySelectionCancelButton"
-                    text: qsTr("Cancel")
-                    activeFocusOnTab: true
-                    Accessible.name: qsTr("Cancel library selection and keep editing")
-                    onClicked: {
-                        materialStudioPage.pendingLibrarySelectionKind = ""
-                        materialStudioPage.pendingLibrarySelectionArguments = []
-                        dirtyLibrarySelectionDialog.close()
-                    }
-                }
-            }
-        }
-    }
 }

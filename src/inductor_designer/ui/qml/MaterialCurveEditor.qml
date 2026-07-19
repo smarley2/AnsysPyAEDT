@@ -6,6 +6,45 @@ Pane {
     id: materialCurveEditor
     property var controller: null
     property var pointModel: controller !== null ? controller.points : []
+    property var sourcePointModel: controller !== null ? controller.sourcePoints : []
+    property var pendingCanonicalPoints: ({})
+
+    function pointKey(point) {
+        return point.seriesId + ":" + point.index
+    }
+
+    function pointText(points) {
+        return points.map(function(point) {
+            return qsTr("%1: %2, %3").arg(point.index + 1).arg(point.x).arg(point.y)
+        }).join("; ")
+    }
+
+    function pendingText(point, axis) {
+        const pending = pendingCanonicalPoints[pointKey(point)]
+        return pending !== undefined ? pending[axis] : String(point[axis])
+    }
+
+    function setPendingText(point, axis, value) {
+        const key = pointKey(point)
+        const next = Object.assign({}, pendingCanonicalPoints)
+        const entry = Object.assign({
+            "x": String(point.x),
+            "y": String(point.y)
+        }, next[key] || ({}))
+        entry[axis] = value
+        next[key] = entry
+        pendingCanonicalPoints = next
+        controller.invalidateEditorInput(
+            "canonical:" + key,
+            qsTr("Apply or correct the visible canonical point values before saving.")
+        )
+    }
+
+    function clearPending(point) {
+        const next = Object.assign({}, pendingCanonicalPoints)
+        delete next[pointKey(point)]
+        pendingCanonicalPoints = next
+    }
 
     function valueRange(axis) {
         if (pointModel.length === 0) {
@@ -67,6 +106,30 @@ Pane {
             }
         }
 
+        Label {
+            objectName: "sourcePointComparison"
+            Layout.fillWidth: true
+            text: materialCurveEditor.controller !== null
+                    && materialCurveEditor.controller.sourceComparisonAvailable
+                ? qsTr("Source points: %1").arg(
+                    materialCurveEditor.pointText(materialCurveEditor.sourcePointModel)
+                )
+                : qsTr("Source points: no stored source comparison is available")
+            wrapMode: Text.WordWrap
+            activeFocusOnTab: true
+            Accessible.name: text
+        }
+        Label {
+            objectName: "currentPointComparison"
+            Layout.fillWidth: true
+            text: qsTr("Current points: %1").arg(
+                materialCurveEditor.pointText(materialCurveEditor.pointModel)
+            )
+            wrapMode: Text.WordWrap
+            activeFocusOnTab: true
+            Accessible.name: text
+        }
+
         ScrollView {
             id: canonicalPointList
             objectName: "canonicalPointList"
@@ -90,8 +153,16 @@ Pane {
                             id: xField
                             objectName: "canonicalPointX-" + index
                             Layout.fillWidth: true
-                            text: String(modelData.x)
+                            property bool parseValid: text.trim().length > 0
+                                && Number.isFinite(Number(text))
+                            text: materialCurveEditor.pendingText(modelData, "x")
+                            validator: DoubleValidator {
+                                notation: DoubleValidator.ScientificNotation
+                            }
                             inputMethodHints: Qt.ImhFormattedNumbersOnly
+                            onTextEdited: materialCurveEditor.setPendingText(
+                                modelData, "x", text
+                            )
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Point %1 canonical X value").arg(index + 1)
                         }
@@ -99,22 +170,36 @@ Pane {
                             id: yField
                             objectName: "canonicalPointY-" + index
                             Layout.fillWidth: true
-                            text: String(modelData.y)
+                            property bool parseValid: text.trim().length > 0
+                                && Number.isFinite(Number(text))
+                            text: materialCurveEditor.pendingText(modelData, "y")
+                            validator: DoubleValidator {
+                                notation: DoubleValidator.ScientificNotation
+                            }
                             inputMethodHints: Qt.ImhFormattedNumbersOnly
+                            onTextEdited: materialCurveEditor.setPendingText(
+                                modelData, "y", text
+                            )
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Point %1 canonical Y value").arg(index + 1)
                         }
                         Button {
                             objectName: "applyCanonicalPoint-" + index
                             text: qsTr("Apply")
+                            enabled: xField.parseValid && yField.parseValid
                             activeFocusOnTab: true
                             Accessible.name: qsTr("Apply point %1 numeric values").arg(index + 1)
-                            onClicked: materialCurveEditor.controller.setCanonicalPoint(
-                                modelData.seriesId,
-                                modelData.index,
-                                Number(xField.text),
-                                Number(yField.text)
-                            )
+                            onClicked: {
+                                const editor = materialCurveEditor
+                                const point = modelData
+                                if (editor.controller.setCanonicalPoint(
+                                        modelData.seriesId,
+                                        modelData.index,
+                                        Number(xField.text),
+                                        Number(yField.text))) {
+                                    editor.clearPending(point)
+                                }
+                            }
                         }
                         Button {
                             objectName: "deletePoint-" + index

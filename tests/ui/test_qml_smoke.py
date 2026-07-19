@@ -55,6 +55,10 @@ class RecordingMaterialStudioController(QObject):
     )
     series = Property(list, lambda self: [], notify=selectionChanged)
     points = Property(list, lambda self: [], notify=selectionChanged)
+    sourcePoints = Property(list, lambda self: [], notify=selectionChanged)
+    sourceComparisonAvailable = Property(
+        bool, lambda self: False, notify=selectionChanged
+    )
     issues = Property(list, lambda self: self._issues, notify=selectionChanged)
     fit = Property(dict, lambda self: self._fit, notify=selectionChanged)
     source = Property(dict, lambda self: {}, notify=sourceChanged)

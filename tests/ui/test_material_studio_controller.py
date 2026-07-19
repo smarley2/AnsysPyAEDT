@@ -625,6 +625,8 @@ def test_select_revision_restores_exact_stored_image_source_and_editor_snapshot(
     assert controller.source["capturedAt"] == _CREATED_AT
     assert controller.source["description"] == f"Stored {filename}"
     assert controller.source["sha256"] == session.record.sources[0].sha256
+    assert controller.sourceComparisonAvailable is True
+    assert controller.sourcePoints == controller.points
     assert controller.imageEditing["crop"] == {
         "left": 0,
         "top": 0,
@@ -726,6 +728,12 @@ def test_new_record_clears_source_while_lifecycle_preserves_it(tmp_path: Path) -
         )
     )
 
+    controller.importTable(_file_url(edited))
+
+    assert controller.source
+    assert "Save or discard" in controller.statusMessage
+    controller.discardChanges()
+    source_changes.clear()
     controller.importTable(_file_url(edited))
 
     assert controller.source == {}
@@ -830,6 +838,7 @@ def test_controller_rejects_crop_outside_loaded_source_bounds() -> None:
 def test_image_metadata_and_canonical_point_edits_use_authoritative_replacements() -> None:
     controller, _ = _controller(InMemoryMaterialRepository())
     _create_image_draft(controller)
+    source_points = controller.sourcePoints
 
     controller.setSeriesMetadata(
         "bh room",
@@ -847,10 +856,14 @@ def test_image_metadata_and_canonical_point_edits_use_authoritative_replacements
     assert controller.series[0]["temperatureC"] == 30.0
     assert controller.series[0]["dcBiasAPerM"] == 0.0
     assert controller.imageEditing["metadata"]["seriesId"] == "bh room"
+    assert controller.sourcePoints == [
+        {**point, "seriesId": "bh room"} for point in source_points
+    ]
 
     controller.setCanonicalPoint("bh room", 1, 200.0, 0.3)
 
     assert controller.series[0]["imageBacked"] is False
+    assert controller.sourcePoints != controller.points
     assert controller.points[1] == {
         "seriesId": "bh room",
         "index": 1,
@@ -1239,3 +1252,162 @@ def test_create_engine_injects_material_studio_controller() -> None:
     assert app is not None
     assert engine.rootContext().contextProperty("materialStudioController") is controller
     assert len(engine.rootObjects()) == 1
+
+
+@pytest.mark.ui
+def test_destructive_imports_refuse_to_replace_dirty_state(tmp_path: Path) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository(), with_project=False)
+    template = material_import_template("csv")
+    first = tmp_path / "first.csv"
+    second = tmp_path / "second.csv"
+    first.write_bytes(template.data)
+    second.write_bytes(template.data.replace(b"Example Vendor", b"Second Vendor"))
+    controller.importTable(_file_url(first))
+    snapshot = (
+        controller.selectedRevision,
+        controller.series,
+        controller.source,
+    )
+
+    controller.importTable(_file_url(second))
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+
+    assert (controller.selectedRevision, controller.series, controller.source) == snapshot
+    assert controller.dirty is True
+    assert "Save or discard" in controller.statusMessage
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize("download_kind", ["template", "revision"])
+def test_download_failure_is_atomic_and_cleans_same_directory_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    download_kind: str,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository, with_project=False)
+    if download_kind == "revision":
+        controller.selectMaterial(
+            approved.record.ref.manufacturer,
+            approved.record.ref.name,
+            approved.record.ref.grade,
+        )
+        controller.selectRevision(approved.record.revision_id)
+    destination = tmp_path / ("selected.xlsx" if download_kind == "revision" else "template.csv")
+    original = b"existing destination"
+    destination.write_bytes(original)
+
+    def fail_replace(_source: object, _destination: object) -> None:
+        raise OSError("controlled replace failure")
+
+    monkeypatch.setattr(controller_module.os, "replace", fail_replace)
+    if download_kind == "revision":
+        controller.exportSelectedWorkbook(_file_url(destination))
+    else:
+        controller.downloadTemplate("csv", _file_url(destination))
+
+    assert destination.read_bytes() == original
+    assert sorted(path.name for path in tmp_path.iterdir()) == [destination.name]
+    assert controller.statusMessage == "controlled replace failure"
+
+
+@pytest.mark.ui
+def test_canonical_point_pending_value_requires_finite_apply(tmp_path: Path) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository(), with_project=False)
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+    controller.invalidateEditorInput("canonical:bh-25c:0", "Invalid canonical point.")
+    before = controller.points[0]
+
+    assert controller.canSave is False
+    assert controller.setCanonicalPoint("bh-25c", 0, float("nan"), 0.15) is False
+    assert controller.points[0] == before
+    assert controller.canSave is False
+    assert controller.setCanonicalPoint("bh-25c", 0, 12.5, 0.15) is True
+    assert controller.points[0]["x"] == 12.5
+    assert controller.points[0]["y"] == 0.15
+    assert controller.canSave is True
+
+
+@pytest.mark.ui
+def test_controller_adds_table_and_image_series_then_removes_nonfinal(
+    tmp_path: Path,
+) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository(), with_project=False)
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    rendered = render_material_source(_IMAGE.name, _IMAGE.read_bytes())
+    controller.setXAxis("linear", 0.0, 0.0, float(rendered.width_px), 100.0)
+    controller.setYAxis(
+        "linear", float(rendered.height_px), 0.0, 0.0, 0.5
+    )
+    controller.addPixelPoint(0.0, float(rendered.height_px))
+    controller.addPixelPoint(float(rendered.width_px), 0.0)
+    controller.createImageDraft("Example", "Ferrite", "Series", "Manual graph")
+
+    assert controller.addTableSeries(
+        "loss-extra",
+        "loss-table",
+        "T",
+        "W/m3",
+        100000.0,
+        25.0,
+        float("nan"),
+        [{"x": 0.1, "y": 1000.0}, {"x": 0.2, "y": 4000.0}],
+    ) is True
+    assert controller.addImageSeries(
+        "bh-second",
+        "bh-curve",
+        "A/m",
+        "T",
+        float("nan"),
+        100.0,
+        float("nan"),
+    ) is True
+    assert [item["seriesId"] for item in controller.series] == [
+        "bh-manual",
+        "loss-extra",
+        "bh-second",
+    ]
+    assert controller.removeSeries("loss-extra") is True
+    assert [item["seriesId"] for item in controller.series] == [
+        "bh-manual",
+        "bh-second",
+    ]
+    assert controller.removeSeries("bh-manual") is True
+    assert controller.removeSeries("bh-second") is False
+    assert "final" in controller.statusMessage
+
+
+@pytest.mark.ui
+def test_source_and_current_points_and_fit_attribution_are_truthful(tmp_path: Path) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository(), with_project=False)
+    template = material_import_template("csv")
+    source = tmp_path / template.filename
+    source.write_bytes(template.data)
+    controller.importTable(_file_url(source))
+
+    original_source = controller.sourcePoints
+    assert original_source == controller.points
+    assert controller.sourceComparisonAvailable is True
+    assert controller.fit["lossSeriesIds"] == ["loss-100khz", "loss-200khz"]
+
+    point = controller.points[1]
+    assert controller.setCanonicalPoint(
+        str(point["seriesId"]), int(point["index"]), 123.0, 0.25
+    ) is True
+    assert controller.sourcePoints == original_source
+    assert controller.points != original_source
+    controller.saveDraft()
+    revision_id = str(controller.selectedRevision["revisionId"])
+    selected = controller.selectedMaterial
+    controller.selectMaterial(
+        str(selected["manufacturer"]),
+        str(selected["name"]),
+        str(selected["grade"]),
+    )
+    controller.selectRevision(revision_id)
+    assert controller.sourceComparisonAvailable is False
+    assert controller.sourcePoints == []

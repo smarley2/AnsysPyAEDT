@@ -200,6 +200,8 @@ class WorkflowController(QObject):
         self.can_review = True
         self.can_approve = True
         self.can_use = True
+        self._source_points = [dict(point) for point in self._points]
+        self._fit = {"k": 1.0, "lossSeriesIds": ["loss-100khz", "loss-200khz"]}
         self.calls: list[tuple[object, ...]] = []
 
     materials = Property(list, lambda self: self._materials, notify=libraryChanged)
@@ -215,7 +217,13 @@ class WorkflowController(QObject):
     series = Property(list, lambda self: self._series, notify=selectionChanged)
     points = Property(list, lambda self: self._points, notify=selectionChanged)
     issues = Property(list, lambda self: [], notify=selectionChanged)
-    fit = Property(dict, lambda self: {}, notify=selectionChanged)
+    fit = Property(dict, lambda self: self._fit, notify=selectionChanged)
+    sourcePoints = Property(
+        list, lambda self: self._source_points, notify=selectionChanged
+    )
+    sourceComparisonAvailable = Property(
+        bool, lambda self: bool(self._source_points), notify=selectionChanged
+    )
     source = Property(dict, lambda self: self._source, notify=sourceChanged)
     imageEditing = Property(dict, lambda self: self._editing, notify=sourceChanged)
     statusMessage = Property(str, lambda self: "Ready", notify=statusMessageChanged)
@@ -276,9 +284,21 @@ class WorkflowController(QObject):
     def deletePoint(self, index: int) -> None:
         self.calls.append(("deletePoint", index))
 
-    @Slot(str, int, float, float)
-    def setCanonicalPoint(self, series_id: str, index: int, x: float, y: float) -> None:
+    @Slot(str, int, float, float, result=bool)
+    def setCanonicalPoint(self, series_id: str, index: int, x: float, y: float) -> bool:
         self.calls.append(("setCanonicalPoint", series_id, index, x, y))
+        if not math.isfinite(x) or not math.isfinite(y):
+            return False
+        self.can_save = True
+        self._dirty = True
+        self._points[index] = {
+            "seriesId": series_id,
+            "index": index,
+            "x": x,
+            "y": y,
+        }
+        self.selectionChanged.emit()
+        return True
 
     @Slot(str, str, str, str, float, float, float)
     def setSeriesMetadata(self, *values: object) -> None:
@@ -370,6 +390,21 @@ class WorkflowController(QObject):
         self.can_save = False
         self.set_dirty(True)
         self.selectionChanged.emit()
+
+    @Slot(str, str, str, str, float, float, float, list, result=bool)
+    def addTableSeries(self, *values: object) -> bool:
+        self.calls.append(("addTableSeries", *values))
+        return True
+
+    @Slot(str, str, str, str, float, float, float, result=bool)
+    def addImageSeries(self, *values: object) -> bool:
+        self.calls.append(("addImageSeries", *values))
+        return True
+
+    @Slot(str, result=bool)
+    def removeSeries(self, series_id: str) -> bool:
+        self.calls.append(("removeSeries", series_id))
+        return True
 
 
 def _press(item: QObject) -> None:
@@ -565,8 +600,11 @@ def test_curve_workspace_converts_display_clicks_and_forwards_numeric_edits() ->
     assert controller.calls[-1] == ("movePixelPoint", 1, 12.0, 1.0)
 
     point_x.setProperty("text", "200")
+    assert QMetaObject.invokeMethod(point_x, "textEdited")
     point_y.setProperty("text", "0.3")
+    assert QMetaObject.invokeMethod(point_y, "textEdited")
     _press(apply_point)
+    delete_point = _accessible_object(root, "Delete point 2")
     _press(delete_point)
     assert controller.calls[-2:] == [
         ("setCanonicalPoint", "bh-25c", 1, 200.0, 0.3),
@@ -1095,10 +1133,10 @@ def test_dirty_navigation_save_discard_and_cancel_are_transactional() -> None:
     steps = root.findChild(QObject, "guidedStepList")
     simulation = root.findChild(QObject, "simulationStep")
     core = root.findChild(QObject, "coreStep")
-    dialog = root.findChild(QObject, "dirtyNavigationDialog")
-    save = root.findChild(QObject, "dirtyNavigationSaveButton")
-    discard = root.findChild(QObject, "dirtyNavigationDiscardButton")
-    cancel = root.findChild(QObject, "dirtyNavigationCancelButton")
+    dialog = root.findChild(QObject, "dirtyMaterialTransactionDialog")
+    save = root.findChild(QObject, "dirtyMaterialTransactionSaveButton")
+    discard = root.findChild(QObject, "dirtyMaterialTransactionDiscardButton")
+    cancel = root.findChild(QObject, "dirtyMaterialTransactionCancelButton")
 
     controller.set_dirty(True)
     _press(simulation)
@@ -1156,10 +1194,10 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     revision_list = root.findChild(QQuickItem, "revisionList")
     material_list = root.findChild(QQuickItem, "materialList")
     selection_list = revision_list if selection is None else material_list
-    dialog = root.findChild(QObject, "dirtyLibrarySelectionDialog")
-    save = root.findChild(QObject, "dirtyLibrarySelectionSaveButton")
-    discard = root.findChild(QObject, "dirtyLibrarySelectionDiscardButton")
-    cancel = root.findChild(QObject, "dirtyLibrarySelectionCancelButton")
+    dialog = root.findChild(QObject, "dirtyMaterialTransactionDialog")
+    save = root.findChild(QObject, "dirtyMaterialTransactionSaveButton")
+    discard = root.findChild(QObject, "dirtyMaterialTransactionDiscardButton")
+    cancel = root.findChild(QObject, "dirtyMaterialTransactionCancelButton")
     assert selection_list is not None
     assert selection_list.property("currentIndex") == 0
 
@@ -1245,7 +1283,7 @@ def test_dirty_library_selection_resolves_identity_after_save_reorders_model(
     selection_list.forceActiveFocus()
     QTest.keyClick(root, Qt.Key.Key_Return)
     app.processEvents()
-    _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+    _press(root.findChild(QObject, "dirtyMaterialTransactionSaveButton"))
     app.processEvents()
 
     current_index = selection_list.property("currentIndex")
@@ -1262,7 +1300,7 @@ def test_dirty_library_selection_resolves_identity_after_save_reorders_model(
             "revisionId": "222222222222" if selection_succeeds else "111111111111"
         }
     assert all(current[key] == value for key, value in expected.items())
-    assert root.findChild(QObject, "dirtyLibrarySelectionDialog").property("visible") is False
+    assert root.findChild(QObject, "dirtyMaterialTransactionDialog").property("visible") is False
     assert engine.rootObjects()
 
 
@@ -1317,17 +1355,17 @@ def test_empty_confirmed_identity_dirty_transaction_restores_or_commits_selectio
     QTest.keyClick(root, Qt.Key.Key_Return)
     app.processEvents()
 
-    dialog = root.findChild(QObject, "dirtyLibrarySelectionDialog")
+    dialog = root.findChild(QObject, "dirtyMaterialTransactionDialog")
     assert dialog.property("visible") is True
     if outcome == "cancel":
-        _press(root.findChild(QObject, "dirtyLibrarySelectionCancelButton"))
+        _press(root.findChild(QObject, "dirtyMaterialTransactionCancelButton"))
     elif outcome == "failed-save":
         repository.fail_save = True
-        _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+        _press(root.findChild(QObject, "dirtyMaterialTransactionSaveButton"))
     elif outcome == "save":
-        _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+        _press(root.findChild(QObject, "dirtyMaterialTransactionSaveButton"))
     else:
-        _press(root.findChild(QObject, "dirtyLibrarySelectionDiscardButton"))
+        _press(root.findChild(QObject, "dirtyMaterialTransactionDiscardButton"))
     app.processEvents()
 
     if outcome in {"cancel", "failed-save"}:
@@ -1348,4 +1386,168 @@ def test_empty_confirmed_identity_dirty_transaction_restores_or_commits_selectio
         else:
             revision = controller.revisions[selection_list.property("currentIndex")]
             assert revision["revisionId"] == confirmed_revision_id
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("dialog_name", "expected_call"),
+    [
+        ("tableUploadDialog", "importTable"),
+        ("workbookReimportDialog", "importEditedWorkbook"),
+        ("imageSourceDialog", "importSourceImage"),
+    ],
+)
+def test_every_destructive_import_uses_shared_dirty_transaction(
+    tmp_path: Path,
+    dialog_name: str,
+    expected_call: str,
+) -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    source = tmp_path / ("source.pdf" if dialog_name == "imageSourceDialog" else "source.xlsx")
+    source.write_bytes(b"controlled")
+    dialog = root.findChild(QObject, dialog_name)
+    transaction = root.findChild(QObject, "dirtyMaterialTransactionDialog")
+    save = root.findChild(QObject, "dirtyMaterialTransactionSaveButton")
+    discard = root.findChild(QObject, "dirtyMaterialTransactionDiscardButton")
+    cancel = root.findChild(QObject, "dirtyMaterialTransactionCancelButton")
+    assert dialog.setProperty("selectedFile", QUrl.fromLocalFile(str(source)))
+
+    controller.set_dirty(True)
+    assert QMetaObject.invokeMethod(dialog, "accepted")
+    app.processEvents()
+    assert transaction.property("visible") is True
+    assert not any(call[0] == expected_call for call in controller.calls)
+    _press(cancel)
+    assert transaction.property("visible") is False
+    assert controller.dirty is True
+
+    assert QMetaObject.invokeMethod(dialog, "accepted")
+    controller.save_succeeds = False
+    _press(save)
+    app.processEvents()
+    assert transaction.property("visible") is True
+    assert not any(call[0] == expected_call for call in controller.calls)
+
+    controller.save_succeeds = True
+    _press(save)
+    app.processEvents()
+    assert transaction.property("visible") is False
+    assert controller.calls[-1][0] == expected_call
+
+    controller.set_dirty(True)
+    assert QMetaObject.invokeMethod(dialog, "accepted")
+    _press(discard)
+    app.processEvents()
+    assert controller.calls[-2][0] == "discardChanges"
+    assert controller.calls[-1][0] == expected_call
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_application_close_is_intercepted_by_shared_dirty_transaction() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    transaction = root.findChild(QObject, "dirtyMaterialTransactionDialog")
+    cancel = root.findChild(QObject, "dirtyMaterialTransactionCancelButton")
+    discard = root.findChild(QObject, "dirtyMaterialTransactionDiscardButton")
+    controller.set_dirty(True)
+
+    root.close()
+    app.processEvents()
+    assert root.property("visible") is True
+    assert transaction.property("visible") is True
+    _press(cancel)
+    assert root.property("visible") is True
+
+    root.close()
+    app.processEvents()
+    _press(discard)
+    app.processEvents()
+    assert controller.calls[-1] == ("discardChanges",)
+    assert root.property("visible") is False
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_canonical_point_fields_own_pending_invalid_text_until_successful_apply() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    x_field = _accessible_object(root, "Point 1 canonical X value")
+    y_field = _accessible_object(root, "Point 1 canonical Y value")
+    apply = _accessible_object(root, "Apply point 1 numeric values")
+    save = root.findChild(QObject, "saveDraftButton")
+    x_field.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClick(root, Qt.Key.Key_Backspace)
+    app.processEvents()
+
+    assert x_field.property("text") == ""
+    assert apply.property("enabled") is False
+    assert save.property("enabled") is False
+    assert any(call[0] == "invalidateEditorInput" for call in controller.calls)
+    controller.sourceChanged.emit()
+    app.processEvents()
+    assert x_field.property("text") == ""
+
+    x_field.setProperty("text", "12.5")
+    assert QMetaObject.invokeMethod(x_field, "textEdited")
+    y_field.setProperty("text", "0.15")
+    assert QMetaObject.invokeMethod(y_field, "textEdited")
+    app.processEvents()
+    assert apply.property("enabled") is True
+    _press(apply)
+    app.processEvents()
+    assert controller.calls[-1] == ("setCanonicalPoint", "bh-25c", 0, 12.5, 0.15)
+    assert save.property("enabled") is True
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_series_management_controls_forward_explicit_values_and_points() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    new_id = root.findChild(QObject, "newSeriesIdField")
+    new_points = root.findChild(QObject, "newSeriesPointsField")
+    new_id.setProperty("text", "loss-extra")
+    new_points.setProperty("text", "0.1,1000\n0.2,4000")
+
+    _press(root.findChild(QObject, "addTableSeriesButton"))
+    call = controller.calls[-1]
+    assert call[0:5] == ("addTableSeries", "loss-extra", "bh-curve", "A/m", "T")
+    assert call[-1] == [{"x": 0.1, "y": 1000}, {"x": 0.2, "y": 4000}]
+
+    new_id.setProperty("text", "bh-image-extra")
+    _press(root.findChild(QObject, "addImageSeriesButton"))
+    assert controller.calls[-1][0:5] == (
+        "addImageSeries",
+        "bh-image-extra",
+        "bh-curve",
+        "A/m",
+        "T",
+    )
+    _press(root.findChild(QObject, "removeSeriesButton"))
+    assert controller.calls[-1] == ("removeSeries", "bh-25c")
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_source_current_comparison_and_fit_series_are_visible_and_accessible() -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    source = root.findChild(QObject, "sourcePointComparison")
+    current = root.findChild(QObject, "currentPointComparison")
+    fit_sources = root.findChild(QObject, "fitLossSeriesIds")
+
+    assert "Source points" in source.property("text")
+    assert "0, 0" in source.property("text")
+    assert "Current points" in current.property("text")
+    assert "100, 0.2" in current.property("text")
+    assert fit_sources.property("text") == (
+        "Loss series used by fit: loss-100khz, loss-200khz"
+    )
+    assert source.property("activeFocusOnTab") is True
+    assert current.property("activeFocusOnTab") is True
+    assert app is not None
     assert engine.rootObjects()
