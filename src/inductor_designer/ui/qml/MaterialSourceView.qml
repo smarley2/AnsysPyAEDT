@@ -39,8 +39,8 @@ Item {
 
     function setCropTopLeft(originalX, originalY) {
         const crop = editing.crop || ({})
-        const right = crop.left + crop.width
-        const bottom = crop.top + crop.height
+        const right = Math.round(clamp(crop.left + crop.width, 1, sourceWidth))
+        const bottom = Math.round(clamp(crop.top + crop.height, 1, sourceHeight))
         const left = Math.round(clamp(originalX, 0, Math.max(0, right - 1)))
         const top = Math.round(clamp(originalY, 0, Math.max(0, bottom - 1)))
         controller.setCrop(left, top, right - left, bottom - top)
@@ -48,9 +48,11 @@ Item {
 
     function setCropBottomRight(originalX, originalY) {
         const crop = editing.crop || ({})
-        const right = Math.round(clamp(originalX, crop.left + 1, sourceWidth))
-        const bottom = Math.round(clamp(originalY, crop.top + 1, sourceHeight))
-        controller.setCrop(crop.left, crop.top, right - crop.left, bottom - crop.top)
+        const left = Math.round(clamp(crop.left, 0, sourceWidth - 1))
+        const top = Math.round(clamp(crop.top, 0, sourceHeight - 1))
+        const right = Math.round(clamp(originalX, left + 1, sourceWidth))
+        const bottom = Math.round(clamp(originalY, top + 1, sourceHeight))
+        controller.setCrop(left, top, right - left, bottom - top)
     }
 
     Rectangle {

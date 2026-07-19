@@ -858,7 +858,16 @@ class MaterialStudioController(QObject):
                 "width": rendered.width_px,
                 "height": rendered.height_px,
             }
+            self._session = None
             self._saved = False
+            self._selected_revision = {}
+            self._series = []
+            self._points = []
+            self._issues = []
+            self._fit = {}
+            self._active_series_id = ""
+            self._invalid_editor_groups = {"source"}
+            self._editor_valid = False
             self._set_dirty(True)
             self.sourceChanged.emit()
             self.selectionChanged.emit()
@@ -881,13 +890,33 @@ class MaterialStudioController(QObject):
         )
 
     def _current_extraction(self) -> ExtractionRecord:
+        left = int(self._crop_values["left"])
+        top = int(self._crop_values["top"])
+        width = int(self._crop_values["width"])
+        height = int(self._crop_values["height"])
+        source_width_value = self._source.get("width", 0)
+        source_height_value = self._source.get("height", 0)
+        source_width = (
+            int(source_width_value)
+            if isinstance(source_width_value, (int, float))
+            else 0
+        )
+        source_height = (
+            int(source_height_value)
+            if isinstance(source_height_value, (int, float))
+            else 0
+        )
+        if source_width > 0 and source_height > 0 and (
+            left < 0
+            or top < 0
+            or width <= 0
+            or height <= 0
+            or left + width > source_width
+            or top + height > source_height
+        ):
+            raise ValueError("Crop must stay within loaded source bounds.")
         return ExtractionRecord(
-            CropRegion(
-                int(self._crop_values["left"]),
-                int(self._crop_values["top"]),
-                int(self._crop_values["width"]),
-                int(self._crop_values["height"]),
-            ),
+            CropRegion(left, top, width, height),
             self._axis_from_values(self._x_axis_values),
             self._axis_from_values(self._y_axis_values),
             tuple(self._pixel_points),
@@ -963,6 +992,11 @@ class MaterialStudioController(QObject):
         success_message: str,
         resolved_group: str,
     ) -> None:
+        unresolved_groups = self._invalid_editor_groups - {"source"}
+        if unresolved_groups and resolved_group not in unresolved_groups:
+            self._set_status("Apply or correct the visible editor input first.")
+            self.selectionChanged.emit()
+            return
         self._mark_edit()
         pending_groups = set(self._invalid_editor_groups)
         try:
@@ -1179,7 +1213,8 @@ class MaterialStudioController(QObject):
         source_description: str,
     ) -> None:
         def action() -> None:
-            self._require_editor_valid()
+            if self._invalid_editor_groups - {"source"}:
+                raise ValueError("Apply or correct the visible editor input first.")
             if self._source_data is None or not self._source:
                 raise ValueError("Load an image or PDF page before creating a draft.")
             stamp = self._now()

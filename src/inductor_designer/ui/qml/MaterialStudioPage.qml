@@ -8,6 +8,9 @@ Page {
     property var controller: null
     property string pendingLibrarySelectionKind: ""
     property var pendingLibrarySelectionArguments: []
+    property int pendingLibrarySelectionIndex: -1
+    property int confirmedMaterialIndex: 0
+    property int confirmedRevisionIndex: 0
     property var editing: controller !== null ? controller.imageEditing : ({})
     property var metadata: editing.metadata || ({})
     property var revisionSources: controller !== null
@@ -44,6 +47,31 @@ Page {
         return text.trim().length === 0 || Number.isFinite(Number(text))
     }
 
+    function applyClampedCrop() {
+        const source = controller !== null ? controller.source : ({})
+        const sourceWidth = Math.max(1, Math.round(Number(source.width) || 1))
+        const sourceHeight = Math.max(1, Math.round(Number(source.height) || 1))
+        const rawLeft = Math.round(Number(cropLeftField.text))
+        const rawTop = Math.round(Number(cropTopField.text))
+        const rawWidth = Math.round(Number(cropWidthField.text))
+        const rawHeight = Math.round(Number(cropHeightField.text))
+        const left = Math.max(
+            0, Math.min(Number.isFinite(rawLeft) ? rawLeft : 0, sourceWidth - 1)
+        )
+        const top = Math.max(
+            0, Math.min(Number.isFinite(rawTop) ? rawTop : 0, sourceHeight - 1)
+        )
+        const width = Math.max(
+            1,
+            Math.min(Number.isFinite(rawWidth) ? rawWidth : 1, sourceWidth - left)
+        )
+        const height = Math.max(
+            1,
+            Math.min(Number.isFinite(rawHeight) ? rawHeight : 1, sourceHeight - top)
+        )
+        controller.setCrop(left, top, width, height)
+    }
+
     function conditionText(value, unit) {
         return value === undefined || value === null
             ? qsTr("unspecified")
@@ -78,29 +106,79 @@ Page {
         }
     }
 
+    function findNamedChild(item, name) {
+        if (item === null || item === undefined) {
+            return null
+        }
+        if (item.objectName === name) {
+            return item
+        }
+        const childItems = item.children || []
+        for (let index = 0; index < childItems.length; ++index) {
+            const found = findNamedChild(childItems[index], name)
+            if (found !== null) {
+                return found
+            }
+        }
+        return null
+    }
+
+    function libraryList(kind) {
+        return findNamedChild(
+            materialLibraryPane,
+            kind === "material" ? "materialList" : "revisionList"
+        )
+    }
+
+    function confirmedLibraryIndex(kind) {
+        return kind === "material" ? confirmedMaterialIndex : confirmedRevisionIndex
+    }
+
+    function setConfirmedLibraryIndex(kind, index) {
+        if (kind === "material") {
+            confirmedMaterialIndex = index
+            confirmedRevisionIndex = 0
+        } else {
+            confirmedRevisionIndex = index
+        }
+    }
+
     function performPendingLibrarySelection() {
+        const selectionKind = pendingLibrarySelectionKind
         const selectionArguments = pendingLibrarySelectionArguments
-        if (pendingLibrarySelectionKind === "material") {
+        if (selectionKind === "material") {
             controller.selectMaterial(
                 selectionArguments[0], selectionArguments[1], selectionArguments[2]
             )
-        } else if (pendingLibrarySelectionKind === "revision") {
+        } else if (selectionKind === "revision") {
             controller.selectRevision(selectionArguments[0])
+        }
+        const list = libraryList(selectionKind)
+        if (list !== null && pendingLibrarySelectionIndex >= 0) {
+            setConfirmedLibraryIndex(selectionKind, pendingLibrarySelectionIndex)
+            list.currentIndex = pendingLibrarySelectionIndex
         }
         pendingLibrarySelectionKind = ""
         pendingLibrarySelectionArguments = []
+        pendingLibrarySelectionIndex = -1
         dirtyLibrarySelectionDialog.close()
     }
 
     function requestLibrarySelection(kind, selectionArguments) {
+        const list = libraryList(kind)
         if (controller !== null && controller.dirty) {
             pendingLibrarySelectionKind = kind
             pendingLibrarySelectionArguments = selectionArguments
+            pendingLibrarySelectionIndex = list !== null ? list.currentIndex : -1
+            if (list !== null) {
+                list.currentIndex = confirmedLibraryIndex(kind)
+            }
             dirtyLibrarySelectionDialog.open()
             return
         }
         pendingLibrarySelectionKind = kind
         pendingLibrarySelectionArguments = selectionArguments
+        pendingLibrarySelectionIndex = list !== null ? list.currentIndex : -1
         performPendingLibrarySelection()
     }
 
@@ -206,6 +284,7 @@ Page {
             spacing: 8
 
             MaterialLibraryPane {
+                id: materialLibraryPane
                 objectName: "materialLibraryPane"
                 Layout.preferredWidth: 300
                 Layout.fillHeight: true
@@ -668,12 +747,7 @@ Page {
                             text: qsTr("Apply crop")
                             activeFocusOnTab: true
                             Accessible.name: text
-                            onClicked: materialStudioPage.controller.setCrop(
-                                Number(cropLeftField.text),
-                                Number(cropTopField.text),
-                                Number(cropWidthField.text),
-                                Number(cropHeightField.text)
-                            )
+                            onClicked: materialStudioPage.applyClampedCrop()
                         }
                     }
 
@@ -928,6 +1002,7 @@ Page {
                     onClicked: {
                         materialStudioPage.pendingLibrarySelectionKind = ""
                         materialStudioPage.pendingLibrarySelectionArguments = []
+                        materialStudioPage.pendingLibrarySelectionIndex = -1
                         dirtyLibrarySelectionDialog.close()
                     }
                 }

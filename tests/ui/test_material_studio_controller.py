@@ -155,9 +155,9 @@ def _controller(
 
 def _create_image_draft(controller: MaterialStudioController) -> None:
     controller.importSourceImage(_file_url(_IMAGE), 0)
-    controller.setCrop(0, 0, 120, 80)
-    controller.setXAxis("linear", 10.0, 0.0, 110.0, 2.0)
-    controller.setYAxis("linear", 70.0, 0.0, 10.0, 2.0)
+    controller.setCrop(0, 0, 12, 8)
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
     controller.setSeriesMetadata(
         "bh-manual",
         "bh-curve",
@@ -167,8 +167,8 @@ def _create_image_draft(controller: MaterialStudioController) -> None:
         0.0,
         float("nan"),
     )
-    controller.addPixelPoint(10.0, 70.0)
-    controller.addPixelPoint(110.0, 10.0)
+    controller.addPixelPoint(1.0, 7.0)
+    controller.addPixelPoint(11.0, 1.0)
     controller.createImageDraft(
         "Example",
         "Ferrite",
@@ -457,6 +457,13 @@ def test_image_import_exposes_rendered_png_and_preserves_selection_on_error() ->
         "pageCount": 1,
         "pageIndex": 0,
     }
+    assert controller.selectedRevision == {}
+    assert controller.series == []
+    assert controller.canSave is False
+    assert controller.canReview is False
+    assert controller.canApprove is False
+    assert controller.canUseInProject is False
+    assert controller.dirty is True
     source_before = dict(controller.source)
     selected_before = dict(controller.selectedRevision)
 
@@ -465,6 +472,64 @@ def test_image_import_exposes_rendered_png_and_preserves_selection_on_error() ->
 
     assert controller.source == source_before
     assert controller.selectedRevision == selected_before
+
+
+@pytest.mark.ui
+def test_loaded_source_blocks_stale_lifecycle_until_matching_draft_is_created() -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, saved_projects = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+    assert controller.canUseInProject is True
+
+    source_bytes = _IMAGE.read_bytes()
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    controller.saveDraft()
+    controller.reviewDraft("reviewer-2@example.com")
+    controller.approveRevision("approver-2@example.com")
+    controller.useInProject("bh-25c")
+
+    assert saved_projects == []
+    assert repository.list_revisions(approved.record.ref) == (
+        approved.record.revision_id,
+    )
+    assert controller.selectedRevision == {}
+    assert controller.canSave is False
+    assert controller.canReview is False
+    assert controller.canApprove is False
+    assert controller.canUseInProject is False
+
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+    controller.setSeriesMetadata(
+        "bh-new-source",
+        "bh-curve",
+        "A/m",
+        "T",
+        float("nan"),
+        25.0,
+        0.0,
+    )
+    controller.addPixelPoint(1.0, 7.0)
+    controller.addPixelPoint(11.0, 1.0)
+    controller.createImageDraft(
+        "Replacement",
+        "Source",
+        "R1",
+        "Replacement image",
+    )
+    assert controller.canSave is True
+
+    controller.saveDraft()
+
+    ref = MaterialRef("Replacement", "Source", "R1")
+    revision_id = str(controller.selectedRevision["revisionId"])
+    assert repository.source_bytes(ref, revision_id) == {_IMAGE.name: source_bytes}
 
 
 @pytest.mark.ui
@@ -656,32 +721,59 @@ def test_image_edit_state_builds_draft_and_invalid_axis_keeps_last_valid_session
         },
     ]
     assert controller.imageEditing["pixelPoints"] == [
-        {"xPx": 10.0, "yPx": 70.0},
-        {"xPx": 110.0, "yPx": 10.0},
+        {"xPx": 1.0, "yPx": 7.0},
+        {"xPx": 11.0, "yPx": 1.0},
     ]
     assert controller.canSave is True
     last_valid_revision = controller.selectedRevision["revisionId"]
 
-    controller.setXAxis("log", 10.0, 0.0, 110.0, 2.0)
-    controller.movePixelPoint(1, 100.0, 20.0)
+    controller.setXAxis("log", 1.0, 0.0, 11.0, 2.0)
+    controller.movePixelPoint(1, 10.0, 2.0)
 
     assert controller.imageEditing["xAxis"]["scale"] == "log"
     assert controller.imageEditing["xAxis"]["valueA"] == 0.0
-    assert controller.imageEditing["pixelPoints"][1] == {"xPx": 100.0, "yPx": 20.0}
+    assert controller.imageEditing["pixelPoints"][1] == {"xPx": 11.0, "yPx": 1.0}
     assert controller.selectedRevision["revisionId"] == last_valid_revision
-    assert "logarithmic axis values must be positive" in controller.statusMessage
+    assert controller.statusMessage == "Apply or correct the visible editor input first."
     assert controller.canSave is False
     controller.saveDraft()
     assert controller.dirty is True
     assert controller.selectedRevision["revisionId"] == last_valid_revision
     assert controller.statusMessage == "Resolve the invalid editor input before saving."
 
-    controller.setXAxis("linear", 10.0, 0.0, 110.0, 2.0)
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
 
-    assert controller.selectedRevision["revisionId"] != last_valid_revision
-    assert controller.points[1]["x"] == pytest.approx(143.239448783)
-    assert controller.points[1]["y"] == pytest.approx(0.166666667)
+    assert controller.selectedRevision["revisionId"] == last_valid_revision
+    assert controller.points[1]["x"] == pytest.approx(159.154943092)
+    assert controller.points[1]["y"] == pytest.approx(0.2)
     assert controller.statusMessage == "Image extraction updated."
+    assert controller.canSave is True
+
+
+@pytest.mark.ui
+def test_controller_rejects_crop_outside_loaded_source_bounds() -> None:
+    controller, _ = _controller(InMemoryMaterialRepository())
+    _create_image_draft(controller)
+    valid_revision = controller.selectedRevision["revisionId"]
+
+    for crop in ((-1, 0, 12, 8), (0, -1, 12, 8), (0, 0, 13, 8), (0, 0, 12, 9)):
+        controller.setCrop(*crop)
+        assert controller.imageEditing["crop"] == dict(
+            zip(("left", "top", "width", "height"), crop, strict=True)
+        )
+        assert controller.selectedRevision["revisionId"] == valid_revision
+        assert controller.canSave is False
+        assert "source bounds" in controller.statusMessage
+        controller.setCrop(0, 0, 12, 8)
+        assert controller.canSave is True
+
+    controller.setCrop(11, 7, 1, 1)
+    assert controller.imageEditing["crop"] == {
+        "left": 11,
+        "top": 7,
+        "width": 1,
+        "height": 1,
+    }
     assert controller.canSave is True
 
 

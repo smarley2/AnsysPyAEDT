@@ -29,6 +29,10 @@ from PySide6.QtTest import QTest  # noqa: E402
 
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.material_source import render_material_source  # noqa: E402
+from inductor_designer.ui.material_studio_controller import (  # noqa: E402
+    MaterialStudioController,
+)
+from tests.fakes.material_repository import InMemoryMaterialRepository  # noqa: E402
 
 _IMAGE = Path(__file__).parents[1] / "fixtures" / "materials" / "manual-bh.png"
 
@@ -352,6 +356,43 @@ def _root(controller: WorkflowController) -> tuple[QGuiApplication, object, QObj
     root.findChild(QObject, "guidedStepList").setProperty("currentIndex", 2)
     app.processEvents()
     return app, engine, root
+
+
+def _real_image_root() -> tuple[
+    MaterialStudioController,
+    QGuiApplication,
+    object,
+    QObject,
+]:
+    controller = MaterialStudioController(
+        InMemoryMaterialRepository(),
+        now=lambda: "2026-07-19T10:00:00+00:00",
+    )
+    controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+    controller.setSeriesMetadata(
+        "bh-real",
+        "bh-curve",
+        "A/m",
+        "T",
+        float("nan"),
+        25.0,
+        0.0,
+    )
+    controller.addPixelPoint(1.0, 7.0)
+    controller.addPixelPoint(11.0, 1.0)
+    controller.createImageDraft("Real", "QML", "R1", "Real controller workflow")
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    return controller, app, engine, root
+
+
+def _replace_field_text(root: QObject, field: QObject, text: str) -> None:
+    field.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    for character in text:
+        key = getattr(Qt.Key, f"Key_{character.upper()}")
+        QTest.keyClick(root, key)
 
 
 @pytest.mark.ui
@@ -717,6 +758,60 @@ def test_pending_calibration_text_disables_stale_save() -> None:
 
 
 @pytest.mark.ui
+def test_real_controller_preserves_malformed_metadata_across_sibling_edits() -> None:
+    controller, app, engine, root = _real_image_root()
+    frequency = root.findChild(QObject, "frequencyConditionField")
+    _replace_field_text(root, frequency, "10khz")
+    app.processEvents()
+    before = controller.imageEditing
+    revision_before = controller.selectedRevision
+
+    crop = root.findChild(QQuickItem, "cropHandleBottomRight")
+    x_axis = _accessible_object(root, "X axis anchor A")
+    point = _accessible_object(root, "Move source point 1")
+    for item, key in (
+        (crop, Qt.Key.Key_Left),
+        (x_axis, Qt.Key.Key_Right),
+        (point, Qt.Key.Key_Right),
+    ):
+        item.forceActiveFocus()
+        QTest.keyClick(root, key)
+        app.processEvents()
+        assert frequency.property("text") == "10khz"
+        assert controller.imageEditing == before
+        assert controller.selectedRevision == revision_before
+        assert controller.canSave is False
+
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_real_controller_preserves_malformed_calibration_across_sibling_edits() -> None:
+    controller, app, engine, root = _real_image_root()
+    crop_width = root.findChild(QObject, "cropWidthField")
+    _replace_field_text(root, crop_width, "x")
+    app.processEvents()
+    before = controller.imageEditing
+    revision_before = controller.selectedRevision
+
+    x_axis = _accessible_object(root, "X axis anchor A")
+    point = _accessible_object(root, "Move source point 1")
+    for item, key in (
+        (x_axis, Qt.Key.Key_Right),
+        (point, Qt.Key.Key_Right),
+    ):
+        item.forceActiveFocus()
+        QTest.keyClick(root, key)
+        app.processEvents()
+        assert crop_width.property("text") == "x"
+        assert controller.imageEditing == before
+        assert controller.selectedRevision == revision_before
+        assert controller.canSave is False
+
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
 def test_crop_and_both_axis_anchor_controls_forward_explicit_values() -> None:
     controller = WorkflowController()
     app, engine, root = _root(controller)
@@ -768,6 +863,40 @@ def test_crop_and_both_axis_anchor_controls_forward_explicit_values() -> None:
         ("setYAxis", "linear", 7.0, 0.0, 1.0, 2.0),
     ]
     assert app is not None
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        (("-5", "-6", "99", "99"), ("setCrop", 0, 0, 12, 8)),
+        (("99", "99", "0", "0"), ("setCrop", 11, 7, 1, 1)),
+    ],
+)
+def test_crop_text_application_clamps_the_complete_source_rectangle(
+    values: tuple[str, str, str, str],
+    expected: tuple[object, ...],
+) -> None:
+    controller = WorkflowController()
+    app, engine, root = _root(controller)
+    fields = [
+        root.findChild(QObject, name)
+        for name in (
+            "cropLeftField",
+            "cropTopField",
+            "cropWidthField",
+            "cropHeightField",
+        )
+    ]
+    assert all(field is not None for field in fields)
+    for field, value in zip(fields, values, strict=True):
+        field.setProperty("text", value)
+
+    _press(root.findChild(QObject, "applyCropButton"))
+    app.processEvents()
+
+    assert controller.calls[-1] == expected
     assert engine.rootObjects()
 
 
@@ -837,10 +966,14 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
         else _accessible_object(root, selection_name)
     )
     revision_list = root.findChild(QQuickItem, "revisionList")
+    material_list = root.findChild(QQuickItem, "materialList")
+    selection_list = revision_list if selection is None else material_list
     dialog = root.findChild(QObject, "dirtyLibrarySelectionDialog")
     save = root.findChild(QObject, "dirtyLibrarySelectionSaveButton")
     discard = root.findChild(QObject, "dirtyLibrarySelectionDiscardButton")
     cancel = root.findChild(QObject, "dirtyLibrarySelectionCancelButton")
+    assert selection_list is not None
+    assert selection_list.property("currentIndex") == 0
 
     def activate_selection() -> None:
         if selection is not None:
@@ -855,9 +988,11 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     activate_selection()
     app.processEvents()
     assert dialog.property("visible") is True
+    assert selection_list.property("currentIndex") == 0
     assert selection_call not in controller.calls
     _press(cancel)
     assert dialog.property("visible") is False
+    assert selection_list.property("currentIndex") == 0
     assert selection_call not in controller.calls
 
     controller.save_succeeds = False
@@ -865,6 +1000,7 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     _press(save)
     app.processEvents()
     assert dialog.property("visible") is True
+    assert selection_list.property("currentIndex") == 0
     assert selection_call not in controller.calls
 
     controller.save_succeeds = True
@@ -872,6 +1008,7 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     app.processEvents()
     assert dialog.property("visible") is False
     assert controller.calls[-1] == selection_call
+    assert selection_list.property("currentIndex") == 1
 
     controller.set_dirty(True)
     activate_selection()
@@ -879,4 +1016,5 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     app.processEvents()
     assert controller.calls[-2:] == [("discardChanges",), selection_call]
     assert dialog.property("visible") is False
+    assert selection_list.property("currentIndex") == 1
     assert engine.rootObjects()
