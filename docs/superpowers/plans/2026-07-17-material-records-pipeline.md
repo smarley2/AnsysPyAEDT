@@ -8,6 +8,33 @@
 
 **Tech Stack:** stdlib only (json, csv-free hand rendering, hashlib, math — Steinmetz is a 3×3 linear solve). No new dependencies.
 
+## Completion and acceptance status
+
+**Implementation:** Complete. Tasks 1–13 and the complementary CSV/XLSX
+template plan are merged to `main`; the automated exit proof is green.
+
+**Acceptance:** Pending only the following external evidence:
+
+- [ ] Import, review, and approve one real Magnetics Kool Mu 60 B-H and
+  core-loss source with redistribution rights recorded.
+- [ ] Run `tools.reproduce_material` for that approved revision and obtain
+  `MATCH` from the stored source files.
+- [ ] Generate and open Maxwell 3D with that exact pinned revision and verify
+  the nonlinear B-H data and ferrite-loss coefficients in AEDT.
+- [ ] Generate and solve the FEMM model with that exact pinned revision and
+  verify that every B-H point was transferred.
+
+These checks require the real source material and licensed/user-installed
+solver environments; they are not missing implementation tasks.
+
+**M5b sequencing:** M5b implementation may start against the stable, automated
+M5a services. The real-record import and reproduction check should be performed
+before or early in M5b because it can expose workflow issues relevant to the
+UI. Live AEDT/FEMM handoff may run in parallel with M5b development, but it must
+pass before M5a or M5b is accepted and before solver behavior is claimed as
+validated. Licensing approval blocks committing/distributing source bytes, not
+local M5b UI development.
+
 ## Global Constraints
 
 - Python `>=3.10,<3.14`; mypy strict over `src` and `tools`; Ruff line 100 (`E,F,I,B,UP,ANN,SIM`); branch coverage `fail_under = 80`.
@@ -62,7 +89,7 @@
 
 **Interfaces:** `to_canonical` accepts the new units per D11. Exact factors: `"T": 1.0, "mT": 1e-3, "G": 1e-4, "kG": 0.1, "A/m": 1.0, "kA/m": 1e3, "Oe": 79.57747154594767, "W/m3": 1.0, "kW/m3": 1e3, "mW/cm3": 1e3`.
 
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
 
 ```python
 def test_flux_density_units() -> None:
@@ -82,7 +109,7 @@ def test_loss_density_units() -> None:
     assert to_canonical(1.0, "kW/m3") == pytest.approx(1000.0)
 ```
 
-- [ ] **Step 2:** run → FAIL (unknown unit). **Step 3:** add the ten entries to `_CONVERSIONS`. **Step 4:** gates. **Step 5:** commit `feat(domain): flux-density, field, and loss-density units`.
+- [x] **Step 2:** run → FAIL (unknown unit). **Step 3:** add the ten entries to `_CONVERSIONS`. **Step 4:** gates. **Step 5:** commit `feat(domain): flux-density, field, and loss-density units`.
 
 ---
 

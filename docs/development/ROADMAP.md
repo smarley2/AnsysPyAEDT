@@ -348,6 +348,14 @@ Remaining acceptance work and risks:
 - Resolve multiple B-H condition selection in M5b; M5a deliberately blocks ambiguous records.
 - Keep revision choice explicit: M5b must list all revisions, may suggest the latest approved one, and must persist the chosen revision. Export must never silently select latest.
 
+M5b implementation does not need to wait for the live solver checks: its UI can
+be built against the stable, automated M5a services. The real-record import and
+`MATCH` reproduction should happen before or early in M5b so any workflow issue
+can still shape the UI. Live AEDT/FEMM handoff may proceed in parallel, but it
+remains a hard gate for accepting either milestone and for making live-solver
+claims. Source licensing must be confirmed before real datasheet bytes are
+committed or redistributed.
+
 Material Studio UI, explicit-formula records, OCR proposals, the optional
 attributed GPL importer, and MCP material tools are M5b scope. See the
 [material records procedure](material-records.md) and the

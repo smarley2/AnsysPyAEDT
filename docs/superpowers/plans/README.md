@@ -12,7 +12,7 @@ Milestone 2 status: **Accepted 2026-07-15** (exit tests green; interactive previ
 
 Milestones 3, 4, and 4.5 status: **Accepted 2026-07-16**, **Accepted 2026-07-17**, and **Accepted 2026-07-17**, respectively. See the roadmap for the exact live-verification scope.
 
-Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record and live AEDT/FEMM material handoff remain required. Milestone 5b planning is next.
+Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record, `MATCH` reproduction, and live AEDT/FEMM material handoff remain required. M5b implementation may start now, but those checks must pass before either milestone is accepted.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
@@ -23,7 +23,7 @@ Milestone 5a status: **Implementation complete, automated exit proof green, acce
 | 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |
 | 4.5 | Automation interfaces — MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Maxwell 2D and DC-bias generation accepted | MCP client creates a valid project, generates a ready-to-solve Maxwell design, runs a FEMM solve of the 2D equivalent, and reads back per-winding R/L, with the backend chosen per call |
 | 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Material interface and solver export requirements accepted | Automated source replay is green; real datasheet approval and live solver handoff remain pending |
-| 5b | Material Studio UI and material tools | Plan pending M5a acceptance | M5a live handoff accepted | Reviewer can import/edit image curves, choose conditions and revisions explicitly, and use the planned OCR, GPL-import, and MCP material workflows |
+| 5b | Material Studio UI and material tools | Plan pending; stable M5a automated interfaces are available | Real-record validation should run before or early in M5b; live handoff is required before acceptance | Reviewer can import/edit image curves, choose conditions and revisions explicitly, and use the planned OCR, GPL-import, and MCP material workflows |
 | 6 | Productization | Written after Milestone 5 review | Desktop and extension workflows accepted | Installer and extension pass Commercial and Student release validation |
 | 7 | Additional core families | One plan per core family after toroid release criteria pass | Toroid workflow released | Each family has independent schemas, invariants, previews, adapters, and fixtures |
 
