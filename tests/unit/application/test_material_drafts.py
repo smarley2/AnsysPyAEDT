@@ -13,6 +13,7 @@ from inductor_designer.adapters.materials import (
     material_import_template,
 )
 from inductor_designer.application.services.material_drafts import (
+    MaterialDraftSession,
     approve_material_session,
     clone_revision_as_draft,
     replace_table_series,
@@ -23,14 +24,19 @@ from inductor_designer.application.services.material_drafts import (
 from inductor_designer.application.services.material_import import (
     MaterialImportError,
     approve_material,
+    new_draft_record,
     review_material,
 )
+from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
     CurvePoint,
     MaterialRecord,
     MaterialStatus,
+    PointSeries,
     SeriesKind,
+    SourceKind,
+    SourceProvenance,
 )
 from inductor_designer.materials.serde import revision_id_for, sha256_hex
 from tests.fakes.material_repository import InMemoryMaterialRepository
@@ -61,6 +67,39 @@ def _approved_repository() -> tuple[
     repository = InMemoryMaterialRepository()
     repository.save(approved, dict(imported.source_files))
     return repository, approved, imported.source_files
+
+
+def _external_source_session(*, shared: bool) -> MaterialDraftSession:
+    data = b"x,y\n0.0,0.0\n100.0,0.2\n"
+    source = SourceProvenance(
+        kind=SourceKind.CSV,
+        filename="shared.csv" if shared else "external.csv",
+        sha256=sha256_hex(data),
+        url="https://example.com/source.csv",
+        page=None,
+        captured_at=_CREATED_AT,
+        description="External source",
+    )
+    conditions = CurveConditions(None, 25.0, None)
+    points = (CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.2))
+    target = PointSeries(
+        series_id="bh-first",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=conditions,
+        points=points,
+        source_filename=source.filename,
+        extraction=None,
+    )
+    sibling = replace(target, series_id="bh-second")
+    record = new_draft_record(
+        MaterialRef("Example", "Ferrite", "External"),
+        series=(target, sibling) if shared else (target,),
+        sources=(source,),
+        created_at=_CREATED_AT,
+    )
+    return MaterialDraftSession(record, ((source.filename, data),), None)
 
 
 def test_session_from_upload_wraps_existing_import_result_exactly() -> None:
@@ -220,6 +259,56 @@ def test_replace_loss_series_recomputes_fit_and_revision() -> None:
     assert edited.record.revision_id != session.record.revision_id
 
 
+def test_replace_table_series_retains_direct_external_source() -> None:
+    session = _external_source_session(shared=False)
+    source = session.record.sources[0]
+    source_bytes = session.source_files[0][1]
+
+    edited = replace_table_series(
+        session,
+        "bh-first",
+        series_id="bh-edited",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 30.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(200.0, 0.3)),
+    )
+
+    assert source in edited.record.sources
+    assert dict(edited.source_files)[source.filename] == source_bytes
+    replacement = next(item for item in edited.record.series if item.series_id == "bh-edited")
+    assert replacement.source_filename == "series-bh_edited.csv"
+    assert replacement.source_filename in {item.filename for item in edited.record.sources}
+    assert replacement.source_filename in dict(edited.source_files)
+
+
+def test_replace_table_series_retains_source_shared_by_sibling() -> None:
+    session = _external_source_session(shared=True)
+    source = session.record.sources[0]
+    source_bytes = session.source_files[0][1]
+
+    edited = replace_table_series(
+        session,
+        "bh-first",
+        series_id="bh-edited",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 30.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(200.0, 0.3)),
+    )
+
+    sibling = next(item for item in edited.record.series if item.series_id == "bh-second")
+    replacement = next(item for item in edited.record.series if item.series_id == "bh-edited")
+    assert sibling.source_filename == source.filename
+    assert source in edited.record.sources
+    assert dict(edited.source_files)[source.filename] == source_bytes
+    assert replacement.source_filename == "series-bh_edited.csv"
+    assert replacement.source_filename in {item.filename for item in edited.record.sources}
+    assert replacement.source_filename in dict(edited.source_files)
+
+
 @pytest.mark.parametrize("status", [MaterialStatus.REVIEWED, MaterialStatus.APPROVED])
 def test_replace_table_series_requires_a_draft_session(status: MaterialStatus) -> None:
     template = material_import_template("csv")
@@ -285,6 +374,7 @@ def test_save_review_and_approve_persist_each_immutable_session() -> None:
     draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
 
     saved = save_material_session(repository, draft)
+    assert save_material_session(repository, saved) is saved
     reviewed = review_material_session(repository, saved, "reviewer@example.com")
     approved = approve_material_session(repository, reviewed, "approver@example.com")
 
@@ -300,6 +390,36 @@ def test_save_review_and_approve_persist_each_immutable_session() -> None:
     assert draft.record.status is MaterialStatus.DRAFT
     assert saved.record.status is MaterialStatus.DRAFT
     assert reviewed.record.approved_by is None
+
+
+def test_stale_draft_save_cannot_revert_a_reviewed_revision() -> None:
+    template = material_import_template("csv")
+    repository = InMemoryMaterialRepository()
+    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    save_material_session(repository, draft)
+    reviewed = review_material_session(repository, draft, "reviewer@example.com")
+
+    with pytest.raises(MaterialImportError, match="current saved draft"):
+        save_material_session(repository, draft)
+
+    assert repository.get(reviewed.record.ref, reviewed.record.revision_id) == reviewed.record
+
+
+@pytest.mark.parametrize("status", [MaterialStatus.REVIEWED, MaterialStatus.APPROVED])
+def test_save_material_session_rejects_non_draft_status(status: MaterialStatus) -> None:
+    template = material_import_template("csv")
+    repository = InMemoryMaterialRepository()
+    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    save_material_session(repository, draft)
+    session = review_material_session(repository, draft, "reviewer@example.com")
+    if status is MaterialStatus.APPROVED:
+        session = approve_material_session(repository, session, "approver@example.com")
+    stored_before = repository.get(session.record.ref, session.record.revision_id)
+
+    with pytest.raises(MaterialImportError, match="draft"):
+        save_material_session(repository, session)
+
+    assert repository.get(session.record.ref, session.record.revision_id) == stored_before
 
 
 def test_review_requires_the_current_draft_to_be_saved() -> None:

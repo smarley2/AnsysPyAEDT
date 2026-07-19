@@ -106,14 +106,37 @@ def replace_table_series(
             (f"Series ID '{series_id}' collides after sanitizing.",)
         )
 
-    source_filename = f"series-{sanitized_id}.csv"
-    retained_sources = tuple(
-        source for source in session.record.sources if source.filename != target.source_filename
+    old_provenance = next(
+        (
+            source
+            for source in session.record.sources
+            if source.filename == target.source_filename
+        ),
+        None,
     )
-    if len(retained_sources) == len(session.record.sources):
+    if old_provenance is None:
         raise MaterialImportError(
             (f"Series '{target_series_id}' source provenance does not exist.",)
         )
+    if not any(name == target.source_filename for name, _ in session.source_files):
+        raise MaterialImportError(
+            (f"Series '{target_series_id}' source bytes do not exist.",)
+        )
+
+    disposable_filename = f"series-{sanitize_identifier(target_series_id)}.csv"
+    disposable_source = (
+        target.source_filename == disposable_filename
+        and old_provenance.kind is SourceKind.CSV
+        and not any(
+            item.source_filename == target.source_filename for item in other_series
+        )
+    )
+    source_filename = f"series-{sanitized_id}.csv"
+    retained_sources = tuple(
+        source
+        for source in session.record.sources
+        if not disposable_source or source.filename != target.source_filename
+    )
     if any(
         sanitize_identifier(source.filename).casefold()
         == sanitize_identifier(source_filename).casefold()
@@ -129,11 +152,6 @@ def replace_table_series(
     )
     source_text = "x,y\n" + "".join(f"{x!r},{y!r}\n" for x, y in raw_rows)
     source_bytes = source_text.encode()
-    old_provenance = next(
-        source
-        for source in session.record.sources
-        if source.filename == target.source_filename
-    )
     provenance = replace(
         old_provenance,
         kind=SourceKind.CSV,
@@ -154,18 +172,20 @@ def replace_table_series(
         replacement if item.series_id == target_series_id else item
         for item in session.record.series
     )
-    sources = tuple(
-        provenance if source.filename == target.source_filename else source
-        for source in session.record.sources
-    )
-    files = tuple(
-        (source_filename, source_bytes) if name == target.source_filename else (name, data)
-        for name, data in session.source_files
-    )
-    if not any(name == target.source_filename for name, _ in session.source_files):
-        raise MaterialImportError(
-            (f"Series '{target_series_id}' source bytes do not exist.",)
+    if disposable_source:
+        sources = tuple(
+            provenance if source.filename == target.source_filename else source
+            for source in session.record.sources
         )
+        files = tuple(
+            (source_filename, source_bytes)
+            if name == target.source_filename
+            else (name, data)
+            for name, data in session.source_files
+        )
+    else:
+        sources = (*session.record.sources, provenance)
+        files = (*session.source_files, (source_filename, source_bytes))
 
     draft = new_draft_record(
         session.record.ref,
@@ -182,7 +202,18 @@ def save_material_session(
     repository: MaterialRepository,
     session: MaterialDraftSession,
 ) -> MaterialDraftSession:
+    if session.record.status is not MaterialStatus.DRAFT:
+        raise MaterialImportError(("Only draft material sessions can be saved.",))
     _require_distinct_valid_revision(session)
+    try:
+        stored = repository.get(session.record.ref, session.record.revision_id)
+    except MaterialLookupError:
+        pass
+    else:
+        if stored != session.record:
+            raise MaterialImportError(
+                ("Material must be the current saved draft before it can be saved.",)
+            )
     repository.save(session.record, dict(session.source_files))
     return session
 
