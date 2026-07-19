@@ -23,6 +23,17 @@ from inductor_designer.materials.serde import (
 )
 
 
+def _material_sort_key(ref: MaterialRef) -> tuple[str, str, str, str, str, str]:
+    return (
+        ref.manufacturer.casefold(),
+        ref.name.casefold(),
+        ref.grade.casefold(),
+        ref.manufacturer,
+        ref.name,
+        ref.grade,
+    )
+
+
 class FileOverlayMaterialRepository:
     def __init__(self, root: Path) -> None:
         self._root = root
@@ -161,6 +172,18 @@ class FileOverlayMaterialRepository:
         sources = self._read_sources(record, revision_directory)
         self._verify_points(record, revision_directory)
         return record, sources
+
+    def list_materials(self) -> tuple[MaterialRef, ...]:
+        discovered: dict[tuple[str, str, str], MaterialRef] = {}
+        for path in self._root.glob("*/*/*/*/record.json"):
+            persisted = material_record_from_json(self._document(path))
+            record, _ = self._load_verified(persisted.ref, persisted.revision_id)
+            path_key = self._material_path_key(record.ref)
+            previous = discovered.get(path_key)
+            if previous is not None and previous != record.ref:
+                raise ValueError("material identity paths collide after sanitizing")
+            discovered[path_key] = record.ref
+        return tuple(sorted(discovered.values(), key=_material_sort_key))
 
     def list_revisions(self, ref: MaterialRef) -> tuple[str, ...]:
         material_directory = self._material_directory(ref)

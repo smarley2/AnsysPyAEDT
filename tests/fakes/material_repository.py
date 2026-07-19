@@ -10,6 +10,17 @@ from inductor_designer.materials.records import MaterialRecord, MaterialStatus
 from inductor_designer.materials.serde import sha256_hex
 
 
+def _material_sort_key(ref: MaterialRef) -> tuple[str, str, str, str, str, str]:
+    return (
+        ref.manufacturer.casefold(),
+        ref.name.casefold(),
+        ref.grade.casefold(),
+        ref.manufacturer,
+        ref.name,
+        ref.grade,
+    )
+
+
 class InMemoryMaterialRepository:
     def __init__(self) -> None:
         self._records: dict[tuple[MaterialRef, str], MaterialRecord] = {}
@@ -54,6 +65,10 @@ class InMemoryMaterialRepository:
         if timestamp.tzinfo is None:
             timestamp = timestamp.replace(tzinfo=timezone.utc)
         return (timestamp.timestamp(), record.revision_id)
+
+    def list_materials(self) -> tuple[MaterialRef, ...]:
+        refs = {ref for ref, _ in self._records}
+        return tuple(sorted(refs, key=_material_sort_key))
 
     def list_revisions(self, ref: MaterialRef) -> tuple[str, ...]:
         return tuple(

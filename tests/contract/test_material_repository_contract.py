@@ -208,6 +208,35 @@ def test_save_rejects_material_path_alias(repository: MaterialRepository) -> Non
         repository.save(alias, {"bh-source.csv": source})
 
 
+def test_list_materials_returns_distinct_sorted_identities(
+    repository: MaterialRepository,
+) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    acme_ref = MaterialRef("ACME", "Ferrite", "N87")
+    magnetics_ref = MaterialRef("Magnetics", "Kool Mu", "60")
+    acme = replace(_record(source), ref=acme_ref)
+    acme_second_revision = replace(
+        _record(source, revision_id="111111111111"),
+        ref=acme_ref,
+    )
+    magnetics = replace(
+        _record(source, revision_id="222222222222"),
+        ref=magnetics_ref,
+    )
+    alias = replace(
+        _record(source, revision_id="333333333333"),
+        ref=MaterialRef("Magnetics", "Kool-Mu", "60"),
+    )
+    repository.save(magnetics, {"bh-source.csv": source})
+    repository.save(acme, {"bh-source.csv": source})
+    repository.save(acme_second_revision, {"bh-source.csv": source})
+
+    with pytest.raises(ValueError, match="material identity.*collide"):
+        repository.save(alias, {"bh-source.csv": source})
+
+    assert repository.list_materials() == (acme_ref, magnetics_ref)
+
+
 def test_material_path_alias_is_typed_unknown(repository: MaterialRepository) -> None:
     source = b"h,b\n0,0\n100,0.2\n"
     stored = _record(source)
