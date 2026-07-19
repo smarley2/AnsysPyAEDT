@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from inductor_designer.adapters.materials import import_material_file_as_draft
 from inductor_designer.application.ports.material_repository import (
     MaterialLookupError,
     MaterialRepository,
@@ -142,6 +141,189 @@ def _image_target(
     return target
 
 
+def _require_draft(session: MaterialDraftSession, action: str) -> None:
+    if session.record.status is not MaterialStatus.DRAFT:
+        raise MaterialImportError((f"{action} can only be edited in a draft session.",))
+
+
+def _new_series_id(session: MaterialDraftSession, series_id: str) -> str:
+    if not series_id.strip():
+        raise MaterialImportError(("Series ID must not be blank.",))
+    if any(item.series_id == series_id for item in session.record.series):
+        raise MaterialImportError((f"Series ID '{series_id}' already exists.",))
+    sanitized_id = sanitize_identifier(series_id)
+    if any(
+        sanitize_identifier(item.series_id).casefold() == sanitized_id.casefold()
+        for item in session.record.series
+    ):
+        raise MaterialImportError((f"Series ID '{series_id}' collides after sanitizing.",))
+    return sanitized_id
+
+
+def _rebuild_session(
+    session: MaterialDraftSession,
+    *,
+    series: tuple[PointSeries, ...],
+    sources: tuple[SourceProvenance, ...],
+    source_files: tuple[tuple[str, bytes], ...],
+) -> MaterialDraftSession:
+    draft = new_draft_record(
+        session.record.ref,
+        series=series,
+        sources=sources,
+        created_at=session.record.created_at,
+        relative_permeability=session.record.relative_permeability,
+        notes=session.record.notes,
+    )
+    return MaterialDraftSession(draft, source_files, session.base_revision_id)
+
+
+def add_table_series(
+    session: MaterialDraftSession,
+    *,
+    series_id: str,
+    kind: SeriesKind,
+    x_unit: str,
+    y_unit: str,
+    conditions: CurveConditions,
+    points: tuple[CurvePoint, ...],
+    captured_at: str,
+) -> MaterialDraftSession:
+    """Add a direct-edit series while retaining all existing source evidence."""
+    _require_draft(session, "Table series")
+    sanitized_id = _new_series_id(session, series_id)
+    source_filename = f"series-{sanitized_id}.csv"
+    if any(
+        sanitize_identifier(source.filename).casefold()
+        == sanitize_identifier(source_filename).casefold()
+        for source in session.record.sources
+    ):
+        raise MaterialImportError(
+            (f"Generated source filename '{source_filename}' collides with retained provenance.",)
+        )
+    raw_rows = tuple(
+        (from_canonical(point.x, x_unit), from_canonical(point.y, y_unit))
+        for point in points
+    )
+    source_text = "x,y\n" + "".join(f"{x!r},{y!r}\n" for x, y in raw_rows)
+    source_bytes = source_text.encode()
+    provenance = SourceProvenance(
+        kind=SourceKind.CSV,
+        filename=source_filename,
+        sha256=sha256_hex(source_bytes),
+        url="",
+        page=None,
+        captured_at=captured_at,
+        description="Material Studio direct table series",
+    )
+    added = import_curve_csv(
+        source_text,
+        series_id=series_id,
+        kind=kind,
+        x_unit=x_unit,
+        y_unit=y_unit,
+        conditions=conditions,
+        source=provenance,
+    )
+    return _rebuild_session(
+        session,
+        series=(*session.record.series, added),
+        sources=(*session.record.sources, provenance),
+        source_files=(*session.source_files, (source_filename, source_bytes)),
+    )
+
+
+def add_image_series(
+    session: MaterialDraftSession,
+    *,
+    source_filename: str,
+    series_id: str,
+    kind: SeriesKind,
+    x_unit: str,
+    y_unit: str,
+    conditions: CurveConditions,
+    extraction: ExtractionRecord,
+) -> MaterialDraftSession:
+    """Add another manually digitized series from an existing image/PDF source."""
+    _require_draft(session, "Image series")
+    _new_series_id(session, series_id)
+    provenance = next(
+        (source for source in session.record.sources if source.filename == source_filename),
+        None,
+    )
+    if provenance is None or provenance.kind is not SourceKind.IMAGE:
+        raise MaterialImportError((f"Image source '{source_filename}' does not exist.",))
+    if not any(name == source_filename for name, _ in session.source_files):
+        raise MaterialImportError((f"Image source '{source_filename}' bytes do not exist.",))
+    added = _image_series(
+        series_id=series_id,
+        kind=kind,
+        x_unit=x_unit,
+        y_unit=y_unit,
+        conditions=conditions,
+        source_filename=source_filename,
+        extraction=extraction,
+    )
+    return _rebuild_session(
+        session,
+        series=(*session.record.series, added),
+        sources=session.record.sources,
+        source_files=session.source_files,
+    )
+
+
+def remove_series(
+    session: MaterialDraftSession,
+    series_id: str,
+) -> MaterialDraftSession:
+    """Remove one series and only its unreferenced generated CSV artifact."""
+    _require_draft(session, "Material series")
+    target = next(
+        (item for item in session.record.series if item.series_id == series_id),
+        None,
+    )
+    if target is None:
+        raise MaterialImportError((f"Series '{series_id}' does not exist.",))
+    if len(session.record.series) == 1:
+        raise MaterialImportError(("Cannot remove the final material series.",))
+    retained_series = tuple(
+        item for item in session.record.series if item.series_id != series_id
+    )
+    provenance = next(
+        (
+            source
+            for source in session.record.sources
+            if source.filename == target.source_filename
+        ),
+        None,
+    )
+    generated_filename = f"series-{sanitize_identifier(series_id)}.csv"
+    remove_generated_source = (
+        provenance is not None
+        and provenance.kind is SourceKind.CSV
+        and target.source_filename == generated_filename
+        and not any(
+            item.source_filename == target.source_filename for item in retained_series
+        )
+    )
+    sources = tuple(
+        source
+        for source in session.record.sources
+        if not remove_generated_source or source.filename != target.source_filename
+    )
+    source_files = tuple(
+        (name, data)
+        for name, data in session.source_files
+        if not remove_generated_source or name != target.source_filename
+    )
+    return _rebuild_session(
+        session,
+        series=retained_series,
+        sources=sources,
+        source_files=source_files,
+    )
+
+
 def replace_image_series(
     session: MaterialDraftSession,
     target_series_id: str,
@@ -212,31 +394,26 @@ def replace_image_extraction(
     )
 
 
-def session_from_upload(
-    filename: str,
-    data: bytes,
-    *,
-    created_at: str,
-    notes: str = "",
+def session_from_import(
+    record: MaterialRecord,
+    source_files: tuple[tuple[str, bytes], ...],
 ) -> MaterialDraftSession:
-    imported = import_material_file_as_draft(
-        filename,
-        data,
-        created_at=created_at,
-        notes=notes,
-    )
-    return MaterialDraftSession(imported.record, imported.source_files, None)
+    """Wrap format-neutral imported material data in a draft session."""
+    return MaterialDraftSession(record, source_files, None)
 
 
 def clone_revision_as_draft(
     repository: MaterialRepository,
     ref: MaterialRef,
     revision_id: str,
+    *,
+    created_at: str,
 ) -> MaterialDraftSession:
     stored = repository.get(ref, revision_id)
     draft = replace(
         stored,
         status=MaterialStatus.DRAFT,
+        created_at=created_at,
         reviewed_by=None,
         approved_by=None,
     )
@@ -396,13 +573,13 @@ def save_material_session(
 
 
 def _require_distinct_valid_revision(session: MaterialDraftSession) -> None:
-    computed_revision = revision_id_for(session.record)
-    if session.record.revision_id != computed_revision:
-        raise MaterialImportError(("Material revision ID does not match its content.",))
-    if session.base_revision_id == computed_revision:
+    if session.base_revision_id == session.record.revision_id:
         raise MaterialImportError(
             ("Cloned material revision must be edited before it can be saved.",)
         )
+    computed_revision = revision_id_for(session.record)
+    if session.record.revision_id != computed_revision:
+        raise MaterialImportError(("Material revision ID does not match its content.",))
 
 
 def _require_actor(actor: str, role: str) -> None:

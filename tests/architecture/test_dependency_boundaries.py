@@ -49,5 +49,36 @@ def test_application_rejects_infrastructure_but_allows_pathlib(tmp_path: Path) -
     )
 
 
+@pytest.mark.parametrize(
+    ("statement", "imported"),
+    [
+        (
+            "from inductor_designer.adapters.materials import import_material_file\n",
+            "inductor_designer.adapters.materials",
+        ),
+        (
+            "import inductor_designer.adapters.persistence\n",
+            "inductor_designer.adapters.persistence",
+        ),
+        (
+            "from inductor_designer import adapters\n",
+            "inductor_designer.adapters",
+        ),
+    ],
+)
+def test_application_rejects_adapter_dependencies(
+    tmp_path: Path,
+    statement: str,
+    imported: str,
+) -> None:
+    source = tmp_path / "inductor_designer" / "application" / "services" / "drafts.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(statement, encoding="utf-8")
+
+    assert find_forbidden_imports(tmp_path) == (
+        Violation(source, 1, imported, "application"),
+    )
+
+
 def test_repository_inner_packages_respect_boundaries() -> None:
     assert find_forbidden_imports(Path("src")) == ()

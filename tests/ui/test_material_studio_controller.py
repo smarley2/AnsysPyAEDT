@@ -18,6 +18,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPdfWriter  # noqa:
 
 from inductor_designer.adapters.materials import (  # noqa: E402
     export_material_record_xlsx,
+    import_material_file_as_draft,
     material_import_template,
 )
 from inductor_designer.application.services.material_drafts import (  # noqa: E402
@@ -27,7 +28,7 @@ from inductor_designer.application.services.material_drafts import (  # noqa: E4
     image_draft_session,
     review_material_session,
     save_material_session,
-    session_from_upload,
+    session_from_import,
 )
 from inductor_designer.application.services.material_selection import (  # noqa: E402
     pin_material_revision as authoritative_pin_material_revision,
@@ -62,6 +63,16 @@ _IMAGE = Path(__file__).parents[1] / "fixtures" / "materials" / "manual-bh.png"
 
 def _file_url(path: Path) -> str:
     return QUrl.fromLocalFile(str(path)).toString()
+
+
+def _session_from_upload(
+    filename: str,
+    data: bytes,
+    *,
+    created_at: str,
+) -> MaterialDraftSession:
+    imported = import_material_file_as_draft(filename, data, created_at=created_at)
+    return session_from_import(imported.record, imported.source_files)
 
 
 def _two_page_pdf() -> bytes:
@@ -132,7 +143,7 @@ def _approved_material(
     repository: InMemoryMaterialRepository,
 ) -> MaterialDraftSession:
     template = material_import_template("csv")
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     save_material_session(repository, draft)
     reviewed = review_material_session(repository, draft, "reviewer@example.com")
     return approve_material_session(repository, reviewed, "approver@example.com")
@@ -606,7 +617,7 @@ def test_series_switch_restores_matching_source_and_fails_atomically(
         series_id="bh-image",
     )
     table_template = material_import_template("csv")
-    table = session_from_upload(
+    table = _session_from_upload(
         table_template.filename,
         table_template.data,
         created_at=_CREATED_AT,

@@ -13,6 +13,7 @@ from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
 from inductor_designer.adapters.materials import (
     export_material_record_xlsx,
+    import_material_file_as_draft,
     material_import_template,
 )
 from inductor_designer.application.ports.material_repository import (
@@ -29,7 +30,7 @@ from inductor_designer.application.services.material_drafts import (
     replace_table_series,
     review_material_session,
     save_material_session,
-    session_from_upload,
+    session_from_import,
 )
 from inductor_designer.application.services.material_import import MaterialImportError
 from inductor_designer.application.services.material_library import (
@@ -808,7 +809,12 @@ class MaterialStudioController(QObject):
         def action() -> None:
             path = self._local_path(source_url)
             data = path.read_bytes()
-            session = session_from_upload(path.name, data, created_at=self._now())
+            imported = import_material_file_as_draft(
+                path.name,
+                data,
+                created_at=self._now(),
+            )
+            session = session_from_import(imported.record, imported.source_files)
             materials, revisions = self._library_values(session.record.ref)
             self._remember_clean_state()
             self._set_session(
@@ -959,6 +965,7 @@ class MaterialStudioController(QObject):
             self._repository,
             self._session.record.ref,
             self._session.record.revision_id,
+            created_at=self._now(),
         )
 
     def _replacement_editor_series(

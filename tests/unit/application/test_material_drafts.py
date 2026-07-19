@@ -16,21 +16,27 @@ from inductor_designer.adapters.materials import (
 from inductor_designer.application.services.material_drafts import (
     ImageSeriesInput,
     MaterialDraftSession,
+    add_image_series,
+    add_table_series,
     approve_material_session,
     clone_revision_as_draft,
     image_draft_session,
+    remove_series,
     replace_image_extraction,
     replace_image_series,
     replace_table_series,
     review_material_session,
     save_material_session,
-    session_from_upload,
+    session_from_import,
 )
 from inductor_designer.application.services.material_import import (
     MaterialImportError,
     approve_material,
     new_draft_record,
     review_material,
+)
+from inductor_designer.application.services.material_library import (
+    list_material_revision_summaries,
 )
 from inductor_designer.materials.calibration import (
     AxisCalibration,
@@ -66,6 +72,22 @@ def _uploaded_draft() -> tuple[MaterialTemplateDownload, ImportedMaterialDraft]:
         created_at=_CREATED_AT,
         notes="Uploaded in Material Studio",
     )
+
+
+def _session_from_upload(
+    filename: str,
+    data: bytes,
+    *,
+    created_at: str,
+    notes: str = "",
+) -> MaterialDraftSession:
+    imported = import_material_file_as_draft(
+        filename,
+        data,
+        created_at=created_at,
+        notes=notes,
+    )
+    return session_from_import(imported.record, imported.source_files)
 
 
 def _approved_repository() -> tuple[
@@ -116,15 +138,10 @@ def _external_source_session(*, shared: bool) -> MaterialDraftSession:
     return MaterialDraftSession(record, ((source.filename, data),), None)
 
 
-def test_session_from_upload_wraps_existing_import_result_exactly() -> None:
+def test_session_from_import_wraps_existing_import_result_exactly() -> None:
     template, imported = _uploaded_draft()
 
-    session = session_from_upload(
-        template.filename,
-        template.data,
-        created_at=_CREATED_AT,
-        notes="Uploaded in Material Studio",
-    )
+    session = session_from_import(imported.record, imported.source_files)
 
     assert session.record == imported.record
     assert session.source_files == imported.source_files
@@ -147,11 +164,13 @@ def test_clone_revision_resets_lifecycle_and_retains_exact_sources(
         repository,
         stored.ref,
         stored.revision_id,
+        created_at="2026-07-20T08:00:00+00:00",
     )
 
     assert session.record.status is MaterialStatus.DRAFT
     assert session.record.reviewed_by is None
     assert session.record.approved_by is None
+    assert session.record.created_at == "2026-07-20T08:00:00+00:00"
     assert session.record.revision_id == stored.revision_id
     assert session.source_files == imported.source_files
     assert session.base_revision_id == stored.revision_id
@@ -160,7 +179,12 @@ def test_clone_revision_resets_lifecycle_and_retains_exact_sources(
 
 def test_unchanged_approved_clone_cannot_be_saved_or_overwrite_base() -> None:
     repository, approved, _ = _approved_repository()
-    session = clone_revision_as_draft(repository, approved.ref, approved.revision_id)
+    session = clone_revision_as_draft(
+        repository,
+        approved.ref,
+        approved.revision_id,
+        created_at="2026-07-20T08:00:00+00:00",
+    )
     before = repository.get(approved.ref, approved.revision_id)
 
     with pytest.raises(MaterialImportError, match="edited"):
@@ -172,9 +196,50 @@ def test_unchanged_approved_clone_cannot_be_saved_or_overwrite_base() -> None:
     assert repository.get(approved.ref, approved.revision_id) == before
 
 
+def test_approved_edit_gets_fresh_timestamp_and_becomes_latest_suggestion() -> None:
+    repository, approved, _ = _approved_repository()
+    base_before = deepcopy(approved)
+    derived_at = "2026-07-20T08:00:00+00:00"
+    clone = clone_revision_as_draft(
+        repository,
+        approved.ref,
+        approved.revision_id,
+        created_at=derived_at,
+    )
+
+    edited = replace_table_series(
+        clone,
+        "bh-25c",
+        series_id="bh-30c",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 30.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(125.0, 0.2)),
+    )
+    save_material_session(repository, edited)
+    reviewed = review_material_session(repository, edited, "reviewer@example.com")
+    derived = approve_material_session(repository, reviewed, "approver@example.com")
+
+    summaries = list_material_revision_summaries(repository, approved.ref)
+    assert clone.record.created_at == derived_at
+    assert edited.record.created_at == derived_at
+    assert derived.record.created_at == derived_at
+    assert derived.record.revision_id != approved.revision_id
+    assert summaries[0].revision_id == derived.record.revision_id
+    assert summaries[0].is_latest_approved
+    assert not summaries[1].is_latest_approved
+    assert repository.get(approved.ref, approved.revision_id) == base_before
+
+
 def test_replace_table_series_renames_generated_source_and_retains_upload() -> None:
     repository, approved, _ = _approved_repository()
-    session = clone_revision_as_draft(repository, approved.ref, approved.revision_id)
+    session = clone_revision_as_draft(
+        repository,
+        approved.ref,
+        approved.revision_id,
+        created_at="2026-07-20T08:00:00+00:00",
+    )
     session_before = deepcopy(session)
     base_before = repository.get(approved.ref, approved.revision_id)
     upload_name = session.record.sources[0].filename
@@ -248,7 +313,7 @@ def test_replace_table_series_renames_generated_source_and_retains_upload() -> N
 
 def test_replace_loss_series_recomputes_fit_and_revision() -> None:
     _, imported = _uploaded_draft()
-    session = session_from_upload(
+    session = _session_from_upload(
         "material-import-template.csv",
         material_import_template("csv").data,
         created_at=_CREATED_AT,
@@ -327,7 +392,7 @@ def test_replace_table_series_retains_source_shared_by_sibling() -> None:
 def test_replace_table_series_requires_a_draft_session(status: MaterialStatus) -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     save_material_session(repository, draft)
     session = review_material_session(repository, draft, "reviewer@example.com")
     if status is MaterialStatus.APPROVED:
@@ -364,7 +429,7 @@ def test_replace_table_series_rejects_missing_target_or_id_collision(
     message: str,
 ) -> None:
     template = material_import_template("csv")
-    session = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    session = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     before = deepcopy(session)
 
     with pytest.raises(MaterialImportError, match=message):
@@ -382,10 +447,216 @@ def test_replace_table_series_rejects_missing_target_or_id_collision(
     assert session == before
 
 
+def test_add_table_series_is_immutable_replayable_and_retains_lineage() -> None:
+    template = material_import_template("csv")
+    original = _session_from_upload(
+        template.filename,
+        template.data,
+        created_at=_CREATED_AT,
+    )
+    before = deepcopy(original)
+
+    added = add_table_series(
+        original,
+        series_id="bh extra",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 80.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(150.0, 0.25)),
+        captured_at="2026-07-20T09:00:00+00:00",
+    )
+
+    assert original == before
+    assert added.record.created_at == original.record.created_at
+    assert added.base_revision_id == original.base_revision_id
+    assert added.record.revision_id == revision_id_for(added.record)
+    assert added.record.revision_id != original.record.revision_id
+    assert added.record.series[-1].series_id == "bh extra"
+    assert added.record.series[-1].source_filename == "series-bh_extra.csv"
+    assert added.record.sources[:-1] == original.record.sources
+    assert added.record.sources[-1] == SourceProvenance(
+        kind=SourceKind.CSV,
+        filename="series-bh_extra.csv",
+        sha256=sha256_hex(b"x,y\n0.0,0.0\n150.0,0.25\n"),
+        url="",
+        page=None,
+        captured_at="2026-07-20T09:00:00+00:00",
+        description="Material Studio direct table series",
+    )
+    assert added.source_files[:-1] == original.source_files
+    assert reproduce_record(added.record, dict(added.source_files)).matches
+
+
+@pytest.mark.parametrize("series_id", ["bh-25c", "bh 25c"])
+def test_add_table_series_rejects_exact_and_sanitized_id_collisions(
+    series_id: str,
+) -> None:
+    template = material_import_template("csv")
+    session = _session_from_upload(
+        template.filename,
+        template.data,
+        created_at=_CREATED_AT,
+    )
+
+    with pytest.raises(MaterialImportError, match="already exists|collides"):
+        add_table_series(
+            session,
+            series_id=series_id,
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.2)),
+            captured_at=_CREATED_AT,
+        )
+
+
+def test_add_image_series_reuses_source_without_duplicating_provenance() -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    original = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Image add"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="https://example.com/manual-bh.png",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual curves",
+            series_id="bh-25c",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+
+    added = add_image_series(
+        original,
+        source_filename="manual-bh.png",
+        series_id="bh-100c",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 100.0, None),
+        extraction=extraction,
+    )
+
+    assert tuple(item.series_id for item in added.record.series) == ("bh-25c", "bh-100c")
+    assert added.record.sources == original.record.sources
+    assert added.source_files == original.source_files
+    assert added.record.revision_id == revision_id_for(added.record)
+    assert reproduce_record(added.record, dict(added.source_files)).matches
+
+
+def test_remove_series_drops_only_unreferenced_generated_source() -> None:
+    template = material_import_template("csv")
+    original = _session_from_upload(
+        template.filename,
+        template.data,
+        created_at=_CREATED_AT,
+    )
+
+    removed = remove_series(original, "loss-100khz")
+
+    assert original.record.steinmetz is not None
+    assert removed.record.steinmetz is None
+    assert tuple(item.series_id for item in removed.record.series) == (
+        "bh-25c",
+        "loss-200khz",
+    )
+    assert removed.record.sources[0] == original.record.sources[0]
+    assert "material-import-template.csv" in dict(removed.source_files)
+    assert "series-loss_100khz.csv" not in dict(removed.source_files)
+    assert all(
+        source.filename != "series-loss_100khz.csv"
+        for source in removed.record.sources
+    )
+    assert removed.record.revision_id == revision_id_for(removed.record)
+    assert reproduce_record(removed.record, dict(removed.source_files)).matches
+
+
+def test_remove_series_retains_generated_source_still_used_by_sibling() -> None:
+    template = material_import_template("csv")
+    original = _session_from_upload(
+        template.filename,
+        template.data,
+        created_at=_CREATED_AT,
+    )
+    target = original.record.series[0]
+    sibling = replace(target, series_id="bh-shared")
+    record = new_draft_record(
+        original.record.ref,
+        series=(*original.record.series, sibling),
+        sources=original.record.sources,
+        created_at=original.record.created_at,
+    )
+    session = MaterialDraftSession(record, original.source_files, None)
+
+    removed = remove_series(session, target.series_id)
+
+    assert "series-bh_25c.csv" in dict(removed.source_files)
+    assert any(
+        source.filename == "series-bh_25c.csv" for source in removed.record.sources
+    )
+    assert reproduce_record(removed.record, dict(removed.source_files)).matches
+
+
+def test_remove_image_series_retains_original_source_as_supplemental_provenance() -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    image = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Image removal"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="https://example.com/manual-bh.png",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual curve",
+            series_id="bh-image",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 100.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+    session = add_table_series(
+        image,
+        series_id="bh-table",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="A/m",
+        y_unit="T",
+        conditions=CurveConditions(None, 25.0, None),
+        points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.2)),
+        captured_at=_CREATED_AT,
+    )
+
+    removed = remove_series(session, "bh-image")
+
+    assert removed.record.sources == session.record.sources
+    assert removed.source_files == session.source_files
+    assert removed.base_revision_id == session.base_revision_id
+
+
+def test_remove_series_rejects_missing_target_and_final_series() -> None:
+    session = _external_source_session(shared=False)
+
+    with pytest.raises(MaterialImportError, match="does not exist"):
+        remove_series(session, "missing")
+    with pytest.raises(MaterialImportError, match="final"):
+        remove_series(session, "bh-first")
+
+
 def test_save_review_and_approve_persist_each_immutable_session() -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
 
     saved = save_material_session(repository, draft)
     assert save_material_session(repository, saved) is saved
@@ -409,7 +680,7 @@ def test_save_review_and_approve_persist_each_immutable_session() -> None:
 def test_stale_draft_save_cannot_revert_a_reviewed_revision() -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     save_material_session(repository, draft)
     reviewed = review_material_session(repository, draft, "reviewer@example.com")
 
@@ -423,7 +694,7 @@ def test_stale_draft_save_cannot_revert_a_reviewed_revision() -> None:
 def test_save_material_session_rejects_non_draft_status(status: MaterialStatus) -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     save_material_session(repository, draft)
     session = review_material_session(repository, draft, "reviewer@example.com")
     if status is MaterialStatus.APPROVED:
@@ -439,7 +710,7 @@ def test_save_material_session_rejects_non_draft_status(status: MaterialStatus) 
 def test_review_requires_the_current_draft_to_be_saved() -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    session = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    session = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
 
     with pytest.raises(MaterialImportError, match="saved draft"):
         review_material_session(repository, session, "reviewer@example.com")
@@ -451,7 +722,7 @@ def test_review_requires_the_current_draft_to_be_saved() -> None:
 def test_approval_requires_the_current_reviewed_revision_to_be_saved() -> None:
     template = material_import_template("csv")
     repository = InMemoryMaterialRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     save_material_session(repository, draft)
     transient_reviewed = replace(
         draft,
@@ -471,7 +742,7 @@ def test_lifecycle_rejects_blank_actors_without_repository_changes(actor: str) -
     repository = InMemoryMaterialRepository()
     saved = save_material_session(
         repository,
-        session_from_upload(template.filename, template.data, created_at=_CREATED_AT),
+        _session_from_upload(template.filename, template.data, created_at=_CREATED_AT),
     )
     revisions_before = repository.list_revisions(saved.record.ref)
     stored_before = repository.get(saved.record.ref, saved.record.revision_id)
@@ -504,7 +775,7 @@ class _RejectingSaveRepository(InMemoryMaterialRepository):
 def test_failed_save_review_and_approval_leave_session_and_repository_unchanged() -> None:
     template = material_import_template("csv")
     repository = _RejectingSaveRepository()
-    draft = session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
+    draft = _session_from_upload(template.filename, template.data, created_at=_CREATED_AT)
     draft_before = deepcopy(draft)
     repository.reject_save = True
 

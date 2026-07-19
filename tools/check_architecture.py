@@ -29,6 +29,7 @@ FORBIDDEN_ROOTS = frozenset(
 # values through DTOs but must never import solver, UI, or persistence
 # infrastructure directly (dependency inversion, spec section 4.4).
 _APPLICATION_FORBIDDEN_ROOTS = frozenset({"PySide6", "ansys", "femm", "mcp", "pyaedt", "sqlite3"})
+_APPLICATION_FORBIDDEN_PREFIXES = ("inductor_designer.adapters",)
 PACKAGE_FORBIDDEN_ROOTS: dict[str, frozenset[str]] = {
     "application": _APPLICATION_FORBIDDEN_ROOTS,
     "domain": FORBIDDEN_ROOTS,
@@ -50,7 +51,10 @@ class Violation:
 def _imported_names(node: ast.Import | ast.ImportFrom) -> tuple[str, ...]:
     if isinstance(node, ast.Import):
         return tuple(alias.name for alias in node.names)
-    return (node.module or "",)
+    module = node.module or ""
+    if module == "inductor_designer":
+        return tuple(f"{module}.{alias.name}" for alias in node.names)
+    return (module,)
 
 
 def find_forbidden_imports(source_root: Path) -> tuple[Violation, ...]:
@@ -64,7 +68,12 @@ def find_forbidden_imports(source_root: Path) -> tuple[Violation, ...]:
                 if not isinstance(node, (ast.Import, ast.ImportFrom)):
                     continue
                 for imported in _imported_names(node):
-                    if imported.split(".", maxsplit=1)[0] in forbidden:
+                    is_forbidden = imported.split(".", maxsplit=1)[0] in forbidden
+                    if inner_package == "application":
+                        is_forbidden = is_forbidden or imported.startswith(
+                            _APPLICATION_FORBIDDEN_PREFIXES
+                        )
+                    if is_forbidden:
                         violations.append(
                             Violation(path, node.lineno, imported, inner_package)
                         )
