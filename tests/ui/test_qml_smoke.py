@@ -74,6 +74,34 @@ def _accessible_name(interface: object) -> str:
     return interface.text(QAccessible.Text.Name)
 
 
+def _overflow_library_values() -> tuple[
+    list[dict[str, object]], list[dict[str, object]]
+]:
+    materials = [
+        {
+            "manufacturer": "ACME",
+            "name": f"Material {index:02d}",
+            "grade": f"G{index:02d}",
+        }
+        for index in range(20)
+    ]
+    revisions = [
+        {
+            "revisionId": f"rev-{index:02d}",
+            "status": "approved" if index == 19 else "draft",
+            "createdAt": f"2026-07-19T{index:02d}:00:00+00:00",
+            "reviewedBy": "Ada" if index == 19 else "",
+            "approvedBy": "Grace" if index == 19 else "",
+            "seriesCount": 1,
+            "validationErrors": 0,
+            "validationWarnings": 0,
+            "isLatestApproved": index == 19,
+        }
+        for index in range(20)
+    ]
+    return materials, revisions
+
+
 @pytest.mark.ui
 def test_guided_studio_qml_loads() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
@@ -255,26 +283,154 @@ def test_material_library_renders_every_revision_and_only_actions_select() -> No
         "Select revision rev-approved",
     ]
     assert all(interface.state().focusable for interface in select_actions)
-    first_action = select_actions[0].actionInterface()
-    assert first_action is not None
-    first_action.doAction(QAccessibleActionInterface.setFocusAction())
+    material_list.forceActiveFocus()
     app.processEvents()
     QTest.keyClick(root, Qt.Key.Key_Tab)
     app.processEvents()
-    focus = app.focusObject()
-    assert focus is not None
-    focus_interface = QAccessible.queryAccessibleInterface(focus)
-    assert focus_interface is not None
-    assert _accessible_name(focus_interface) == "Select revision rev-reviewed"
+    assert revision_list.property("activeFocus") is True
     QTest.keyClick(root, Qt.Key.Key_Return)
     app.processEvents()
-    assert controller.selected_revisions == ["rev-reviewed"]
+    assert controller.selected_revisions == ["rev-draft"]
 
     action = select_actions[2].actionInterface()
     assert action is not None
     action.doAction(QAccessibleActionInterface.pressAction())
     app.processEvents()
-    assert controller.selected_revisions == ["rev-reviewed", "rev-approved"]
+    assert revision_list.property("currentIndex") == 2
+    assert controller.selected_revisions == ["rev-draft", "rev-approved"]
+
+
+@pytest.mark.ui
+def test_material_list_keyboard_reaches_and_activates_overflow_row_once() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    materials, revisions = _overflow_library_values()
+    controller = RecordingMaterialStudioController(
+        materials=materials,
+        revisions=revisions,
+    )
+    engine = create_engine(material_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    guided_steps = root.findChild(QObject, "guidedStepList")
+    material_list = root.findChild(QObject, "materialList")
+    revision_list = root.findChild(QObject, "revisionList")
+
+    assert guided_steps is not None
+    assert material_list is not None
+    assert revision_list is not None
+    guided_steps.setProperty("currentIndex", 2)
+    app.processEvents()
+
+    initial_names = [
+        _accessible_name(item) for item in _accessible_interfaces(root)
+    ]
+    realized_actions = [
+        name for name in initial_names if name.startswith("Select material ")
+    ]
+    assert 0 < len(realized_actions) < len(materials)
+    assert material_list.property("activeFocusOnTab") is True
+    assert material_list.property("currentIndex") == 0
+    material_interface = QAccessible.queryAccessibleInterface(material_list)
+    assert material_interface is not None
+    assert _accessible_name(material_interface) == "Material library"
+    assert material_interface.state().focusable
+
+    material_list.forceActiveFocus()
+    app.processEvents()
+    QTest.keyClick(root, Qt.Key.Key_Tab)
+    app.processEvents()
+    assert revision_list.property("activeFocus") is True
+    QTest.keyClick(
+        root,
+        Qt.Key.Key_Tab,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    app.processEvents()
+    assert material_list.property("activeFocus") is True
+
+    material_list.setProperty("currentIndex", -1)
+    QTest.keyClick(root, Qt.Key.Key_Down)
+    app.processEvents()
+    assert material_list.property("currentIndex") == 0
+
+    for _ in range(25):
+        QTest.keyClick(root, Qt.Key.Key_Down)
+    app.processEvents()
+
+    assert material_list.property("currentIndex") == 19
+    assert material_list.property("contentY") > 0
+    assert controller.selected_materials == []
+    interfaces = _accessible_interfaces(root)
+    last_action = next(
+        item
+        for item in interfaces
+        if _accessible_name(item) == "Select material ACME, Material 19, G19"
+    )
+    assert "Current material" in last_action.text(QAccessible.Text.Description)
+
+    QTest.keyClick(root, Qt.Key.Key_Space)
+    app.processEvents()
+    assert controller.selected_materials == [("ACME", "Material 19", "G19")]
+    QTest.keyClick(root, Qt.Key.Key_Down)
+    app.processEvents()
+    assert material_list.property("currentIndex") == 19
+    assert controller.selected_materials == [("ACME", "Material 19", "G19")]
+
+
+@pytest.mark.ui
+def test_revision_list_keyboard_reaches_and_activates_overflow_row_once() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    materials, revisions = _overflow_library_values()
+    controller = RecordingMaterialStudioController(
+        materials=materials,
+        revisions=revisions,
+    )
+    engine = create_engine(material_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    guided_steps = root.findChild(QObject, "guidedStepList")
+    revision_list = root.findChild(QObject, "revisionList")
+
+    assert guided_steps is not None
+    assert revision_list is not None
+    guided_steps.setProperty("currentIndex", 2)
+    app.processEvents()
+
+    initial_names = [
+        _accessible_name(item) for item in _accessible_interfaces(root)
+    ]
+    realized_actions = [
+        name for name in initial_names if name.startswith("Select revision ")
+    ]
+    assert 0 < len(realized_actions) < len(revisions)
+    assert revision_list.property("activeFocusOnTab") is True
+    assert revision_list.property("currentIndex") == 0
+    revision_interface = QAccessible.queryAccessibleInterface(revision_list)
+    assert revision_interface is not None
+    assert _accessible_name(revision_interface) == "Material revisions"
+    assert revision_interface.state().focusable
+
+    revision_list.forceActiveFocus()
+    for _ in range(25):
+        QTest.keyClick(root, Qt.Key.Key_Down)
+    app.processEvents()
+
+    assert revision_list.property("currentIndex") == 19
+    assert revision_list.property("contentY") > 0
+    assert controller.selected_revisions == []
+    names = [_accessible_name(item) for item in _accessible_interfaces(root)]
+    assert names.count("Current revision") == 1
+    assert "Select revision rev-19" in names
+
+    QTest.keyClick(root, Qt.Key.Key_Return)
+    app.processEvents()
+    assert controller.selected_revisions == ["rev-19"]
+    for _ in range(25):
+        QTest.keyClick(root, Qt.Key.Key_Up)
+    app.processEvents()
+    assert revision_list.property("currentIndex") == 0
+    assert controller.selected_revisions == ["rev-19"]
+    QTest.keyClick(root, Qt.Key.Key_Enter)
+    app.processEvents()
+    assert controller.selected_revisions == ["rev-19", "rev-00"]
 
 
 @pytest.mark.ui
