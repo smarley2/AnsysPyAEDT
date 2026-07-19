@@ -595,6 +595,13 @@ git commit -m "feat(materials): digitize image and PDF curves manually"
 - Create: `src/inductor_designer/ui/material_studio_controller.py`
 - Create: `tests/ui/test_material_studio_controller.py`
 - Modify: `src/inductor_designer/ui/main.py`
+- Modify: `src/inductor_designer/adapters/persistence/project_repository.py`
+- Modify: `tests/unit/adapters/persistence/test_project_repository.py`
+
+The persistence adapter/test were added to the Task 6 allowlist after review
+identified that the controller's production callback cannot meet the approved
+failure-atomic project-save contract while `ProjectRepository.save` writes
+directly to the destination file.
 
 **Interfaces:**
 - Consumes: Tasks 1–5 services, existing template/export adapters, a loaded
@@ -684,12 +691,12 @@ self._set_session(session)
 - [ ] **Step 6: Run Task 6 gates and commit**
 
 ```console
-QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_qml_smoke.py -q
-.venv/bin/python -m ruff check src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/ui/main.py tests/ui/test_material_studio_controller.py
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_qml_smoke.py tests/unit/adapters/persistence/test_project_repository.py -q
+.venv/bin/python -m ruff check src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/ui/main.py src/inductor_designer/adapters/persistence/project_repository.py tests/ui/test_material_studio_controller.py tests/unit/adapters/persistence/test_project_repository.py
 .venv/bin/python -m mypy src tools
 .venv/bin/python tools/check_architecture.py
 git diff --check
-git add src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/ui/main.py tests/ui/test_material_studio_controller.py
+git add src/inductor_designer/ui/material_studio_controller.py src/inductor_designer/ui/main.py src/inductor_designer/adapters/persistence/project_repository.py tests/ui/test_material_studio_controller.py tests/unit/adapters/persistence/test_project_repository.py
 git commit -m "feat(ui): expose Material Studio controller"
 ```
 

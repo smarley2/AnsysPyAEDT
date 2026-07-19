@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -184,4 +186,25 @@ class ProjectRepository:
     def save(self, project: InductorProject, path: Path) -> None:
         document = project_to_document(project)
         self._schemas.validate_project(document)
-        path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        serialized = json.dumps(document, indent=2, sort_keys=True) + "\n"
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(
+                descriptor,
+                "w",
+                encoding="utf-8",
+                newline="",
+            ) as stream:
+                descriptor = -1
+                stream.write(serialized)
+                stream.flush()
+            os.replace(temporary_path, path)
+        finally:
+            if descriptor != -1:
+                os.close(descriptor)
+            temporary_path.unlink(missing_ok=True)

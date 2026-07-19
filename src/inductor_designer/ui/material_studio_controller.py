@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import logging
 from collections.abc import Callable
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,10 +39,18 @@ from inductor_designer.materials.records import (
     MaterialRecord,
     MaterialStatus,
     PointSeries,
-    SeriesKind,
 )
 from inductor_designer.materials.validation import MaterialIssue, validate_record
 from inductor_designer.ui.material_source import render_material_source
+
+_LOGGER = logging.getLogger(__name__)
+_KNOWN_ACTION_ERRORS = (
+    MaterialImportError,
+    MaterialLookupError,
+    MaterialSelectionError,
+    OSError,
+    ValueError,
+)
 
 
 def _utc_now() -> str:
@@ -86,42 +96,42 @@ class MaterialStudioController(QObject):
         self._refresh_materials()
 
     def _get_materials(self) -> list[dict[str, object]]:
-        return list(self._materials)
+        return deepcopy(self._materials)
 
     materials = Property(list, _get_materials, notify=libraryChanged)
 
     def _get_revisions(self) -> list[dict[str, object]]:
-        return list(self._revisions)
+        return deepcopy(self._revisions)
 
     revisions = Property(list, _get_revisions, notify=libraryChanged)
 
     def _get_selected_revision(self) -> dict[str, object]:
-        return dict(self._selected_revision)
+        return deepcopy(self._selected_revision)
 
     selectedRevision = Property(dict, _get_selected_revision, notify=selectionChanged)
 
     def _get_series(self) -> list[dict[str, object]]:
-        return list(self._series)
+        return deepcopy(self._series)
 
     series = Property(list, _get_series, notify=selectionChanged)
 
     def _get_points(self) -> list[dict[str, object]]:
-        return list(self._points)
+        return deepcopy(self._points)
 
     points = Property(list, _get_points, notify=selectionChanged)
 
     def _get_issues(self) -> list[dict[str, object]]:
-        return list(self._issues)
+        return deepcopy(self._issues)
 
     issues = Property(list, _get_issues, notify=selectionChanged)
 
     def _get_fit(self) -> dict[str, object]:
-        return dict(self._fit)
+        return deepcopy(self._fit)
 
     fit = Property(dict, _get_fit, notify=selectionChanged)
 
     def _get_source(self) -> dict[str, object]:
-        return dict(self._source)
+        return deepcopy(self._source)
 
     source = Property(dict, _get_source, notify=sourceChanged)
 
@@ -258,6 +268,19 @@ class MaterialStudioController(QObject):
             for summary in list_material_revision_summaries(self._repository, ref)
         ]
 
+    def _library_values(
+        self,
+        ref: MaterialRef,
+    ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+        materials = [
+            self._material_dict(item) for item in self._repository.list_materials()
+        ]
+        revisions = [
+            self._summary_dict(summary)
+            for summary in list_material_revision_summaries(self._repository, ref)
+        ]
+        return materials, revisions
+
     def _set_status(self, message: str) -> None:
         if self._status_message == message:
             return
@@ -289,6 +312,9 @@ class MaterialStudioController(QObject):
         *,
         dirty: bool,
         saved: bool,
+        clear_source: bool,
+        materials: list[dict[str, object]] | None = None,
+        revisions: list[dict[str, object]] | None = None,
     ) -> None:
         record = session.record
         issues = validate_record(record)
@@ -317,14 +343,6 @@ class MaterialStudioController(QObject):
                 "maxRelativeResidual": fit.max_relative_residual,
             }
         )
-        materials = [
-            self._material_dict(ref) for ref in self._repository.list_materials()
-        ]
-        revisions = [
-            self._summary_dict(summary)
-            for summary in list_material_revision_summaries(self._repository, record.ref)
-        ]
-
         self._session = session
         self._saved = saved
         self._selected_ref = record.ref
@@ -333,22 +351,46 @@ class MaterialStudioController(QObject):
         self._points = points
         self._issues = issue_values
         self._fit = fit_value
+        if materials is not None:
+            self._materials = materials
+        if revisions is not None:
+            self._revisions = revisions
+        if clear_source:
+            self._source = {}
+        self._set_dirty(dirty)
+        if materials is not None or revisions is not None:
+            self.libraryChanged.emit()
+        self.selectionChanged.emit()
+        if clear_source:
+            self.sourceChanged.emit()
+
+    def _finish_persisted_session(
+        self,
+        session: MaterialDraftSession,
+        success_message: str,
+    ) -> None:
+        self._set_session(
+            session,
+            dirty=False,
+            saved=True,
+            clear_source=False,
+        )
+        try:
+            materials, revisions = self._library_values(session.record.ref)
+        except _KNOWN_ACTION_ERRORS as error:
+            _LOGGER.exception("Material Studio refresh failed after persistence")
+            self._set_status(f"{success_message} Library refresh failed: {error}")
+            return
         self._materials = materials
         self._revisions = revisions
-        self._set_dirty(dirty)
         self.libraryChanged.emit()
-        self.selectionChanged.emit()
+        self._set_status(success_message)
 
     def _run_action(self, action: Callable[[], None]) -> None:
         try:
             action()
-        except (
-            MaterialImportError,
-            MaterialLookupError,
-            MaterialSelectionError,
-            OSError,
-            ValueError,
-        ) as error:
+        except _KNOWN_ACTION_ERRORS as error:
+            _LOGGER.exception("Material Studio action failed")
             self._set_status(str(error))
 
     @staticmethod
@@ -386,10 +428,14 @@ class MaterialStudioController(QObject):
             source_files = tuple(
                 self._repository.source_bytes(self._selected_ref, revision_id).items()
             )
+            materials, revisions = self._library_values(record.ref)
             self._set_session(
                 MaterialDraftSession(record, source_files, None),
                 dirty=False,
                 saved=True,
+                clear_source=True,
+                materials=materials,
+                revisions=revisions,
             )
             self._set_status("")
 
@@ -416,7 +462,15 @@ class MaterialStudioController(QObject):
             path = self._local_path(source_url)
             data = path.read_bytes()
             session = session_from_upload(path.name, data, created_at=self._now())
-            self._set_session(session, dirty=True, saved=False)
+            materials, revisions = self._library_values(session.record.ref)
+            self._set_session(
+                session,
+                dirty=True,
+                saved=False,
+                clear_source=True,
+                materials=materials,
+                revisions=revisions,
+            )
             self._set_status(success_message)
 
         self._run_action(action)
@@ -474,8 +528,7 @@ class MaterialStudioController(QObject):
             if self._session is None:
                 raise ValueError("No material draft is selected.")
             saved = save_material_session(self._repository, self._session)
-            self._set_session(saved, dirty=False, saved=True)
-            self._set_status("Material draft saved.")
+            self._finish_persisted_session(saved, "Material draft saved.")
 
         self._run_action(action)
 
@@ -489,8 +542,7 @@ class MaterialStudioController(QObject):
                 self._session,
                 reviewer,
             )
-            self._set_session(reviewed, dirty=False, saved=True)
-            self._set_status("Material draft reviewed.")
+            self._finish_persisted_session(reviewed, "Material draft reviewed.")
 
         self._run_action(action)
 
@@ -504,8 +556,10 @@ class MaterialStudioController(QObject):
                 self._session,
                 approver,
             )
-            self._set_session(approved, dirty=False, saved=True)
-            self._set_status("Material revision approved.")
+            self._finish_persisted_session(
+                approved,
+                "Material revision approved.",
+            )
 
         self._run_action(action)
 
@@ -518,15 +572,7 @@ class MaterialStudioController(QObject):
                 raise ValueError("Project persistence is unavailable.")
             if self._session is None:
                 raise ValueError("Select an approved material revision first.")
-            selected_id = bh_series_id if bh_series_id.strip() else None
-            if selected_id is None:
-                bh_series = tuple(
-                    item
-                    for item in self._session.record.series
-                    if item.kind is SeriesKind.BH_CURVE
-                )
-                if len(bh_series) == 1:
-                    selected_id = bh_series[0].series_id
+            selected_id = bh_series_id.strip() or None
             updated = pin_material_revision(
                 self._project,
                 self._session.record,

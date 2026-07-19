@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 from inductor_designer.adapters.persistence.project_repository import (
     ProjectRepository,
@@ -93,6 +96,27 @@ def test_save_is_deterministic(tmp_path: Path) -> None:
     repo.save(project, first)
     repo.save(project, second)
     assert first.read_bytes() == second.read_bytes()
+
+
+def test_save_replace_failure_preserves_existing_file_and_cleans_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = repository()
+    path = tmp_path / "existing.inductor.json"
+    repo.save(make_project(), path)
+    original = path.read_bytes()
+
+    def reject_replace(source: str | bytes, destination: str | bytes) -> None:
+        raise OSError("injected replace failure")
+
+    monkeypatch.setattr(os, "replace", reject_replace)
+
+    with pytest.raises(OSError, match="injected replace failure"):
+        repo.save(make_project(name="Updated project"), path)
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [path]
 
 
 def test_sample_v3_fixture_saves_as_migrated_v4(tmp_path: Path) -> None:

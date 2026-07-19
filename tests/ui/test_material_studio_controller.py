@@ -26,8 +26,17 @@ from inductor_designer.application.services.material_drafts import (  # noqa: E4
     save_material_session,
     session_from_upload,
 )
+from inductor_designer.application.services.material_selection import (  # noqa: E402
+    pin_material_revision as authoritative_pin_material_revision,
+)
 from inductor_designer.domain.project import InductorProject  # noqa: E402
-from inductor_designer.materials.records import SeriesKind  # noqa: E402
+from inductor_designer.materials.identity import MaterialRef  # noqa: E402
+from inductor_designer.materials.records import (  # noqa: E402
+    MaterialRecord,
+    MaterialStatus,
+    SeriesKind,
+)
+from inductor_designer.ui import material_studio_controller as controller_module  # noqa: E402
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.material_source import render_material_source  # noqa: E402
 from inductor_designer.ui.material_studio_controller import (  # noqa: E402
@@ -211,6 +220,53 @@ def test_known_selection_error_keeps_prior_selection() -> None:
 
 
 @pytest.mark.ui
+def test_known_errors_are_logged_with_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    caplog.set_level("ERROR", logger="inductor_designer.ui.material_studio_controller")
+
+    controller.selectRevision("missing")
+
+    assert "unknown material revision:" in controller.statusMessage
+    assert any(
+        record.exc_info is not None and "Material Studio action failed" in record.message
+        for record in caplog.records
+    )
+
+
+@pytest.mark.ui
+def test_qml_property_values_are_deep_copies() -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+
+    materials = controller.materials
+    revisions = controller.revisions
+    selected = controller.selectedRevision
+    materials[0]["name"] = "mutated"
+    revisions[0]["status"] = "mutated"
+    selected["sources"][0]["filename"] = "mutated"
+
+    assert controller.materials[0]["name"] == approved.record.ref.name
+    assert controller.revisions[0]["status"] == "approved"
+    assert controller.selectedRevision["sources"][0]["filename"] != "mutated"
+
+
+@pytest.mark.ui
 def test_downloads_require_local_destinations_and_use_exact_bytes(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
@@ -306,6 +362,85 @@ def test_image_import_exposes_rendered_png_and_preserves_selection_on_error() ->
 
 
 @pytest.mark.ui
+def test_new_record_clears_source_while_lifecycle_preserves_it(tmp_path: Path) -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    assert controller.source
+    source_changes: list[None] = []
+    controller.sourceChanged.connect(lambda: source_changes.append(None))
+    template = material_import_template("csv")
+    edited = tmp_path / template.filename
+    edited.write_bytes(
+        template.data.replace(
+            b"Synthetic example data - replace before review",
+            b"Source clearing lifecycle draft",
+        )
+    )
+
+    controller.importTable(_file_url(edited))
+
+    assert controller.source == {}
+    assert source_changes == [None]
+
+    controller.importSourceImage(_file_url(_IMAGE), 0)
+    rendered_source = controller.source
+    controller.saveDraft()
+    controller.reviewDraft("reviewer-2@example.com")
+
+    assert controller.source == rendered_source
+
+
+class _PostPersistenceListingFailureRepository(InMemoryMaterialRepository):
+    fail_listing = False
+
+    def list_materials(self) -> tuple[MaterialRef, ...]:
+        if self.fail_listing:
+            raise ValueError("post-persistence listing unavailable")
+        return super().list_materials()
+
+
+@pytest.mark.ui
+def test_lifecycle_success_is_committed_before_refresh_warning(tmp_path: Path) -> None:
+    repository = _PostPersistenceListingFailureRepository()
+    _approved_material(repository)
+    controller, _ = _controller(repository)
+    template = material_import_template("csv")
+    edited = tmp_path / template.filename
+    edited.write_bytes(
+        template.data.replace(
+            b"Synthetic example data - replace before review",
+            b"Post-persistence refresh draft",
+        )
+    )
+    controller.importTable(_file_url(edited))
+    controller.saveDraft()
+    ref = MaterialRef(
+        controller.selectedRevision["manufacturer"],
+        controller.selectedRevision["name"],
+        controller.selectedRevision["grade"],
+    )
+    revision_id = controller.selectedRevision["revisionId"]
+    repository.fail_listing = True
+
+    controller.reviewDraft("reviewer-2@example.com")
+
+    assert repository.get(ref, revision_id).status is MaterialStatus.REVIEWED
+    assert controller.selectedRevision["status"] == "reviewed"
+    assert controller.selectedRevision["reviewedBy"] == "reviewer-2@example.com"
+    assert controller.canApprove is True
+    assert "reviewed" in controller.statusMessage
+    assert "refresh failed" in controller.statusMessage
+
+
+@pytest.mark.ui
 def test_project_use_requires_explicit_multi_bh_id_and_saves_once() -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
@@ -334,6 +469,49 @@ def test_project_use_requires_explicit_multi_bh_id_and_saves_once() -> None:
     assert len(saved_projects) == 1
     assert saved_projects[0].materials[0].revision_id == multi.revision_id
     assert saved_projects[0].materials[0].bh_series_id == "bh-100c"
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize(
+    ("requested_id", "expected_id"),
+    [("   ", None), ("  bh-25c  ", "bh-25c")],
+)
+def test_bh_selection_is_normalized_then_forwarded_to_authoritative_service(
+    monkeypatch: pytest.MonkeyPatch,
+    requested_id: str,
+    expected_id: str | None,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, saved_projects = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+    forwarded: list[str | None] = []
+
+    def recording_pin(
+        project: InductorProject,
+        record: MaterialRecord,
+        *,
+        bh_series_id: str | None,
+    ) -> InductorProject:
+        forwarded.append(bh_series_id)
+        return authoritative_pin_material_revision(
+            project,
+            record,
+            bh_series_id=bh_series_id,
+        )
+
+    monkeypatch.setattr(controller_module, "pin_material_revision", recording_pin)
+
+    controller.useInProject(requested_id)
+
+    assert forwarded == [expected_id]
+    assert len(saved_projects) == 1
+    assert saved_projects[0].materials[0].bh_series_id == expected_id
 
 
 @pytest.mark.ui
