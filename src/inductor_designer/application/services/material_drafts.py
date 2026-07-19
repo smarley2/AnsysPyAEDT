@@ -16,16 +16,20 @@ from inductor_designer.application.services.material_import import (
 )
 from inductor_designer.domain.units import from_canonical
 from inductor_designer.geometry.naming import sanitize_identifier
+from inductor_designer.materials.calibration import ExtractionRecord, extract_points
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
     CurvePoint,
     MaterialRecord,
     MaterialStatus,
+    PointSeries,
     SeriesKind,
     SourceKind,
+    SourceProvenance,
 )
-from inductor_designer.materials.serde import revision_id_for, sha256_hex
+from inductor_designer.materials.serde import canonicalize_points, revision_id_for, sha256_hex
+from inductor_designer.materials.validation import validate_series
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +37,132 @@ class MaterialDraftSession:
     record: MaterialRecord
     source_files: tuple[tuple[str, bytes], ...]
     base_revision_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ImageSeriesInput:
+    ref: MaterialRef
+    source_filename: str
+    source_data: bytes
+    source_url: str
+    source_page: int | None
+    captured_at: str
+    source_description: str
+    series_id: str
+    kind: SeriesKind
+    x_unit: str
+    y_unit: str
+    conditions: CurveConditions
+    extraction: ExtractionRecord
+    created_at: str
+    notes: str = ""
+
+
+def _image_series(
+    *,
+    series_id: str,
+    kind: SeriesKind,
+    x_unit: str,
+    y_unit: str,
+    conditions: CurveConditions,
+    source_filename: str,
+    extraction: ExtractionRecord,
+) -> PointSeries:
+    series = PointSeries(
+        series_id=series_id,
+        kind=kind,
+        x_unit=x_unit,
+        y_unit=y_unit,
+        conditions=conditions,
+        points=canonicalize_points(extract_points(extraction), x_unit, y_unit),
+        source_filename=source_filename,
+        extraction=extraction,
+    )
+    if messages := tuple(
+        issue.message for issue in validate_series(series) if issue.code == "unit-family"
+    ):
+        raise MaterialImportError(messages)
+    return series
+
+
+def image_draft_session(input_data: ImageSeriesInput) -> MaterialDraftSession:
+    provenance = SourceProvenance(
+        kind=SourceKind.IMAGE,
+        filename=input_data.source_filename,
+        sha256=sha256_hex(input_data.source_data),
+        url=input_data.source_url,
+        page=input_data.source_page,
+        captured_at=input_data.captured_at,
+        description=input_data.source_description,
+    )
+    series = _image_series(
+        series_id=input_data.series_id,
+        kind=input_data.kind,
+        x_unit=input_data.x_unit,
+        y_unit=input_data.y_unit,
+        conditions=input_data.conditions,
+        source_filename=input_data.source_filename,
+        extraction=input_data.extraction,
+    )
+    record = new_draft_record(
+        input_data.ref,
+        series=(series,),
+        sources=(provenance,),
+        created_at=input_data.created_at,
+        notes=input_data.notes,
+    )
+    return MaterialDraftSession(
+        record,
+        ((input_data.source_filename, input_data.source_data),),
+        None,
+    )
+
+
+def replace_image_extraction(
+    session: MaterialDraftSession,
+    series_id: str,
+    extraction: ExtractionRecord,
+) -> MaterialDraftSession:
+    if session.record.status is not MaterialStatus.DRAFT:
+        raise MaterialImportError(("Image extraction can only be edited in a draft session.",))
+    target = next((item for item in session.record.series if item.series_id == series_id), None)
+    if target is None:
+        raise MaterialImportError((f"Series '{series_id}' does not exist.",))
+    provenance = next(
+        (
+            source
+            for source in session.record.sources
+            if source.filename == target.source_filename
+        ),
+        None,
+    )
+    if provenance is None or provenance.kind is not SourceKind.IMAGE:
+        raise MaterialImportError((f"Series '{series_id}' is not backed by an image source.",))
+    if not any(name == target.source_filename for name, _ in session.source_files):
+        raise MaterialImportError((f"Series '{series_id}' source bytes do not exist.",))
+
+    replacement = _image_series(
+        series_id=target.series_id,
+        kind=target.kind,
+        x_unit=target.x_unit,
+        y_unit=target.y_unit,
+        conditions=target.conditions,
+        source_filename=target.source_filename,
+        extraction=extraction,
+    )
+    series = tuple(
+        replacement if item.series_id == series_id else item
+        for item in session.record.series
+    )
+    draft = new_draft_record(
+        session.record.ref,
+        series=series,
+        sources=session.record.sources,
+        created_at=session.record.created_at,
+        relative_permeability=session.record.relative_permeability,
+        notes=session.record.notes,
+    )
+    return MaterialDraftSession(draft, session.source_files, session.base_revision_id)
 
 
 def session_from_upload(

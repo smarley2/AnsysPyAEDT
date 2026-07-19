@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -13,9 +14,12 @@ from inductor_designer.adapters.materials import (
     material_import_template,
 )
 from inductor_designer.application.services.material_drafts import (
+    ImageSeriesInput,
     MaterialDraftSession,
     approve_material_session,
     clone_revision_as_draft,
+    image_draft_session,
+    replace_image_extraction,
     replace_table_series,
     review_material_session,
     save_material_session,
@@ -26,6 +30,13 @@ from inductor_designer.application.services.material_import import (
     approve_material,
     new_draft_record,
     review_material,
+)
+from inductor_designer.materials.calibration import (
+    AxisCalibration,
+    AxisScale,
+    CropRegion,
+    ExtractionRecord,
+    PixelPoint,
 )
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -38,10 +49,12 @@ from inductor_designer.materials.records import (
     SourceKind,
     SourceProvenance,
 )
+from inductor_designer.materials.replay import reproduce_record
 from inductor_designer.materials.serde import revision_id_for, sha256_hex
 from tests.fakes.material_repository import InMemoryMaterialRepository
 
 _CREATED_AT = "2026-07-19T08:00:00+00:00"
+_MANUAL_IMAGE = Path(__file__).resolve().parents[2] / "fixtures/materials/manual-bh.png"
 
 
 def _uploaded_draft() -> tuple[MaterialTemplateDownload, ImportedMaterialDraft]:
@@ -518,3 +531,177 @@ def test_failed_save_review_and_approval_leave_session_and_repository_unchanged(
         approve_material_session(repository, reviewed, "approver@example.com")
     assert repository.get(reviewed.record.ref, reviewed.record.revision_id) == stored_reviewed
     assert reviewed == reviewed_before
+
+
+def _linear_extraction(*points: PixelPoint) -> ExtractionRecord:
+    return ExtractionRecord(
+        crop=CropRegion(0, 0, 120, 80),
+        x_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 110.0, 2.0),
+        y_axis=AxisCalibration(AxisScale.LINEAR, 70.0, 0.0, 10.0, 2.0),
+        pixel_points=points,
+    )
+
+
+def test_image_draft_canonicalizes_points_and_preserves_replayable_source() -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    input_data = ImageSeriesInput(
+        ref=MaterialRef("Example", "Ferrite", "Manual"),
+        source_filename="manual-bh.png",
+        source_data=source_data,
+        source_url="https://example.com/manual-bh.png",
+        source_page=None,
+        captured_at=_CREATED_AT,
+        source_description="Synthetic manual B-H curve",
+        series_id="bh-manual",
+        kind=SeriesKind.BH_CURVE,
+        x_unit="Oe",
+        y_unit="kG",
+        conditions=CurveConditions(None, 25.0, 0.0),
+        extraction=extraction,
+        created_at=_CREATED_AT,
+        notes="Digitized manually",
+    )
+
+    session = image_draft_session(input_data)
+
+    assert session.base_revision_id is None
+    assert session.source_files == (("manual-bh.png", source_data),)
+    assert session.record.sources == (
+        SourceProvenance(
+            kind=SourceKind.IMAGE,
+            filename="manual-bh.png",
+            sha256=sha256_hex(source_data),
+            url="https://example.com/manual-bh.png",
+            page=None,
+            captured_at=_CREATED_AT,
+            description="Synthetic manual B-H curve",
+        ),
+    )
+    assert session.record.series == (
+        PointSeries(
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="Oe",
+            y_unit="kG",
+            conditions=CurveConditions(None, 25.0, 0.0),
+            points=(CurvePoint(0.0, 0.0), CurvePoint(159.154943092, 0.2)),
+            source_filename="manual-bh.png",
+            extraction=extraction,
+        ),
+    )
+    assert session.record.revision_id == revision_id_for(session.record)
+    assert reproduce_record(session.record, dict(session.source_files)).matches
+
+
+def test_image_draft_supports_log_axes_and_preserves_pdf_page_metadata() -> None:
+    source_data = b"synthetic two-page PDF source"
+    extraction = ExtractionRecord(
+        crop=CropRegion(0, 0, 100, 100),
+        x_axis=AxisCalibration(AxisScale.LOG, 0.0, 0.1, 100.0, 1.0),
+        y_axis=AxisCalibration(AxisScale.LOG, 100.0, 10.0, 0.0, 1000.0),
+        pixel_points=(PixelPoint(50.0, 50.0),),
+    )
+
+    session = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "PDF"),
+            source_filename="datasheet.pdf",
+            source_data=source_data,
+            source_url="https://example.com/datasheet.pdf",
+            source_page=1,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic PDF page",
+            series_id="loss-log",
+            kind=SeriesKind.LOSS_TABLE,
+            x_unit="kG",
+            y_unit="mW/cm3",
+            conditions=CurveConditions(100_000.0, 100.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+
+    assert session.record.series[0].points == (CurvePoint(0.031622777, 100_000.0),)
+    assert session.record.sources[0].page == 1
+    assert session.record.sources[0].sha256 == sha256_hex(source_data)
+    assert reproduce_record(session.record, dict(session.source_files)).matches
+
+
+def test_replace_image_extraction_rebuilds_draft_and_retains_original_sources() -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    original_extraction = _linear_extraction(
+        PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0)
+    )
+    session = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Editable"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="https://example.com/manual-bh.png",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual B-H curve",
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="Oe",
+            y_unit="kG",
+            conditions=CurveConditions(None, 25.0, 0.0),
+            extraction=original_extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+    before = deepcopy(session)
+    moved_extraction = replace(
+        original_extraction,
+        pixel_points=(PixelPoint(10.0, 70.0), PixelPoint(100.0, 20.0)),
+    )
+
+    edited = replace_image_extraction(session, "bh-manual", moved_extraction)
+
+    assert edited.record.series[0].extraction == moved_extraction
+    assert edited.record.series[0].points == (
+        CurvePoint(0.0, 0.0),
+        CurvePoint(143.239448783, 0.166666667),
+    )
+    assert edited.record.revision_id == revision_id_for(edited.record)
+    assert edited.record.revision_id != session.record.revision_id
+    assert edited.record.sources == session.record.sources
+    assert edited.source_files == session.source_files
+    assert edited.base_revision_id == session.base_revision_id
+    assert reproduce_record(edited.record, dict(edited.source_files)).matches
+    assert session == before
+
+
+@pytest.mark.parametrize("status", [MaterialStatus.REVIEWED, MaterialStatus.APPROVED])
+def test_replace_image_extraction_requires_a_draft_session(status: MaterialStatus) -> None:
+    source_data = _MANUAL_IMAGE.read_bytes()
+    extraction = _linear_extraction(PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0))
+    session = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Lifecycle"),
+            source_filename="manual-bh.png",
+            source_data=source_data,
+            source_url="",
+            source_page=None,
+            captured_at=_CREATED_AT,
+            source_description="Synthetic manual B-H curve",
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=extraction,
+            created_at=_CREATED_AT,
+        )
+    )
+    repository = InMemoryMaterialRepository()
+    save_material_session(repository, session)
+    session = review_material_session(repository, session, "reviewer@example.com")
+    if status is MaterialStatus.APPROVED:
+        session = approve_material_session(repository, session, "approver@example.com")
+
+    with pytest.raises(MaterialImportError, match="draft"):
+        replace_image_extraction(session, "bh-manual", extraction)
+
+    assert session.record.status is status
