@@ -34,6 +34,12 @@ Page {
         && frequencyConditionField.parseValid
         && temperatureConditionField.parseValid
         && dcBiasConditionField.parseValid
+    property int overviewColumns: width < 1000 ? 1 : width < 1400 ? 2 : 3
+    property int workspaceColumns: width < 1200 ? 1 : 2
+    property int workspaceFormColumns: width < 1800 ? 4 : 6
+    property int editorColumns: width < 850
+        ? 1
+        : (workspaceColumns === 1 || width >= 1500 ? 2 : 1)
 
     function fieldText(value) {
         return value === undefined || value === null ? "" : String(value)
@@ -390,38 +396,64 @@ Page {
         )
     }
 
-    ColumnLayout {
+    ScrollView {
+        id: materialStudioScrollView
+        objectName: "materialStudioScrollView"
         anchors.fill: parent
-        spacing: 8
+        clip: true
+        contentWidth: availableWidth
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
-        Label {
-            text: qsTr("Material Studio")
-            font.pixelSize: 22
-            font.bold: true
-        }
+        ColumnLayout {
+            id: materialStudioContent
+            width: materialStudioScrollView.availableWidth
+            spacing: 12
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 238
-            spacing: 8
-
-            MaterialLibraryPane {
-                id: materialLibraryPane
-                objectName: "materialLibraryPane"
-                Layout.preferredWidth: 300
-                Layout.fillHeight: true
-                controller: libraryController
+            Label {
+                text: qsTr("Material Studio")
+                font.pixelSize: 22
+                font.bold: true
             }
 
-            Pane {
-                objectName: "materialImportExportPane"
-                Layout.preferredWidth: 245
-                Layout.fillHeight: true
-                Accessible.name: qsTr("Material import and export")
+            Label {
+                objectName: "materialWorkflowGuide"
+                Layout.fillWidth: true
+                text: qsTr(
+                    "Workflow: 1. Import a source image or PDF. 2. Set Crop to the plot area. "
+                    + "3. Calibrate X and Y with two anchors each. "
+                    + "4. Click the curve to add points and review the canonical values."
+                )
+                wrapMode: Text.WordWrap
+                Accessible.name: text
+            }
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 4
+            GridLayout {
+                id: materialOverviewGrid
+                objectName: "materialOverviewGrid"
+                Layout.fillWidth: true
+                columns: materialStudioPage.overviewColumns
+                rowSpacing: 8
+                columnSpacing: 8
+
+                MaterialLibraryPane {
+                    id: materialLibraryPane
+                    objectName: "materialLibraryPane"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: 238
+                    controller: libraryController
+                }
+
+                Pane {
+                    objectName: "materialImportExportPane"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: 238
+                    Accessible.name: qsTr("Material import and export")
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 4
 
                     Label { text: qsTr("Import and export"); font.bold: true }
                     RowLayout {
@@ -490,18 +522,19 @@ Page {
                             Accessible.name: qsTr("PDF page, zero based")
                         }
                     }
+                    }
                 }
-            }
 
-            Pane {
-                objectName: "materialLifecyclePane"
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Accessible.name: qsTr("Material lifecycle and project selection")
+                Pane {
+                    objectName: "materialLifecyclePane"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: 238
+                    Accessible.name: qsTr("Material lifecycle and project selection")
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: 4
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 4
                     Label { text: qsTr("Lifecycle and project"); font.bold: true }
                     RowLayout {
                         Layout.fillWidth: true
@@ -604,28 +637,56 @@ Page {
                                 ? projectBhSeriesChoice.currentValue : ""
                         )
                     }
+                    }
                 }
             }
-        }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 8
+            GridLayout {
+                id: materialWorkspaceGrid
+                objectName: "materialWorkspaceGrid"
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                columns: materialStudioPage.workspaceColumns
+                rowSpacing: 8
+                columnSpacing: 8
 
             Pane {
                 objectName: "materialSourceCurveWorkspace"
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
+                Layout.alignment: Qt.AlignTop
+                implicitWidth: 0
+                Layout.preferredHeight: materialStudioPage.editorColumns === 1
+                    ? 1650
+                    : (width < 1800 ? 1250 : 1000)
                 Accessible.name: qsTr("Material source and curve workspace")
 
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 5
 
-                    RowLayout {
+                    GridLayout {
                         Layout.fillWidth: true
-                        Label { text: qsTr("Identity:") }
+                        Layout.minimumWidth: 0
+                        columns: materialStudioPage.workspaceFormColumns
+                        rowSpacing: 5
+                        columnSpacing: 5
+                        Label {
+                            text: qsTr("Source image identity")
+                            font.bold: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                        }
+                        Label {
+                            objectName: "identityInstructions"
+                            Layout.fillWidth: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                            text: qsTr(
+                                "Describe the imported image or PDF before creating an image-backed material draft."
+                            )
+                            wrapMode: Text.WordWrap
+                            Accessible.name: text
+                        }
                         TextField {
                             id: manufacturerField
                             objectName: "imageManufacturerField"
@@ -677,11 +738,26 @@ Page {
                         }
                     }
 
-                    RowLayout {
+                    GridLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        columns: materialStudioPage.workspaceFormColumns
+                        rowSpacing: 5
+                        columnSpacing: 5
                         Label {
                             text: qsTr("Series management")
                             font.bold: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                        }
+                        Label {
+                            objectName: "seriesManagementInstructions"
+                            Layout.fillWidth: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                            text: qsTr(
+                                "Create a table series from explicit X,Y pairs or add another series from the calibrated image."
+                            )
+                            wrapMode: Text.WordWrap
+                            Accessible.name: text
                         }
                         TextField {
                             id: newSeriesIdField
@@ -755,8 +831,27 @@ Page {
                         }
                     }
 
-                    RowLayout {
+                    GridLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        columns: materialStudioPage.workspaceFormColumns
+                        rowSpacing: 5
+                        columnSpacing: 5
+                        Label {
+                            text: qsTr("Series metadata")
+                            font.bold: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                        }
+                        Label {
+                            objectName: "seriesMetadataInstructions"
+                            Layout.fillWidth: true
+                            Layout.columnSpan: materialStudioPage.workspaceFormColumns
+                            text: qsTr(
+                                "Select the series to edit, set its units and optional operating conditions, then apply the metadata."
+                            )
+                            wrapMode: Text.WordWrap
+                            Accessible.name: text
+                        }
                         ComboBox {
                             id: workspaceSeriesChoice
                             objectName: "workspaceSeriesChoice"
@@ -895,233 +990,489 @@ Page {
                         Accessible.ignored: !visible
                     }
 
-                    RowLayout {
+                    ColumnLayout {
+                        id: cropSection
                         Layout.fillWidth: true
-                        Label { text: qsTr("Crop") }
-                        TextField {
-                            id: cropLeftField
-                            objectName: "cropLeftField"
-                            Layout.preferredWidth: 62
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.crop || ({})).left
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
-                            Accessible.name: qsTr("Crop left")
+                        Layout.minimumWidth: 0
+                        spacing: 4
+
+                        Label {
+                            objectName: "cropSectionTitle"
+                            text: qsTr("Crop source plot")
+                            font.bold: true
                         }
-                        TextField {
-                            id: cropTopField
-                            objectName: "cropTopField"
-                            Layout.preferredWidth: 62
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.crop || ({})).top
+                        Label {
+                            objectName: "cropInstructions"
+                            Layout.fillWidth: true
+                            text: qsTr(
+                                "Select the rectangle containing only the plot. Left and Top are image pixels from the upper-left corner; Width and Height are image pixels."
                             )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
-                            Accessible.name: qsTr("Crop top")
-                        }
-                        TextField {
-                            id: cropWidthField
-                            objectName: "cropWidthField"
-                            Layout.preferredWidth: 62
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.crop || ({})).width
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
-                            Accessible.name: qsTr("Crop width")
-                        }
-                        TextField {
-                            id: cropHeightField
-                            objectName: "cropHeightField"
-                            Layout.preferredWidth: 62
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.crop || ({})).height
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("crop")
-                            Accessible.name: qsTr("Crop height")
-                        }
-                        Button {
-                            objectName: "applyCropButton"
-                            text: qsTr("Apply crop")
-                            activeFocusOnTab: true
+                            wrapMode: Text.WordWrap
                             Accessible.name: text
-                            onClicked: materialStudioPage.applyClampedCrop()
+                        }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            columns: materialStudioPage.workspaceFormColumns
+                            rowSpacing: 5
+                            columnSpacing: 8
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "cropLeftLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Left (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: cropLeftField
+                                    objectName: "cropLeftField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 62
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.crop || ({})).left
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("crop")
+                                    Accessible.name: qsTr("Crop left in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "cropTopLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Top (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: cropTopField
+                                    objectName: "cropTopField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 62
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.crop || ({})).top
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("crop")
+                                    Accessible.name: qsTr("Crop top in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "cropWidthLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Width (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: cropWidthField
+                                    objectName: "cropWidthField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 62
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.crop || ({})).width
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("crop")
+                                    Accessible.name: qsTr("Crop width in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "cropHeightLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Height (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: cropHeightField
+                                    objectName: "cropHeightField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 62
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.crop || ({})).height
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("crop")
+                                    Accessible.name: qsTr("Crop height in image pixels")
+                                }
+                            }
+                            Button {
+                                objectName: "applyCropButton"
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignBottom
+                                text: qsTr("Apply crop")
+                                activeFocusOnTab: true
+                                Accessible.name: text
+                                onClicked: materialStudioPage.applyClampedCrop()
+                            }
                         }
                     }
 
-                    RowLayout {
+                    ColumnLayout {
+                        id: xAxisSection
                         Layout.fillWidth: true
-                        Label { text: qsTr("X axis") }
-                        ComboBox {
-                            id: xAxisScaleField
-                            objectName: "xAxisScaleField"
-                            Layout.preferredWidth: 78
-                            model: [
-                                {"value": "linear", "label": qsTr("Linear")},
-                                {"value": "log", "label": qsTr("Logarithmic")}
-                            ]
-                            textRole: "label"
-                            valueRole: "value"
-                            currentIndex: (materialStudioPage.editing.xAxis || ({})).scale
-                                === "log" ? 1 : 0
-                            activeFocusOnTab: true
-                            onActivated: materialStudioPage.markPendingEditorInput("x-axis")
-                            Accessible.name: qsTr("X axis scale")
+                        Layout.minimumWidth: 0
+                        spacing: 4
+
+                        Label {
+                            objectName: "xAxisSectionTitle"
+                            text: qsTr("Calibrate X axis")
+                            font.bold: true
                         }
-                        TextField {
-                            id: xAxisPixelAField
-                            objectName: "xAxisPixelAField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.xAxis || ({})).pixelA
+                        Label {
+                            objectName: "xAxisInstructions"
+                            Layout.fillWidth: true
+                            text: qsTr(
+                                "Map two horizontal image positions to physical X values. Pixel A/B use image pixels; Value A/B use the selected X unit. Logarithmic values must be positive."
                             )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
-                            Accessible.name: qsTr("X axis anchor A pixel")
-                        }
-                        TextField {
-                            id: xAxisValueAField
-                            objectName: "xAxisValueAField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.xAxis || ({})).valueA
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
-                            Accessible.name: qsTr("X axis anchor A value")
-                        }
-                        TextField {
-                            id: xAxisPixelBField
-                            objectName: "xAxisPixelBField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.xAxis || ({})).pixelB
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
-                            Accessible.name: qsTr("X axis anchor B pixel")
-                        }
-                        TextField {
-                            id: xAxisValueBField
-                            objectName: "xAxisValueBField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.xAxis || ({})).valueB
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
-                            Accessible.name: qsTr("X axis anchor B value")
-                        }
-                        Button {
-                            objectName: "applyXAxisButton"
-                            text: qsTr("Apply X axis")
-                            activeFocusOnTab: true
+                            wrapMode: Text.WordWrap
                             Accessible.name: text
-                            onClicked: materialStudioPage.controller.setXAxis(
-                                xAxisScaleField.currentValue,
-                                Number(xAxisPixelAField.text),
-                                Number(xAxisValueAField.text),
-                                Number(xAxisPixelBField.text),
-                                Number(xAxisValueBField.text)
-                            )
+                        }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            columns: materialStudioPage.workspaceFormColumns
+                            rowSpacing: 5
+                            columnSpacing: 8
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "xAxisScaleLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Scale")
+                                }
+                                ComboBox {
+                                    id: xAxisScaleField
+                                    objectName: "xAxisScaleField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 78
+                                    model: [
+                                        {"value": "linear", "label": qsTr("Linear")},
+                                        {"value": "log", "label": qsTr("Logarithmic")}
+                                    ]
+                                    textRole: "label"
+                                    valueRole: "value"
+                                    currentIndex: (materialStudioPage.editing.xAxis || ({})).scale
+                                        === "log" ? 1 : 0
+                                    activeFocusOnTab: true
+                                    onActivated: materialStudioPage.markPendingEditorInput("x-axis")
+                                    Accessible.name: qsTr("X axis scale")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "xAxisPixelALabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Pixel A (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: xAxisPixelAField
+                                    objectName: "xAxisPixelAField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.xAxis || ({})).pixelA
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
+                                    Accessible.name: qsTr("X axis pixel A in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "xAxisValueALabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Value A (%1)").arg(
+                                        xUnitField.text.trim().length > 0
+                                            ? xUnitField.text : qsTr("X unit")
+                                    )
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: xAxisValueAField
+                                    objectName: "xAxisValueAField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.xAxis || ({})).valueA
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
+                                    Accessible.name: qsTr("X axis value A")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "xAxisPixelBLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Pixel B (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: xAxisPixelBField
+                                    objectName: "xAxisPixelBField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.xAxis || ({})).pixelB
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
+                                    Accessible.name: qsTr("X axis pixel B in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "xAxisValueBLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Value B (%1)").arg(
+                                        xUnitField.text.trim().length > 0
+                                            ? xUnitField.text : qsTr("X unit")
+                                    )
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: xAxisValueBField
+                                    objectName: "xAxisValueBField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.xAxis || ({})).valueB
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("x-axis")
+                                    Accessible.name: qsTr("X axis value B")
+                                }
+                            }
+                            Button {
+                                objectName: "applyXAxisButton"
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignBottom
+                                text: qsTr("Apply X axis")
+                                activeFocusOnTab: true
+                                Accessible.name: text
+                                onClicked: materialStudioPage.controller.setXAxis(
+                                    xAxisScaleField.currentValue,
+                                    Number(xAxisPixelAField.text),
+                                    Number(xAxisValueAField.text),
+                                    Number(xAxisPixelBField.text),
+                                    Number(xAxisValueBField.text)
+                                )
+                            }
                         }
                     }
 
-                    RowLayout {
+                    ColumnLayout {
+                        id: yAxisSection
                         Layout.fillWidth: true
-                        Label { text: qsTr("Y axis") }
-                        ComboBox {
-                            id: yAxisScaleField
-                            objectName: "yAxisScaleField"
-                            Layout.preferredWidth: 78
-                            model: [
-                                {"value": "linear", "label": qsTr("Linear")},
-                                {"value": "log", "label": qsTr("Logarithmic")}
-                            ]
-                            textRole: "label"
-                            valueRole: "value"
-                            currentIndex: (materialStudioPage.editing.yAxis || ({})).scale
-                                === "log" ? 1 : 0
-                            activeFocusOnTab: true
-                            onActivated: materialStudioPage.markPendingEditorInput("y-axis")
-                            Accessible.name: qsTr("Y axis scale")
+                        Layout.minimumWidth: 0
+                        spacing: 4
+
+                        Label {
+                            objectName: "yAxisSectionTitle"
+                            text: qsTr("Calibrate Y axis")
+                            font.bold: true
                         }
-                        TextField {
-                            id: yAxisPixelAField
-                            objectName: "yAxisPixelAField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.yAxis || ({})).pixelA
+                        Label {
+                            objectName: "yAxisInstructions"
+                            Layout.fillWidth: true
+                            text: qsTr(
+                                "Map two vertical image positions to physical Y values. Pixel A/B use image pixels; Value A/B use the selected Y unit. Logarithmic values must be positive."
                             )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
-                            Accessible.name: qsTr("Y axis anchor A pixel")
-                        }
-                        TextField {
-                            id: yAxisValueAField
-                            objectName: "yAxisValueAField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.yAxis || ({})).valueA
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
-                            Accessible.name: qsTr("Y axis anchor A value")
-                        }
-                        TextField {
-                            id: yAxisPixelBField
-                            objectName: "yAxisPixelBField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.yAxis || ({})).pixelB
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
-                            Accessible.name: qsTr("Y axis anchor B pixel")
-                        }
-                        TextField {
-                            id: yAxisValueBField
-                            objectName: "yAxisValueBField"
-                            Layout.preferredWidth: 55
-                            text: materialStudioPage.fieldText(
-                                (materialStudioPage.editing.yAxis || ({})).valueB
-                            )
-                            activeFocusOnTab: true
-                            onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
-                            Accessible.name: qsTr("Y axis anchor B value")
-                        }
-                        Button {
-                            objectName: "applyYAxisButton"
-                            text: qsTr("Apply Y axis")
-                            activeFocusOnTab: true
+                            wrapMode: Text.WordWrap
                             Accessible.name: text
-                            onClicked: materialStudioPage.controller.setYAxis(
-                                yAxisScaleField.currentValue,
-                                Number(yAxisPixelAField.text),
-                                Number(yAxisValueAField.text),
-                                Number(yAxisPixelBField.text),
-                                Number(yAxisValueBField.text)
-                            )
+                        }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            columns: materialStudioPage.workspaceFormColumns
+                            rowSpacing: 5
+                            columnSpacing: 8
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "yAxisScaleLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Scale")
+                                }
+                                ComboBox {
+                                    id: yAxisScaleField
+                                    objectName: "yAxisScaleField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 78
+                                    model: [
+                                        {"value": "linear", "label": qsTr("Linear")},
+                                        {"value": "log", "label": qsTr("Logarithmic")}
+                                    ]
+                                    textRole: "label"
+                                    valueRole: "value"
+                                    currentIndex: (materialStudioPage.editing.yAxis || ({})).scale
+                                        === "log" ? 1 : 0
+                                    activeFocusOnTab: true
+                                    onActivated: materialStudioPage.markPendingEditorInput("y-axis")
+                                    Accessible.name: qsTr("Y axis scale")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "yAxisPixelALabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Pixel A (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: yAxisPixelAField
+                                    objectName: "yAxisPixelAField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.yAxis || ({})).pixelA
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
+                                    Accessible.name: qsTr("Y axis pixel A in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "yAxisValueALabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Value A (%1)").arg(
+                                        yUnitField.text.trim().length > 0
+                                            ? yUnitField.text : qsTr("Y unit")
+                                    )
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: yAxisValueAField
+                                    objectName: "yAxisValueAField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.yAxis || ({})).valueA
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
+                                    Accessible.name: qsTr("Y axis value A")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "yAxisPixelBLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Pixel B (image px)")
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: yAxisPixelBField
+                                    objectName: "yAxisPixelBField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.yAxis || ({})).pixelB
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
+                                    Accessible.name: qsTr("Y axis pixel B in image pixels")
+                                }
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Label {
+                                    objectName: "yAxisValueBLabel"
+                                    Layout.fillWidth: true
+                                    text: qsTr("Value B (%1)").arg(
+                                        yUnitField.text.trim().length > 0
+                                            ? yUnitField.text : qsTr("Y unit")
+                                    )
+                                    wrapMode: Text.WordWrap
+                                }
+                                TextField {
+                                    id: yAxisValueBField
+                                    objectName: "yAxisValueBField"
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 55
+                                    text: materialStudioPage.fieldText(
+                                        (materialStudioPage.editing.yAxis || ({})).valueB
+                                    )
+                                    activeFocusOnTab: true
+                                    onTextEdited: materialStudioPage.markPendingEditorInput("y-axis")
+                                    Accessible.name: qsTr("Y axis value B")
+                                }
+                            }
+                            Button {
+                                objectName: "applyYAxisButton"
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignBottom
+                                text: qsTr("Apply Y axis")
+                                activeFocusOnTab: true
+                                Accessible.name: text
+                                onClicked: materialStudioPage.controller.setYAxis(
+                                    yAxisScaleField.currentValue,
+                                    Number(yAxisPixelAField.text),
+                                    Number(yAxisValueAField.text),
+                                    Number(yAxisPixelBField.text),
+                                    Number(yAxisValueBField.text)
+                                )
+                            }
                         }
                     }
 
-                    RowLayout {
+                    GridLayout {
+                        id: materialEditorGrid
+                        objectName: "materialEditorGrid"
                         Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumWidth: 0
+                        columns: materialStudioPage.editorColumns
+                        rowSpacing: 8
+                        columnSpacing: 8
                         MaterialSourceView {
                             objectName: "materialSourceView"
                             Layout.preferredWidth: 1
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
+                            Layout.preferredHeight: materialStudioPage.editorColumns === 1 ? 300 : 1
+                            Layout.fillHeight: materialStudioPage.editorColumns === 2
                             activeFocusOnTab: true
                             controller: materialStudioPage.controller
                         }
                         MaterialCurveEditor {
                             objectName: "materialCurveEditor"
                             Layout.preferredWidth: 1
+                            Layout.minimumWidth: 0
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
+                            Layout.preferredHeight: materialStudioPage.editorColumns === 1 ? 420 : 1
+                            Layout.fillHeight: materialStudioPage.editorColumns === 2
                             controller: materialStudioPage.controller
                         }
                     }
@@ -1130,8 +1481,12 @@ Page {
 
             MaterialValidationPane {
                 objectName: "materialValidationPane"
-                Layout.preferredWidth: 270
-                Layout.fillHeight: true
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: 1
+                Layout.alignment: Qt.AlignTop
+                implicitWidth: 0
+                Layout.preferredHeight: materialStudioPage.workspaceColumns === 1 ? 340 : 640
                 controller: materialStudioPage.controller
             }
         }
@@ -1146,6 +1501,7 @@ Page {
             Accessible.name: text.length > 0
                 ? qsTr("Material Studio status: %1").arg(text)
                 : qsTr("Material Studio status")
+        }
         }
     }
 

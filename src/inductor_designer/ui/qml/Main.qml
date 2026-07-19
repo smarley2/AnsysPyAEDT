@@ -2,14 +2,17 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQml.Models
+import QtQuick.Window
 
 ApplicationWindow {
     id: window
     property string pendingMaterialAction: ""
     property var pendingMaterialArguments: []
     property bool allowCloseOnce: false
-    width: 1200
-    height: 760
+    width: Math.min(1800, Math.max(1200, Math.round(Screen.width * 0.78)))
+    height: Math.min(1100, Math.max(760, Math.round(Screen.height * 0.82)))
+    minimumWidth: 1000
+    minimumHeight: 700
     visible: true
     title: qsTr("PyAEDT Inductor Designer")
 
@@ -137,7 +140,9 @@ ApplicationWindow {
         spacing: 0
 
         Frame {
-            Layout.preferredWidth: 320
+            Layout.preferredWidth: Math.max(230, Math.min(340, Math.round(window.width * 0.22)))
+            Layout.minimumWidth: 230
+            Layout.maximumWidth: 340
             Layout.fillHeight: true
 
             ColumnLayout {

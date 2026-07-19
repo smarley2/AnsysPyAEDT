@@ -7,8 +7,9 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Property, QObject, Qt, Signal, Slot  # noqa: E402
+from PySide6.QtCore import Property, QObject, QPointF, Qt, Signal, Slot  # noqa: E402
 from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QGuiApplication  # noqa: E402
+from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 from inductor_designer.ui.main import create_engine  # noqa: E402
@@ -533,3 +534,164 @@ def test_material_validation_groups_severity_and_preserves_display_values() -> N
         assert any(value in name for name in names)
     assert status_text.property("text") == "Library ready"
     assert any("Library ready" in name for name in names)
+
+
+@pytest.mark.ui
+def test_material_studio_reflows_panes_for_compact_and_wide_windows() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    controller = RecordingMaterialStudioController()
+    engine = create_engine(material_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    guided_steps = root.findChild(QObject, "guidedStepList")
+    material_page = root.findChild(QObject, "materialStudioPage")
+    library_pane = root.findChild(QObject, "materialLibraryPane")
+    import_pane = root.findChild(QObject, "materialImportExportPane")
+    lifecycle_pane = root.findChild(QObject, "materialLifecyclePane")
+    workspace_pane = root.findChild(QObject, "materialSourceCurveWorkspace")
+    validation_pane = root.findChild(QObject, "materialValidationPane")
+
+    assert app is not None
+    assert guided_steps is not None
+    assert material_page is not None
+    assert library_pane is not None
+    assert import_pane is not None
+    assert lifecycle_pane is not None
+    assert workspace_pane is not None
+    assert validation_pane is not None
+    assert root.property("minimumWidth") == 1000
+    assert root.property("minimumHeight") == 700
+
+    guided_steps.setProperty("currentIndex", 2)
+    root.setProperty("width", 1200)
+    root.setProperty("height", 760)
+    app.processEvents()
+
+    assert material_page.property("overviewColumns") == 1
+    assert material_page.property("workspaceColumns") == 1
+    assert library_pane.property("y") < import_pane.property("y")
+    assert import_pane.property("y") < lifecycle_pane.property("y")
+    assert workspace_pane.property("y") < validation_pane.property("y")
+
+    root.setProperty("width", 1600)
+    root.setProperty("height", 900)
+    app.processEvents()
+
+    assert material_page.property("overviewColumns") == 2
+    assert material_page.property("workspaceColumns") == 2
+    assert library_pane.property("y") == import_pane.property("y")
+    assert lifecycle_pane.property("y") > library_pane.property("y")
+    assert abs(workspace_pane.property("y") - validation_pane.property("y")) < 1
+
+    for width, height in ((2200, 1200), (3840, 2160)):
+        root.setProperty("width", width)
+        root.setProperty("height", height)
+        app.processEvents()
+
+        assert material_page.property("overviewColumns") == 3
+        assert material_page.property("workspaceColumns") == 2
+        assert abs(library_pane.property("y") - import_pane.property("y")) < 1
+        assert abs(import_pane.property("y") - lifecycle_pane.property("y")) < 1
+        assert abs(workspace_pane.property("y") - validation_pane.property("y")) < 1
+
+
+@pytest.mark.ui
+def test_material_workspace_keeps_source_and_validation_content_visible() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    controller = RecordingMaterialStudioController()
+    engine = create_engine(material_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    guided_steps = root.findChild(QObject, "guidedStepList")
+    workspace_grid = root.findChild(QQuickItem, "materialWorkspaceGrid")
+    source_workspace = root.findChild(QQuickItem, "materialSourceCurveWorkspace")
+    validation_pane = root.findChild(QQuickItem, "materialValidationPane")
+    source_view = root.findChild(QQuickItem, "materialSourceView")
+    curve_editor = root.findChild(QQuickItem, "materialCurveEditor")
+    source_comparison = root.findChild(QQuickItem, "sourcePointComparison")
+    source_description = root.findChild(QQuickItem, "sourceDescriptionField")
+    temperature_field = root.findChild(QQuickItem, "temperatureConditionField")
+    dc_bias_field = root.findChild(QQuickItem, "dcBiasConditionField")
+
+    assert app is not None
+    assert guided_steps is not None
+    assert workspace_grid is not None
+    assert source_workspace is not None
+    assert validation_pane is not None
+    assert source_view is not None
+    assert curve_editor is not None
+    assert source_comparison is not None
+    assert source_description is not None
+    assert temperature_field is not None
+    assert dc_bias_field is not None
+
+    guided_steps.setProperty("currentIndex", 2)
+    content_item = root.contentItem()
+
+    def assert_inside(item: QQuickItem, container: QQuickItem) -> None:
+        item_top_left = item.mapToItem(content_item, QPointF(0, 0))
+        container_top_left = container.mapToItem(content_item, QPointF(0, 0))
+        assert item_top_left.x() >= container_top_left.x() - 1
+        assert item_top_left.y() >= container_top_left.y() - 1
+        assert item_top_left.x() + item.width() <= container_top_left.x() + container.width() + 1
+        assert item_top_left.y() + item.height() <= container_top_left.y() + container.height() + 1
+
+    for width, height in ((1200, 760), (1600, 900), (2200, 1200), (3840, 2160)):
+        root.setProperty("width", width)
+        root.setProperty("height", height)
+        app.processEvents()
+
+        assert_inside(source_workspace, workspace_grid)
+        assert_inside(validation_pane, workspace_grid)
+        assert_inside(source_view, source_workspace)
+        assert_inside(curve_editor, source_workspace)
+        assert_inside(source_comparison, curve_editor)
+        assert_inside(source_description, source_workspace)
+        assert_inside(temperature_field, source_workspace)
+        assert_inside(dc_bias_field, source_workspace)
+        assert validation_pane.width() >= 360
+
+        if width == 1200:
+            assert abs(curve_editor.y() - source_view.y()) < 1
+            assert curve_editor.x() > source_view.x()
+        elif width == 1600:
+            assert curve_editor.y() > source_view.y()
+        else:
+            assert abs(curve_editor.y() - source_view.y()) < 1
+
+
+@pytest.mark.ui
+def test_material_source_editor_explains_crop_and_axis_calibration() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    controller = RecordingMaterialStudioController()
+    engine = create_engine(material_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    guided_steps = root.findChild(QObject, "guidedStepList")
+
+    assert app is not None
+    assert guided_steps is not None
+    guided_steps.setProperty("currentIndex", 2)
+    app.processEvents()
+
+    expected_instructions = {
+        "materialWorkflowGuide": "Import a source image or PDF",
+        "cropInstructions": "image pixels",
+        "xAxisInstructions": "horizontal image positions",
+        "yAxisInstructions": "vertical image positions",
+    }
+    for object_name, expected_text in expected_instructions.items():
+        instruction = root.findChild(QObject, object_name)
+        assert instruction is not None
+        assert expected_text in instruction.property("text")
+
+    for object_name, expected_text in {
+        "cropLeftLabel": "Left (image px)",
+        "cropTopLabel": "Top (image px)",
+        "cropWidthLabel": "Width (image px)",
+        "cropHeightLabel": "Height (image px)",
+        "xAxisPixelALabel": "Pixel A (image px)",
+        "xAxisValueALabel": "Value A (X unit)",
+        "yAxisPixelALabel": "Pixel A (image px)",
+        "yAxisValueALabel": "Value A (Y unit)",
+    }.items():
+        label = root.findChild(QObject, object_name)
+        assert label is not None
+        assert label.property("text") == expected_text

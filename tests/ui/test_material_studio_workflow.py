@@ -443,6 +443,15 @@ def _root(controller: WorkflowController) -> tuple[QGuiApplication, object, QObj
     return app, engine, root
 
 
+def _scroll_to_source_workspace(root: QObject, source_view: QQuickItem) -> None:
+    scroll_view = root.findChild(QObject, "materialStudioScrollView")
+    assert scroll_view is not None
+    content_item = scroll_view.property("contentItem")
+    assert isinstance(content_item, QQuickItem)
+    source_y = source_view.mapToItem(content_item, QPointF(0, 0)).y()
+    content_item.setProperty("contentY", max(0.0, source_y - 80.0))
+
+
 def _real_image_root() -> tuple[
     MaterialStudioController,
     QGuiApplication,
@@ -581,6 +590,7 @@ def test_curve_workspace_converts_display_clicks_and_forwards_numeric_edits() ->
     assert apply_point is not None
     assert delete_point is not None
     assert move_point is not None
+    _scroll_to_source_workspace(root, source_view)
     scale = float(source_view.property("sourceScale"))
     offset_x = float(source_view.property("sourceOffsetX"))
     offset_y = float(source_view.property("sourceOffsetY"))
@@ -624,6 +634,7 @@ def test_crop_and_every_axis_handle_support_mouse_drag_and_keyboard() -> None:
     app, engine, root = _root(controller)
     source_view = root.findChild(QQuickItem, "materialSourceView")
     scale = float(source_view.property("sourceScale"))
+    _scroll_to_source_workspace(root, source_view)
 
     def handle(name: str) -> QQuickItem:
         item = root.findChild(QQuickItem, name)
@@ -1056,10 +1067,10 @@ def test_crop_and_both_axis_anchor_controls_forward_explicit_values() -> None:
     ):
         assert _accessible_object(root, label) is not None
 
-    crop_left = _accessible_object(root, "Crop left")
-    crop_top = _accessible_object(root, "Crop top")
-    crop_width = _accessible_object(root, "Crop width")
-    crop_height = _accessible_object(root, "Crop height")
+    crop_left = _accessible_object(root, "Crop left in image pixels")
+    crop_top = _accessible_object(root, "Crop top in image pixels")
+    crop_width = _accessible_object(root, "Crop width in image pixels")
+    crop_height = _accessible_object(root, "Crop height in image pixels")
     crop_apply = _accessible_object(root, "Apply crop")
     crop_left.setProperty("text", "1")
     crop_top.setProperty("text", "2")
