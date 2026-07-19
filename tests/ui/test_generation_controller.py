@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from dataclasses import replace
 
 import pytest
 
@@ -12,7 +13,12 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
-from inductor_designer.ui.generation_controller import GenerationController  # noqa: E402
+from inductor_designer.ui.generation_controller import (  # noqa: E402
+    CurrentProjectProvider,
+    GenerationController,
+)
+from inductor_designer.ui.main import _persist_and_publish_project  # noqa: E402
+from tests.unit.domain.test_project import make_project  # noqa: E402
 
 pytestmark = pytest.mark.ui
 
@@ -79,3 +85,21 @@ def test_generate_handles_runner_exception() -> None:
     assert len(controller.lines) == 1
     assert "Generation failed:" in controller.lines[0]
     assert "test error from runner" in controller.lines[0]
+
+
+def test_project_provider_publishes_only_after_persistence_succeeds() -> None:
+    original = make_project()
+    updated = replace(original, name="updated")
+    provider = CurrentProjectProvider(original)
+
+    def failing_save(_project: object) -> None:
+        raise OSError("disk save failed")
+
+    with pytest.raises(OSError, match="disk save failed"):
+        _persist_and_publish_project(updated, failing_save, provider)
+    assert provider.current() is original
+
+    saved: list[object] = []
+    _persist_and_publish_project(updated, saved.append, provider)
+    assert saved == [updated]
+    assert provider.current() is updated

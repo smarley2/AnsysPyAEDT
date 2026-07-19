@@ -10,6 +10,7 @@ from zipfile import BadZipFile
 from openpyxl import load_workbook  # type: ignore[import-untyped]
 from openpyxl.cell.cell import Cell  # type: ignore[import-untyped]
 from openpyxl.utils.exceptions import InvalidFileException  # type: ignore[import-untyped]
+from openpyxl.workbook.workbook import Workbook  # type: ignore[import-untyped]
 from openpyxl.worksheet.worksheet import Worksheet  # type: ignore[import-untyped]
 
 from inductor_designer.application.services.material_import import (
@@ -77,6 +78,49 @@ _LOSS_COLUMNS = (
 class ImportedMaterialDraft:
     record: MaterialRecord
     source_files: tuple[tuple[str, bytes], ...]
+    base_ref: MaterialRef | None = None
+    base_revision_id: str | None = None
+
+
+def _workbook_lineage(
+    filename: str, workbook: Workbook
+) -> tuple[MaterialRef | None, str | None]:
+    if "_MaterialStudio" not in workbook.sheetnames:
+        return None, None
+    sheet = workbook["_MaterialStudio"]
+    if sheet.sheet_state == "visible":
+        raise _fail(filename, "_MaterialStudio", "lineage sheet must remain hidden")
+    values = {
+        sheet.cell(row=row, column=1).value: sheet.cell(row=row, column=2).value
+        for row in range(2, sheet.max_row + 1)
+    }
+    expected = {
+        "format",
+        "version",
+        "manufacturer",
+        "material_name",
+        "grade",
+        "base_revision_id",
+    }
+    if set(values) != expected or values.get("format") != "material-studio-edit" or values.get(
+        "version"
+    ) != 1:
+        raise _fail(filename, "_MaterialStudio", "invalid Material Studio lineage marker")
+    ref = MaterialRef(
+        _required_text(values["manufacturer"], filename, "_MaterialStudio!B4", "manufacturer"),
+        _required_text(values["material_name"], filename, "_MaterialStudio!B5", "material_name"),
+        _required_text(values["grade"], filename, "_MaterialStudio!B6", "grade"),
+    )
+    revision_id = _required_text(
+        values["base_revision_id"], filename, "_MaterialStudio!B7", "base_revision_id"
+    )
+    if len(revision_id) != 12 or any(char not in "0123456789abcdef" for char in revision_id):
+        raise _fail(
+            filename,
+            "_MaterialStudio!B7",
+            "base_revision_id must be 12 lowercase hexadecimal characters",
+        )
+    return ref, revision_id
 
 
 def _fail(filename: str, location: str, message: str) -> MaterialImportError:
@@ -402,10 +446,11 @@ def _import_xlsx(filename: str, data: bytes) -> ImportedMaterialTable:
         sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"
     )
     extras = tuple(sheet for sheet in workbook.worksheets if sheet.title not in _VISIBLE_SHEETS)
-    valid_lists = not extras or (
-        len(extras) == 1 and extras[0].title == "_Lists" and extras[0].sheet_state != "visible"
-    )
-    if visible != frozenset(_VISIBLE_SHEETS) or not valid_lists:
+    valid_extras = all(
+        sheet.title in {"_Lists", "_MaterialStudio"} and sheet.sheet_state != "visible"
+        for sheet in extras
+    ) and len({sheet.title for sheet in extras}) == len(extras)
+    if visible != frozenset(_VISIBLE_SHEETS) or not valid_extras:
         raise _fail(
             filename,
             "workbook sheets",
@@ -451,6 +496,11 @@ def import_material_file_as_draft(
 ) -> ImportedMaterialDraft:
     """Import a material file and create a new draft record from its curves."""
     imported = import_material_file(filename, data)
+    base_ref: MaterialRef | None = None
+    base_revision_id: str | None = None
+    if PurePath(filename).suffix == ".xlsx":
+        workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
+        base_ref, base_revision_id = _workbook_lineage(filename, workbook)
     return ImportedMaterialDraft(
         record=new_draft_record(
             imported.ref,
@@ -460,4 +510,6 @@ def import_material_file_as_draft(
             notes=notes,
         ),
         source_files=imported.source_files,
+        base_ref=base_ref,
+        base_revision_id=base_revision_id,
     )

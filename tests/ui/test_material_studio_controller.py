@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QSG_RHI_BACKEND", "software")
@@ -399,11 +400,14 @@ def test_downloads_require_local_destinations_and_use_exact_bytes(
     )
     controller.selectRevision(approved.record.revision_id)
     workbook_target = tmp_path / "selected.xlsx"
-    expected_workbook = export_material_record_xlsx(approved.record)
+    expected_workbook = export_material_record_xlsx(
+        approved.record,
+        exported_at="2026-07-19T10:00:00+00:00",
+    )
     monkeypatch.setattr(
         controller_module,
         "export_material_record_xlsx",
-        lambda _record: expected_workbook,
+        lambda _record, *, exported_at: expected_workbook,
     )
 
     controller.exportSelectedWorkbook("")
@@ -441,6 +445,40 @@ def test_table_and_workbook_uploads_read_before_replacing_state(tmp_path: Path) 
     assert controller.selectedRevision["revisionId"] != approved.record.revision_id
     assert controller.dirty is True
     assert controller.canSave is True
+
+
+@pytest.mark.ui
+def test_edited_workbook_requires_matching_clean_selected_base(tmp_path: Path) -> None:
+    repository = InMemoryMaterialRepository()
+    approved = _approved_material(repository)
+    controller, _ = _controller(repository)
+    controller.selectMaterial(
+        approved.record.ref.manufacturer,
+        approved.record.ref.name,
+        approved.record.ref.grade,
+    )
+    controller.selectRevision(approved.record.revision_id)
+    selected_before = dict(controller.selectedRevision)
+
+    wrong = tmp_path / "wrong-base.xlsx"
+    wrong.write_bytes(export_material_record_xlsx(approved.record).data)
+    workbook = load_workbook(wrong)
+    lineage = workbook["_MaterialStudio"]
+    lineage["B7"] = "000000000000"
+    workbook.save(wrong)
+
+    controller.importEditedWorkbook(_file_url(wrong))
+
+    assert "does not match the selected revision" in controller.statusMessage
+    assert controller.selectedRevision == selected_before
+    assert controller.dirty is False
+
+    generic = tmp_path / "generic.xlsx"
+    generic.write_bytes(material_import_template("xlsx").data)
+    controller.importEditedWorkbook(_file_url(generic))
+    assert "does not identify an exported base revision" in controller.statusMessage
+    assert controller.selectedRevision == selected_before
+    assert controller.dirty is False
 
 
 @pytest.mark.ui

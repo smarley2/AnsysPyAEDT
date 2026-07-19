@@ -25,6 +25,7 @@ from inductor_designer.application.services.material_drafts import (
     MaterialDraftSession,
     approve_material_session,
     clone_revision_as_draft,
+    derive_workbook_draft,
     image_draft_session,
     replace_image_series,
     replace_table_series,
@@ -842,7 +843,10 @@ class MaterialStudioController(QObject):
             if self._session is None:
                 raise ValueError("Select a material revision before exporting.")
             destination = self._local_path(destination_url)
-            download = export_material_record_xlsx(self._session.record)
+            download = export_material_record_xlsx(
+                self._session.record,
+                exported_at=self._now(),
+            )
             destination.write_bytes(download.data)
             self._set_status(f"Saved {download.filename}.")
 
@@ -850,7 +854,50 @@ class MaterialStudioController(QObject):
 
     @Slot(str)
     def importEditedWorkbook(self, source_url: str) -> None:
-        self._import_table(source_url, "Imported edited workbook as a draft.")
+        if not source_url:
+            return
+
+        def action() -> None:
+            if self._session is None or not self._saved or self._dirty:
+                raise ValueError(
+                    "Select a clean, saved material revision before reimporting its workbook."
+                )
+            path = self._local_path(source_url)
+            data = path.read_bytes()
+            imported = import_material_file_as_draft(
+                path.name,
+                data,
+                created_at=self._now(),
+            )
+            if imported.base_ref is None or imported.base_revision_id is None:
+                raise ValueError(
+                    "Edited workbook does not identify an exported base revision."
+                )
+            if (
+                imported.base_ref != self._session.record.ref
+                or imported.base_revision_id != self._session.record.revision_id
+            ):
+                raise ValueError(
+                    "Edited workbook does not match the selected revision."
+                )
+            session = derive_workbook_draft(
+                self._session,
+                imported.record,
+                imported.source_files,
+            )
+            materials, revisions = self._library_values(session.record.ref)
+            self._remember_clean_state()
+            self._set_session(
+                session,
+                dirty=True,
+                saved=False,
+                clear_source=True,
+                materials=materials,
+                revisions=revisions,
+            )
+            self._set_status("Imported edited workbook as a draft.")
+
+        self._run_action(action)
 
     @Slot(str, int)
     def importSourceImage(self, source_url: str, page_index: int) -> None:

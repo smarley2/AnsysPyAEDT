@@ -10,6 +10,7 @@ import pytest
 from inductor_designer.adapters.materials import (
     ImportedMaterialDraft,
     MaterialTemplateDownload,
+    export_material_record_xlsx,
     import_material_file_as_draft,
     material_import_template,
 )
@@ -20,6 +21,7 @@ from inductor_designer.application.services.material_drafts import (
     add_table_series,
     approve_material_session,
     clone_revision_as_draft,
+    derive_workbook_draft,
     image_draft_session,
     remove_series,
     replace_image_extraction,
@@ -240,6 +242,74 @@ def test_unchanged_approved_clone_cannot_be_saved_or_overwrite_base() -> None:
     with pytest.raises(ValueError, match="immutable"):
         repository.save(session.record, dict(session.source_files))
     assert repository.get(approved.ref, approved.revision_id) == before
+
+
+def test_workbook_draft_retains_base_evidence_and_renames_import_collisions() -> None:
+    image_bytes = _MANUAL_IMAGE.read_bytes()
+    image = image_draft_session(
+        ImageSeriesInput(
+            ref=MaterialRef("Example", "Ferrite", "Workbook"),
+            source_filename="manual-bh.png",
+            source_data=image_bytes,
+            source_url="https://example.com/datasheet.pdf",
+            source_page=3,
+            captured_at=_CREATED_AT,
+            source_description="PDF page rendered for manual extraction",
+            series_id="bh-manual",
+            kind=SeriesKind.BH_CURVE,
+            x_unit="A/m",
+            y_unit="T",
+            conditions=CurveConditions(None, 25.0, None),
+            extraction=_linear_extraction(
+                PixelPoint(10.0, 70.0), PixelPoint(110.0, 10.0)
+            ),
+            created_at=_CREATED_AT,
+        )
+    )
+    base_draft = add_table_series(
+        image,
+        series_id="loss-table",
+        kind=SeriesKind.LOSS_TABLE,
+        x_unit="T",
+        y_unit="W/m3",
+        conditions=CurveConditions(100_000.0, 25.0, None),
+        points=(CurvePoint(0.05, 1000.0), CurvePoint(0.1, 3000.0)),
+        captured_at=_CREATED_AT,
+    )
+    base = approve_material(
+        review_material(base_draft.record, "reviewer@example.com"),
+        "approver@example.com",
+    )
+    base_session = MaterialDraftSession(base, base_draft.source_files, None)
+    base_before = deepcopy(base_session)
+    exported = export_material_record_xlsx(base)
+    imported = import_material_file_as_draft(
+        exported.filename,
+        exported.data,
+        created_at="2026-07-20T08:00:00+00:00",
+    )
+
+    derived = derive_workbook_draft(
+        base_session,
+        imported.record,
+        imported.source_files,
+    )
+
+    assert base_session == base_before
+    assert derived.base_revision_id == base.revision_id
+    assert derived.record.sources[: len(base.sources)] == base.sources
+    assert derived.source_files[: len(base_draft.source_files)] == base_draft.source_files
+    assert base.series[0].extraction is not None
+    assert {source.sha256 for source in base.sources} <= {
+        source.sha256 for source in derived.record.sources
+    }
+    source_names = tuple(source.filename for source in derived.record.sources)
+    assert len(source_names) == len(set(source_names))
+    assert all(
+        item.source_filename not in {source.filename for source in base.sources}
+        for item in derived.record.series
+    )
+    assert reproduce_record(derived.record, dict(derived.source_files)).matches
 
 
 def test_approved_edit_gets_fresh_timestamp_and_becomes_latest_suggestion() -> None:

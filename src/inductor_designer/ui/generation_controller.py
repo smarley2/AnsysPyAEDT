@@ -2,8 +2,28 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
+
+if TYPE_CHECKING:
+    from inductor_designer.domain.project import InductorProject
+
+
+class CurrentProjectProvider:
+    """Share the latest persisted project with generation without global state."""
+
+    def __init__(self, project: InductorProject) -> None:
+        self._project = project
+        self._lock = threading.Lock()
+
+    def current(self) -> InductorProject:
+        with self._lock:
+            return self._project
+
+    def replace(self, project: InductorProject) -> None:
+        with self._lock:
+            self._project = project
 
 
 class GenerationController(QObject):

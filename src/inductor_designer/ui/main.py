@@ -10,7 +10,10 @@ if TYPE_CHECKING:
     from PySide6.QtQml import QQmlApplicationEngine
 
     from inductor_designer.domain.project import InductorProject
-    from inductor_designer.ui.generation_controller import GenerationController
+    from inductor_designer.ui.generation_controller import (
+        CurrentProjectProvider,
+        GenerationController,
+    )
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
     from inductor_designer.ui.preview_geometry import PreviewEntry
 
@@ -78,7 +81,7 @@ def _load_simulation_summary(project: InductorProject, matrix_path: Path) -> lis
 
 
 def _build_generation_controller(
-    project: InductorProject, catalog_path: Path, matrix_path: Path
+    project_provider: CurrentProjectProvider, catalog_path: Path, matrix_path: Path
 ) -> GenerationController:
     from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
     from inductor_designer.adapters.compatibility.matrix_repository import (
@@ -92,15 +95,15 @@ def _build_generation_controller(
     from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
 
     catalog = SqliteCatalogRepository(catalog_path)
-    capabilities = MatrixCapabilityRepository(matrix_path).snapshot_for(
-        project.target_release, project.target_edition
-    )
-    output_directory = Path("artifacts") / "studio" / sanitize_identifier(project.name)
+    matrix = MatrixCapabilityRepository(matrix_path)
     maxwell3d_exporter = PyaedtMaxwell3dExporter()
     maxwell2d_exporter = PyaedtMaxwell2dExporter()
     femm_solver = PyfemmSolver()
 
     def runner(backend_label: str) -> tuple[str, ...]:
+        project = project_provider.current()
+        capabilities = matrix.snapshot_for(project.target_release, project.target_edition)
+        output_directory = Path("artifacts") / "studio" / sanitize_identifier(project.name)
         backend = GenerationBackend(backend_label)
         return run_generation(
             backend,
@@ -114,6 +117,16 @@ def _build_generation_controller(
         )
 
     return GenerationController(runner)
+
+
+def _persist_and_publish_project(
+    project: InductorProject,
+    persist: Callable[[InductorProject], None],
+    provider: CurrentProjectProvider,
+) -> None:
+    """Publish a project to same-session consumers only after disk persistence."""
+    persist(project)
+    provider.replace(project)
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -143,6 +156,7 @@ def main() -> int:
     preview_entries: list[PreviewEntry] | None = None
     simulation_summary: list[str] = []
     generation_controller: GenerationController | None = None
+    project_provider: CurrentProjectProvider | None = None
     backend_choices: list[str] = []
     project: InductorProject | None = None
     if args.project is not None:
@@ -166,8 +180,11 @@ def main() -> int:
             for issue in error.issues:
                 print(issue, file=sys.stderr)
             return 3
+        from inductor_designer.ui.generation_controller import CurrentProjectProvider
+
+        project_provider = CurrentProjectProvider(project)
         generation_controller = _build_generation_controller(
-            project, args.catalog, args.matrix
+            project_provider, args.catalog, args.matrix
         )
         backend_choices = [backend.value for backend in GenerationBackend]
         print(
@@ -191,7 +208,12 @@ def main() -> int:
         project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
 
         def save_project(updated_project: InductorProject) -> None:
-            project_repository.save(updated_project, args.project)
+            assert project_provider is not None
+            _persist_and_publish_project(
+                updated_project,
+                lambda value: project_repository.save(value, args.project),
+                project_provider,
+            )
 
         project_save_callback = save_project
 

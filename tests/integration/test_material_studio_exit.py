@@ -36,8 +36,12 @@ from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from inductor_designer.ui.generation_controller import CurrentProjectProvider
+from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
+from inductor_designer.ui.main import _persist_and_publish_project
 from inductor_designer.ui.material_studio_controller import MaterialStudioController
 from tests.fakes.femm_solver import RecordingFemmSolver
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
 
@@ -102,10 +106,15 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     projects = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     project_path = tmp_path / "material-studio.inductor.json"
     projects.save(projects.load(PROJECT_FIXTURE), project_path)
+    provider = CurrentProjectProvider(projects.load(project_path))
     controller = MaterialStudioController(
         materials,
-        project=projects.load(project_path),
-        project_save_callback=lambda project: projects.save(project, project_path),
+        project=provider.current(),
+        project_save_callback=lambda project: _persist_and_publish_project(
+            project,
+            lambda value: projects.save(value, project_path),
+            provider,
+        ),
         now=lambda: "2026-07-19T12:00:00+00:00",
     )
 
@@ -143,6 +152,10 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     assert sum(bool(item["isLatestApproved"]) for item in controller.revisions) == 1
     assert materials.get(base_record.ref, base_revision) == base_record
     edited = materials.get(base_record.ref, edited_revision)
+    assert edited.sources[: len(base_record.sources)] == base_record.sources
+    base_source_bytes = materials.source_bytes(base_record.ref, base_revision)
+    edited_source_bytes = materials.source_bytes(base_record.ref, edited_revision)
+    assert all(edited_source_bytes[name] == data for name, data in base_source_bytes.items())
     edited_loss = next(
         series for series in edited.series if series.series_id == "loss-100khz"
     )
@@ -186,6 +199,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     controller.useInProject("bh-100c")
     assert controller.statusMessage == "replace failed"
     assert project_path.read_bytes() == before_pin
+    assert provider.current().materials == ()
     monkeypatch.setattr(project_module.os, "replace", real_replace)
 
     controller.useInProject("bh-100c")
@@ -198,6 +212,28 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     assert selection.snapshot == edited
     assert selection.revision_id == edited_revision
     assert selection.bh_series_id == "bh-100c"
+
+    same_session_exporter = RecordingMaxwell3dExporter()
+    lines = run_generation(
+        GenerationBackend.MAXWELL_3D,
+        provider.current(),
+        CATALOG,
+        CAPABILITIES,
+        tmp_path / "same-session-maxwell",
+        maxwell3d_exporter=same_session_exporter,
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+    )
+    assert lines[-1].startswith("save: ok")
+    same_session_material = same_session_exporter.requests[0].plan.core.material
+    assert same_session_material.material_revision == edited_revision
+    assert same_session_material.bh_series_id == "bh-100c"
+    assert same_session_material.bh_curve == tuple(
+        (point.y, point.x)
+        for point in next(
+            item for item in edited.series if item.series_id == "bh-100c"
+        ).points
+    )
 
     maxwell = export_maxwell3d(
         reloaded,

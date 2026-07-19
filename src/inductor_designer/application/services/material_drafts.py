@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import PurePath
 
 from inductor_designer.application.ports.material_repository import (
     MaterialLookupError,
@@ -437,6 +438,63 @@ def session_from_import(
                 (f"Imported source hash does not match '{source.filename}'.",)
             )
     return MaterialDraftSession(record, source_files, None)
+
+
+def _supplemental_filename(existing: set[str], filename: str) -> str:
+    path = PurePath(filename)
+    stem = sanitize_identifier(path.stem)
+    suffix = path.suffix.casefold()
+    candidate = f"edited-{stem}{suffix}"
+    index = 2
+    while sanitize_identifier(candidate).casefold() in existing:
+        candidate = f"edited-{stem}-{index}{suffix}"
+        index += 1
+    existing.add(sanitize_identifier(candidate).casefold())
+    return candidate
+
+
+def derive_workbook_draft(
+    base: MaterialDraftSession,
+    imported_record: MaterialRecord,
+    imported_source_files: tuple[tuple[str, bytes], ...],
+) -> MaterialDraftSession:
+    """Derive edited workbook curves while retaining authoritative base evidence."""
+    imported = session_from_import(imported_record, imported_source_files)
+    if not base.record.revision_id:
+        raise MaterialImportError(("Workbook editing requires a saved base revision.",))
+    if imported.record.ref != base.record.ref:
+        raise MaterialImportError(("Edited workbook material identity does not match its base.",))
+
+    existing = {
+        sanitize_identifier(source.filename).casefold() for source in base.record.sources
+    }
+    renamed: dict[str, str] = {}
+    supplemental_sources: list[SourceProvenance] = []
+    supplemental_files: list[tuple[str, bytes]] = []
+    source_data = dict(imported.source_files)
+    for source in imported.record.sources:
+        filename = _supplemental_filename(existing, source.filename)
+        renamed[source.filename] = filename
+        supplemental_sources.append(replace(source, filename=filename))
+        supplemental_files.append((filename, source_data[source.filename]))
+
+    series = tuple(
+        replace(item, source_filename=renamed[item.source_filename])
+        for item in imported.record.series
+    )
+    draft = new_draft_record(
+        base.record.ref,
+        series=series,
+        sources=(*base.record.sources, *supplemental_sources),
+        created_at=imported.record.created_at,
+        relative_permeability=base.record.relative_permeability,
+        notes=base.record.notes,
+    )
+    return MaterialDraftSession(
+        draft,
+        (*base.source_files, *supplemental_files),
+        base.record.revision_id,
+    )
 
 
 def clone_revision_as_draft(

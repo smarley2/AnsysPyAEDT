@@ -6,7 +6,10 @@ from dataclasses import replace
 import pytest
 from openpyxl import load_workbook
 
-from inductor_designer.adapters.materials.table_file import import_material_file
+from inductor_designer.adapters.materials.table_file import (
+    import_material_file,
+    import_material_file_as_draft,
+)
 from inductor_designer.adapters.materials.templates import (
     MaterialTemplateExportError,
     export_material_record_xlsx,
@@ -114,6 +117,41 @@ def test_packaged_templates_have_download_metadata_and_equivalent_examples() -> 
     assert xlsx_result.series == csv_result.series
 
 
+def test_exported_workbook_carries_hidden_base_identity_but_template_does_not() -> None:
+    record = _approved_record()
+
+    exported = export_material_record_xlsx(record)
+    workbook = load_workbook(io.BytesIO(exported.data), data_only=False)
+    lineage = workbook["_MaterialStudio"]
+
+    assert lineage.sheet_state == "veryHidden"
+    assert tuple(lineage.values) == (
+        ("field", "value"),
+        ("format", "material-studio-edit"),
+        ("version", 1),
+        ("manufacturer", record.ref.manufacturer),
+        ("material_name", record.ref.name),
+        ("grade", record.ref.grade),
+        ("base_revision_id", record.revision_id),
+    )
+    imported = import_material_file_as_draft(
+        exported.filename,
+        exported.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    assert imported.base_ref == record.ref
+    assert imported.base_revision_id == record.revision_id
+
+    template = material_import_template("xlsx")
+    generic = import_material_file_as_draft(
+        template.filename,
+        template.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    assert generic.base_ref is None
+    assert generic.base_revision_id is None
+
+
 def test_packaged_xlsx_has_documented_structure_and_validations() -> None:
     download = material_import_template("xlsx")
     workbook = load_workbook(io.BytesIO(download.data), data_only=False)
@@ -180,9 +218,11 @@ def test_export_material_record_xlsx_preserves_template_and_retained_units() -> 
         == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     workbook = load_workbook(io.BytesIO(download.data), data_only=False)
-    assert tuple(sheet.title for sheet in workbook.worksheets) == tuple(
+    assert tuple(sheet.title for sheet in workbook.worksheets[:-1]) == tuple(
         sheet.title for sheet in packaged.worksheets
     )
+    assert workbook.worksheets[-1].title == "_MaterialStudio"
+    assert workbook.worksheets[-1].sheet_state == "veryHidden"
     assert workbook["B-H Curves"][1][0].style_id == packaged["B-H Curves"][1][0].style_id
     assert workbook["B-H Curves"][2][0].style_id == packaged["B-H Curves"][2][0].style_id
     assert tuple(workbook["B-H Curves"].tables) == ("BHCurvesTable",)
@@ -195,10 +235,13 @@ def test_export_material_record_xlsx_preserves_template_and_retained_units() -> 
         "manufacturer": "Example Magnetics",
         "material_name": "Ferrite",
         "grade": "F1",
-        "source_url": "https://example.com/material",
-        "source_page": 7,
+        "source_url": None,
+        "source_page": None,
         "captured_at": "2026-07-18T12:00:00+00:00",
-        "source_description": "Editable export of base material revision abcde1234567",
+        "source_description": (
+            "Editable workbook derived from base material revision abcde1234567; "
+            "Material Studio retains 1 original provenance source(s)."
+        ),
     }
     assert tuple(workbook["B-H Curves"].iter_rows(min_row=2, values_only=True)) == (
         ("bh-25c", 25.0, None, "Oe", "kG", 0.0, 0.0),
@@ -294,16 +337,21 @@ def test_export_preserves_formula_like_text_as_literal_strings_on_round_trip() -
         series=(replace(base.series[0], series_id="=bh"),),
     )
 
-    download = export_material_record_xlsx(record)
+    download = export_material_record_xlsx(
+        record,
+        exported_at="-2026-07-19T10:00:00+00:00",
+    )
     workbook = load_workbook(io.BytesIO(download.data), data_only=False)
 
-    for coordinate in ("B2", "B3", "B4", "B5", "B7", "B8"):
+    for coordinate in ("B2", "B3", "B4", "B7", "B8"):
         assert workbook["Material"][coordinate].data_type == "s"
     for coordinate in ("A2", "D2", "E2"):
         assert workbook["B-H Curves"][coordinate].data_type == "s"
 
     imported = import_material_file(download.filename, download.data)
     assert imported.ref == record.ref
-    assert imported.sources[0].url == source.url
-    assert imported.sources[0].captured_at == source.captured_at
+    assert imported.sources[0].url == ""
+    assert imported.sources[0].page is None
+    assert imported.sources[0].captured_at == "-2026-07-19T10:00:00+00:00"
+    assert "base material revision" in imported.sources[0].description
     assert imported.series[0].series_id == "=bh"

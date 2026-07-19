@@ -136,7 +136,11 @@ def _loss_rows(series: PointSeries) -> list[tuple[object, ...]]:
     ]
 
 
-def export_material_record_xlsx(record: MaterialRecord) -> MaterialTemplateDownload:
+def export_material_record_xlsx(
+    record: MaterialRecord,
+    *,
+    exported_at: str | None = None,
+) -> MaterialTemplateDownload:
     """Export all tabular curves in a material record as an editable workbook."""
     if not record.series:
         raise MaterialTemplateExportError(
@@ -145,15 +149,17 @@ def export_material_record_xlsx(record: MaterialRecord) -> MaterialTemplateDownl
 
     template = material_import_template("xlsx")
     workbook = load_workbook(io.BytesIO(template.data), data_only=False)
-    source = record.sources[0]
     metadata = {
         "manufacturer": record.ref.manufacturer,
         "material_name": record.ref.name,
         "grade": record.ref.grade,
-        "source_url": source.url,
-        "source_page": source.page,
-        "captured_at": source.captured_at,
-        "source_description": f"Editable export of base material revision {record.revision_id}",
+        "source_url": "",
+        "source_page": None,
+        "captured_at": exported_at or record.created_at,
+        "source_description": (
+            f"Editable workbook derived from base material revision {record.revision_id}; "
+            f"Material Studio retains {len(record.sources)} original provenance source(s)."
+        ),
     }
     material = workbook["Material"]
     for row in range(2, material.max_row + 1):
@@ -174,6 +180,23 @@ def export_material_record_xlsx(record: MaterialRecord) -> MaterialTemplateDownl
     ]
     _replace_rows(workbook["B-H Curves"], bh_rows, "BHCurvesTable")
     _replace_rows(workbook["Loss Curves"], loss_rows, "LossCurvesTable")
+
+    lineage = workbook.create_sheet("_MaterialStudio")
+    lineage.sheet_state = "veryHidden"
+    for row, values in enumerate(
+        (
+            ("field", "value"),
+            ("format", "material-studio-edit"),
+            ("version", 1),
+            ("manufacturer", record.ref.manufacturer),
+            ("material_name", record.ref.name),
+            ("grade", record.ref.grade),
+            ("base_revision_id", record.revision_id),
+        ),
+        start=1,
+    ):
+        for column, value in enumerate(values, start=1):
+            _set_cell_value(lineage.cell(row=row, column=column), value)
 
     workbook.properties.creator = "PyAEDT Inductor Designer"
     workbook.properties.title = f"{record.ref.manufacturer} {record.ref.name} {record.ref.grade}"
