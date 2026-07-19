@@ -8,9 +8,8 @@ Page {
     property var controller: null
     property string pendingLibrarySelectionKind: ""
     property var pendingLibrarySelectionArguments: []
-    property int pendingLibrarySelectionIndex: -1
-    property int confirmedMaterialIndex: 0
-    property int confirmedRevisionIndex: 0
+    property var confirmedMaterialSelection: []
+    property var confirmedRevisionSelection: []
     property var editing: controller !== null ? controller.imageEditing : ({})
     property var metadata: editing.metadata || ({})
     property var revisionSources: controller !== null
@@ -130,56 +129,94 @@ Page {
         )
     }
 
-    function confirmedLibraryIndex(kind) {
-        return kind === "material" ? confirmedMaterialIndex : confirmedRevisionIndex
+    function selectionArgumentsAt(kind, index) {
+        const values = kind === "material"
+            ? libraryController.materials : libraryController.revisions
+        if (index < 0 || index >= values.length) {
+            return []
+        }
+        const value = values[index]
+        return kind === "material"
+            ? [value.manufacturer, value.name, value.grade]
+            : [value.revisionId]
     }
 
-    function setConfirmedLibraryIndex(kind, index) {
+    function selectionIndex(kind, selectionArguments) {
+        const values = kind === "material"
+            ? libraryController.materials : libraryController.revisions
+        for (let index = 0; index < values.length; ++index) {
+            const candidate = selectionArgumentsAt(kind, index)
+            if (candidate.length === selectionArguments.length
+                    && candidate.every(function(value, part) {
+                        return value === selectionArguments[part]
+                    })) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    function confirmedLibrarySelection(kind) {
+        return kind === "material"
+            ? confirmedMaterialSelection : confirmedRevisionSelection
+    }
+
+    function setConfirmedLibrarySelection(kind, selectionArguments) {
         if (kind === "material") {
-            confirmedMaterialIndex = index
-            confirmedRevisionIndex = 0
+            confirmedMaterialSelection = selectionArguments
+            confirmedRevisionSelection = selectionArgumentsAt("revision", 0)
         } else {
-            confirmedRevisionIndex = index
+            confirmedRevisionSelection = selectionArguments
+        }
+    }
+
+    function restoreLibrarySelection(kind, selectionArguments) {
+        const list = libraryList(kind)
+        const index = selectionIndex(kind, selectionArguments)
+        if (list !== null && index >= 0) {
+            list.currentIndex = index
         }
     }
 
     function performPendingLibrarySelection() {
         const selectionKind = pendingLibrarySelectionKind
         const selectionArguments = pendingLibrarySelectionArguments
+        let selected = false
         if (selectionKind === "material") {
-            controller.selectMaterial(
+            selected = controller.selectMaterial(
                 selectionArguments[0], selectionArguments[1], selectionArguments[2]
             )
         } else if (selectionKind === "revision") {
-            controller.selectRevision(selectionArguments[0])
+            selected = controller.selectRevision(selectionArguments[0])
         }
-        const list = libraryList(selectionKind)
-        if (list !== null && pendingLibrarySelectionIndex >= 0) {
-            setConfirmedLibraryIndex(selectionKind, pendingLibrarySelectionIndex)
-            list.currentIndex = pendingLibrarySelectionIndex
+        if (selected) {
+            setConfirmedLibrarySelection(selectionKind, selectionArguments)
         }
+        restoreLibrarySelection(
+            selectionKind,
+            selected ? selectionArguments : confirmedLibrarySelection(selectionKind)
+        )
         pendingLibrarySelectionKind = ""
         pendingLibrarySelectionArguments = []
-        pendingLibrarySelectionIndex = -1
         dirtyLibrarySelectionDialog.close()
     }
 
     function requestLibrarySelection(kind, selectionArguments) {
-        const list = libraryList(kind)
         if (controller !== null && controller.dirty) {
             pendingLibrarySelectionKind = kind
             pendingLibrarySelectionArguments = selectionArguments
-            pendingLibrarySelectionIndex = list !== null ? list.currentIndex : -1
-            if (list !== null) {
-                list.currentIndex = confirmedLibraryIndex(kind)
-            }
+            restoreLibrarySelection(kind, confirmedLibrarySelection(kind))
             dirtyLibrarySelectionDialog.open()
             return
         }
         pendingLibrarySelectionKind = kind
         pendingLibrarySelectionArguments = selectionArguments
-        pendingLibrarySelectionIndex = list !== null ? list.currentIndex : -1
         performPendingLibrarySelection()
+    }
+
+    Component.onCompleted: {
+        confirmedMaterialSelection = selectionArgumentsAt("material", 0)
+        confirmedRevisionSelection = selectionArgumentsAt("revision", 0)
     }
 
     QtObject {
@@ -1002,7 +1039,6 @@ Page {
                     onClicked: {
                         materialStudioPage.pendingLibrarySelectionKind = ""
                         materialStudioPage.pendingLibrarySelectionArguments = []
-                        materialStudioPage.pendingLibrarySelectionIndex = -1
                         dirtyLibrarySelectionDialog.close()
                     }
                 }

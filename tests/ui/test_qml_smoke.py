@@ -67,13 +67,15 @@ class RecordingMaterialStudioController(QObject):
         str, lambda self: self._status_message, notify=statusMessageChanged
     )
 
-    @Slot(str, str, str)
-    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None:
+    @Slot(str, str, str, result=bool)
+    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
         self.selected_materials.append((manufacturer, name, grade))
+        return True
 
-    @Slot(str)
-    def selectRevision(self, revision_id: str) -> None:
+    @Slot(str, result=bool)
+    def selectRevision(self, revision_id: str) -> bool:
         self.selected_revisions.append(revision_id)
+        return True
 
     @Slot(result=bool)
     def discardChanges(self) -> bool:

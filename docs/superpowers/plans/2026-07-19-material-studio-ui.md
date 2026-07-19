@@ -613,10 +613,10 @@ directly to the destination file.
 - Produces slots:
 
 ```python
-@Slot(str, str, str)
-def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None: ...
-@Slot(str)
-def selectRevision(self, revision_id: str) -> None: ...
+@Slot(str, str, str, result=bool)
+def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool: ...
+@Slot(str, result=bool)
+def selectRevision(self, revision_id: str) -> bool: ...
 @Slot(str, str)
 def downloadTemplate(self, file_format: str, destination_url: str) -> None: ...
 @Slot(str)
@@ -809,6 +809,11 @@ that changing image-series metadata through table replacement would silently
 discard extraction semantics, while reconstructing a one-series image session
 could discard sibling series. Task 8 therefore adds one focused immutable image
 series replacement service.
+
+The library-selection slots return `True` only after a successful controller
+selection. Material Studio uses that result with the stable material tuple or
+revision ID to resolve the highlighted row from a refreshed/reordered model;
+failed selection restores the previously confirmed identity.
 
 **Interfaces:**
 - Adds controller slots for crop/calibration/point edits:

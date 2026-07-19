@@ -149,6 +149,8 @@ class WorkflowController(QObject):
             },
         ]
         self.save_succeeds = True
+        self.reorder_on_save = False
+        self.selection_succeeds = True
         self.can_save = True
         self.can_review = True
         self.can_approve = True
@@ -263,6 +265,10 @@ class WorkflowController(QObject):
     def saveDraft(self) -> None:
         self.calls.append(("saveDraft",))
         if self.save_succeeds:
+            if self.reorder_on_save:
+                self._materials = self._materials[1:] + self._materials[:1]
+                self._revisions = self._revisions[1:] + self._revisions[:1]
+                self.libraryChanged.emit()
             self.set_dirty(False)
 
     @Slot(str)
@@ -311,13 +317,15 @@ class WorkflowController(QObject):
     def selectSeries(self, series_id: str) -> None:
         self.calls.append(("selectSeries", series_id))
 
-    @Slot(str, str, str)
-    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None:
+    @Slot(str, str, str, result=bool)
+    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
         self.calls.append(("selectMaterial", manufacturer, name, grade))
+        return self.selection_succeeds
 
-    @Slot(str)
-    def selectRevision(self, revision_id: str) -> None:
+    @Slot(str, result=bool)
+    def selectRevision(self, revision_id: str) -> bool:
         self.calls.append(("selectRevision", revision_id))
+        return self.selection_succeeds
 
     @Slot(str, str)
     def invalidateEditorInput(self, group: str, message: str) -> None:
@@ -812,6 +820,39 @@ def test_real_controller_preserves_malformed_calibration_across_sibling_edits() 
 
 
 @pytest.mark.ui
+def test_real_controller_resolves_invalid_groups_without_erasing_sibling_text() -> None:
+    controller, app, engine, root = _real_image_root()
+    crop_width = root.findChild(QObject, "cropWidthField")
+    frequency = root.findChild(QObject, "frequencyConditionField")
+    apply_metadata = root.findChild(QObject, "applySeriesMetadataButton")
+    apply_crop = root.findChild(QObject, "applyCropButton")
+
+    _replace_field_text(root, crop_width, "x")
+    _replace_field_text(root, frequency, "10khz")
+    app.processEvents()
+    assert controller.canSave is False
+
+    _replace_field_text(root, frequency, "10")
+    _press(apply_metadata)
+    app.processEvents()
+
+    assert crop_width.property("text") == "x"
+    assert frequency.property("text") == "10"
+    assert controller.imageEditing["metadata"]["frequencyHz"] == 10.0
+    assert controller.canSave is False
+    controller.saveDraft()
+    assert controller.dirty is True
+
+    _replace_field_text(root, crop_width, "12")
+    _press(apply_crop)
+    app.processEvents()
+
+    assert crop_width.property("text") == "12"
+    assert controller.canSave is True
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
 def test_crop_and_both_axis_anchor_controls_forward_explicit_values() -> None:
     controller = WorkflowController()
     app, engine, root = _root(controller)
@@ -1017,4 +1058,62 @@ def test_dirty_library_selection_save_discard_cancel_transaction(
     assert controller.calls[-2:] == [("discardChanges",), selection_call]
     assert dialog.property("visible") is False
     assert selection_list.property("currentIndex") == 1
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize("selection_kind", ["material", "revision"])
+@pytest.mark.parametrize("selection_succeeds", [True, False])
+def test_dirty_library_selection_resolves_identity_after_save_reorders_model(
+    selection_kind: str,
+    selection_succeeds: bool,
+) -> None:
+    controller = WorkflowController()
+    controller._materials.append(  # noqa: SLF001 - controlled QML model fake
+        {"manufacturer": "Third", "name": "Ferrite", "grade": "N49"}
+    )
+    controller._revisions.append(  # noqa: SLF001 - controlled QML model fake
+        {
+            "revisionId": "333333333333",
+            "status": "reviewed",
+            "createdAt": "2026-07-19T12:00:00+00:00",
+            "reviewedBy": "reviewer@example.com",
+            "approvedBy": "",
+            "seriesCount": 1,
+            "validationErrors": 0,
+            "validationWarnings": 0,
+            "isLatestApproved": False,
+        }
+    )
+    controller.reorder_on_save = True
+    controller.selection_succeeds = selection_succeeds
+    app, engine, root = _root(controller)
+    material_list = root.findChild(QQuickItem, "materialList")
+    revision_list = root.findChild(QQuickItem, "revisionList")
+    selection_list = material_list if selection_kind == "material" else revision_list
+    assert selection_list is not None
+
+    controller.set_dirty(True)
+    selection_list.setProperty("currentIndex", 1)
+    selection_list.forceActiveFocus()
+    QTest.keyClick(root, Qt.Key.Key_Return)
+    app.processEvents()
+    _press(root.findChild(QObject, "dirtyLibrarySelectionSaveButton"))
+    app.processEvents()
+
+    current_index = selection_list.property("currentIndex")
+    if selection_kind == "material":
+        current = controller.materials[current_index]
+        expected = (
+            {"manufacturer": "Other", "name": "Ferrite", "grade": "N97"}
+            if selection_succeeds
+            else {"manufacturer": "Example", "name": "Ferrite", "grade": "N87"}
+        )
+    else:
+        current = controller.revisions[current_index]
+        expected = {
+            "revisionId": "222222222222" if selection_succeeds else "111111111111"
+        }
+    assert all(current[key] == value for key, value in expected.items())
+    assert root.findChild(QObject, "dirtyLibrarySelectionDialog").property("visible") is False
     assert engine.rootObjects()

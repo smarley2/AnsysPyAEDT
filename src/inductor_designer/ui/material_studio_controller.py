@@ -529,6 +529,8 @@ class MaterialStudioController(QObject):
         revisions: list[dict[str, object]] | None = None,
         source_state: tuple[dict[str, object], bytes | None, str, int | None]
         | None = None,
+        pending_editor_groups: set[str] | None = None,
+        notify_source: bool = True,
     ) -> None:
         record = session.record
         self._sync_editor_from_record(record)
@@ -565,8 +567,8 @@ class MaterialStudioController(QObject):
         self._points = points
         self._issues = issue_values
         self._fit = fit_value
-        self._invalid_editor_groups.clear()
-        self._editor_valid = True
+        self._invalid_editor_groups = set(pending_editor_groups or ())
+        self._editor_valid = not self._invalid_editor_groups
         if materials is not None:
             self._materials = materials
         if revisions is not None:
@@ -587,7 +589,8 @@ class MaterialStudioController(QObject):
         if materials is not None or revisions is not None:
             self.libraryChanged.emit()
         self.selectionChanged.emit()
-        self.sourceChanged.emit()
+        if notify_source:
+            self.sourceChanged.emit()
 
     def _finish_persisted_session(
         self,
@@ -681,9 +684,12 @@ class MaterialStudioController(QObject):
             provenance.page,
         )
 
-    @Slot(str, str, str)
-    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> None:
+    @Slot(str, str, str, result=bool)
+    def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
+        selected = False
+
         def action() -> None:
+            nonlocal selected
             if self._reject_dirty_library_selection():
                 return
             ref = MaterialRef(manufacturer, name, grade)
@@ -697,12 +703,17 @@ class MaterialStudioController(QObject):
             self.libraryChanged.emit()
             self._set_status("")
             self._set_clean_state()
+            selected = True
 
         self._run_action(action)
+        return selected
 
-    @Slot(str)
-    def selectRevision(self, revision_id: str) -> None:
+    @Slot(str, result=bool)
+    def selectRevision(self, revision_id: str) -> bool:
+        selected = False
+
         def action() -> None:
+            nonlocal selected
             if self._reject_dirty_library_selection():
                 return
             if self._selected_ref is None:
@@ -731,8 +742,10 @@ class MaterialStudioController(QObject):
             )
             self._set_status("")
             self._set_clean_state()
+            selected = True
 
         self._run_action(action)
+        return selected
 
     @Slot(str)
     def selectSeries(self, series_id: str) -> None:
@@ -1001,22 +1014,30 @@ class MaterialStudioController(QObject):
         pending_groups = set(self._invalid_editor_groups)
         try:
             mutation()
-            self._emit_editor_change()
             updated = replacement()
+            remaining_groups = pending_groups - {resolved_group}
             if updated is not None:
                 self._set_session(
                     updated,
                     dirty=True,
                     saved=False,
                     clear_source=False,
+                    pending_editor_groups=remaining_groups,
+                    notify_source=not (remaining_groups - {"source"}),
                 )
-            self._invalid_editor_groups = pending_groups - {resolved_group}
+            else:
+                self._invalid_editor_groups = remaining_groups
+                self._editor_valid = not remaining_groups
+                self._emit_editor_change()
+            self._invalid_editor_groups = remaining_groups
             self._editor_valid = not self._invalid_editor_groups
             self._set_status(success_message)
         except _KNOWN_ACTION_ERRORS as error:
             _LOGGER.exception("Material Studio editor mutation failed")
             self._invalid_editor_groups = pending_groups or {resolved_group}
             self._editor_valid = False
+            if not (pending_groups - {resolved_group, "source"}):
+                self._emit_editor_change()
             self._set_status(str(error))
         self.selectionChanged.emit()
 
