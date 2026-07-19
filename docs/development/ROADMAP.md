@@ -332,31 +332,48 @@ export, and new-draft reimport are implemented. They accept retained datasheet
 units including `A/m`, `Oe`, and `mW/cm3` while normalizing points to canonical
 SI units. The end-to-end integration test covers template import,
 review/approval, overlay persistence, replay, export, edit, and immutable-base
-reimport. M5b still owns the Material Studio download/upload buttons, revision
-browser, condition selection, review, and approval UI.
+reimport.
 
 Automated evidence covers fresh overlay save/load/replay, tampered record and
 source failures, schema v3 snapshot propagation, and recording-fake Maxwell 3D
 and FEMM manifests with a pinned revision and nonzero B-H point count. Full
-non-live quality evidence is recorded in the Task 13 handoff commit.
+M5a non-live quality evidence is recorded in the Task 13 handoff commit.
+
+M5b Tasks 1-9 are implemented as of 2026-07-19, with their focused automated
+and non-live gates passing. Material Studio now downloads CSV/XLSX templates,
+exports any selected revision as editable XLSX, reimports edits as a distinct
+draft, imports PNG/JPEG or one PDF page for manual crop/axis/point digitization,
+shows validation and fit results, lists every lifecycle revision, and performs
+explicit draft/review/approve transitions. The latest approved badge is advisory
+only. Project schema v4 migrates v3 selections with `bhSeriesId: null`, and the
+user must explicitly pin one approved revision and B-H series when multiple
+series exist. Recording Maxwell 2D/3D and FEMM exports consume only that pinned
+snapshot and series.
+
+M5b is **implementation ready but pending acceptance evidence**, not complete:
+the whole-change review, fresh complete suite/static gates, and native Windows
+manual UI acceptance have not yet been recorded. This computer cannot provide
+the required native Windows/high-DPI/FileDialog and manual Excel-compatible
+workbook evidence. It also has no live Ansys AEDT or FEMM material-validation
+run for this milestone.
 
 Remaining acceptance work and risks:
 
 - Import, review, and approve a real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
 - Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.
 - Confirm source licensing and redistribution rights before committing real datasheet bytes.
-- Resolve multiple B-H condition selection in M5b; M5a deliberately blocks ambiguous records.
-- Keep revision choice explicit: M5b must list all revisions, may suggest the latest approved one, and must persist the chosen revision. Export must never silently select latest.
+- Run and close the M5b whole-change review and fresh complete non-live gates.
+- On Windows, manually verify keyboard/focus, scaling, PNG/JPEG/PDF rendering,
+  file dialogs, template download, Excel-compatible workbook edit/reimport, all
+  revisions, lifecycle actions, and explicit B-H selection.
 
-M5b implementation does not need to wait for the live solver checks: its UI can
-be built against the stable, automated M5a services. The real-record import and
-`MATCH` reproduction should happen before or early in M5b so any workflow issue
-can still shape the UI. Live AEDT/FEMM handoff may proceed in parallel, but it
-remains a hard gate for accepting either milestone and for making live-solver
-claims. Source licensing must be confirmed before real datasheet bytes are
-committed or redistributed.
+The completed M5b implementation work did not need live solver checks because it
+uses the stable, automated M5a services. The real-record import and `MATCH`
+reproduction plus live AEDT/FEMM handoff remain hard gates for formally accepting
+either milestone and for making live-solver claims. Source licensing must be
+confirmed before real datasheet bytes are committed or redistributed.
 
-The approved M5b scope is the Guided Studio manual/spreadsheet workflow:
+The implemented M5b scope is the Guided Studio manual/spreadsheet workflow:
 download CSV/XLSX templates, export any selected revision to editable XLSX,
 reimport edits as a new draft, manually digitize PNG/JPEG/PDF sources, browse all
 revisions, perform review/approval, and pin one exact approved revision and B-H

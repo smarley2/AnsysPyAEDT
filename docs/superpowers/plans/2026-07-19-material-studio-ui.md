@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Approved 2026-07-19; implementation pending.
+**Status:** Tasks 1-9 implemented with focused automated/non-live gates passing; Task 10 whole review, fresh complete gates, native Windows manual acceptance, merge, and push pending.
 
 **Approved specification:** `docs/superpowers/specs/2026-07-19-material-studio-ui-design.md`
 
@@ -100,7 +100,7 @@ def list_material_revision_summaries(
 ) -> tuple[MaterialRevisionSummary, ...]: ...
 ```
 
-- [ ] **Step 1: Add failing repository contract tests**
+- [x] **Step 1: Add failing repository contract tests**
 
 Save two distinct identities and one sanitized alias. Assert identities are
 returned once, ordered by `(manufacturer.casefold(), name.casefold(),
@@ -113,14 +113,14 @@ assert repository.list_materials() == (
 )
 ```
 
-- [ ] **Step 2: Run the contract RED**
+- [x] **Step 2: Run the contract RED**
 
 Run: `.venv/bin/python -m pytest tests/contract/test_material_repository_contract.py -q`
 
 Expected: FAIL because `MaterialRepository` implementations do not expose
 `list_materials`.
 
-- [ ] **Step 3: Implement deterministic identity discovery**
+- [x] **Step 3: Implement deterministic identity discovery**
 
 The file adapter must read verified `record.json` files, reject two different
 identities with the same sanitized/case-folded physical path, de-duplicate exact
@@ -137,14 +137,14 @@ def list_materials(self) -> tuple[MaterialRef, ...]:
     return tuple(sorted(discovered_refs, key=_material_sort_key))
 ```
 
-- [ ] **Step 4: Add revision-summary RED tests**
+- [x] **Step 4: Add revision-summary RED tests**
 
 Create draft, reviewed and approved revisions with different timestamps and one
 validation warning. Assert newest-first ordering, exact status/actor/count fields,
 and exactly one `is_latest_approved=True`. Assert calling the service does not
 change repository content or choose a revision.
 
-- [ ] **Step 5: Implement the pure summary service**
+- [x] **Step 5: Implement the pure summary service**
 
 Count `IssueSeverity.ERROR` and `IssueSeverity.WARNING` from `validate_record`.
 Use parsed timestamps plus revision ID as the ordering key; do not sort ISO text
@@ -156,7 +156,7 @@ summaries = tuple(_summary(repository.get(ref, revision), latest) for revision i
 return tuple(sorted(summaries, key=_summary_time_key, reverse=True))
 ```
 
-- [ ] **Step 6: Run Task 1 gates and commit**
+- [x] **Step 6: Run Task 1 gates and commit**
 
 ```console
 .venv/bin/python -m pytest tests/contract/test_material_repository_contract.py tests/unit/application/test_material_library.py -q
@@ -207,7 +207,7 @@ def pin_material_revision(
 ) -> InductorProject: ...
 ```
 
-- [ ] **Step 1: Write schema/domain RED tests**
+- [x] **Step 1: Write schema/domain RED tests**
 
 Assert v4 requires `bhSeriesId` as a string or null, v3 migrates by adding null,
 and a v4 save/load round trip preserves an explicit ID. Domain tests require a
@@ -215,13 +215,13 @@ present ID to name a `BH_CURVE`, reject loss/unknown IDs, and permit null for
 zero/one B-H series and migrated multi-series records so export can issue the
 actionable block.
 
-- [ ] **Step 2: Run schema/domain RED**
+- [x] **Step 2: Run schema/domain RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/domain/test_project.py tests/unit/adapters/persistence/test_schema_repository.py tests/unit/adapters/persistence/test_project_repository.py -q`
 
 Expected: FAIL because schema v4 and `bh_series_id` do not exist.
 
-- [ ] **Step 3: Implement schema v4 and migration**
+- [x] **Step 3: Implement schema v4 and migration**
 
 Set `LATEST_PROJECT_SCHEMA_VERSION = 4`, add `_migrate_v3_to_v4`, emit
 `schemaVersion: 4`, and serialize every material with `bhSeriesId`. Migration
@@ -241,14 +241,14 @@ def _migrate_v3_to_v4(document: dict[str, object]) -> dict[str, object]:
 Validate mapping types before spreading; malformed v3 documents must fail their
 v3 schema before migration.
 
-- [ ] **Step 4: Write explicit pinning RED tests**
+- [x] **Step 4: Write explicit pinning RED tests**
 
 Assert only approved records are pinnable; multiple B-H series require an ID;
 zero/one series accept null; explicit IDs are persisted; pinning replaces the
 same `MaterialRef` while preserving unrelated selections; and neither
 `latest_approved` nor repository access occurs.
 
-- [ ] **Step 5: Implement `pin_material_revision`**
+- [x] **Step 5: Implement `pin_material_revision`**
 
 Return `replace(project, materials=...)`. Reject blank/unknown/wrong-kind IDs and
 validation-error records through `MaterialSelectionError.issues`. Snapshot the
@@ -260,7 +260,7 @@ kept = tuple(item for item in project.materials if item.ref != record.ref)
 return replace(project, materials=(*kept, selection))
 ```
 
-- [ ] **Step 6: Run Task 2 gates and commit**
+- [x] **Step 6: Run Task 2 gates and commit**
 
 ```console
 .venv/bin/python -m pytest tests/unit/domain/test_project.py tests/unit/adapters/persistence/test_schema_repository.py tests/unit/adapters/persistence/test_project_repository.py tests/unit/application/test_material_selection.py -q
@@ -306,20 +306,20 @@ def material_spec_from_material_record(
 ) -> MaterialSpec: ...
 ```
 
-- [ ] **Step 1: Write selected-series RED tests**
+- [x] **Step 1: Write selected-series RED tests**
 
 Build an approved record with `bh-25c` and `bh-100c`. Assert selecting `bh-100c`
 exports only its converted `(B, H)` pairs, records `bh_series_id`, and leaves the
 record unchanged. Assert null blocks multiple series and unknown/loss IDs fail
 with actionable `PlanBuildError` messages.
 
-- [ ] **Step 2: Run solver-plan RED**
+- [x] **Step 2: Run solver-plan RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/simulation/test_maxwell_plan.py tests/unit/simulation/test_plan_builder.py tests/unit/simulation/test_plan_builder2d.py -q`
 
 Expected: FAIL because the material helper cannot receive a selected ID.
 
-- [ ] **Step 3: Thread the selected ID through both plan builders**
+- [x] **Step 3: Thread the selected ID through both plan builders**
 
 Add a keyword-only `material_bh_series_id: str | None = None` beside
 `material_record` in both builders. Forward it only to
@@ -336,7 +336,7 @@ material = (
 )
 ```
 
-- [ ] **Step 4: Write export/manifest RED tests**
+- [x] **Step 4: Write export/manifest RED tests**
 
 Assert `_selected_material` returns the full `MaterialRevisionSelection`, all
 three backends receive its record and ID, and AEDT/FEMM manifests include both:
@@ -346,7 +346,7 @@ assert manifest["coreMaterial"]["materialRevision"] == revision_id
 assert manifest["coreMaterial"]["bhSeriesId"] == "bh-100c"
 ```
 
-- [ ] **Step 5: Implement export selection and manifest fields**
+- [x] **Step 5: Implement export selection and manifest fields**
 
 Rename the private helper to `_selected_material_selection`. Preserve the
 multiple-revision block. Add `bhSeriesId` to `_core_material_block`; the FEMM
@@ -358,7 +358,7 @@ record = selection.snapshot if selection is not None else None
 series_id = selection.bh_series_id if selection is not None else None
 ```
 
-- [ ] **Step 6: Run Task 3 gates and commit**
+- [x] **Step 6: Run Task 3 gates and commit**
 
 ```console
 .venv/bin/python -m pytest tests/unit/simulation/test_maxwell_plan.py tests/unit/simulation/test_plan_builder.py tests/unit/simulation/test_plan_builder2d.py tests/unit/application/test_maxwell_export.py tests/integration/test_material_reproducibility.py -q
@@ -410,7 +410,7 @@ def review_material_session(repository: MaterialRepository, session: MaterialDra
 def approve_material_session(repository: MaterialRepository, session: MaterialDraftSession, approver: str) -> MaterialDraftSession: ...
 ```
 
-- [ ] **Step 1: Write upload/clone RED tests**
+- [x] **Step 1: Write upload/clone RED tests**
 
 Assert upload wraps the existing imported draft and exact source files. Cloning
 a reviewed/approved record clears lifecycle actors, records
@@ -418,13 +418,13 @@ a reviewed/approved record clears lifecycle actors, records
 controller until an edit marks the session dirty. Repository immutability still
 rejects any attempted overwrite of the approved base.
 
-- [ ] **Step 2: Run upload/clone RED**
+- [x] **Step 2: Run upload/clone RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/application/test_material_drafts.py -q`
 
 Expected: collection FAIL because `material_drafts` does not exist.
 
-- [ ] **Step 3: Implement session construction**
+- [x] **Step 3: Implement session construction**
 
 Use `repository.source_bytes` for cloning. `replace` is permitted only to create
 the transient, unsaved lifecycle-reset clone because it has no content changes;
@@ -438,7 +438,7 @@ draft = replace(stored, status=MaterialStatus.DRAFT, reviewed_by=None, approved_
 return MaterialDraftSession(draft, tuple(repository.source_bytes(ref, revision_id).items()), revision_id)
 ```
 
-- [ ] **Step 4: Write table-edit and lifecycle RED tests**
+- [x] **Step 4: Write table-edit and lifecycle RED tests**
 
 Replace or rename one B-H or loss series using canonical edited points. Assert retained
 units are reconstructed through `from_canonical`, deterministic
@@ -446,7 +446,7 @@ units are reconstructed through `from_canonical`, deterministic
 as supplemental provenance, fit/revision change, base is unchanged, and failed
 save/review/approval leaves repository/session unchanged.
 
-- [ ] **Step 5: Implement table replacement and lifecycle coordination**
+- [x] **Step 5: Implement table replacement and lifecycle coordination**
 
 Render retained-unit `x,y\n` text, pass it through `import_curve_csv`, replace
 only `target_series_id` and its generated provenance/source file, and rebuild the
@@ -464,7 +464,7 @@ replacement = import_curve_csv(source_text, series_id=series_id, kind=kind,
                                conditions=conditions, source=provenance)
 ```
 
-- [ ] **Step 6: Run Task 4 gates and commit**
+- [x] **Step 6: Run Task 4 gates and commit**
 
 ```console
 .venv/bin/python -m pytest tests/unit/application/test_material_drafts.py tests/unit/application/test_material_import.py tests/unit/adapters/test_material_table_file.py -q
@@ -523,20 +523,20 @@ class RenderedMaterialSource:
 def render_material_source(filename: str, data: bytes, *, page_index: int = 0) -> RenderedMaterialSource: ...
 ```
 
-- [ ] **Step 1: Write image-draft RED tests**
+- [x] **Step 1: Write image-draft RED tests**
 
 Use a two-point linear extraction and a log-axis case. Assert extracted raw
 coordinates are canonicalized with existing units, the `IMAGE` provenance hashes
 the original bytes, the extraction is stored, replay matches, and moving a pixel
 point creates a new draft revision while retaining source bytes.
 
-- [ ] **Step 2: Run image-draft RED**
+- [x] **Step 2: Run image-draft RED**
 
 Run: `.venv/bin/python -m pytest tests/unit/application/test_material_drafts.py -q -k image`
 
 Expected: FAIL because the image session functions do not exist.
 
-- [ ] **Step 3: Implement pure image draft construction**
+- [x] **Step 3: Implement pure image draft construction**
 
 Call `extract_points`, then `canonicalize_points`; construct `PointSeries` with
 the `ExtractionRecord` and the original image/PDF source filename. Rebuild edits
@@ -551,7 +551,7 @@ series = PointSeries(input_data.series_id, input_data.kind,
                      input_data.source_filename, input_data.extraction)
 ```
 
-- [ ] **Step 4: Write source-renderer RED tests**
+- [x] **Step 4: Write source-renderer RED tests**
 
 Under `@pytest.mark.ui`, assert a synthetic, repository-owned PNG fixture and an
 in-memory JPEG render to PNG bytes at original dimensions. Build a two-page PDF
@@ -559,7 +559,7 @@ inside the test with `QPdfWriter`; assert `page_count == 2` and the requested pa
 renders. Invalid/empty/out-of-range inputs raise `MaterialSourceError`, and no
 OCR/text extraction API is called.
 
-- [ ] **Step 5: Implement Qt image/PDF rendering**
+- [x] **Step 5: Implement Qt image/PDF rendering**
 
 Use `QImage.fromData` for raster sources and `QPdfDocument` for PDF. Keep the
 `QBuffer` that owns PDF source bytes alive until synchronous rendering completes,
@@ -575,7 +575,7 @@ png_data = _image_to_png(image)
 return RenderedMaterialSource(png_data, image.width(), image.height(), page_count, page_index)
 ```
 
-- [ ] **Step 6: Run Task 5 gates and commit**
+- [x] **Step 6: Run Task 5 gates and commit**
 
 ```console
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/unit/application/test_material_drafts.py tests/ui/test_material_source.py -q
@@ -637,20 +637,20 @@ def approveRevision(self, approver: str) -> None: ...
 def useInProject(self, bh_series_id: str) -> None: ...
 ```
 
-- [ ] **Step 1: Write controller library/lifecycle RED tests**
+- [x] **Step 1: Write controller library/lifecycle RED tests**
 
 Instantiate the controller with an in-memory repository and project callback.
 Assert identity/revision refresh, latest-approved badge without selection,
 selected record details, correct action flags, nonblank actor requirements,
 successful save/review/approve refresh, and error messages without state loss.
 
-- [ ] **Step 2: Run controller RED**
+- [x] **Step 2: Run controller RED**
 
 Run: `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py -q`
 
 Expected: collection FAIL because the controller does not exist.
 
-- [ ] **Step 3: Implement controller state and lifecycle slots**
+- [x] **Step 3: Implement controller state and lifecycle slots**
 
 Follow `GenerationController` property/signal style but keep Material Studio
 operations synchronous and small. Catch only expected `ValueError`,
@@ -666,7 +666,7 @@ def _run_action(self, action: Callable[[], None]) -> None:
         self._set_status(str(error))
 ```
 
-- [ ] **Step 4: Write file/project workflow RED tests**
+- [x] **Step 4: Write file/project workflow RED tests**
 
 Use `QTemporaryDir`/`tmp_path` URLs. Assert template and selected-revision
 downloads write exact bytes only after a destination is supplied; uploads create
@@ -674,7 +674,7 @@ drafts; image/PDF page import exposes a PNG data URL and original dimensions;
 multi-B-H project use requires an ID; pinning invokes the project callback once;
 and cancelled/invalid paths write nothing.
 
-- [ ] **Step 5: Implement file/project slots and `create_engine` wiring**
+- [x] **Step 5: Implement file/project slots and `create_engine` wiring**
 
 Convert only local `file:` URLs with `QUrl.toLocalFile`. Perform all source reads
 before mutating controller state. Inject `materialStudioController` into QML;
@@ -688,7 +688,7 @@ session = session_from_upload(path.name, data, created_at=self._now())
 self._set_session(session)
 ```
 
-- [ ] **Step 6: Run Task 6 gates and commit**
+- [x] **Step 6: Run Task 6 gates and commit**
 
 ```console
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_qml_smoke.py tests/unit/adapters/persistence/test_project_repository.py -q
@@ -717,19 +717,19 @@ git commit -m "feat(ui): expose Material Studio controller"
   `materialStudioPage`, `materialLibraryPane`, `revisionList`,
   `validationIssueList`, and `materialStatusText` for stable UI tests.
 
-- [ ] **Step 1: Write QML shell RED tests**
+- [x] **Step 1: Write QML shell RED tests**
 
 Load QML offscreen with a recording controller. Find the object names, select
 `Materials`, assert `MaterialStudioPage.visible`, and return to another step.
 Assert no second window is created and the controller is not re-instantiated.
 
-- [ ] **Step 2: Run QML shell RED**
+- [x] **Step 2: Run QML shell RED**
 
 Run: `QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_qml_smoke.py -q`
 
 Expected: FAIL because the named Guided Studio controls/components are absent.
 
-- [ ] **Step 3: Implement navigation and page composition**
+- [x] **Step 3: Implement navigation and page composition**
 
 Replace static step labels with a keyboard-navigable `ListView` and
 `StackLayout`. Keep Preview as the default non-Materials content. Compose the
@@ -748,14 +748,14 @@ StackLayout {
 }
 ```
 
-- [ ] **Step 4: Add library/accessibility RED tests**
+- [x] **Step 4: Add library/accessibility RED tests**
 
 Feed three revisions and assert all appear with revision ID, textual status,
 actors, timestamp, issue counts, and a non-color `Suggested latest approved`
 label on only one entry. Verify accessible names, Tab focus order, and that
 clicking the badge alone does not call `selectRevision`.
 
-- [ ] **Step 5: Implement library and validation panes**
+- [x] **Step 5: Implement library and validation panes**
 
 Use controller lists as read-only models. Selection occurs only through the
 revision row action. Group validation entries by textual severity and expose fit
@@ -769,7 +769,7 @@ Button {
 }
 ```
 
-- [ ] **Step 6: Run Task 7 gates and commit**
+- [x] **Step 6: Run Task 7 gates and commit**
 
 ```console
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_qml_smoke.py tests/ui/test_material_studio_controller.py -q
@@ -865,20 +865,20 @@ transformation rather than performing it silently.
 every sibling series plus all source provenance/bytes, supports a validated
 series-ID rename, and rebuilds through `new_draft_record`.
 
-- [ ] **Step 1: Write controller edit-coordinate RED tests**
+- [x] **Step 1: Write controller edit-coordinate RED tests**
 
 Assert QML display coordinates are converted through current source scale and
 offset to original pixels; zoom/resize changes do not alter stored points. Assert
 linear/log calibration, add/move/delete, numeric point edits, metadata/unit
 changes, validation refresh, dirty state, and Save/Discard/Cancel behavior.
 
-- [ ] **Step 2: Run controller edit RED**
+- [x] **Step 2: Run controller edit RED**
 
 Run: `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py -q -k edit`
 
 Expected: FAIL because edit slots/state do not exist.
 
-- [ ] **Step 3: Implement edit slots through Task 4/5 services**
+- [x] **Step 3: Implement edit slots through Task 4/5 services**
 
 The controller builds immutable `CropRegion`, `AxisCalibration`, `PixelPoint`,
 and `CurveConditions` values, then calls service replacements. It must not
@@ -892,7 +892,7 @@ updated = replace_image_extraction(self._session, self._series_id, extraction)
 self._set_session(updated, dirty=True)
 ```
 
-- [ ] **Step 4: Write QML workflow RED tests**
+- [x] **Step 4: Write QML workflow RED tests**
 
 Exercise with offscreen mouse/keyboard events: template download format choice,
 table upload, revision export/reimport, image page selection, crop handles, two
@@ -900,7 +900,7 @@ axis anchors, point add/move/delete, series/condition controls, Save, Review,
 Approve, explicit B-H selection, Use in Project, and dirty navigation dialog.
 Assert action enablement matches the spec and all buttons have accessible names.
 
-- [ ] **Step 5: Implement source view, curve editor and lifecycle controls**
+- [x] **Step 5: Implement source view, curve editor and lifecycle controls**
 
 `MaterialSourceView` uses an `Image` with overlay coordinates expressed in
 original-pixel space via explicit scale/offset properties. `MaterialCurveEditor`
@@ -914,7 +914,7 @@ function originalY(displayY) { return (displayY - sourceOffsetY) / sourceScale }
 TapHandler { onTapped: controller.addPixelPoint(originalX(point.position.x), originalY(point.position.y)) }
 ```
 
-- [ ] **Step 6: Run Task 8 gates and commit**
+- [x] **Step 6: Run Task 8 gates and commit**
 
 ```console
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/ui/test_material_studio_controller.py tests/ui/test_material_studio_workflow.py tests/ui/test_qml_smoke.py tests/unit/application/test_material_drafts.py -q
@@ -946,7 +946,7 @@ fixture to v4 would remove the migration evidence and regress its focused test.
   fakes.
 - Produces the automated M5b implementation exit evidence; no new production API.
 
-- [ ] **Step 1: Write the end-to-end spreadsheet RED test**
+- [x] **Step 1: Write the end-to-end spreadsheet RED test**
 
 Through `MaterialStudioController` and a real temporary
 `FileOverlayMaterialRepository`: download/import XLSX, save/review/approve,
@@ -955,26 +955,26 @@ approve the edited revision, explicitly choose a B-H series, save/reload schema
 v4, and generate recording-fake Maxwell 3D/FEMM manifests with exact revision and
 series ID.
 
-- [ ] **Step 2: Run spreadsheet exit RED**
+- [x] **Step 2: Run spreadsheet exit RED**
 
 Run: `QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/integration/test_material_studio_exit.py -q`
 
 Expected: FAIL on the first incomplete controller/UI-to-service contract; fix the
 owning Task 1–8 boundary without weakening the exit assertions.
 
-- [ ] **Step 3: Add the manual-image replay flow**
+- [x] **Step 3: Add the manual-image replay flow**
 
 Load `manual-bh.png`, set crop and axes, click points, save/review/approve, reload
 the overlay, and require `reproduce_record(...).matches`. Assert source SHA/page,
 pixel extraction, canonical points and revision are unchanged after reload.
 
-- [ ] **Step 4: Add negative exit cases**
+- [x] **Step 4: Add negative exit cases**
 
 Assert latest-approved suggestion never pins, reviewed/approved edits create a
 new draft, multiple B-H series without selection block project use/export, and a
 failed project save leaves the previous project file byte-identical.
 
-- [ ] **Step 5: Run Task 9 gates and commit**
+- [x] **Step 5: Run Task 9 gates and commit**
 
 ```console
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest tests/integration/test_material_studio_exit.py tests/integration/test_material_table_upload.py tests/integration/test_material_reproducibility.py -q
@@ -999,7 +999,7 @@ git commit -m "test: prove Material Studio workflow end to end"
 
 **Interfaces:** No new production interfaces.
 
-- [ ] **Step 1: Document the exact UI workflow**
+- [x] **Step 1: Document the exact UI workflow**
 
 Document template/current-revision downloads, table/image/PDF import, crop and
 axis calibration, manual point editing, conditions, validation/fit display,
