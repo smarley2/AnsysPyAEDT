@@ -932,7 +932,14 @@ git commit -m "feat(ui): complete Material Studio editing workflow"
 
 **Files:**
 - Create: `tests/integration/test_material_studio_exit.py`
-- Modify: `tests/fixtures/sample_geometry_project.inductor.json`
+- Modify: this plan to record the shared-fixture clarification
+
+Implementation clarification (2026-07-19):
+`tests/fixtures/sample_geometry_project.inductor.json` remains at schema v3
+because it is the shared v3-to-v4 migration regression input. The M5b schema v4
+exit is proven by loading that fixture and saving/reloading a temporary project
+through `MaterialStudioController` and `ProjectRepository`; changing the shared
+fixture to v4 would remove the migration evidence and regress its focused test.
 
 **Interfaces:**
 - Consumes: all Tasks 1–8 public interfaces and existing recording Maxwell/FEMM
@@ -975,7 +982,7 @@ QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software .venv/bin/python -m pytest te
 .venv/bin/python -m mypy src tools
 .venv/bin/python tools/check_architecture.py
 git diff --check
-git add tests/integration/test_material_studio_exit.py tests/fixtures/sample_geometry_project.inductor.json
+git add tests/integration/test_material_studio_exit.py docs/superpowers/plans/2026-07-19-material-studio-ui.md
 git commit -m "test: prove Material Studio workflow end to end"
 ```
 
