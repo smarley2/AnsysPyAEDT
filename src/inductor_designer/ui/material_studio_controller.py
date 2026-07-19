@@ -91,6 +91,7 @@ class MaterialStudioController(QObject):
     libraryChanged = Signal()
     selectionChanged = Signal()
     sourceChanged = Signal()
+    editorReset = Signal()
     dirtyChanged = Signal()
     statusMessageChanged = Signal()
 
@@ -557,6 +558,7 @@ class MaterialStudioController(QObject):
         self._set_dirty(False)
         self.selectionChanged.emit()
         self.sourceChanged.emit()
+        self.editorReset.emit()
 
     def _set_session(
         self,
@@ -715,6 +717,7 @@ class MaterialStudioController(QObject):
             else:
                 snapshots[series.series_id] = None
         self._source_point_snapshots = snapshots
+        self.editorReset.emit()
 
     @staticmethod
     def _atomic_write_bytes(destination: Path, data: bytes) -> None:
@@ -1072,6 +1075,7 @@ class MaterialStudioController(QObject):
             self._invalid_editor_groups = {"source"}
             self._editor_valid = False
             self._set_dirty(True)
+            self.editorReset.emit()
             self.sourceChanged.emit()
             self.selectionChanged.emit()
             self._set_status(f"Loaded {path.name}.")
@@ -1568,7 +1572,6 @@ class MaterialStudioController(QObject):
                 parsed_points.append(CurvePoint(x, y))
             if not parsed_points:
                 raise ValueError("A table series requires at least one point.")
-            self._mark_edit()
             updated = add_table_series(
                 draft,
                 series_id=series_id,
@@ -1583,6 +1586,7 @@ class MaterialStudioController(QObject):
                 points=tuple(parsed_points),
                 captured_at=self._now(),
             )
+            self._mark_edit()
             added = updated.record.series[-1]
             self._source_point_snapshots[added.series_id] = added.points
             self._set_session(updated, dirty=True, saved=False, clear_source=False)
@@ -1612,7 +1616,6 @@ class MaterialStudioController(QObject):
                 raise ValueError("Load or select an image/PDF source before adding a series.")
             source_filename = str(self._source.get("filename", ""))
             draft = self._draft_for_edit()
-            self._mark_edit()
             updated = add_image_series(
                 draft,
                 source_filename=source_filename,
@@ -1627,6 +1630,7 @@ class MaterialStudioController(QObject):
                 ),
                 extraction=self._current_extraction(),
             )
+            self._mark_edit()
             added = updated.record.series[-1]
             self._source_point_snapshots[added.series_id] = added.points
             self._active_series_id = added.series_id
@@ -1645,8 +1649,8 @@ class MaterialStudioController(QObject):
             nonlocal succeeded
             self._require_editor_valid()
             draft = self._draft_for_edit()
-            self._mark_edit()
             updated = remove_series(draft, series_id)
+            self._mark_edit()
             self._source_point_snapshots.pop(series_id, None)
             self._active_series_id = updated.record.series[0].series_id
             self._set_session(updated, dirty=True, saved=False, clear_source=False)
@@ -1662,6 +1666,7 @@ class MaterialStudioController(QObject):
             return True
         self._restore_clean_state()
         self._set_dirty(False)
+        self.editorReset.emit()
         self.libraryChanged.emit()
         self.selectionChanged.emit()
         self.sourceChanged.emit()

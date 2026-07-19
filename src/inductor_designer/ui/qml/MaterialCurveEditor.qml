@@ -103,6 +103,9 @@ Pane {
             Connections {
                 target: materialCurveEditor.controller
                 function onSelectionChanged() { curveCanvas.requestPaint() }
+                function onEditorReset() {
+                    materialCurveEditor.pendingCanonicalPoints = ({})
+                }
             }
         }
 

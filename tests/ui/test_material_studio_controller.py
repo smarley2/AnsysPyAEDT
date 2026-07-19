@@ -1411,3 +1411,69 @@ def test_source_and_current_points_and_fit_attribution_are_truthful(tmp_path: Pa
     controller.selectRevision(revision_id)
     assert controller.sourceComparisonAvailable is False
     assert controller.sourcePoints == []
+
+
+@pytest.mark.ui
+@pytest.mark.parametrize("status", ["draft", "reviewed", "approved"])
+@pytest.mark.parametrize("operation", ["add-table", "add-image", "remove-final"])
+def test_failed_series_management_is_atomic_for_every_lifecycle_base(
+    status: str,
+    operation: str,
+) -> None:
+    controller, _ = _controller(InMemoryMaterialRepository(), with_project=False)
+    _create_image_draft(controller)
+    controller.saveDraft()
+    if status in {"reviewed", "approved"}:
+        controller.reviewDraft("reviewer@example.com")
+    if status == "approved":
+        controller.approveRevision("approver@example.com")
+    snapshot = {
+        "selectedRevision": controller.selectedRevision,
+        "series": controller.series,
+        "points": controller.points,
+        "sourcePoints": controller.sourcePoints,
+        "source": controller.source,
+        "imageEditing": controller.imageEditing,
+        "dirty": controller.dirty,
+        "canSave": controller.canSave,
+        "canReview": controller.canReview,
+        "canApprove": controller.canApprove,
+    }
+
+    if operation == "add-table":
+        result = controller.addTableSeries(
+            "bh-manual",
+            "bh-curve",
+            "A/m",
+            "T",
+            float("nan"),
+            25.0,
+            float("nan"),
+            [{"x": 0.0, "y": 0.0}, {"x": 100.0, "y": 0.2}],
+        )
+    elif operation == "add-image":
+        result = controller.addImageSeries(
+            "bh-manual",
+            "bh-curve",
+            "A/m",
+            "T",
+            float("nan"),
+            25.0,
+            float("nan"),
+        )
+    else:
+        result = controller.removeSeries("bh-manual")
+
+    assert result is False
+    assert {
+        "selectedRevision": controller.selectedRevision,
+        "series": controller.series,
+        "points": controller.points,
+        "sourcePoints": controller.sourcePoints,
+        "source": controller.source,
+        "imageEditing": controller.imageEditing,
+        "dirty": controller.dirty,
+        "canSave": controller.canSave,
+        "canReview": controller.canReview,
+        "canApprove": controller.canApprove,
+    } == snapshot

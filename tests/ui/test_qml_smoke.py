@@ -18,6 +18,7 @@ class RecordingMaterialStudioController(QObject):
     libraryChanged = Signal()
     selectionChanged = Signal()
     sourceChanged = Signal()
+    editorReset = Signal()
     dirtyChanged = Signal()
     statusMessageChanged = Signal()
 

@@ -28,6 +28,10 @@ from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QGuiApplicati
 from PySide6.QtQuick import QQuickItem  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
+from inductor_designer.adapters.materials import (  # noqa: E402
+    import_material_file_as_draft,
+    material_import_template,
+)
 from inductor_designer.materials.records import MaterialRecord  # noqa: E402
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.material_source import render_material_source  # noqa: E402
@@ -54,6 +58,7 @@ class WorkflowController(QObject):
     libraryChanged = Signal()
     selectionChanged = Signal()
     sourceChanged = Signal()
+    editorReset = Signal()
     dirtyChanged = Signal()
     statusMessageChanged = Signal()
 
@@ -1550,4 +1555,79 @@ def test_source_current_comparison_and_fit_series_are_visible_and_accessible() -
     assert source.property("activeFocusOnTab") is True
     assert current.property("activeFocusOnTab") is True
     assert app is not None
+    assert engine.rootObjects()
+
+
+def _saved_table_controller_for_pending_point_test() -> MaterialStudioController:
+    repository = InMemoryMaterialRepository()
+    template = material_import_template("csv")
+    imported = import_material_file_as_draft(
+        template.filename,
+        template.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    repository.save(imported.record, dict(imported.source_files))
+    controller = MaterialStudioController(repository)
+    controller.selectMaterial(
+        imported.record.ref.manufacturer,
+        imported.record.ref.name,
+        imported.record.ref.grade,
+    )
+    controller.selectRevision(imported.record.revision_id)
+    return controller
+
+
+@pytest.mark.ui
+def test_discard_clears_pending_canonical_text_from_real_qml() -> None:
+    controller = _saved_table_controller_for_pending_point_test()
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    field = _accessible_object(root, "Point 1 canonical X value")
+    original = field.property("text")
+    field.setProperty("text", "999")
+    assert QMetaObject.invokeMethod(field, "textEdited")
+    app.processEvents()
+    assert controller.dirty is True
+
+    assert controller.discardChanges() is True
+    app.processEvents()
+    field = _accessible_object(root, "Point 1 canonical X value")
+    assert controller.dirty is False
+    assert field.property("text") == original
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_revision_replacement_never_reuses_same_key_pending_point_text() -> None:
+    repository = InMemoryMaterialRepository()
+    template = material_import_template("csv")
+    first = import_material_file_as_draft(
+        template.filename,
+        template.data,
+        created_at="2026-07-19T10:00:00+00:00",
+    )
+    second = import_material_file_as_draft(
+        template.filename,
+        template.data.replace(b"0.16", b"0.19"),
+        created_at="2026-07-19T11:00:00+00:00",
+    )
+    repository.save(first.record, dict(first.source_files))
+    repository.save(second.record, dict(second.source_files))
+    controller = MaterialStudioController(repository)
+    controller.selectMaterial(
+        first.record.ref.manufacturer,
+        first.record.ref.name,
+        first.record.ref.grade,
+    )
+    controller.selectRevision(first.record.revision_id)
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    field = _accessible_object(root, "Point 1 canonical X value")
+    field.setProperty("text", "999")
+    assert QMetaObject.invokeMethod(field, "textEdited")
+
+    assert controller.discardChanges() is True
+    assert controller.selectRevision(second.record.revision_id) is True
+    app.processEvents()
+    field = _accessible_object(root, "Point 1 canonical X value")
+    assert float(field.property("text")) == controller.points[0]["x"]
+    assert field.property("text") != "999"
     assert engine.rootObjects()
