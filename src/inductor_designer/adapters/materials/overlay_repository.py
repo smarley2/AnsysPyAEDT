@@ -176,8 +176,18 @@ class FileOverlayMaterialRepository:
     def list_materials(self) -> tuple[MaterialRef, ...]:
         discovered: dict[tuple[str, str, str], MaterialRef] = {}
         for path in self._root.glob("*/*/*/*/record.json"):
-            persisted = material_record_from_json(self._document(path))
-            record, _ = self._load_verified(persisted.ref, persisted.revision_id)
+            if any(part.startswith(".") for part in path.relative_to(self._root).parts[:-1]):
+                continue
+            record = material_record_from_json(self._document(path))
+            revision_directory = path.parent
+            if revision_directory != self._revision_directory(
+                record.ref, record.revision_id
+            ):
+                raise ValueError(
+                    "persisted material identity does not match its repository path"
+                )
+            self._read_sources(record, revision_directory)
+            self._verify_points(record, revision_directory)
             path_key = self._material_path_key(record.ref)
             previous = discovered.get(path_key)
             if previous is not None and previous != record.ref:

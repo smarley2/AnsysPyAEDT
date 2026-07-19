@@ -237,6 +237,41 @@ def test_list_materials_returns_distinct_sorted_identities(
     assert repository.list_materials() == (acme_ref, magnetics_ref)
 
 
+def test_file_list_materials_rejects_record_under_wrong_path(tmp_path: Path) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    root = tmp_path / "overlay"
+    repository = FileOverlayMaterialRepository(root)
+    record = _record(source)
+    repository.save(record, {"bh-source.csv": source})
+    canonical_revision = next(root.glob("*/*/*/*"))
+    misplaced_revision = (
+        root
+        / "Wrong_Manufacturer"
+        / canonical_revision.parent.parent.name
+        / canonical_revision.parent.name
+        / canonical_revision.name
+    )
+    misplaced_revision.mkdir(parents=True)
+    (misplaced_revision / "record.json").write_bytes(
+        (canonical_revision / "record.json").read_bytes()
+    )
+
+    with pytest.raises(ValueError, match="identity.*path"):
+        repository.list_materials()
+
+
+def test_file_list_materials_skips_hidden_staging_revision(tmp_path: Path) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    root = tmp_path / "overlay"
+    repository = FileOverlayMaterialRepository(root)
+    record = _record(source)
+    repository.save(record, {"bh-source.csv": source})
+    revision = next(root.glob("*/*/*/*"))
+    revision.rename(revision.with_name(f".{revision.name}.staging-abandoned"))
+
+    assert repository.list_materials() == ()
+
+
 def test_material_path_alias_is_typed_unknown(repository: MaterialRepository) -> None:
     source = b"h,b\n0,0\n100,0.2\n"
     stored = _record(source)
