@@ -1060,6 +1060,34 @@ finishing workflow, rerun the non-live suite plus static gates on merged `main`,
 push `main`, and confirm `git ls-remote --heads origin main` equals local HEAD.
 Do not delete a host-managed worktree.
 
+#### Whole-review remediation amendment (2026-07-19)
+
+The whole-change review at `f533295` returned NO-GO. Before Step 2 can be
+checked, expand the Task 10 edit scope to the following production and test
+boundaries. This amendment records the required reason before those files are
+edited, as required by the ownership rules above:
+
+- `src/inductor_designer/application/ports/`,
+  `src/inductor_designer/application/services/material_drafts.py`, and
+  `tools/check_architecture.py`: remove the application-to-adapter dependency,
+  refresh derived-revision timestamps, and add/remove series without weakening
+  immutable draft semantics;
+- `src/inductor_designer/adapters/materials/templates.py` and the Material Studio
+  controller: reimport an exported workbook with the selected revision as its
+  base while retaining every original and supplemental provenance source;
+- `src/inductor_designer/ui/main.py`, generation/controller tests, and the M5b
+  exit proof: make same-session Generate consume the project most recently saved
+  by Material Studio;
+- Material Studio controller/QML components and UI tests: cover every destructive
+  import and application close with the dirty Save/Discard/Cancel transaction,
+  validate pending canonical point fields, expose source-versus-current points
+  and loss-series fit attribution, and add/remove series accessibly.
+
+Permitted remediation tests are the matching files under `tests/unit/`,
+`tests/ui/`, `tests/integration/`, and `tests/architecture/`. Every Critical or
+Important finding requires an observed RED, a focused commit, and independent
+re-review before the whole review and complete gates are repeated.
+
 ---
 
 ## Execution Order and Review Gates
