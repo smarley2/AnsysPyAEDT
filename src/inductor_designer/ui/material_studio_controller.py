@@ -136,6 +136,13 @@ class MaterialStudioController(QObject):
 
     revisions = Property(list, _get_revisions, notify=libraryChanged)
 
+    def _get_selected_material(self) -> dict[str, object]:
+        return (
+            {} if self._selected_ref is None else self._material_dict(self._selected_ref)
+        )
+
+    selectedMaterial = Property(dict, _get_selected_material, notify=selectionChanged)
+
     def _get_selected_revision(self) -> dict[str, object]:
         return deepcopy(self._selected_revision)
 
@@ -873,6 +880,7 @@ class MaterialStudioController(QObject):
             }
             self._session = None
             self._saved = False
+            self._selected_ref = None
             self._selected_revision = {}
             self._series = []
             self._points = []

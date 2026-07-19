@@ -607,7 +607,7 @@ directly to the destination file.
 - Consumes: Tasks 1–5 services, existing template/export adapters, a loaded
   `InductorProject`, and project-save callback.
 - Produces `MaterialStudioController(QObject)` with QML properties for
-  `materials`, `revisions`, `selectedRevision`, `series`, `points`, `issues`,
+  `materials`, `revisions`, `selectedMaterial`, `selectedRevision`, `series`, `points`, `issues`,
   `fit`, `dirty`, `statusMessage`, `canSave`, `canReview`, `canApprove`, and
   `canUseInProject`.
 - Produces slots:

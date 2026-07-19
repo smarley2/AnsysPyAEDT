@@ -175,6 +175,11 @@ class WorkflowController(QObject):
                 },
             ],
         }
+        self._selected_material = {
+            "manufacturer": "Example",
+            "name": "Ferrite",
+            "grade": "N87",
+        }
         self.save_succeeds = True
         self.reorder_on_save = False
         self.selection_succeeds = True
@@ -186,6 +191,9 @@ class WorkflowController(QObject):
 
     materials = Property(list, lambda self: self._materials, notify=libraryChanged)
     revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
+    selectedMaterial = Property(
+        dict, lambda self: self._selected_material, notify=selectionChanged
+    )
     selectedRevision = Property(
         dict,
         lambda self: self._selected_revision,
@@ -323,6 +331,11 @@ class WorkflowController(QObject):
     def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
         self.calls.append(("selectMaterial", manufacturer, name, grade))
         if self.selection_succeeds:
+            self._selected_material = {
+                "manufacturer": manufacturer,
+                "name": name,
+                "grade": grade,
+            }
             self._selected_revision = {}
             self.selectionChanged.emit()
         return self.selection_succeeds
@@ -938,6 +951,38 @@ def test_controller_refresh_selects_new_material_and_revision_identities() -> No
         "Z9",
     )
     assert revision["revisionId"] == selected["revisionId"]
+    assert engine.rootObjects()
+
+
+@pytest.mark.ui
+def test_imported_source_clears_authoritative_and_current_library_identities() -> None:
+    controller = MaterialStudioController(
+        InMemoryMaterialRepository(),
+        now=lambda: "2026-07-19T10:00:00+00:00",
+    )
+    controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
+    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
+    controller.addPixelPoint(1.0, 7.0)
+    controller.addPixelPoint(11.0, 1.0)
+    controller.createImageDraft("Example", "Ferrite", "N87", "Detach identity")
+    controller.saveDraft()
+    app, engine, root = _root(controller)  # type: ignore[arg-type]
+    page = root.findChild(QObject, "materialStudioPage")
+    material_list = root.findChild(QQuickItem, "materialList")
+    revision_list = root.findChild(QQuickItem, "revisionList")
+    assert material_list.property("currentIndex") == 0
+    assert revision_list.property("currentIndex") == 0
+
+    controller.importSourceImage(QUrl.fromLocalFile(str(_IMAGE)).toString(), 0)
+    app.processEvents()
+
+    assert controller.selectedMaterial == {}
+    assert controller.selectedRevision == {}
+    assert page.property("confirmedMaterialSelection").toVariant() == []
+    assert page.property("confirmedRevisionSelection").toVariant() == []
+    assert material_list.property("currentIndex") == -1
+    assert revision_list.property("currentIndex") == -1
     assert engine.rootObjects()
 
 

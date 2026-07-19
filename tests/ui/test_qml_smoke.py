@@ -36,12 +36,23 @@ class RecordingMaterialStudioController(QObject):
         self._issues = issues or []
         self._fit = fit or {}
         self._status_message = status_message
+        self._selected_material = self._materials[0] if self._materials else {}
+        self._selected_revision = (
+            {"revisionId": self._revisions[0]["revisionId"]}
+            if self._revisions
+            else {}
+        )
         self.selected_materials: list[tuple[str, str, str]] = []
         self.selected_revisions: list[str] = []
 
     materials = Property(list, lambda self: self._materials, notify=libraryChanged)
     revisions = Property(list, lambda self: self._revisions, notify=libraryChanged)
-    selectedRevision = Property(dict, lambda self: {}, notify=selectionChanged)
+    selectedMaterial = Property(
+        dict, lambda self: self._selected_material, notify=selectionChanged
+    )
+    selectedRevision = Property(
+        dict, lambda self: self._selected_revision, notify=selectionChanged
+    )
     series = Property(list, lambda self: [], notify=selectionChanged)
     points = Property(list, lambda self: [], notify=selectionChanged)
     issues = Property(list, lambda self: self._issues, notify=selectionChanged)
@@ -70,11 +81,19 @@ class RecordingMaterialStudioController(QObject):
     @Slot(str, str, str, result=bool)
     def selectMaterial(self, manufacturer: str, name: str, grade: str) -> bool:
         self.selected_materials.append((manufacturer, name, grade))
+        self._selected_material = {
+            "manufacturer": manufacturer,
+            "name": name,
+            "grade": grade,
+        }
+        self.selectionChanged.emit()
         return True
 
     @Slot(str, result=bool)
     def selectRevision(self, revision_id: str) -> bool:
         self.selected_revisions.append(revision_id)
+        self._selected_revision = {"revisionId": revision_id}
+        self.selectionChanged.emit()
         return True
 
     @Slot(result=bool)

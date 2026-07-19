@@ -182,22 +182,43 @@ Page {
         if (controller === null) {
             return
         }
-        const selected = controller.selectedRevision || ({})
+        const selectedMaterial = controller.selectedMaterial || ({})
         const materialSelection = [
-            selected.manufacturer, selected.name, selected.grade
+            selectedMaterial.manufacturer,
+            selectedMaterial.name,
+            selectedMaterial.grade
         ]
         if (materialSelection.every(function(value) {
             return value !== undefined && value !== null && String(value).length > 0
         }) && selectionIndex("material", materialSelection) >= 0) {
             confirmedMaterialSelection = materialSelection
             restoreLibrarySelection("material", materialSelection)
+        } else {
+            confirmedMaterialSelection = []
+            confirmedRevisionSelection = []
+            const materialList = libraryList("material")
+            const revisionList = libraryList("revision")
+            if (materialList !== null) {
+                materialList.currentIndex = -1
+            }
+            if (revisionList !== null) {
+                revisionList.currentIndex = -1
+            }
+            return
         }
+        const selected = controller.selectedRevision || ({})
         const revisionSelection = [selected.revisionId]
         if (selected.revisionId !== undefined && selected.revisionId !== null
                 && String(selected.revisionId).length > 0
                 && selectionIndex("revision", revisionSelection) >= 0) {
             confirmedRevisionSelection = revisionSelection
             restoreLibrarySelection("revision", revisionSelection)
+        } else {
+            confirmedRevisionSelection = []
+            const revisionList = libraryList("revision")
+            if (revisionList !== null) {
+                revisionList.currentIndex = -1
+            }
         }
     }
 
