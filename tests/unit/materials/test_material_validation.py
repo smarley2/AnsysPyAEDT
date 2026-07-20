@@ -4,13 +4,6 @@ from dataclasses import replace
 
 import pytest
 
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-)
 from inductor_designer.materials.fitting import MU0
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -58,7 +51,6 @@ def _bh_series(
         conditions=CurveConditions(None, 25.0, None),
         points=tuple(CurvePoint(x, y) for x, y in points),
         source_filename="curve.csv",
-        extraction=None,
     )
 
 
@@ -77,7 +69,6 @@ def _loss_series(
         conditions=CurveConditions(frequency_hz, 25.0, None),
         points=tuple(CurvePoint(x, y) for x, y in points),
         source_filename="curve.csv",
-        extraction=None,
     )
 
 
@@ -279,39 +270,5 @@ def test_validate_record_includes_series_issues_in_series_order() -> None:
     )
 
 
-def _extraction() -> ExtractionRecord:
-    return ExtractionRecord(
-        crop=CropRegion(0, 0, 10, 10),
-        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 10.0, 1.0),
-        y_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 0.0, 1.0),
-        pixel_points=(PixelPoint(0.0, 10.0), PixelPoint(10.0, 0.0)),
-    )
-
-
-@pytest.mark.parametrize(
-    ("source_kind", "extraction", "expected_code"),
-    [
-        (SourceKind.IMAGE, None, "image-extraction-missing"),
-        (SourceKind.CSV, _extraction(), "csv-extraction-present"),
-    ],
-)
-def test_validate_record_rejects_series_source_provenance_mismatch(
-    source_kind: SourceKind,
-    extraction: ExtractionRecord | None,
-    expected_code: str,
-) -> None:
-    source = replace(_source(), kind=source_kind)
-    series = replace(_bh_series(), extraction=extraction)
-
-    assert expected_code in {
-        issue.code
-        for issue in validate_record(_record(sources=(source,), series=(series,)))
-    }
-
-
-def test_validate_record_rejects_spreadsheet_as_direct_series_source() -> None:
-    source = replace(_source(), kind=SourceKind.SPREADSHEET)
-
-    assert {issue.message for issue in validate_record(_record(sources=(source,)))} == {
-        "spreadsheet provenance cannot directly back a point series"
-    }
+def test_validate_record_accepts_csv_backed_series_without_extraction_metadata() -> None:
+    assert validate_record(_record()) == ()

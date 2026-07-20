@@ -406,7 +406,6 @@ def test_import_exported_workbook_as_draft_recomputes_fit_and_preserves_base() -
             CurveConditions(float(frequency), 25.0, 0.0),
             (CurvePoint(0.05, first), CurvePoint(0.1, second)),
             source.filename,
-            None,
         )
         for frequency, first, second in (
             (100_000, 1000.0, 2000.0),

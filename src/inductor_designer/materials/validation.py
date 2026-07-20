@@ -8,7 +8,6 @@ from inductor_designer.materials.records import (
     MaterialRecord,
     PointSeries,
     SeriesKind,
-    SourceKind,
 )
 
 _B_UNITS = frozenset({"T", "mT", "G", "kG"})
@@ -90,30 +89,6 @@ def validate_series(series: PointSeries) -> tuple[MaterialIssue, ...]:
 def validate_record(record: MaterialRecord) -> tuple[MaterialIssue, ...]:
     """Return series and record-level material validation issues."""
     issues = [issue for series in record.series for issue in validate_series(series)]
-    source_kinds = {source.filename: source.kind for source in record.sources}
-    for series in record.series:
-        source_kind = source_kinds[series.source_filename]
-        if source_kind is SourceKind.IMAGE and series.extraction is None:
-            issues.append(
-                _error(
-                    "image-extraction-missing",
-                    "image-backed series requires extraction metadata",
-                )
-            )
-        elif source_kind is SourceKind.CSV and series.extraction is not None:
-            issues.append(
-                _error(
-                    "csv-extraction-present",
-                    "CSV-backed series must not include extraction metadata",
-                )
-            )
-        elif source_kind is SourceKind.SPREADSHEET:
-            issues.append(
-                _error(
-                    "spreadsheet-series-source",
-                    "spreadsheet provenance cannot directly back a point series",
-                )
-            )
     if record.relative_permeability is not None and not 1.0 <= record.relative_permeability <= 1e6:
         issues.append(
             _error("permeability-range", "relative permeability must be between 1 and 1e6")

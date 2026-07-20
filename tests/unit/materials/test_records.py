@@ -4,13 +4,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -54,7 +47,6 @@ def _series(
         ),
         points=(CurvePoint(0.0, 0.0), CurvePoint(79.577471546, 0.1)),
         source_filename=source_filename,
-        extraction=None,
     )
 
 
@@ -127,29 +119,17 @@ def test_approve_record_rejects_non_reviewed(status: MaterialStatus) -> None:
 def test_source_provenance_rejects_invalid_sha256() -> None:
     with pytest.raises(ValueError, match="sha256"):
         SourceProvenance(
-            kind=SourceKind.IMAGE,
-            filename="curve.png",
+            kind=SourceKind.CSV,
             sha256="A" * 64,
-            url="https://example.com/curve.png",
-            page=1,
+            filename="curve.csv",
+            url="https://example.com/curve.csv",
+            page=None,
             captured_at="2026-07-17T12:00:00+00:00",
-            description="Example image",
+            description="Example table",
         )
 
 
 def test_material_record_canonicalizes_all_nested_floats_in_memory() -> None:
-    extraction = ExtractionRecord(
-        crop=CropRegion(0, 0, 10, 10),
-        x_axis=AxisCalibration(
-            AxisScale.LINEAR,
-            0.0000000004,
-            1.0000000004,
-            10.0000000004,
-            2.0000000004,
-        ),
-        y_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 0.0, 1.0),
-        pixel_points=(PixelPoint(1.0000000004, 2.0000000004),),
-    )
     series = PointSeries(
         series_id="loss",
         kind=SeriesKind.LOSS_TABLE,
@@ -158,7 +138,6 @@ def test_material_record_canonicalizes_all_nested_floats_in_memory() -> None:
         conditions=CurveConditions(10_000.0000000004, 25.0000000004, 0.0000000004),
         points=(CurvePoint(0.1000000004, 1000.0000000004),),
         source_filename="curve.csv",
-        extraction=extraction,
     )
     record = _record(
         series=(series,),
@@ -187,11 +166,6 @@ def test_material_record_canonicalizes_all_nested_floats_in_memory() -> None:
     assert record.steinmetz == SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02)
     assert record.series[0].conditions == CurveConditions(10_000.0, 25.0, 0.0)
     assert record.series[0].points == (CurvePoint(0.1, 1000.0),)
-    assert record.series[0].extraction is not None
-    assert record.series[0].extraction.x_axis == AxisCalibration(
-        AxisScale.LINEAR, 0.0, 1.0, 10.0, 2.0
-    )
-    assert record.series[0].extraction.pixel_points == (PixelPoint(1.0, 2.0),)
 
 
 @pytest.mark.parametrize(

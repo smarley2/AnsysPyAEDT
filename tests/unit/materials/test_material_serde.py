@@ -5,13 +5,6 @@ from dataclasses import replace
 
 import pytest
 
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -23,7 +16,6 @@ from inductor_designer.materials.records import (
     SourceKind,
     SourceProvenance,
     SteinmetzFit,
-    approve_record,
     review_record,
 )
 from inductor_designer.materials.serde import (
@@ -37,33 +29,22 @@ from inductor_designer.materials.serde import (
 )
 
 
+def _source(
+    filename: str = "curves.csv", kind: SourceKind = SourceKind.CSV
+) -> SourceProvenance:
+    return SourceProvenance(
+        kind=kind,
+        filename=filename,
+        sha256="a" * 64,
+        url="https://example.com/curves.csv",
+        page=None,
+        captured_at="2026-07-17T08:30:00+00:00",
+        description="Imported material table",
+    )
+
+
 def _record() -> MaterialRecord:
-    extraction = ExtractionRecord(
-        crop=CropRegion(left=10, top=20, width=300, height=200),
-        x_axis=AxisCalibration(AxisScale.LINEAR, 10.0, 0.0, 310.0, 300.0),
-        y_axis=AxisCalibration(AxisScale.LOG, 220.0, 1.0, 20.0, 1000.0),
-        pixel_points=(PixelPoint(10.0, 220.0), PixelPoint(160.0, 120.0)),
-    )
-    sources = (
-        SourceProvenance(
-            kind=SourceKind.IMAGE,
-            filename="bh.png",
-            sha256="a" * 64,
-            url="https://example.com/datasheet.pdf",
-            page=4,
-            captured_at="2026-07-17T08:30:00+00:00",
-            description="B-H curve",
-        ),
-        SourceProvenance(
-            kind=SourceKind.CSV,
-            filename="loss.csv",
-            sha256="b" * 64,
-            url="https://example.com/loss.csv",
-            page=None,
-            captured_at="2026-07-17T08:31:00+00:00",
-            description="Core-loss table",
-        ),
-    )
+    source = _source()
     series = (
         PointSeries(
             series_id="bh_25c",
@@ -72,8 +53,7 @@ def _record() -> MaterialRecord:
             y_unit="G",
             conditions=CurveConditions(None, 25.0, 0.0),
             points=(CurvePoint(0.0, 0.0), CurvePoint(79.577471546, 0.1)),
-            source_filename="bh.png",
-            extraction=extraction,
+            source_filename=source.filename,
         ),
         PointSeries(
             series_id="loss_100khz",
@@ -82,8 +62,7 @@ def _record() -> MaterialRecord:
             y_unit="mW/cm3",
             conditions=CurveConditions(100_000.0, 25.0, None),
             points=(CurvePoint(0.05, 1200.0), CurvePoint(0.1, 4500.0)),
-            source_filename="loss.csv",
-            extraction=None,
+            source_filename=source.filename,
         ),
     )
     return MaterialRecord(
@@ -93,15 +72,15 @@ def _record() -> MaterialRecord:
         created_at="2026-07-17T08:32:00+00:00",
         reviewed_by=None,
         approved_by=None,
-        sources=sources,
+        sources=(source,),
         series=series,
         relative_permeability=60.0,
         steinmetz=SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02),
-        notes="Digitized from manufacturer data.",
+        notes="Imported from a material table.",
     )
 
 
-def test_full_material_record_round_trips() -> None:
+def test_full_material_record_round_trips_without_image_metadata() -> None:
     record = _record()
 
     document = material_record_to_json(record)
@@ -110,7 +89,7 @@ def test_full_material_record_round_trips() -> None:
     assert document["revisionId"] == "0123456789ab"
     assert "revisionId" not in material_record_to_json(record, include_revision=False)
     assert document["series"][0]["conditions"]["frequencyHz"] is None  # type: ignore[index]
-    assert document["series"][0]["extraction"]["xAxis"]["pixelA"] == 10.0  # type: ignore[index]
+    assert "extraction" not in document["series"][0]  # type: ignore[operator]
 
 
 def test_material_record_json_is_byte_identical_and_exactly_formatted() -> None:
@@ -120,22 +99,19 @@ def test_material_record_json_is_byte_identical_and_exactly_formatted() -> None:
     assert first == second
     assert first.endswith("\n")
     assert not first.endswith("\n\n")
-    assert first.startswith('{\n  "approvedBy": null,\n')
+    assert first.splitlines()[1] == '  "approvedBy": null,'
 
 
 def test_revision_id_ignores_workflow_transitions_but_hashes_material_content() -> None:
     draft = _record()
     reviewed = review_record(draft, "reviewer@example.com")
-    approved = approve_record(reviewed, "approver@example.com")
     changed_point = replace(
         draft.series[0],
         points=(*draft.series[0].points[:-1], CurvePoint(79.577471546, 0.2)),
     )
     changed = replace(draft, series=(changed_point, draft.series[1]))
 
-    assert revision_id_for(draft) == revision_id_for(draft)
     assert revision_id_for(reviewed) == revision_id_for(draft)
-    assert revision_id_for(approved) == revision_id_for(draft)
     assert revision_id_for(changed) != revision_id_for(draft)
     assert len(revision_id_for(draft)) == 12
 
@@ -169,16 +145,13 @@ def test_points_csv_rejects_non_finite_values(value: float) -> None:
 
 @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
 @pytest.mark.parametrize(
-    "field",
-    ["relative-permeability", "point", "fit", "condition", "axis", "pixel-point"],
+    "field", ["relative-permeability", "point", "fit", "condition"]
 )
 def test_material_serialization_rejects_non_finite_numeric_fields(
     value: float, field: str
 ) -> None:
     record = _record()
     series = record.series[0]
-    extraction = series.extraction
-    assert extraction is not None
     if field == "relative-permeability":
         invalid = replace(record, relative_permeability=value)
     elif field == "point":
@@ -187,20 +160,10 @@ def test_material_serialization_rejects_non_finite_numeric_fields(
     elif field == "fit":
         assert record.steinmetz is not None
         invalid = replace(record, steinmetz=replace(record.steinmetz, beta=value))
-    elif field == "condition":
+    else:
         invalid_series = replace(
             series, conditions=replace(series.conditions, temperature_c=value)
         )
-        invalid = replace(record, series=(invalid_series, record.series[1]))
-    elif field == "axis":
-        invalid_extraction = replace(
-            extraction, x_axis=replace(extraction.x_axis, value_a=value)
-        )
-        invalid_series = replace(series, extraction=invalid_extraction)
-        invalid = replace(record, series=(invalid_series, record.series[1]))
-    else:
-        invalid_extraction = replace(extraction, pixel_points=(PixelPoint(value, 1.0),))
-        invalid_series = replace(series, extraction=invalid_extraction)
         invalid = replace(record, series=(invalid_series, record.series[1]))
 
     with pytest.raises(ValueError, match="finite"):
@@ -233,6 +196,18 @@ def test_material_deserialization_rejects_wrong_primitive_scalar_type() -> None:
         material_record_from_json(document)
 
 
+def test_material_deserialization_rejects_image_and_extraction_legacy_fields() -> None:
+    document = material_record_to_json(_record())
+    document["sources"][0]["kind"] = "image"  # type: ignore[index]
+    with pytest.raises(ValueError, match="image"):
+        material_record_from_json(document)
+
+    document = material_record_to_json(_record())
+    document["series"][0]["extraction"] = None  # type: ignore[index]
+    with pytest.raises(ValueError, match="extraction"):
+        material_record_from_json(document)
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -254,9 +229,7 @@ def test_parse_points_csv_rejects_malformed_input(text: str) -> None:
 def test_material_serialization_canonicalizes_every_nested_float() -> None:
     record = _record()
     series = record.series[0]
-    extraction = series.extraction
     fit = record.steinmetz
-    assert extraction is not None
     assert fit is not None
     noncanonical = replace(
         record,
@@ -273,17 +246,6 @@ def test_material_serialization_canonicalizes_every_nested_float() -> None:
                 series,
                 conditions=CurveConditions(None, 25.0000000004, 0.0000000004),
                 points=(CurvePoint(0.0000000004, 0.0000000004),),
-                extraction=replace(
-                    extraction,
-                    x_axis=AxisCalibration(
-                        AxisScale.LINEAR,
-                        10.0000000004,
-                        0.0000000004,
-                        310.0000000004,
-                        300.0000000004,
-                    ),
-                    pixel_points=(PixelPoint(10.0000000004, 220.0000000004),),
-                ),
             ),
             record.series[1],
         ),
@@ -305,16 +267,6 @@ def test_material_serialization_canonicalizes_every_nested_float() -> None:
         "dcBiasAPerM": 0.0,
     }
     assert first_series["points"] == [{"x": 0.0, "y": 0.0}]  # type: ignore[index]
-    assert first_series["extraction"]["xAxis"] == {  # type: ignore[index]
-        "scale": "linear",
-        "pixelA": 10.0,
-        "valueA": 0.0,
-        "pixelB": 310.0,
-        "valueB": 300.0,
-    }
-    assert first_series["extraction"]["pixelPoints"] == [  # type: ignore[index]
-        {"xPx": 10.0, "yPx": 220.0}
-    ]
 
 
 def test_sub_nanodifference_has_same_canonical_json_and_revision_id() -> None:

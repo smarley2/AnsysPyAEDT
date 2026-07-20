@@ -64,7 +64,6 @@ def _record(
                 conditions=CurveConditions(None, 25.0, None),
                 points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.2)),
                 source_filename="bh-source.csv",
-                extraction=None,
             ),
         ),
         relative_permeability=1600.0,

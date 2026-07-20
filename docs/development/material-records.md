@@ -3,8 +3,8 @@
 Milestone 5a provides a traceable, deterministic path from source bytes to an
 approved magnetic-material revision and solver export. Milestone 5b exposes that
 path in the Guided Studio `Materials` page. The final M5b whole-change review is
-clean and the fresh complete non-live verification passes (822 tests, 119 UI
-tests, and 91.80% coverage). Native Windows manual acceptance remains pending,
+clean and the fresh complete non-live verification passes (672 tests, 22 UI
+tests, and 89.84% coverage). Native Windows manual acceptance remains pending,
 so M5b is not yet implementation-complete. Formal M5a/M5b acceptance also remains pending until
 a reviewer imports a real datasheet, obtains `MATCH`, and checks the exact pinned
 revision in live AEDT and FEMM; no live material handoff is claimed here.
@@ -169,6 +169,12 @@ in Excel or a compatible workbook editor, then use `Reimport edited workbook`.
 The import always opens a new draft; it never overwrites the selected base
 revision.
 
+Material Studio accepts only CSV and XLSX material uploads. No user material
+records have been imported yet, so the former image/PDF digitization path was
+removed instead of being retained as a compatibility workflow. Select a
+material, revision, and series in the Materials page to inspect the canonical
+curve plot produced from the imported table.
+
 ## Material Studio workflow
 
 Open the `Materials` step in Guided Studio and follow this sequence:
@@ -178,20 +184,16 @@ Open the `Materials` step in Guided Studio and follow this sequence:
    validation counts, and source traceability (URL, page, capture time,
    description, and SHA-256). `Suggested latest approved` is advisory only: it
    neither selects a revision nor changes the project.
-2. Start from one of three sources:
-   - download the CSV or XLSX template, fill it, and import it;
+2. Start from one of two spreadsheet sources:
+   - download the CSV or XLSX template, fill it, and import it; or
    - select any revision, export its populated XLSX workbook, edit it in Excel
-     or a compatible editor, and reimport it as a new draft; or
-   - import PNG/JPEG or one selected page from a PDF for manual digitization.
-3. For an image or PDF, set the crop, place the two X-axis and two Y-axis
-   calibration anchors, enter each anchor value, and choose linear or logarithmic
-   scales. Set retained units from the supported H, B, and loss-density families.
-   The original image/PDF bytes, selected PDF page, crop, axes, and pixel points
-   remain in provenance; resizing or scaling the view does not change stored
-   original-pixel coordinates.
-4. Add, move, or delete manual points. Canonical point values may also be edited
-   directly. Direct numeric editing intentionally converts that curve into a
-   table edit while retaining the original image/PDF as supplemental provenance.
+     or a compatible editor, and reimport it as a new draft.
+3. Select a revision and then a B-H or loss series. The plot shows the canonical
+   points, visible point markers, axis units, and any frequency, temperature, or
+   DC-bias conditions. Changing the selected series changes the plot without
+   changing the material record.
+4. Add, delete, or numerically edit table points. Editing a reviewed or approved
+   revision first creates a distinct draft; no image conversion step is involved.
 5. Set the series ID and kind plus applicable frequency, temperature, and DC-bias
    conditions. Blank optional conditions remain unspecified; physical zero is
    stored as zero. Malformed values remain visible and block applying or saving
@@ -331,8 +333,7 @@ and compares the complete stored and recomputed fit values.
 
 Approval records both reviewer and approver identities. It does not replace
 engineering review of the source, curve conditions, units, transcription,
-fit residuals, source licensing, or redistribution rights. OCR never approves
-data automatically.
+fit residuals, source licensing, or redistribution rights.
 
 ## Reproduce a stored revision
 
@@ -348,8 +349,8 @@ python -m tools.reproduce_material \
   --revision <12-hex-revision>
 ```
 
-`MATCH` and exit code 0 mean that source hashes, replayed CSV or image
-extraction points, a recomputed Steinmetz fit, and the content-derived revision
+`MATCH` and exit code 0 mean that source hashes, replayed CSV points, a
+recomputed Steinmetz fit, and the content-derived revision
 identifier all match. Missing or changed artifacts print mismatches and exit 1.
 This is reproducibility evidence, not proof that the original transcription or
 physical interpretation is correct.
@@ -391,21 +392,19 @@ Maxwell 3D, and FEMM consume only that pinned series from the stored snapshot.
 
 ## Milestone 5b handoff and pending acceptance
 
-The spreadsheet and manual-digitization workflow is the required M5b scope.
-OCR proposals, automatic curve tracing, the optional attributed GPL
-`materialdatabase` importer, material MCP tools, and explicit-formula records
-are deferred to optional M5c. M5c has no plan or scaffold and will be considered
-only if Windows user acceptance shows that the M5b workflow is insufficient.
+The spreadsheet-only workflow is the required M5b scope. The application has no
+OCR, image tracing, or PDF digitization path. Any future non-spreadsheet
+importer, material MCP tool, or explicit-formula record requires a separate
+approved specification and plan.
 
 M5b has automated evidence for library/revision listing, immutable draft
-editing, image/PDF replay, schema v3-to-v4 migration, explicit B-H selection,
-recording-fake Maxwell/FEMM manifests, controller behavior, and offscreen QML
-flows. This is not native Windows, Excel/FileDialog, high-DPI, or live-solver
-evidence. The final whole-change review and fresh complete gates pass. Before
-M5b can be marked implementation-complete, record native Windows manual
-acceptance for keyboard/focus, scaling, PNG/JPEG/PDF pages, file dialogs,
-template download, workbook edit/reimport, revision visibility, lifecycle, and
-explicit B-H selection.
+editing, CSV/XLSX replay, schema v3-to-v4 migration, explicit B-H selection,
+recording-fake Maxwell/FEMM manifests, controller behavior, selected-series plot
+labels, and offscreen QML flows. This is not native Windows, Excel/FileDialog,
+high-DPI, or live-solver evidence. Before M5b can be marked implementation
+complete, record native Windows manual acceptance for keyboard/focus, scaling,
+file dialogs, template download, workbook edit/reimport, revision visibility,
+lifecycle, and explicit B-H selection.
 
 Before formally accepting M5a or M5b, Fabio must:
 

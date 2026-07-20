@@ -1,5 +1,8 @@
 # Milestone 5a: Material Records Pipeline Implementation Plan
 
+> Historical plan note (2026-07-20): the image/PDF extraction portions described
+> below are superseded by the approved [spreadsheet-only Material Studio design](2026-07-20-material-studio-spreadsheet-only-design.md). The current application accepts material uploads only as CSV/XLSX tables; this file remains for milestone decision history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Traceable, reproducible magnetic-material records: import curve data (CSV now, image-extraction data model now for the M5b UI), fit Steinmetz coefficients and permeability, run physics checks, store draft→reviewed→approved revisions in a local overlay with full provenance — and export only approved revisions to Maxwell (nonlinear B-H + core loss, both dims) and FEMM (B-H points). This is the milestone's exit-criterion half; the Material Studio UI (image crop/calibrate/click-extract editor) follows as plan M5b.

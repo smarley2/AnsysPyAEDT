@@ -1,8 +1,10 @@
 # Milestone 5b: Material Studio UI Implementation Plan
 
+> Superseded on 2026-07-20 by the [spreadsheet-only Material Studio plan](2026-07-20-material-studio-spreadsheet-only.md). This file is retained as historical decision context; its image/PDF workflow is no longer implemented.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** Implemented, reviewed, verified, merged to `main`, and pushed on 2026-07-19. Native Windows manual acceptance remains pending, so M5b is not yet implementation-complete or formally accepted.
+**Status:** Superseded on 2026-07-20. Native Windows acceptance notes in this historical plan do not describe the current spreadsheet-only scope.
 
 **Approved specification:** `docs/superpowers/specs/2026-07-19-material-studio-ui-design.md`
 

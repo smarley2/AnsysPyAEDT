@@ -1,5 +1,7 @@
 # Milestone 5b: Material Studio UI Design
 
+> Superseded on 2026-07-20 by the [spreadsheet-only Material Studio design](2026-07-20-material-studio-spreadsheet-only-design.md). This file is retained as historical decision context; its image/PDF workflow is no longer implemented.
+
 - Status: Approved 2026-07-19
 - Date: 2026-07-19
 - Owner: Codex

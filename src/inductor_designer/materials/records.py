@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import Enum
 
-from inductor_designer.materials.calibration import ExtractionRecord
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.numerics import canonical_float
 
@@ -15,7 +14,6 @@ class MaterialStatus(str, Enum):
 
 
 class SourceKind(str, Enum):
-    IMAGE = "image"
     CSV = "csv"
     SPREADSHEET = "spreadsheet"
 
@@ -72,7 +70,6 @@ class PointSeries:
     conditions: CurveConditions
     points: tuple[CurvePoint, ...]
     source_filename: str
-    extraction: ExtractionRecord | None
 
 
 @dataclass(frozen=True, slots=True)

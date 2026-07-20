@@ -47,7 +47,6 @@ def _approved_record() -> MaterialRecord:
             CurveConditions(None, 25.0, None),
             (CurvePoint(0.0, 0.0), CurvePoint(79.577471546, 0.1)),
             source.filename,
-            None,
         ),
         PointSeries(
             "bh-100c",
@@ -57,7 +56,6 @@ def _approved_record() -> MaterialRecord:
             CurveConditions(None, 100.0, 50.0),
             (CurvePoint(1000.0, 100.0e-3), CurvePoint(2000.0, 200.0e-3)),
             source.filename,
-            None,
         ),
         PointSeries(
             "loss-100khz",
@@ -67,7 +65,6 @@ def _approved_record() -> MaterialRecord:
             CurveConditions(100_000.0, 25.0, 0.0),
             (CurvePoint(0.05, 1000.0), CurvePoint(0.1, 2000.0)),
             source.filename,
-            None,
         ),
         PointSeries(
             "loss-200khz",
@@ -77,7 +74,6 @@ def _approved_record() -> MaterialRecord:
             CurveConditions(200_000.0, 80.0, 10.0),
             (CurvePoint(0.05, 3000.0), CurvePoint(0.1, 6000.0)),
             source.filename,
-            None,
         ),
     )
     return MaterialRecord(

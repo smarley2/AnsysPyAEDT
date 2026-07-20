@@ -217,7 +217,7 @@ def test_import_material_rows_rejects_unsupported_upload_kind() -> None:
             _metadata(),
             (_bh_row(),),
             upload_filename="material.png",
-            upload_kind=SourceKind.IMAGE,
+            upload_kind="image",  # type: ignore[arg-type]
             upload_bytes=b"image",
         )
 

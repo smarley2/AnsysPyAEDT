@@ -86,7 +86,6 @@ def make_approved_material_record(
                 conditions=CurveConditions(None, 25.0, None),
                 points=(CurvePoint(0.0, 0.0), CurvePoint(100.0, 0.025132741)),
                 source_filename=source.filename,
-                extraction=None,
             ),
             PointSeries(
                 series_id="loss_100khz",
@@ -96,7 +95,6 @@ def make_approved_material_record(
                 conditions=CurveConditions(100_000.0, 25.0, None),
                 points=(CurvePoint(0.05, 1200.0), CurvePoint(0.1, 4500.0)),
                 source_filename=source.filename,
-                extraction=None,
             ),
         ),
         relative_permeability=relative_permeability,

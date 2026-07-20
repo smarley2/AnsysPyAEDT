@@ -21,17 +21,8 @@ from inductor_designer.application.services.maxwell_export import (
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
 from inductor_designer.domain.project import MaterialRevisionSelection
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-)
 from inductor_designer.materials.identity import MaterialRef
-from inductor_designer.materials.records import CurvePoint, MaterialStatus, SeriesKind
-from inductor_designer.materials.replay import reproduce_record
-from inductor_designer.materials.serde import sha256_hex
+from inductor_designer.materials.records import CurvePoint, SeriesKind
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
@@ -49,7 +40,6 @@ pytestmark = pytest.mark.ui
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT_FIXTURE = ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"
-MANUAL_IMAGE = ROOT / "tests" / "fixtures" / "materials" / "manual-bh.png"
 CAPABILITIES = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
     edition=AedtEdition.COMMERCIAL,
@@ -257,72 +247,6 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
         assert manifest["coreMaterial"]["materialRevision"] == edited_revision
         assert manifest["coreMaterial"]["bhSeriesId"] == "bh-100c"
         assert manifest["coreMaterial"]["bhPointCount"] == 3
-
-
-def test_manual_image_draft_replays_exact_extraction_after_overlay_reload(
-    tmp_path: Path,
-) -> None:
-    overlay = tmp_path / "image-overlay"
-    repository = FileOverlayMaterialRepository(overlay)
-    controller = MaterialStudioController(
-        repository,
-        now=lambda: "2026-07-19T13:00:00+00:00",
-    )
-    image_bytes = MANUAL_IMAGE.read_bytes()
-
-    controller.importSourceImage(_file_url(MANUAL_IMAGE), 0)
-    assert (controller.source["width"], controller.source["height"]) == (12, 8)
-    controller.setCrop(0, 0, 12, 8)
-    controller.setXAxis("linear", 1.0, 0.0, 11.0, 2.0)
-    controller.setYAxis("linear", 7.0, 0.0, 1.0, 2.0)
-    controller.setSeriesMetadata(
-        "bh-manual",
-        "bh-curve",
-        "Oe",
-        "kG",
-        float("nan"),
-        25.0,
-        float("nan"),
-    )
-    controller.addPixelPoint(1.0, 7.0)
-    controller.addPixelPoint(11.0, 1.0)
-    controller.createImageDraft(
-        "Example Magnetics",
-        "Manual Ferrite",
-        "Image-1",
-        "Synthetic manual B-H source",
-    )
-    revision_id = str(controller.selectedRevision["revisionId"])
-    controller.saveDraft()
-    controller.reviewDraft("image-reviewer@example.com")
-    controller.approveRevision("image-approver@example.com")
-
-    ref = MaterialRef("Example Magnetics", "Manual Ferrite", "Image-1")
-    stored = repository.get(ref, revision_id)
-    expected_extraction = ExtractionRecord(
-        CropRegion(0, 0, 12, 8),
-        AxisCalibration(AxisScale.LINEAR, 1.0, 0.0, 11.0, 2.0),
-        AxisCalibration(AxisScale.LINEAR, 7.0, 0.0, 1.0, 2.0),
-        (PixelPoint(1.0, 7.0), PixelPoint(11.0, 1.0)),
-    )
-    series = stored.series[0]
-    assert stored.status is MaterialStatus.APPROVED
-    assert stored.revision_id == revision_id
-    assert stored.sources[0].sha256 == sha256_hex(image_bytes)
-    assert stored.sources[0].page is None
-    assert series.extraction == expected_extraction
-    assert series.points[0] == CurvePoint(0.0, 0.0)
-    assert series.points[1].x == pytest.approx(159.154943092)
-    assert series.points[1].y == 0.2
-
-    fresh = FileOverlayMaterialRepository(overlay)
-    reloaded = fresh.get(ref, revision_id)
-    reloaded_sources = fresh.source_bytes(ref, revision_id)
-    assert reloaded == stored
-    assert reloaded_sources == {MANUAL_IMAGE.name: image_bytes}
-    assert reloaded.series[0].extraction == expected_extraction
-    assert reloaded.series[0].points == series.points
-    assert reproduce_record(reloaded, reloaded_sources).matches
 
 
 def test_latest_suggestion_and_immutable_lifecycle_edits_never_pin_implicitly(

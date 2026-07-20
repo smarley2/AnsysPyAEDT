@@ -106,7 +106,6 @@ def make_material_series(
         conditions=conditions,
         points=points,
         source_filename="curve.csv",
-        extraction=None,
     )
 
 

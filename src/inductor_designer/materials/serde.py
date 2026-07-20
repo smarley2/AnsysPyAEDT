@@ -7,13 +7,6 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from inductor_designer.domain.units import to_canonical
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-)
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.numerics import canonical_float
 from inductor_designer.materials.records import (
@@ -53,36 +46,6 @@ def canonicalize_points(
             key=lambda point: point.x,
         )
     )
-
-
-def _axis_to_json(axis: AxisCalibration) -> dict[str, object]:
-    return {
-        "scale": axis.scale.value,
-        "pixelA": _canonical_float(axis.pixel_a),
-        "valueA": _canonical_float(axis.value_a),
-        "pixelB": _canonical_float(axis.pixel_b),
-        "valueB": _canonical_float(axis.value_b),
-    }
-
-
-def _extraction_to_json(extraction: ExtractionRecord) -> dict[str, object]:
-    return {
-        "crop": {
-            "left": extraction.crop.left,
-            "top": extraction.crop.top,
-            "width": extraction.crop.width,
-            "height": extraction.crop.height,
-        },
-        "xAxis": _axis_to_json(extraction.x_axis),
-        "yAxis": _axis_to_json(extraction.y_axis),
-        "pixelPoints": [
-            {
-                "xPx": _canonical_float(point.x_px),
-                "yPx": _canonical_float(point.y_px),
-            }
-            for point in extraction.pixel_points
-        ],
-    }
 
 
 def _reject_non_finite(value: object, path: str = "record") -> None:
@@ -140,11 +103,6 @@ def material_record_to_json(
                     for point in series.points
                 ],
                 "sourceFilename": series.source_filename,
-                "extraction": (
-                    _extraction_to_json(series.extraction)
-                    if series.extraction is not None
-                    else None
-                ),
             }
             for series in record.series
         ],
@@ -234,43 +192,6 @@ def _optional_integer(document: Mapping[str, Any], key: str, path: str) -> int |
     return _integer(document, key, path)
 
 
-def _axis_from_json(document: Mapping[str, Any], path: str) -> AxisCalibration:
-    return AxisCalibration(
-        scale=AxisScale(_string(document, "scale", path)),
-        pixel_a=_number(document, "pixelA", path),
-        value_a=_number(document, "valueA", path),
-        pixel_b=_number(document, "pixelB", path),
-        value_b=_number(document, "valueB", path),
-    )
-
-
-def _extraction_from_json(document: Mapping[str, Any], path: str) -> ExtractionRecord:
-    crop_path = f"{path}.crop"
-    crop = _mapping(_value(document, "crop", path), crop_path)
-    pixel_points = []
-    for index, item in enumerate(_list(document, "pixelPoints", path)):
-        point_path = f"{path}.pixelPoints[{index}]"
-        point = _mapping(item, point_path)
-        pixel_points.append(
-            PixelPoint(_number(point, "xPx", point_path), _number(point, "yPx", point_path))
-        )
-    return ExtractionRecord(
-        crop=CropRegion(
-            _integer(crop, "left", crop_path),
-            _integer(crop, "top", crop_path),
-            _integer(crop, "width", crop_path),
-            _integer(crop, "height", crop_path),
-        ),
-        x_axis=_axis_from_json(
-            _mapping(_value(document, "xAxis", path), f"{path}.xAxis"), f"{path}.xAxis"
-        ),
-        y_axis=_axis_from_json(
-            _mapping(_value(document, "yAxis", path), f"{path}.yAxis"), f"{path}.yAxis"
-        ),
-        pixel_points=tuple(pixel_points),
-    )
-
-
 def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
     ref = _mapping(_value(document, "ref", "record"), "record.ref")
     sources = []
@@ -292,6 +213,8 @@ def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
     for index, item in enumerate(_list(document, "series", "record")):
         path = f"record.series[{index}]"
         series = _mapping(item, path)
+        if "extraction" in series:
+            raise ValueError(f"{path}.extraction is not supported; import a CSV or spreadsheet")
         conditions_path = f"{path}.conditions"
         conditions = _mapping(_value(series, "conditions", path), conditions_path)
         points = []
@@ -301,7 +224,6 @@ def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
             points.append(
                 CurvePoint(_number(point, "x", point_path), _number(point, "y", point_path))
             )
-        extraction = _value(series, "extraction", path)
         series_items.append(
             PointSeries(
                 series_id=_string(series, "seriesId", path),
@@ -315,13 +237,6 @@ def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
                 ),
                 points=tuple(points),
                 source_filename=_string(series, "sourceFilename", path),
-                extraction=(
-                    _extraction_from_json(
-                        _mapping(extraction, f"{path}.extraction"), f"{path}.extraction"
-                    )
-                    if extraction is not None
-                    else None
-                ),
             )
         )
     fit_data = _value(document, "steinmetz", "record")

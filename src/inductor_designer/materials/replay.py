@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from inductor_designer.materials.calibration import extract_points
 from inductor_designer.materials.fitting import LossSample, MaterialFitError, fit_steinmetz
 from inductor_designer.materials.records import (
     CurvePoint,
@@ -66,14 +65,13 @@ def reproduce_record(
             failed_loss_reconstruction |= series.kind is SeriesKind.LOSS_TABLE
             continue
         try:
-            if provenance.kind is SourceKind.CSV:
-                raw_points = parse_points_csv(sources[series.source_filename].decode("utf-8"))
-            elif series.extraction is not None:
-                raw_points = extract_points(series.extraction)
-            else:
-                mismatches.append(f"series '{series.series_id}' extraction is missing")
+            if provenance.kind is not SourceKind.CSV:
+                mismatches.append(
+                    f"series '{series.series_id}' must be backed by a CSV source"
+                )
                 failed_loss_reconstruction |= series.kind is SeriesKind.LOSS_TABLE
                 continue
+            raw_points = parse_points_csv(sources[series.source_filename].decode("utf-8"))
             points = canonicalize_points(raw_points, series.x_unit, series.y_unit)
         except ArithmeticError:
             mismatches.append(

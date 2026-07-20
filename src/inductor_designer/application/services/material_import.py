@@ -59,7 +59,6 @@ def import_curve_csv(
         conditions=conditions,
         points=points,
         source_filename=source.filename,
-        extraction=None,
     )
     unit_issues = tuple(issue for issue in validate_series(series) if issue.code == "unit-family")
     if messages := _error_messages(unit_issues):

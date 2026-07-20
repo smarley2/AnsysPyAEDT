@@ -24,24 +24,15 @@ from inductor_designer.application.services.maxwell_export import (
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
 from inductor_designer.domain.project import CatalogCoreSelection, MaterialRevisionSelection
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-    extract_points,
-)
 from inductor_designer.materials.records import (
     CurveConditions,
     MaterialRecord,
-    PointSeries,
     SeriesKind,
     SourceKind,
     SourceProvenance,
 )
 from inductor_designer.materials.replay import reproduce_record
-from inductor_designer.materials.serde import canonicalize_points, sha256_hex
+from inductor_designer.materials.serde import sha256_hex
 from inductor_designer.materials.validation import IssueSeverity, validate_record
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
@@ -64,13 +55,13 @@ CAPABILITIES = CapabilitySnapshot(
 )
 
 
-def _source(kind: SourceKind, filename: str, data: bytes) -> SourceProvenance:
+def _source(filename: str, data: bytes) -> SourceProvenance:
     return SourceProvenance(
-        kind=kind,
+        kind=SourceKind.CSV,
         filename=filename,
         sha256=sha256_hex(data),
         url=f"https://example.com/{filename}",
-        page=7 if kind is SourceKind.IMAGE else None,
+        page=None,
         captured_at="2026-07-18T09:00:00+00:00",
         description="Synthetic reproducibility evidence",
     )
@@ -92,14 +83,9 @@ def _record() -> tuple[MaterialRecord, dict[str, bytes]]:
             + "".join(f"{b},{_loss(50_000.0, b)}\n" for b in flux_densities)
         ).encode(),
         "bh.csv": b"x,y\n0,0\n100,0.02\n200,0.04\n",
-        "loss-100000.png": b"\x89PNG\r\n\x1a\nsynthetic-loss-curve",
     }
     provenance = {
-        filename: _source(
-            SourceKind.IMAGE if filename.endswith(".png") else SourceKind.CSV,
-            filename,
-            data,
-        )
+        filename: _source(filename, data)
         for filename, data in sources.items()
     }
     loss_series = tuple(
@@ -123,31 +109,11 @@ def _record() -> tuple[MaterialRecord, dict[str, bytes]]:
         conditions=CurveConditions(None, 25.0, None),
         source=provenance["bh.csv"],
     )
-    maximum_loss = _loss(100_000.0, flux_densities[-1])
-    extraction = ExtractionRecord(
-        crop=CropRegion(0, 0, 100, 100),
-        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 100.0, 0.2),
-        y_axis=AxisCalibration(AxisScale.LINEAR, 100.0, 0.0, 0.0, maximum_loss),
-        pixel_points=tuple(
-            PixelPoint(500.0 * b, 100.0 * (1.0 - _loss(100_000.0, b) / maximum_loss))
-            for b in flux_densities
-        ),
-    )
-    image_loss_series = PointSeries(
-        series_id="loss-100000-image",
-        kind=SeriesKind.LOSS_TABLE,
-        x_unit="T",
-        y_unit="W/m3",
-        conditions=CurveConditions(100_000.0, 25.0, None),
-        points=canonicalize_points(extract_points(extraction), "T", "W/m3"),
-        source_filename="loss-100000.png",
-        extraction=extraction,
-    )
     project = make_project()
     assert isinstance(project.core, CatalogCoreSelection)
     draft = new_draft_record(
         project.core.snapshot.material,
-        series=(*loss_series, bh_series, image_loss_series),
+        series=(*loss_series, bh_series),
         sources=tuple(provenance.values()),
         created_at="2026-07-18T09:00:00+00:00",
         notes="Synthetic evidence only; no live solver claim.",

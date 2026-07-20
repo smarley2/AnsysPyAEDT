@@ -14,7 +14,7 @@ Milestones 3, 4, and 4.5 status: **Accepted 2026-07-16**, **Accepted 2026-07-17*
 
 Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record, `MATCH` reproduction, and live AEDT/FEMM material handoff remain required. M5b implementation may start now, but those checks must pass before either milestone is accepted.
 
-Milestone 5b status: **Implementation reviewed, verified, merged, and pushed; native Windows manual acceptance pending 2026-07-19**. Fresh evidence is 822 non-live tests, 119 UI tests, 91.80% coverage, and clean static/architecture gates. Formal M5a/M5b acceptance also awaits a real approved record with `MATCH` and live exact-revision/B-H-series verification in AEDT and FEMM. M5c is optional/deferred and will receive a separate plan only if M5b user acceptance demonstrates a need beyond the spreadsheet/manual workflow.
+Milestone 5b status: **Spreadsheet-only redesign in progress 2026-07-20**. The prior manual image/PDF workflow is superseded because no user materials have been imported. The active plan keeps CSV/XLSX import, table editing, lifecycle, project pinning, and visual curve inspection; any future non-spreadsheet ingestion requires a separately approved scope.
 
 | Order | Milestone | Detailed plan | Entry condition | Exit evidence |
 | --- | --- | --- | --- | --- |
@@ -25,8 +25,9 @@ Milestone 5b status: **Implementation reviewed, verified, merged, and pushed; na
 | 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |
 | 4.5 | Automation interfaces — MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Maxwell 2D and DC-bias generation accepted | MCP client creates a valid project, generates a ready-to-solve Maxwell design, runs a FEMM solve of the 2D equivalent, and reads back per-winding R/L, with the backend chosen per call |
 | 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Material interface and solver export requirements accepted | Automated source replay is green; real datasheet approval and live solver handoff remain pending |
-| 5b | Material Studio manual and spreadsheet UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Stable M5a automated interfaces | Whole review and complete non-live gates pass; native Windows manual acceptance and formal live material handoff remain pending |
-| 5c (optional) | Advanced material automation | Written only after M5b user acceptance demonstrates a need and the scope is explicitly approved | M5b accepted for the manual/spreadsheet workflow | Separately defined evidence for any approved OCR, automatic tracing, attributed GPL import, material MCP tools, or explicit-formula records |
+| 5b | Material Studio spreadsheet-only UI | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md) | Stable M5a automated interfaces and explicit removal decision | CSV/XLSX-only import, table editing, lifecycle, project pinning, selected-series plot, and complete non-solver verification |
+| 5b history | Superseded Material Studio manual UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only | Retained for decision history; its image/PDF ingestion instructions no longer describe the application |
+| 5c (optional) | Future material ingestion | Written only after a new explicit need and approved scope | Spreadsheet-only M5b accepted | Separately defined evidence for any new non-spreadsheet importer |
 | 6 | Productization | Written after Milestone 5 review | Desktop and extension workflows accepted | Installer and extension pass Commercial and Student release validation |
 | 7 | Additional core families | One plan per core family after toroid release criteria pass | Toroid workflow released | Each family has independent schemas, invariants, previews, adapters, and fixtures |
 
@@ -49,7 +50,7 @@ Only one detailed milestone plan is active at a time. Every completed milestone 
 | Solver-independent 3D geometry, approximate 2D intermediate geometry, packing, collisions, leads, naming, symmetry proof, and persistent preview | 2 |
 | Ready-to-solve Maxwell 3D geometry, materials, solid/stranded windings, excitations, region, boundaries, mesh, setup, and supported reports | 3 |
 | Maxwell 2D equivalent, native Include DC Fields, AEDT 2024 R2 operating-point fallback, compatibility warnings, and generation manifest | 4 |
-| Traceable datasheet/image/CSV/formula material workflow, curve calibration, fitting, physical checks, review, approval, and optional GPL importer | 5 |
+| Traceable CSV/XLSX material workflow, fitting, physical checks, review, approval, visual curve inspection, and solver export | 5 |
 | Guided Studio completion, autosave/recovery, undo/redo, cancellation, AEDT extension, PyInstaller, Inno Setup, release matrix, checksums, and release documentation | 6 |
 | E, PQ, EQ, EER, and subsequently approved core-family plugins | 7 |
 

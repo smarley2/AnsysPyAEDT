@@ -3,40 +3,33 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from inductor_designer.adapters.materials.overlay_repository import FileOverlayMaterialRepository
+from inductor_designer.adapters.materials.overlay_repository import (
+    FileOverlayMaterialRepository,
+)
 from inductor_designer.application.services.material_import import (
     import_curve_csv,
     new_draft_record,
-)
-from inductor_designer.materials.calibration import (
-    AxisCalibration,
-    AxisScale,
-    CropRegion,
-    ExtractionRecord,
-    PixelPoint,
-    extract_points,
 )
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
     CurvePoint,
     MaterialRecord,
-    PointSeries,
     SeriesKind,
     SourceKind,
     SourceProvenance,
 )
 from inductor_designer.materials.replay import reproduce_record
-from inductor_designer.materials.serde import canonicalize_points, revision_id_for, sha256_hex
+from inductor_designer.materials.serde import revision_id_for, sha256_hex
 
 
-def _source(kind: SourceKind, filename: str, data: bytes) -> SourceProvenance:
+def _source(filename: str, data: bytes) -> SourceProvenance:
     return SourceProvenance(
-        kind=kind,
+        kind=SourceKind.CSV,
         filename=filename,
         sha256=sha256_hex(data),
         url=f"https://example.com/{filename}",
-        page=1 if kind is SourceKind.IMAGE else None,
+        page=None,
         captured_at="2026-07-17T12:00:00+00:00",
         description="Replay fixture",
     )
@@ -50,10 +43,10 @@ def _record_fixture() -> tuple[MaterialRecord, dict[str, bytes]]:
         "loss-50000.csv": (
             b"x,y\n0.05,104083.5487608821\n0.1,512636.1476004878\n"
         ),
-        "bh.png": b"synthetic image bytes",
+        "bh.csv": b"x,y\n0,0\n1,0.001\n2,0.002\n",
     }
     loss_sources = tuple(
-        _source(SourceKind.CSV, filename, source_bytes[filename])
+        _source(filename, source_bytes[filename])
         for filename in ("loss-10000.csv", "loss-50000.csv")
     )
     loss_series = tuple(
@@ -68,27 +61,20 @@ def _record_fixture() -> tuple[MaterialRecord, dict[str, bytes]]:
         )
         for frequency, source in zip((10_000, 50_000), loss_sources, strict=True)
     )
-    image_source = _source(SourceKind.IMAGE, "bh.png", source_bytes["bh.png"])
-    extraction = ExtractionRecord(
-        crop=CropRegion(0, 0, 100, 100),
-        x_axis=AxisCalibration(AxisScale.LINEAR, 0.0, 0.0, 100.0, 2.0),
-        y_axis=AxisCalibration(AxisScale.LINEAR, 100.0, 0.0, 0.0, 0.2),
-        pixel_points=(PixelPoint(0.0, 100.0), PixelPoint(50.0, 50.0)),
-    )
-    image_series = PointSeries(
-        series_id="bh-image",
+    bh_source = _source("bh.csv", source_bytes["bh.csv"])
+    bh_series = import_curve_csv(
+        source_bytes["bh.csv"].decode("utf-8"),
+        series_id="bh-table",
         kind=SeriesKind.BH_CURVE,
-        x_unit="Oe",
+        x_unit="A/m",
         y_unit="T",
         conditions=CurveConditions(None, 25.0, None),
-        points=canonicalize_points(extract_points(extraction), "Oe", "T"),
-        source_filename=image_source.filename,
-        extraction=extraction,
+        source=bh_source,
     )
     record = new_draft_record(
         MaterialRef("Example", "Ferrite", "F1"),
-        series=(*loss_series, image_series),
-        sources=(*loss_sources, image_source),
+        series=(*loss_series, bh_series),
+        sources=(*loss_sources, bh_source),
         created_at="2026-07-17T12:00:00+00:00",
     )
     return record, source_bytes
@@ -98,38 +84,26 @@ def _with_current_revision(record: MaterialRecord) -> MaterialRecord:
     return replace(record, revision_id=revision_id_for(record))
 
 
-def test_reproduce_record_matches_task_8_csv_and_image_paths() -> None:
+def test_reproduce_record_matches_csv_material_tables() -> None:
     record, sources = _record_fixture()
 
-    assert reproduce_record(record, sources).matches
-    assert reproduce_record(record, sources).mismatches == ()
+    report = reproduce_record(record, sources)
+
+    assert report.matches
+    assert report.mismatches == ()
 
 
 def test_save_load_replay_matches_noncanonical_nested_values(tmp_path: Path) -> None:
     record, sources = _record_fixture()
-    image = record.series[-1]
-    assert image.extraction is not None
-    extraction = replace(
-        image.extraction,
-        x_axis=AxisCalibration(
-            AxisScale.LINEAR,
-            0.0000000004,
-            0.0000000004,
-            100.0000000004,
-            2.0000000004,
-        ),
-        pixel_points=(PixelPoint(0.0000000004, 100.0000000004), PixelPoint(50.0, 50.0)),
-    )
     record = replace(
         record,
         relative_permeability=60.0000000004,
         series=(
-            *record.series[:-1],
             replace(
-                image,
-                conditions=CurveConditions(None, 25.0000000004, 0.0000000004),
-                extraction=extraction,
+                record.series[0],
+                conditions=CurveConditions(10_000.0, 25.0000000004, 0.0000000004),
             ),
+            *record.series[1:],
         ),
     )
     record = _with_current_revision(record)
@@ -139,7 +113,9 @@ def test_save_load_replay_matches_noncanonical_nested_values(tmp_path: Path) -> 
     loaded = repository.get(record.ref, record.revision_id)
 
     assert loaded == record
-    assert reproduce_record(loaded, repository.source_bytes(loaded.ref, loaded.revision_id)).matches
+    assert reproduce_record(
+        loaded, repository.source_bytes(loaded.ref, loaded.revision_id)
+    ).matches
 
 
 def test_source_tamper_reports_only_hash_mismatch() -> None:
@@ -153,26 +129,28 @@ def test_source_tamper_reports_only_hash_mismatch() -> None:
 
 def test_stored_point_tamper_reports_only_series_mismatch() -> None:
     record, sources = _record_fixture()
-    image = record.series[-1]
-    tampered = replace(
-        record,
-        series=(
-            *record.series[:-1],
-            replace(image, points=(*image.points[:-1], CurvePoint(image.points[-1].x, 0.11))),
-        ),
+    bh = record.series[-1]
+    tampered = _with_current_revision(
+        replace(
+            record,
+            series=(
+                *record.series[:-1],
+                replace(bh, points=(*bh.points[:-1], CurvePoint(bh.points[-1].x, 0.11))),
+            ),
+        )
     )
-    tampered = _with_current_revision(tampered)
 
     report = reproduce_record(tampered, sources)
 
-    assert report.mismatches == ("series 'bh-image' points mismatch",)
+    assert report.mismatches == ("series 'bh-table' points mismatch",)
 
 
 def test_stored_fit_tamper_reports_only_fit_mismatch() -> None:
     record, sources = _record_fixture()
     assert record.steinmetz is not None
-    tampered = replace(record, steinmetz=replace(record.steinmetz, k=record.steinmetz.k + 0.1))
-    tampered = _with_current_revision(tampered)
+    tampered = _with_current_revision(
+        replace(record, steinmetz=replace(record.steinmetz, k=record.steinmetz.k + 0.1))
+    )
 
     report = reproduce_record(tampered, sources)
 
@@ -189,24 +167,23 @@ def test_revision_tamper_reports_only_revision_mismatch() -> None:
 
 def test_independent_divergences_are_all_reported_in_check_order() -> None:
     record, sources = _record_fixture()
-    image = record.series[-1]
+    bh = record.series[-1]
     assert record.steinmetz is not None
     tampered = replace(
         record,
         revision_id="0" * 12,
         series=(
             *record.series[:-1],
-            replace(image, points=(*image.points[:-1], CurvePoint(image.points[-1].x, 0.11))),
+            replace(bh, points=(*bh.points[:-1], CurvePoint(bh.points[-1].x, 0.11))),
         ),
         steinmetz=replace(record.steinmetz, k=record.steinmetz.k + 0.1),
     )
-    sources["bh.png"] += b"!"
+    sources["bh.csv"] += b"!"
 
     report = reproduce_record(tampered, sources)
 
     assert report.mismatches == (
-        "source 'bh.png' SHA-256 mismatch",
-        "series 'bh-image' points mismatch",
+        "source 'bh.csv' SHA-256 mismatch",
         "Steinmetz fit mismatch",
         "revision ID mismatch",
     )
@@ -222,86 +199,25 @@ def test_missing_source_does_not_duplicate_series_noise() -> None:
     assert report.mismatches == ("source 'loss-10000.csv' is missing",)
 
 
-def test_missing_image_does_not_prevent_independent_extraction_check() -> None:
+def test_spreadsheet_provenance_cannot_directly_back_a_series() -> None:
     record, sources = _record_fixture()
-    image = record.series[-1]
-    tampered = replace(
-        record,
-        series=(
-            *record.series[:-1],
-            replace(image, points=(*image.points[:-1], CurvePoint(image.points[-1].x, 0.11))),
-        ),
+    bh = record.series[-1]
+    spreadsheet = replace(
+        next(source for source in record.sources if source.filename == "bh.csv"),
+        kind=SourceKind.SPREADSHEET,
+        filename="material.xlsx",
     )
-    tampered = _with_current_revision(tampered)
-    del sources["bh.png"]
-
-    report = reproduce_record(tampered, sources)
-
-    assert report.mismatches == (
-        "source 'bh.png' is missing",
-        "series 'bh-image' points mismatch",
-    )
-
-
-def test_series_arithmetic_failure_is_reported_before_revision_mismatch() -> None:
-    record, sources = _record_fixture()
-    image = record.series[-1]
-    assert image.extraction is not None
-    overflowing_extraction = replace(
-        image.extraction,
-        x_axis=AxisCalibration(AxisScale.LOG, 0.0, 1.0, 1.0, 10.0),
-        pixel_points=(PixelPoint(1_000.0, 50.0),),
-    )
-    tampered = replace(
-        record,
-        revision_id="0" * 12,
-        series=(*record.series[:-1], replace(image, extraction=overflowing_extraction)),
-    )
-
-    report = reproduce_record(tampered, sources)
-
-    assert report.mismatches == (
-        "series 'bh-image' reconstruction failed: arithmetic error",
-        "revision ID mismatch",
-    )
-
-
-def test_fit_arithmetic_failure_is_reported_before_revision_mismatch() -> None:
-    record, _ = _record_fixture()
-    raw_series = (
-        (10_000_000_000.0, "x,y\n100000,1e200\n10000000000,1e200\n"),
-        (1e300, "x,y\n1e100,1e50\n"),
-        (1e100, "x,y\n1e50,1e-5\n"),
-    )
-    source_data = {
-        f"overflow-{index}.csv": text.encode("utf-8")
-        for index, (_, text) in enumerate(raw_series)
-    }
-    provenance = tuple(
-        _source(SourceKind.CSV, filename, data) for filename, data in source_data.items()
-    )
-    loss_series = tuple(
-        import_curve_csv(
-            text,
-            series_id=f"overflow-{index}",
-            kind=SeriesKind.LOSS_TABLE,
-            x_unit="T",
-            y_unit="W/m3",
-            conditions=CurveConditions(frequency, 25.0, None),
-            source=provenance[index],
+    tampered = _with_current_revision(
+        replace(
+            record,
+            sources=(*record.sources[:-1], spreadsheet),
+            series=(*record.series[:-1], replace(bh, source_filename="material.xlsx")),
         )
-        for index, (frequency, text) in enumerate(raw_series)
     )
-    tampered = replace(
-        record,
-        revision_id="0" * 12,
-        sources=provenance,
-        series=loss_series,
-    )
+    sources["material.xlsx"] = sources.pop("bh.csv")
 
-    report = reproduce_record(tampered, source_data)
+    report = reproduce_record(tampered, sources)
 
     assert report.mismatches == (
-        "Steinmetz fit could not be reproduced: arithmetic error",
-        "revision ID mismatch",
+        "series 'bh-table' must be backed by a CSV source",
     )
