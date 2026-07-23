@@ -278,7 +278,7 @@ Download selected material XLSX -> enabled
 Delete selected material -> confirmation opens; cancel without deleting
 ```
 
-- [ ] **Step 5: Stage and commit only intended files**
+- [x] **Step 5: Stage and commit only intended files**
 
 Exclude `.DS_Store`, `materials-overlay/`, and `outputs/`. Stage the material workflow, tests, documentation, ADR, plans, and generated template explicitly, then commit:
 
@@ -286,7 +286,7 @@ Exclude `.DS_Store`, `materials-overlay/`, and `outputs/`. Stage the material wo
 git commit -m "feat(materials): streamline spreadsheet library workflow"
 ```
 
-- [ ] **Step 6: Push the current branch**
+- [x] **Step 6: Push the current branch**
 
 Run:
 
