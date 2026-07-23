@@ -9,6 +9,7 @@ from inductor_designer.application.services.material_import import (
     approve_material,
     import_curve_csv,
     new_draft_record,
+    new_imported_record,
     review_material,
 )
 from inductor_designer.materials.identity import MaterialRef
@@ -121,6 +122,61 @@ def test_new_draft_record_fits_loss_csvs_at_multiple_frequencies() -> None:
     assert record.steinmetz.k == pytest.approx(2.5, abs=1e-6)
     assert record.steinmetz.alpha == pytest.approx(1.4, abs=1e-6)
     assert record.steinmetz.beta == pytest.approx(2.3, abs=1e-6)
+
+
+def test_new_imported_record_fit_ignores_loss_origin() -> None:
+    frequencies = (10_000.0, 50_000.0)
+    flux_densities = (0.05, 0.1, 0.2)
+    sources = tuple(_source(f"origin-loss-{int(frequency)}.csv") for frequency in frequencies)
+    series = tuple(
+        import_curve_csv(
+            "x,y\n0,0\n"
+            + "".join(
+                f"{flux_density},{2.5 * frequency**1.4 * flux_density**2.3}\n"
+                for flux_density in flux_densities
+            ),
+            series_id=f"origin-loss-{int(frequency)}",
+            kind=SeriesKind.LOSS_TABLE,
+            x_unit="T",
+            y_unit="W/m3",
+            conditions=CurveConditions(frequency, 25.0, None),
+            source=source,
+        )
+        for frequency, source in zip(frequencies, sources, strict=True)
+    )
+
+    record = new_imported_record(
+        MaterialRef("Example", "Ferrite", "F1"),
+        series=series,
+        sources=sources,
+        created_at="2026-07-17T12:00:00+00:00",
+    )
+
+    assert record.steinmetz is not None
+    assert record.steinmetz.k == pytest.approx(2.5, abs=1e-6)
+    assert record.steinmetz.alpha == pytest.approx(1.4, abs=1e-6)
+    assert record.steinmetz.beta == pytest.approx(2.3, abs=1e-6)
+
+
+def test_new_imported_record_rejects_zero_b_with_nonzero_loss() -> None:
+    source = _source("loss.csv")
+    series = import_curve_csv(
+        "x,y\n0,1\n0.1,2\n",
+        series_id="loss",
+        kind=SeriesKind.LOSS_TABLE,
+        x_unit="T",
+        y_unit="W/m3",
+        conditions=CurveConditions(100_000.0, 25.0, None),
+        source=source,
+    )
+
+    with pytest.raises(MaterialImportError, match="zero B"):
+        new_imported_record(
+            MaterialRef("Example", "Ferrite", "F1"),
+            series=(series,),
+            sources=(source,),
+            created_at="2026-07-17T12:00:00+00:00",
+        )
 
 
 def test_new_draft_record_keeps_optional_fit_empty_for_log_collinear_losses() -> None:

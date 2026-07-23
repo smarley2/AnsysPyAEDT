@@ -5,10 +5,9 @@ import QtQuick.Layouts
 
 Page {
     id: materialStudioPage
+    objectName: "materialStudioPage"
     property var controller: null
     property var transactionHost: null
-    property var editing: controller !== null ? controller.tableEditing : ({})
-    property var metadata: editing.metadata || ({})
     property var revisionSources: controller !== null
         ? (controller.selectedRevision["sources"] || []) : []
     property var bhSeries: controller !== null
@@ -23,48 +22,8 @@ Page {
                 .arg(conditionText(item.dcBiasAPerM, qsTr("A/m")))
         }
     })
-    property bool seriesMetadataInputsValid:
-        seriesIdField.text.trim().length > 0
-        && xUnitField.text.trim().length > 0
-        && yUnitField.text.trim().length > 0
-        && frequencyConditionField.parseValid
-        && temperatureConditionField.parseValid
-        && dcBiasConditionField.parseValid
     property int overviewColumns: width < 1000 ? 1 : width < 1400 ? 2 : 3
     property int workspaceColumns: width < 1200 ? 1 : 2
-    property int workspaceFormColumns: width < 1800 ? 4 : 6
-
-    function fieldText(value) {
-        return value === undefined || value === null ? "" : String(value)
-    }
-
-    function optionalNumber(text) {
-        return text.trim().length === 0 ? Number.NaN : Number(text)
-    }
-
-    function optionalNumberValid(text) {
-        return text.trim().length === 0 || Number.isFinite(Number(text))
-    }
-
-    function parseSeriesPoints(text) {
-        const lines = text.split(/\r?\n/).filter(function(line) {
-            return line.trim().length > 0
-        })
-        const points = []
-        for (let index = 0; index < lines.length; ++index) {
-            const values = lines[index].split(",")
-            if (values.length !== 2) {
-                return []
-            }
-            const x = Number(values[0].trim())
-            const y = Number(values[1].trim())
-            if (!Number.isFinite(x) || !Number.isFinite(y)) {
-                return []
-            }
-            points.push({"x": x, "y": y})
-        }
-        return points
-    }
 
     function conditionText(value, unit) {
         return value === undefined || value === null
@@ -85,167 +44,90 @@ Page {
 
     function sourcesTraceText() {
         return revisionSources.length > 0
-            ? revisionSources.map(function(source) {
-                return sourceTraceText(source)
-            }).join("\n\n")
+            ? revisionSources.map(function(source) { return sourceTraceText(source) }).join("\n\n")
             : qsTr("No material table has been imported yet.")
     }
 
-    function markPendingEditorInput(group) {
-        if (controller !== null) {
-            controller.invalidateEditorInput(
-                group,
-                qsTr("Apply or correct the visible table field before saving.")
-            )
-        }
-    }
-
-    function findNamedChild(item, name) {
-        if (item === null || item === undefined) {
-            return null
-        }
-        if (item.objectName === name) {
-            return item
-        }
-        const childItems = item.children || []
-        for (let index = 0; index < childItems.length; ++index) {
-            const found = findNamedChild(childItems[index], name)
-            if (found !== null) {
-                return found
-            }
-        }
-        return null
-    }
-
-    function libraryList(kind) {
-        return findNamedChild(
-            materialLibraryPane,
-            kind === "material" ? "materialList" : "revisionList"
-        )
-    }
-
-    function selectionArgumentsAt(kind, index) {
-        const values = kind === "material"
-            ? libraryController.materials : libraryController.revisions
-        if (index < 0 || index >= values.length) {
+    function selectionArgumentsAt(index) {
+        if (index < 0 || index >= libraryController.materials.length) {
             return []
         }
-        const value = values[index]
-        return kind === "material"
-            ? [value.manufacturer, value.name, value.grade]
-            : [value.revisionId]
+        const value = libraryController.materials[index]
+        return [value.manufacturer, value.name, value.grade]
     }
 
-    function selectionIndex(kind, selectionArguments) {
-        const values = kind === "material"
-            ? libraryController.materials : libraryController.revisions
-        for (let index = 0; index < values.length; ++index) {
-            const candidate = selectionArgumentsAt(kind, index)
-            if (candidate.length === selectionArguments.length
-                    && candidate.every(function(value, part) {
-                        return value === selectionArguments[part]
-                    })) {
+    function selectionIndex(values) {
+        for (let index = 0; index < libraryController.materials.length; ++index) {
+            const candidate = selectionArgumentsAt(index)
+            if (candidate.length === values.length
+                    && candidate.every(function(value, part) { return value === values[part] })) {
                 return index
             }
         }
         return -1
     }
 
-    function confirmedLibrarySelection(kind) {
-        return kind === "material"
-            ? confirmedMaterialSelection : confirmedRevisionSelection
-    }
-
-    function restoreLibrarySelection(kind, selectionArguments) {
-        const list = libraryList(kind)
-        const index = selectionIndex(kind, selectionArguments)
-        if (list !== null) {
-            list.currentIndex = index
+    function restoreMaterialSelection(values) {
+        if (materialLibraryPane.materialListView !== null) {
+            materialLibraryPane.materialListView.currentIndex = selectionIndex(values)
         }
     }
 
-    function performLibrarySelection(selectionKind, selectionArguments) {
-        let selected = false
-        if (selectionKind === "material") {
-            selected = controller.selectMaterial(
-                selectionArguments[0], selectionArguments[1], selectionArguments[2]
-            )
-        } else if (selectionKind === "revision") {
-            selected = controller.selectRevision(selectionArguments[0])
-        }
+    function performLibrarySelection(values) {
+        const selected = controller.selectMaterial(values[0], values[1], values[2])
         if (selected) {
-            if (selectionKind === "material") {
-                confirmedMaterialSelection = selectionArguments
-                confirmedRevisionSelection = []
-            } else {
-                confirmedRevisionSelection = selectionArguments
-            }
+            confirmedMaterialSelection = values
         }
-        restoreLibrarySelection(
-            selectionKind,
-            selected ? selectionArguments : confirmedLibrarySelection(selectionKind)
-        )
+        restoreMaterialSelection(selected ? values : confirmedMaterialSelection)
     }
 
-    function requestLibrarySelection(kind, selectionArguments) {
-        restoreLibrarySelection(kind, confirmedLibrarySelection(kind))
-        transactionHost.requestMaterialAction(
-            "librarySelection", [kind, selectionArguments]
-        )
+    function requestLibrarySelection(values) {
+        restoreMaterialSelection(confirmedMaterialSelection)
+        transactionHost.requestMaterialAction("librarySelection", values)
     }
 
-    function requestDestructiveAction(action, arguments_) {
-        transactionHost.requestMaterialAction(action, arguments_)
+    function requestMaterialAction(action, values) {
+        transactionHost.requestMaterialAction(action, values)
     }
 
-    function performTransactionAction(action, arguments_) {
+    function performTransactionAction(action, values) {
         if (action === "librarySelection") {
-            performLibrarySelection(arguments_[0], arguments_[1])
+            performLibrarySelection(values)
         } else if (action === "importTable") {
-            controller.importTable(arguments_[0])
-        } else if (action === "importEditedWorkbook") {
-            controller.importEditedWorkbook(arguments_[0])
+            controller.importTable(values[0])
+        } else if (action === "replaceSelectedMaterial") {
+            controller.replaceSelectedMaterial(values[0])
         }
     }
 
     property var confirmedMaterialSelection: []
-    property var confirmedRevisionSelection: []
-
-    Component.onCompleted: {
-        confirmedMaterialSelection = selectionArgumentsAt("material", 0)
-        confirmedRevisionSelection = selectionArgumentsAt("revision", 0)
-    }
-
-    Connections {
-        target: materialStudioPage.controller
-        function onLibraryChanged() {
-            Qt.callLater(function() {
-                materialStudioPage.revisionSources = materialStudioPage.controller !== null
-                    ? (materialStudioPage.controller.selectedRevision["sources"] || [])
-                    : []
-            })
-        }
-    }
 
     QtObject {
         id: libraryController
         property var materials: materialStudioPage.controller !== null
             ? materialStudioPage.controller.materials : []
-        property var revisions: materialStudioPage.controller !== null
-            ? materialStudioPage.controller.revisions : []
 
         function selectMaterial(manufacturer, name, grade) {
-            materialStudioPage.requestLibrarySelection(
-                "material", [manufacturer, name, grade]
-            )
-        }
-
-        function selectRevision(revisionId) {
-            materialStudioPage.requestLibrarySelection("revision", [revisionId])
+            materialStudioPage.requestLibrarySelection([manufacturer, name, grade])
+            return true
         }
     }
 
-    padding: 10
+    Connections {
+        target: materialStudioPage.controller
+        function onLibraryChanged() {
+            materialStudioPage.revisionSources = materialStudioPage.controller !== null
+                ? (materialStudioPage.controller.selectedRevision["sources"] || []) : []
+        }
+        function onSelectionChanged() {
+            materialStudioPage.revisionSources = materialStudioPage.controller !== null
+                ? (materialStudioPage.controller.selectedRevision["sources"] || []) : []
+        }
+    }
+
+    Component.onCompleted: {
+        confirmedMaterialSelection = selectionArgumentsAt(0)
+    }
 
     FileDialog {
         id: templateCsvDialog
@@ -254,10 +136,9 @@ Page {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("CSV files (*.csv)")]
         defaultSuffix: "csv"
-        onAccepted: materialStudioPage.controller.downloadTemplate(
-            "csv", selectedFile.toString()
-        )
+        onAccepted: controller.downloadTemplate("csv", selectedFile.toString())
     }
+
     FileDialog {
         id: templateXlsxDialog
         objectName: "templateXlsxDialog"
@@ -265,45 +146,65 @@ Page {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("Excel workbooks (*.xlsx)")]
         defaultSuffix: "xlsx"
-        onAccepted: materialStudioPage.controller.downloadTemplate(
-            "xlsx", selectedFile.toString()
-        )
+        onAccepted: controller.downloadTemplate("xlsx", selectedFile.toString())
     }
+
+    FileDialog {
+        id: materialWorkbookDownloadDialog
+        objectName: "materialWorkbookDownloadDialog"
+        title: qsTr("Save selected material XLSX")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Excel workbooks (*.xlsx)")]
+        defaultSuffix: "xlsx"
+        onAccepted: controller.exportSelectedWorkbook(selectedFile.toString())
+    }
+
     FileDialog {
         id: tableUploadDialog
         objectName: "tableUploadDialog"
-        title: qsTr("Upload a material table")
+        title: qsTr("Import a material table")
         fileMode: FileDialog.OpenFile
         nameFilters: [
             qsTr("Material tables (*.csv *.xlsx)"),
             qsTr("CSV files (*.csv)"),
             qsTr("Excel workbooks (*.xlsx)")
         ]
-        onAccepted: materialStudioPage.requestDestructiveAction(
-            "importTable", [selectedFile.toString()]
-        )
+        onAccepted: requestMaterialAction("importTable", [selectedFile.toString()])
     }
+
     FileDialog {
-        id: revisionExportDialog
-        objectName: "revisionExportDialog"
-        title: qsTr("Export the selected material revision")
-        fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("Excel workbooks (*.xlsx)")]
-        defaultSuffix: "xlsx"
-        onAccepted: materialStudioPage.controller.exportSelectedWorkbook(
-            selectedFile.toString()
-        )
-    }
-    FileDialog {
-        id: workbookReimportDialog
-        objectName: "workbookReimportDialog"
-        title: qsTr("Reimport an edited material workbook")
+        id: replaceMaterialDialog
+        objectName: "replaceMaterialDialog"
+        title: qsTr("Replace selected material")
         fileMode: FileDialog.OpenFile
-        nameFilters: [qsTr("Excel workbooks (*.xlsx)")]
-        onAccepted: materialStudioPage.requestDestructiveAction(
-            "importEditedWorkbook", [selectedFile.toString()]
-        )
+        nameFilters: [
+            qsTr("Material tables (*.csv *.xlsx)"),
+            qsTr("CSV files (*.csv)"),
+            qsTr("Excel workbooks (*.xlsx)")
+        ]
+        onAccepted: requestMaterialAction("replaceSelectedMaterial", [selectedFile.toString()])
     }
+
+    Dialog {
+        id: deleteMaterialDialog
+        objectName: "deleteMaterialDialog"
+        modal: true
+        title: qsTr("Delete selected material")
+        standardButtons: Dialog.Yes | Dialog.No
+        anchors.centerIn: Overlay.overlay
+
+        Label {
+            width: 420
+            text: qsTr(
+                "Delete the selected material and all stored revisions? The original workbook outside the application overlay will not be deleted."
+            )
+            wrapMode: Text.WordWrap
+        }
+
+        onAccepted: controller.deleteSelectedMaterial()
+    }
+
+    padding: 10
 
     ScrollView {
         id: materialStudioScrollView
@@ -328,7 +229,7 @@ Page {
                 objectName: "materialWorkflowGuide"
                 Layout.fillWidth: true
                 text: qsTr(
-                    "Workflow: 1. Download a CSV or XLSX template. 2. Fill the material metadata and curve tables. 3. Upload the table. 4. Select a revision and series to inspect the plotted canonical curve."
+                    "Import a completed CSV or XLSX table. Imported revisions are stored immediately and remain read-only; use Replace selected material to provide a new file."
                 )
                 wrapMode: Text.WordWrap
                 Accessible.name: text
@@ -356,17 +257,15 @@ Page {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     Layout.preferredHeight: 250
-                    Accessible.name: qsTr("Material table import and export")
+                    Accessible.name: qsTr("Material table import and replacement")
 
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 6
-                        Label { text: qsTr("Table import and export"); font.bold: true }
+                        Label { text: qsTr("Import and replace"); font.bold: true }
                         Label {
                             Layout.fillWidth: true
-                            text: qsTr(
-                                "Use CSV for a compact exchange or XLSX for the structured workbook. These are the only supported material inputs."
-                            )
+                            text: qsTr("The Excel and CSV files are the source of truth. The page only checks and visualizes stored data.")
                             wrapMode: Text.WordWrap
                         }
                         RowLayout {
@@ -375,80 +274,71 @@ Page {
                                 objectName: "downloadCsvTemplateButton"
                                 Layout.fillWidth: true
                                 text: qsTr("CSV template")
-                                activeFocusOnTab: true
-                                Accessible.name: qsTr("Download CSV template")
                                 onClicked: templateCsvDialog.open()
                             }
                             Button {
                                 objectName: "downloadXlsxTemplateButton"
                                 Layout.fillWidth: true
                                 text: qsTr("XLSX template")
-                                activeFocusOnTab: true
-                                Accessible.name: qsTr("Download XLSX template")
                                 onClicked: templateXlsxDialog.open()
                             }
                         }
                         Button {
                             objectName: "uploadTableButton"
                             Layout.fillWidth: true
-                            text: qsTr("Upload CSV or XLSX")
-                            activeFocusOnTab: true
-                            Accessible.name: qsTr("Upload a CSV or XLSX material table")
+                            text: qsTr("Import CSV or XLSX")
                             onClicked: tableUploadDialog.open()
                         }
                         Button {
-                            objectName: "exportRevisionButton"
+                            objectName: "downloadSelectedMaterialButton"
                             Layout.fillWidth: true
-                            text: qsTr("Export selected revision")
-                            enabled: materialStudioPage.controller !== null
-                                && Object.keys(materialStudioPage.controller.selectedRevision).length > 0
-                            activeFocusOnTab: true
-                            onClicked: revisionExportDialog.open()
+                            text: qsTr("Download selected material XLSX")
+                            enabled: controller !== null
+                                && Object.keys(controller.selectedRevision).length > 0
+                            onClicked: materialWorkbookDownloadDialog.open()
                         }
                         Button {
-                            objectName: "reimportWorkbookButton"
+                            objectName: "replaceSelectedMaterialButton"
                             Layout.fillWidth: true
-                            text: qsTr("Reimport edited XLSX")
-                            activeFocusOnTab: true
-                            onClicked: workbookReimportDialog.open()
+                            text: qsTr("Replace selected material")
+                            enabled: controller !== null && Object.keys(controller.selectedRevision).length > 0
+                            onClicked: replaceMaterialDialog.open()
+                        }
+                        Button {
+                            objectName: "deleteSelectedMaterialButton"
+                            Layout.fillWidth: true
+                            text: qsTr("Delete selected material")
+                            enabled: controller !== null && Object.keys(controller.selectedMaterial).length > 0
+                            onClicked: deleteMaterialDialog.open()
                         }
                     }
                 }
 
                 Pane {
-                    objectName: "materialLifecyclePane"
+                    objectName: "materialSelectionPane"
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     Layout.preferredHeight: 250
-                    Accessible.name: qsTr("Material lifecycle and project selection")
+                    Accessible.name: qsTr("Material traceability and simulation selection")
 
                     ColumnLayout {
                         anchors.fill: parent
-                        spacing: 5
-                        Label { text: qsTr("Lifecycle and project"); font.bold: true }
-                        RowLayout {
+                        spacing: 6
+                        Label { text: qsTr("Selected revision"); font.bold: true }
+                        Label {
                             Layout.fillWidth: true
-                            TextField {
-                                id: reviewerField
-                                objectName: "reviewerField"
-                                Layout.fillWidth: true
-                                placeholderText: qsTr("Reviewer identity")
-                                activeFocusOnTab: true
-                                Accessible.name: qsTr("Reviewer identity")
-                            }
-                            TextField {
-                                id: approverField
-                                objectName: "approverField"
-                                Layout.fillWidth: true
-                                placeholderText: qsTr("Approver identity")
-                                activeFocusOnTab: true
-                                Accessible.name: qsTr("Approver identity")
-                            }
+                            text: controller !== null && controller.selectedRevision.status
+                                ? qsTr("Status: %1 · revision %2 · %3 series")
+                                    .arg(controller.selectedRevision.status)
+                                    .arg(controller.selectedRevision.revisionId)
+                                    .arg(controller.selectedRevision.seriesCount)
+                                : qsTr("No material revision selected")
+                            wrapMode: Text.WordWrap
                         }
                         ScrollView {
                             objectName: "materialTraceabilityRegion"
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 74
+                            Layout.preferredHeight: 90
                             clip: true
                             Label {
                                 objectName: "materialSourceTraceabilityDetails"
@@ -458,65 +348,38 @@ Page {
                                 Accessible.name: text
                             }
                         }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Button {
-                                objectName: "saveDraftButton"
-                                text: qsTr("Save draft")
-                                enabled: materialStudioPage.controller !== null
-                                    && materialStudioPage.controller.canSave
-                                    && materialStudioPage.seriesMetadataInputsValid
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.saveDraft()
-                            }
-                            Button {
-                                objectName: "reviewDraftButton"
-                                text: qsTr("Review")
-                                enabled: materialStudioPage.controller !== null
-                                    && materialStudioPage.controller.canReview
-                                    && reviewerField.text.trim().length > 0
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.reviewDraft(
-                                    reviewerField.text
-                                )
-                            }
-                            Button {
-                                objectName: "approveRevisionButton"
-                                text: qsTr("Approve")
-                                enabled: materialStudioPage.controller !== null
-                                    && materialStudioPage.controller.canApprove
-                                    && approverField.text.trim().length > 0
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.approveRevision(
-                                    approverField.text
-                                )
-                            }
-                        }
-                        Label { text: qsTr("B-H series for project") }
                         ComboBox {
                             id: projectBhSeriesChoice
                             objectName: "projectBhSeriesChoice"
+                            visible: controller !== null && controller.hasProject
                             Layout.fillWidth: true
                             model: materialStudioPage.bhSeriesOptions
                             textRole: "label"
                             valueRole: "seriesId"
                             currentIndex: count === 1 ? 0 : -1
-                            activeFocusOnTab: true
-                            Accessible.name: qsTr("Explicit B-H series for project")
+                            Accessible.name: qsTr("Explicit B-H series for simulation")
                         }
                         Button {
-                            objectName: "useInProjectButton"
+                            id: selectForSimulationButton
+                            objectName: "selectForSimulationButton"
+                            visible: controller !== null && controller.hasProject
                             Layout.fillWidth: true
-                            text: qsTr("Use in project")
-                            enabled: materialStudioPage.controller !== null
-                                && materialStudioPage.controller.canUseInProject
+                            text: qsTr("Select for simulation")
+                            enabled: controller !== null
+                                && controller.canUseInProject
                                 && (projectBhSeriesChoice.count <= 1
                                     || projectBhSeriesChoice.currentIndex >= 0)
-                            activeFocusOnTab: true
-                            onClicked: materialStudioPage.controller.useInProject(
+                            onClicked: controller.useInProject(
                                 projectBhSeriesChoice.currentIndex >= 0
                                     ? projectBhSeriesChoice.currentValue : ""
                             )
+                        }
+                        Label {
+                            visible: controller === null || !controller.hasProject
+                            Layout.fillWidth: true
+                            text: qsTr("Load a project to select this revision for simulation.")
+                            wrapMode: Text.WordWrap
+                            color: palette.mid
                         }
                     }
                 }
@@ -534,229 +397,14 @@ Page {
                     objectName: "materialCurveWorkspace"
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    Layout.preferredHeight: materialStudioPage.workspaceColumns === 1 ? 920 : 700
+                    Layout.preferredHeight: materialStudioPage.workspaceColumns === 1 ? 640 : 600
                     Accessible.name: qsTr("Material curve workspace")
 
-                    ColumnLayout {
+                    MaterialCurveEditor {
+                        objectName: "materialCurveEditor"
                         anchors.fill: parent
-                        spacing: 6
-
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: materialStudioPage.workspaceFormColumns
-                            rowSpacing: 5
-                            columnSpacing: 5
-                            Label {
-                                text: qsTr("Series management")
-                                font.bold: true
-                                Layout.columnSpan: materialStudioPage.workspaceFormColumns
-                            }
-                            Label {
-                                objectName: "seriesManagementInstructions"
-                                Layout.fillWidth: true
-                                Layout.columnSpan: materialStudioPage.workspaceFormColumns
-                                text: qsTr(
-                                    "Select a series to inspect its plot. Add another series only from numeric X,Y pairs copied from a CSV or XLSX table."
-                                )
-                                wrapMode: Text.WordWrap
-                            }
-                            TextField {
-                                id: newSeriesIdField
-                                objectName: "newSeriesIdField"
-                                Layout.preferredWidth: 120
-                                placeholderText: qsTr("New series ID")
-                                activeFocusOnTab: true
-                            }
-                            TextArea {
-                                id: newSeriesPointsField
-                                objectName: "newSeriesPointsField"
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 46
-                                placeholderText: qsTr("One numeric x,y pair per line")
-                                activeFocusOnTab: true
-                            }
-                            Button {
-                                objectName: "addTableSeriesButton"
-                                text: qsTr("Add table series")
-                                enabled: newSeriesIdField.text.trim().length > 0
-                                    && materialStudioPage.seriesMetadataInputsValid
-                                    && materialStudioPage.parseSeriesPoints(
-                                        newSeriesPointsField.text
-                                    ).length > 0
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.addTableSeries(
-                                    newSeriesIdField.text,
-                                    seriesKindField.currentValue,
-                                    xUnitField.text,
-                                    yUnitField.text,
-                                    materialStudioPage.optionalNumber(frequencyConditionField.text),
-                                    materialStudioPage.optionalNumber(temperatureConditionField.text),
-                                    materialStudioPage.optionalNumber(dcBiasConditionField.text),
-                                    materialStudioPage.parseSeriesPoints(newSeriesPointsField.text)
-                                )
-                            }
-                            Button {
-                                objectName: "removeSeriesButton"
-                                text: qsTr("Remove selected")
-                                enabled: workspaceSeriesChoice.currentIndex >= 0
-                                    && workspaceSeriesChoice.count > 1
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.removeSeries(
-                                    workspaceSeriesChoice.currentValue
-                                )
-                            }
-                        }
-
-                        GridLayout {
-                            Layout.fillWidth: true
-                            columns: materialStudioPage.workspaceFormColumns
-                            rowSpacing: 5
-                            columnSpacing: 5
-                            Label {
-                                text: qsTr("Series metadata")
-                                font.bold: true
-                                Layout.columnSpan: materialStudioPage.workspaceFormColumns
-                            }
-                            Label {
-                                objectName: "seriesMetadataInstructions"
-                                Layout.fillWidth: true
-                                Layout.columnSpan: materialStudioPage.workspaceFormColumns
-                                text: qsTr(
-                                    "The fields describe the selected table series. Units determine how the imported values are converted to canonical units."
-                                )
-                                wrapMode: Text.WordWrap
-                            }
-                            ComboBox {
-                                id: workspaceSeriesChoice
-                                objectName: "workspaceSeriesChoice"
-                                Layout.preferredWidth: 120
-                                model: materialStudioPage.controller !== null
-                                    ? materialStudioPage.controller.series : []
-                                textRole: "seriesId"
-                                valueRole: "seriesId"
-                                currentIndex: {
-                                    for (let index = 0; index < count; ++index) {
-                                        if (model[index].seriesId
-                                                === materialStudioPage.metadata.seriesId) {
-                                            return index
-                                        }
-                                    }
-                                    return count > 0 ? 0 : -1
-                                }
-                                activeFocusOnTab: true
-                                Accessible.name: qsTr("Table series to inspect")
-                                onActivated: materialStudioPage.controller.selectSeries(
-                                    currentValue
-                                )
-                            }
-                            TextField {
-                                id: seriesIdField
-                                objectName: "seriesIdField"
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.seriesId)
-                                placeholderText: qsTr("Series ID")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            ComboBox {
-                                id: seriesKindField
-                                objectName: "seriesKindField"
-                                model: [
-                                    {"value": "bh-curve", "label": qsTr("B-H curve")},
-                                    {"value": "loss-table", "label": qsTr("Loss table")}
-                                ]
-                                textRole: "label"
-                                valueRole: "value"
-                                currentIndex: materialStudioPage.metadata.kind === "loss-table"
-                                    ? 1 : 0
-                                activeFocusOnTab: true
-                            }
-                            TextField {
-                                id: xUnitField
-                                objectName: "xUnitField"
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.xUnit)
-                                placeholderText: qsTr("X unit")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            TextField {
-                                id: yUnitField
-                                objectName: "yUnitField"
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.yUnit)
-                                placeholderText: qsTr("Y unit")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            TextField {
-                                id: frequencyConditionField
-                                objectName: "frequencyConditionField"
-                                property bool parseValid: materialStudioPage.optionalNumberValid(text)
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.frequencyHz)
-                                placeholderText: qsTr("Frequency (Hz)")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            TextField {
-                                id: temperatureConditionField
-                                objectName: "temperatureConditionField"
-                                property bool parseValid: materialStudioPage.optionalNumberValid(text)
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.temperatureC)
-                                placeholderText: qsTr("Temperature (°C)")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            TextField {
-                                id: dcBiasConditionField
-                                objectName: "dcBiasConditionField"
-                                property bool parseValid: materialStudioPage.optionalNumberValid(text)
-                                text: materialStudioPage.fieldText(materialStudioPage.metadata.dcBiasAPerM)
-                                placeholderText: qsTr("DC bias (A/m)")
-                                onTextEdited: materialStudioPage.markPendingEditorInput("metadata")
-                                activeFocusOnTab: true
-                            }
-                            Button {
-                                objectName: "applySeriesMetadataButton"
-                                text: qsTr("Apply series")
-                                enabled: materialStudioPage.seriesMetadataInputsValid
-                                activeFocusOnTab: true
-                                onClicked: materialStudioPage.controller.setSeriesMetadata(
-                                    seriesIdField.text,
-                                    seriesKindField.currentValue,
-                                    xUnitField.text,
-                                    yUnitField.text,
-                                    materialStudioPage.optionalNumber(frequencyConditionField.text),
-                                    materialStudioPage.optionalNumber(temperatureConditionField.text),
-                                    materialStudioPage.optionalNumber(dcBiasConditionField.text)
-                                )
-                            }
-                        }
-
-                        Label {
-                            objectName: "seriesMetadataInputError"
-                            Layout.fillWidth: true
-                            visible: !materialStudioPage.seriesMetadataInputsValid
-                            text: qsTr(
-                                "Series ID and units are required; each nonblank condition must be numeric."
-                            )
-                            wrapMode: Text.WordWrap
-                            Accessible.ignored: !visible
-                        }
-
-                        MaterialCurveEditor {
-                            objectName: "materialCurveEditor"
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.minimumHeight: 360
-                            controller: materialStudioPage.controller
-                        }
+                        controller: materialStudioPage.controller
                     }
-                }
-
-                MaterialValidationPane {
-                    objectName: "materialValidationPane"
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    Layout.preferredHeight: materialStudioPage.workspaceColumns === 1 ? 330 : 700
-                    controller: materialStudioPage.controller
                 }
             }
 

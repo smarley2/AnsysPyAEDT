@@ -168,20 +168,20 @@ def test_packaged_xlsx_has_documented_structure_and_validations() -> None:
         "series_id",
         "temperature_c",
         "dc_bias_a_per_m",
-        "h_unit",
-        "b_unit",
         "h",
+        "h_unit",
         "b",
+        "b_unit",
     )
     assert tuple(cell.value for cell in loss[1]) == (
         "series_id",
         "frequency_hz",
         "temperature_c",
         "dc_bias_a_per_m",
-        "b_unit",
-        "loss_unit",
         "b",
+        "b_unit",
         "loss",
+        "loss_unit",
     )
     for sheet in (material, bh, loss):
         assert tuple(table.ref for table in sheet.tables.values()) == (sheet.dimensions,)
@@ -192,10 +192,10 @@ def test_packaged_xlsx_has_documented_structure_and_validations() -> None:
         for validation in sheet.data_validations.dataValidation
     }
     assert validations == {
-        ("B-H Curves", "D2:D200"): '\"A/m,kA/m,Oe\"',
-        ("B-H Curves", "E2:E200"): '\"T,mT,G,kG\"',
-        ("Loss Curves", "E2:E200"): '\"T,mT,G,kG\"',
-        ("Loss Curves", "F2:F200"): '\"W/m3,kW/m3,mW/cm3\"',
+        ("B-H Curves", "E2:E200"): '\"A/m,kA/m,Oe\"',
+        ("B-H Curves", "G2:G200"): '\"T,mT,G,kG\"',
+        ("Loss Curves", "F2:F200"): '\"T,mT,G,kG\"',
+        ("Loss Curves", "H2:H200"): '\"W/m3,kW/m3,mW/cm3\"',
     }
 
 
@@ -240,16 +240,16 @@ def test_export_material_record_xlsx_preserves_template_and_retained_units() -> 
         ),
     }
     assert tuple(workbook["B-H Curves"].iter_rows(min_row=2, values_only=True)) == (
-        ("bh-25c", 25.0, None, "Oe", "kG", 0.0, 0.0),
-        ("bh-25c", 25.0, None, "Oe", "kG", pytest.approx(1.0), 1.0),
-        ("bh-100c", 100.0, 50.0, "kA/m", "mT", 1.0, 100.0),
-        ("bh-100c", 100.0, 50.0, "kA/m", "mT", 2.0, 200.0),
+        ("bh-25c", 25.0, None, 0.0, "Oe", 0.0, "kG"),
+        ("bh-25c", 25.0, None, pytest.approx(1.0), "Oe", 1.0, "kG"),
+        ("bh-100c", 100.0, 50.0, 1.0, "kA/m", 100.0, "mT"),
+        ("bh-100c", 100.0, 50.0, 2.0, "kA/m", 200.0, "mT"),
     )
     assert tuple(workbook["Loss Curves"].iter_rows(min_row=2, values_only=True)) == (
-        ("loss-100khz", 100_000.0, 25.0, 0.0, "kG", "mW/cm3", 0.5, 1.0),
-        ("loss-100khz", 100_000.0, 25.0, 0.0, "kG", "mW/cm3", 1.0, 2.0),
-        ("loss-200khz", 200_000.0, 80.0, 10.0, "mT", "kW/m3", 50.0, 3.0),
-        ("loss-200khz", 200_000.0, 80.0, 10.0, "mT", "kW/m3", 100.0, 6.0),
+        ("loss-100khz", 100_000.0, 25.0, 0.0, 0.5, "kG", 1.0, "mW/cm3"),
+        ("loss-100khz", 100_000.0, 25.0, 0.0, 1.0, "kG", 2.0, "mW/cm3"),
+        ("loss-200khz", 200_000.0, 80.0, 10.0, 50.0, "mT", 3.0, "kW/m3"),
+        ("loss-200khz", 200_000.0, 80.0, 10.0, 100.0, "mT", 6.0, "kW/m3"),
     )
 
 
@@ -278,10 +278,10 @@ def test_export_extends_ranges_and_preserves_first_middle_last_style_roles() -> 
     assert loss.tables["LossCurvesTable"].autoFilter.ref == "A1:H1"
     assert {
         str(validation.sqref) for validation in bh.data_validations.dataValidation
-    } == {"D2:D206", "E2:E206"}
+    } == {"E2:E206", "G2:G206"}
     assert {
         str(validation.sqref) for validation in loss.data_validations.dataValidation
-    } == {"E2:E200", "F2:F200"}
+    } == {"F2:F200", "H2:H200"}
     assert [cell.style_id for cell in bh[2]] == [
         cell.style_id for cell in packaged["B-H Curves"][2]
     ]
@@ -341,7 +341,7 @@ def test_export_preserves_formula_like_text_as_literal_strings_on_round_trip() -
 
     for coordinate in ("B2", "B3", "B4", "B7", "B8"):
         assert workbook["Material"][coordinate].data_type == "s"
-    for coordinate in ("A2", "D2", "E2"):
+    for coordinate in ("A2", "E2", "G2"):
         assert workbook["B-H Curves"][coordinate].data_type == "s"
 
     imported = import_material_file(download.filename, download.data)

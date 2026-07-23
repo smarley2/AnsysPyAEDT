@@ -72,10 +72,16 @@ def test_import_material_rows_groups_series_and_preserves_replay_sources() -> No
     assert result.series[0].conditions == CurveConditions(None, 25.0, None)
     assert result.series[1].conditions == CurveConditions(None, 100.0, None)
     assert result.series[2].points == (
+        CurvePoint(0.0, 0.0),
         CurvePoint(0.1, 1000.0),
         CurvePoint(0.2, 3000.0),
     )
     assert result.series[2].conditions == CurveConditions(100_000.0, 25.0, 0.0)
+    assert result.series[3].points == (
+        CurvePoint(0.0, 0.0),
+        CurvePoint(0.1, 1000.0),
+        CurvePoint(0.2, 4000.0),
+    )
     assert result.series[3].conditions == CurveConditions(200_000.0, 100.0, 10.0)
 
     assert tuple(source.filename for source in result.sources) == (
@@ -94,13 +100,54 @@ def test_import_material_rows_groups_series_and_preserves_replay_sources() -> No
     )
     assert all(source.url == "" for source in result.sources[1:])
     assert all(source.page is None for source in result.sources[1:])
+    assert result.sources[1].description == "Material Studio generated per-series CSV"
     assert all(
-        source.description == "Material Studio generated per-series CSV"
-        for source in result.sources[1:]
+        "inserted Maxwell-required loss origin" in source.description
+        for source in result.sources[3:]
     )
     assert tuple(series.source_filename for series in result.series) == tuple(
         source.filename for source in result.sources[1:]
     )
+
+
+def test_import_material_rows_inserts_loss_origin_and_records_normalization() -> None:
+    rows = (
+        MaterialTableRow(
+            "loss-100khz",
+            SeriesKind.LOSS_TABLE,
+            100_000.0,
+            25.0,
+            None,
+            "T",
+            "W/m3",
+            0.1,
+            1000.0,
+        ),
+        MaterialTableRow(
+            "loss-100khz",
+            SeriesKind.LOSS_TABLE,
+            100_000.0,
+            25.0,
+            None,
+            "T",
+            "W/m3",
+            0.2,
+            3000.0,
+        ),
+    )
+
+    result = import_material_rows(
+        _metadata(),
+        rows,
+        upload_filename="material.xlsx",
+        upload_kind=SourceKind.SPREADSHEET,
+        upload_bytes=b"workbook",
+    )
+
+    assert result.series[0].points[0] == CurvePoint(0.0, 0.0)
+    generated = result.sources[1]
+    assert "origin" in generated.description.lower()
+    assert dict(result.source_files)[generated.filename].startswith(b"x,y\n0.0,0.0\n")
 
 
 def _bh_row(series_id: str = "bh") -> MaterialTableRow:

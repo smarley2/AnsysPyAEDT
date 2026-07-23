@@ -27,8 +27,8 @@ def pin_material_revision(
     bh_series_id: str | None,
 ) -> InductorProject:
     issues: list[str] = []
-    if record.status is not MaterialStatus.APPROVED:
-        issues.append("Material revision must be approved before project selection.")
+    if record.status not in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED):
+        issues.append("Material revision must be imported or approved before project selection.")
     issues.extend(
         issue.message
         for issue in validate_record(record)

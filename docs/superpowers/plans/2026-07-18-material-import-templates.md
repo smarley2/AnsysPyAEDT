@@ -351,7 +351,9 @@ Create one auditable `.mjs` builder in a temporary/output directory, not in the
 package. Produce exactly four visible sheets: `Instructions`, `Material`,
 `B-H Curves`, and `Loss Curves`. Do not create `_Lists`; embed the short unit
 choices directly in each data validation because the approved artifact-tool
-API does not expose worksheet visibility controls. Apply readable title/header
+API does not expose worksheet visibility controls. Keep each numeric value
+immediately before its unit (`h`, `h_unit`, `b`, `b_unit` and `b`, `b_unit`,
+`loss`, `loss_unit`). Apply readable title/header
 styles, filters, input fills, number formats, explanatory notes, and data
 validations. Do not require frozen panes: artifact-tool 2.8.6 does not persist
 its documented freeze setting during XLSX export, and the user approved this

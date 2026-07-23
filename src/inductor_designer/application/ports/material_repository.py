@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Protocol
 
 from inductor_designer.materials.identity import MaterialRef
@@ -23,3 +23,9 @@ class MaterialRepository(Protocol):
     def save(self, record: MaterialRecord, sources: Mapping[str, bytes]) -> None: ...
 
     def source_bytes(self, ref: MaterialRef, revision_id: str) -> Mapping[str, bytes]: ...
+
+    def delete_revision(self, ref: MaterialRef, revision_id: str) -> None: ...
+
+    def delete_material(
+        self, ref: MaterialRef, protected_revision_ids: Collection[str] = ()
+    ) -> None: ...

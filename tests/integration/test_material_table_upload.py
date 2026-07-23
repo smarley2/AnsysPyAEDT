@@ -57,7 +57,7 @@ def test_template_upload_export_and_edit_reproduce_end_to_end(tmp_path: Path) ->
     base_before_edit = deepcopy(xlsx_approved)
     exported = export_material_record_xlsx(xlsx_approved)
     workbook = load_workbook(io.BytesIO(exported.data))
-    workbook["Loss Curves"]["H2"] = 110.0
+    workbook["Loss Curves"]["G3"] = 110.0
     stream = io.BytesIO()
     workbook.save(stream)
 
@@ -75,8 +75,9 @@ def test_template_upload_export_and_edit_reproduce_end_to_end(tmp_path: Path) ->
     edited_loss = next(
         series for series in edited.record.series if series.series_id == "loss-100khz"
     )
-    assert edited_loss.points[0] == CurvePoint(0.05, 110_000.0)
-    assert edited_loss.points[0] != base_loss.points[0]
+    assert edited_loss.points[0] == CurvePoint(0.0, 0.0)
+    assert edited_loss.points[1] == CurvePoint(0.05, 110_000.0)
+    assert edited_loss.points[1] != base_loss.points[1]
     assert xlsx_approved == base_before_edit
 
     edited_approved = approve_material(
@@ -92,5 +93,6 @@ def test_template_upload_export_and_edit_reproduce_end_to_end(tmp_path: Path) ->
     reloaded_loss = next(
         series for series in reloaded.series if series.series_id == "loss-100khz"
     )
-    assert reloaded_loss.points[0] == CurvePoint(0.05, 110_000.0)
+    assert reloaded_loss.points[0] == CurvePoint(0.0, 0.0)
+    assert reloaded_loss.points[1] == CurvePoint(0.05, 110_000.0)
     assert fresh.get(xlsx_approved.ref, xlsx_approved.revision_id) == base_before_edit

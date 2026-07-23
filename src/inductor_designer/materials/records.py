@@ -11,6 +11,7 @@ class MaterialStatus(str, Enum):
     DRAFT = "draft"
     REVIEWED = "reviewed"
     APPROVED = "approved"
+    IMPORTED = "imported"
 
 
 class SourceKind(str, Enum):
@@ -116,7 +117,8 @@ class MaterialRecord:
             char in "0123456789abcdef" for char in self.revision_id
         )
         if not valid_revision and not (
-            self.status is MaterialStatus.DRAFT and self.revision_id == ""
+            self.status in (MaterialStatus.DRAFT, MaterialStatus.IMPORTED)
+            and self.revision_id == ""
         ):
             raise ValueError(
                 "revision_id must be 12 lowercase hexadecimal characters "
@@ -128,6 +130,10 @@ class MaterialRecord:
             not self.reviewed_by or not self.approved_by
         ):
             raise ValueError("approved material requires reviewed_by and approved_by")
+        if self.status in (MaterialStatus.DRAFT, MaterialStatus.IMPORTED) and (
+            self.reviewed_by or self.approved_by
+        ):
+            raise ValueError(f"{self.status.value} material cannot have reviewer or approver")
 
         series_ids = [item.series_id for item in self.series]
         if len(series_ids) != len(set(series_ids)):

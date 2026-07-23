@@ -5,36 +5,7 @@ import QtQuick.Layouts
 Pane {
     id: materialLibraryPane
     property var controller: null
-
-    function statusText(status) {
-        switch (status) {
-        case "draft":
-            return qsTr("Draft")
-        case "reviewed":
-            return qsTr("Reviewed")
-        case "approved":
-            return qsTr("Approved")
-        default:
-            return String(status)
-        }
-    }
-
-    function revisionDescription(revision) {
-        return [
-            qsTr("Revision %1").arg(revision.revisionId),
-            qsTr("Status: %1").arg(statusText(revision.status)),
-            qsTr("Created: %1").arg(revision.createdAt),
-            revision.reviewedBy
-                ? qsTr("Reviewer: %1").arg(revision.reviewedBy)
-                : qsTr("Reviewer: Not reviewed"),
-            revision.approvedBy
-                ? qsTr("Approver: %1").arg(revision.approvedBy)
-                : qsTr("Approver: Not approved"),
-            qsTr("Series: %1").arg(revision.seriesCount),
-            qsTr("Validation errors: %1").arg(revision.validationErrors),
-            qsTr("Validation warnings: %1").arg(revision.validationWarnings)
-        ].join("\n")
-    }
+    property alias materialListView: materialList
 
     function materialText(material, isCurrent) {
         const pattern = isCurrent
@@ -80,17 +51,15 @@ Pane {
         spacing: 8
 
         Label {
-            text: qsTr("Library and revisions")
+            text: qsTr("Material library")
             font.bold: true
         }
-
-        Label { text: qsTr("Materials") }
 
         ListView {
             id: materialList
             objectName: "materialList"
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(contentHeight, 104)
+            Layout.fillHeight: true
             activeFocusOnTab: true
             clip: true
             currentIndex: 0
@@ -142,91 +111,6 @@ Pane {
                         modelData.name,
                         modelData.grade
                     )
-                }
-            }
-        }
-
-        Label { text: qsTr("Revisions") }
-
-        ListView {
-            id: revisionList
-            objectName: "revisionList"
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            activeFocusOnTab: true
-            clip: true
-            currentIndex: 0
-            spacing: 8
-            model: materialLibraryPane.controller !== null
-                ? materialLibraryPane.controller.revisions
-                : []
-            Accessible.name: qsTr("Material revisions")
-
-            Keys.onPressed: function(event) {
-                materialLibraryPane.handleListKey(revisionList, event)
-            }
-
-            function activateCurrent() {
-                if (currentIndex < 0 || currentIndex >= count) {
-                    return
-                }
-                const revision = materialLibraryPane.controller.revisions[currentIndex]
-                materialLibraryPane.controller.selectRevision(revision.revisionId)
-            }
-
-            delegate: Frame {
-                id: revisionRow
-                required property int index
-                required property var modelData
-                width: ListView.view.width
-                height: revisionDetails.implicitHeight + 2 * padding
-
-                ColumnLayout {
-                    id: revisionDetails
-                    anchors.fill: parent
-                    spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: materialLibraryPane.revisionDescription(modelData)
-                        wrapMode: Text.WordWrap
-                        Accessible.name: text
-                    }
-
-                    Label {
-                        visible: revisionRow.ListView.isCurrentItem
-                        text: qsTr("Current revision")
-                        font.bold: true
-                        Accessible.name: text
-                        Accessible.ignored: !visible
-                    }
-
-                    Label {
-                        visible: modelData.isLatestApproved
-                        text: qsTr("Suggested latest approved")
-                        font.bold: true
-                        Accessible.name: text
-                        Accessible.ignored: !visible
-                    }
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Select revision %1").arg(modelData.revisionId)
-                        activeFocusOnTab: false
-                        focusPolicy: Qt.ClickFocus
-                        Accessible.name: text
-                        Accessible.focusable: true
-                        onClicked: {
-                            revisionList.currentIndex = revisionRow.index
-                            revisionList.positionViewAtIndex(
-                                revisionRow.index,
-                                ListView.Contain
-                            )
-                            materialLibraryPane.controller.selectRevision(
-                                modelData.revisionId
-                            )
-                        }
-                    }
                 }
             }
         }

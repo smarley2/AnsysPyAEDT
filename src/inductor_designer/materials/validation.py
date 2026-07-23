@@ -71,8 +71,19 @@ def validate_series(series: PointSeries) -> tuple[MaterialIssue, ...]:
             )
         if any(not 0.0 <= point.x <= 5.0 for point in series.points):
             issues.append(_error("range-b", "flux density must be between 0 and 5 T"))
-        if any(not point.y > 0.0 for point in series.points):
+        if any(
+            not point.y > 0.0 and (point.x, point.y) != (0.0, 0.0)
+            for point in series.points
+        ):
             issues.append(_error("loss-positive", "loss density must be positive"))
+        if any(point.x == 0.0 and point.y != 0.0 for point in series.points):
+            issues.append(_error("loss-zero-b", "loss data with zero B must have zero loss"))
+        flux_values = tuple(point.x for point in series.points)
+        if len(flux_values) != len(set(flux_values)):
+            issues.append(_error("duplicate-b", "loss series must not contain duplicate B values"))
+        pairs = tuple(zip(series.points, series.points[1:], strict=False))
+        if any(current.x >= following.x for current, following in pairs):
+            issues.append(_error("monotonic-b", "loss B values must be strictly increasing"))
         if (
             series.conditions.frequency_hz is None
             or series.conditions.frequency_hz <= 0.0

@@ -74,7 +74,11 @@ def make_approved_material_record(
         revision_id="0123456789ab",
         status=status,
         created_at="2026-07-17T08:32:00+00:00",
-        reviewed_by="reviewer@example.com" if status is not MaterialStatus.DRAFT else None,
+        reviewed_by=(
+            "reviewer@example.com"
+            if status in (MaterialStatus.REVIEWED, MaterialStatus.APPROVED)
+            else None
+        ),
         approved_by="approver@example.com" if status is MaterialStatus.APPROVED else None,
         sources=(source,),
         series=(
@@ -153,6 +157,17 @@ def test_approved_record_becomes_nonlinear_material_with_scalar_fallback() -> No
     assert spec.steinmetz is record.steinmetz
     assert spec.material_revision == record.revision_id
     assert spec.bh_series_id is None
+
+
+def test_imported_record_becomes_nonlinear_material_with_scalar_fallback() -> None:
+    record = make_approved_material_record(status=MaterialStatus.IMPORTED)
+
+    spec = material_spec_from_material_record(
+        make_core_record(family=CoreFamily.FERRITE_TOROID), record
+    )
+
+    assert spec.draft is False
+    assert spec.material_revision == record.revision_id
 
 
 def test_selected_bh_series_is_exported_without_changing_record() -> None:

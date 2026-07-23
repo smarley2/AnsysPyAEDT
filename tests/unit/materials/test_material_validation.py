@@ -123,6 +123,14 @@ def _summary(issues: tuple[MaterialIssue, ...]) -> tuple[tuple[str, IssueSeverit
             (("loss-positive", IssueSeverity.ERROR),),
         ),
         (
+            _loss_series(points=((0.0, 1.0), (0.1, 2.0))),
+            (("loss-zero-b", IssueSeverity.ERROR),),
+        ),
+        (
+            _loss_series(points=((0.0, 0.0), (0.1, 2.0), (0.1, 3.0))),
+            (("duplicate-b", IssueSeverity.ERROR), ("monotonic-b", IssueSeverity.ERROR)),
+        ),
+        (
             _bh_series(
                 points=(
                     (0.0, 0.0),
@@ -176,6 +184,8 @@ def _summary(issues: tuple[MaterialIssue, ...]) -> tuple[tuple[str, IssueSeverit
         "loss-range-b",
         "range-h",
         "loss-positive",
+        "loss-zero-b",
+        "loss-duplicate-b",
         "duplicate-h",
         "monotonic-h",
         "monotonic-b",

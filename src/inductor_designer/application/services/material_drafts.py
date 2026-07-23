@@ -200,8 +200,10 @@ def session_from_import(
     source_files: tuple[tuple[str, bytes], ...],
 ) -> MaterialDraftSession:
     """Wrap format-neutral imported material data in a draft session."""
-    if record.status is not MaterialStatus.DRAFT:
-        raise MaterialImportError(("Imported material session requires a draft record.",))
+    if record.status not in (MaterialStatus.DRAFT, MaterialStatus.IMPORTED):
+        raise MaterialImportError(
+            ("Imported material session requires a draft or imported record.",)
+        )
     if record.revision_id != revision_id_for(record):
         raise MaterialImportError(("Imported material revision does not match its content.",))
     source_names = tuple(source.filename for source in record.sources)

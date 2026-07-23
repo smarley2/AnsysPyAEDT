@@ -20,7 +20,7 @@ from tests.unit.domain.test_project import (
 
 
 @pytest.mark.parametrize("status", [MaterialStatus.DRAFT, MaterialStatus.REVIEWED])
-def test_pin_material_revision_requires_approved_record(status: MaterialStatus) -> None:
+def test_pin_material_revision_requires_imported_or_approved_record(status: MaterialStatus) -> None:
     record = make_material_record()
     record = replace(
         record,
@@ -33,7 +33,22 @@ def test_pin_material_revision_requires_approved_record(status: MaterialStatus) 
         pin_material_revision(make_project(), record, bh_series_id=None)
 
     assert captured.value.issues == (
-        "Material revision must be approved before project selection.",
+        "Material revision must be imported or approved before project selection.",
+    )
+
+
+def test_pin_material_revision_accepts_imported_record() -> None:
+    record = replace(
+        make_material_record(),
+        status=MaterialStatus.IMPORTED,
+        reviewed_by=None,
+        approved_by=None,
+    )
+
+    updated = pin_material_revision(make_project(), record, bh_series_id=None)
+
+    assert updated.materials == (
+        MaterialRevisionSelection(record.ref, record.revision_id, record, None),
     )
 
 

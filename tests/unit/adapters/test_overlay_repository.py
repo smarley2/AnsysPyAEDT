@@ -217,3 +217,42 @@ def test_backup_cleanup_failure_rolls_back_and_is_retryable(
     repository.save(replacement, {"bh-source.csv": source})
     assert repository.get(original.ref, original.revision_id) == replacement
     assert not tuple(tmp_path.rglob("*.backup-*"))
+
+
+def test_delete_revision_removes_only_requested_revision(tmp_path: Path) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    first = _record(source, revision_id="111111111111")
+    second = _record(
+        source,
+        revision_id="222222222222",
+        created_at="2026-07-17T09:00:00+00:00",
+    )
+    repository = FileOverlayMaterialRepository(tmp_path)
+    repository.save(first, {"bh-source.csv": source})
+    repository.save(second, {"bh-source.csv": source})
+
+    repository.delete_revision(first.ref, first.revision_id)
+
+    assert repository.list_revisions(first.ref) == (second.revision_id,)
+    with pytest.raises(KeyError):
+        repository.get(first.ref, first.revision_id)
+
+
+def test_delete_material_blocks_pinned_revision_and_then_removes_all(tmp_path: Path) -> None:
+    source = b"h,b\n0,0\n100,0.2\n"
+    first = _record(source, revision_id="111111111111")
+    second = _record(
+        source,
+        revision_id="222222222222",
+        created_at="2026-07-17T09:00:00+00:00",
+    )
+    repository = FileOverlayMaterialRepository(tmp_path)
+    repository.save(first, {"bh-source.csv": source})
+    repository.save(second, {"bh-source.csv": source})
+
+    with pytest.raises(ValueError, match="pinned"):
+        repository.delete_material(first.ref, protected_revision_ids=(first.revision_id,))
+
+    repository.delete_material(first.ref)
+
+    assert repository.list_materials() == ()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from copy import deepcopy
+from datetime import datetime
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -10,8 +11,12 @@ from openpyxl import Workbook, load_workbook
 from inductor_designer.adapters.materials.table_file import (
     import_material_file,
     import_material_file_as_draft,
+    import_material_file_as_imported,
 )
-from inductor_designer.adapters.materials.templates import export_material_record_xlsx
+from inductor_designer.adapters.materials.templates import (
+    export_material_record_xlsx,
+    material_import_template,
+)
 from inductor_designer.application.services.material_import import MaterialImportError
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -109,14 +114,14 @@ def _workbook_bytes(
             "series_id",
             "temperature_c",
             "dc_bias_a_per_m",
-            "h_unit",
-            "b_unit",
             "h",
+            "h_unit",
             "b",
+            "b_unit",
         )
     )
-    bh.append(("bh-25c", 25, None, "Oe", "kG", 0, 0))
-    bh.append(("bh-25c", 25, None, "Oe", "kG", 1, 1))
+    bh.append(("bh-25c", 25, None, 0, "Oe", 0, "kG"))
+    bh.append(("bh-25c", 25, None, 1, "Oe", 1, "kG"))
 
     loss = workbook.create_sheet("Loss Curves")
     loss.append(
@@ -125,14 +130,14 @@ def _workbook_bytes(
             "frequency_hz",
             "temperature_c",
             "dc_bias_a_per_m",
-            "b_unit",
-            "loss_unit",
             "b",
+            "b_unit",
             "loss",
+            "loss_unit",
         )
     )
-    loss.append(("loss-100khz", 100_000, None, 0, "kG", "mW/cm3", 1, 2))
-    loss.append(("loss-100khz", 100_000, None, 0, "kG", "mW/cm3", 2, 4))
+    loss.append(("loss-100khz", 100_000, None, 0, 1, "kG", 2, "mW/cm3"))
+    loss.append(("loss-100khz", 100_000, None, 0, 2, "kG", 4, "mW/cm3"))
 
     if empty_tables:
         bh.delete_rows(2, bh.max_row)
@@ -200,6 +205,7 @@ def test_import_material_csv_groups_series_and_preserves_metadata() -> None:
     )
     assert result.series[1].conditions == CurveConditions(100_000.0, None, 0.0)
     assert result.series[1].points == (
+        CurvePoint(0.0, 0.0),
         CurvePoint(0.1, 2000.0),
         CurvePoint(0.2, 4000.0),
     )
@@ -255,6 +261,15 @@ def test_xlsx_accepts_documented_sheets_in_any_tab_order() -> None:
     assert result.ref == MaterialRef("Example", "Ferrite", "F1")
 
 
+def test_xlsx_normalizes_excel_date_for_captured_at() -> None:
+    result = import_material_file(
+        "excel-date.xlsx",
+        _workbook_bytes(cell_value=("Material", "B7", datetime(2026, 7, 23))),
+    )
+
+    assert result.sources[0].captured_at == "2026-07-23T00:00:00"
+
+
 def test_xlsx_rejects_missing_material_value_column() -> None:
     _assert_import_error(
         "missing-material-column.xlsx",
@@ -279,7 +294,7 @@ def test_xlsx_rejects_extra_material_column(value: str, expected: str) -> None:
 
 @pytest.mark.parametrize(
     ("sheet", "coordinate"),
-    [("Material", "B2"), ("B-H Curves", "F2"), ("Loss Curves", "H2")],
+    [("Material", "B2"), ("B-H Curves", "D2"), ("Loss Curves", "G2")],
 )
 def test_xlsx_rejects_formulas_with_sheet_and_cell(sheet: str, coordinate: str) -> None:
     with pytest.raises(MaterialImportError) as caught:
@@ -366,7 +381,7 @@ def test_xlsx_rejects_missing_required_sheet() -> None:
 def test_xlsx_rejects_boolean_numeric_cell() -> None:
     _assert_import_error(
         "boolean.xlsx",
-        _workbook_bytes(cell_value=("B-H Curves", "F2", True)),
+        _workbook_bytes(cell_value=("B-H Curves", "D2", True)),
         "B-H Curves!A2:G2",
         "finite number",
     )
@@ -375,7 +390,7 @@ def test_xlsx_rejects_boolean_numeric_cell() -> None:
 def test_xlsx_rejects_nonfinite_numeric_cell() -> None:
     _assert_import_error(
         "nonfinite.xlsx",
-        _workbook_bytes(cell_value=("Loss Curves", "H2", float("inf"))),
+        _workbook_bytes(cell_value=("Loss Curves", "G2", float("inf"))),
         "Loss Curves!A2:H2",
         "finite number",
     )
@@ -428,7 +443,7 @@ def test_import_exported_workbook_as_draft_recomputes_fit_and_preserves_base() -
     unchanged = deepcopy(base)
     exported = export_material_record_xlsx(base)
     workbook = load_workbook(io.BytesIO(exported.data))
-    workbook["Loss Curves"]["H2"] = 4.0
+    workbook["Loss Curves"]["G2"] = 4.0
     stream = io.BytesIO()
     workbook.save(stream)
 
@@ -442,10 +457,26 @@ def test_import_exported_workbook_as_draft_recomputes_fit_and_preserves_base() -
     assert imported.record.status is MaterialStatus.DRAFT
     assert imported.record.revision_id != base.revision_id
     assert len(imported.record.revision_id) == 12
-    assert imported.record.series[0].points[0] == CurvePoint(0.05, 4000.0)
+    assert imported.record.series[0].points[0] == CurvePoint(0.0, 0.0)
+    assert imported.record.series[0].points[1] == CurvePoint(0.05, 4000.0)
     assert imported.record.steinmetz is not None
     assert imported.record.notes == "Edited workbook"
     assert {name for name, _ in imported.source_files} == {
         source.filename for source in imported.record.sources
     }
     assert base == unchanged
+
+
+def test_import_material_file_as_imported_persists_solver_loss_origin_in_record() -> None:
+    template = material_import_template("xlsx")
+
+    imported = import_material_file_as_imported(
+        template.filename,
+        template.data,
+        created_at="2026-07-23T10:00:00+00:00",
+    )
+
+    assert imported.record.status is MaterialStatus.IMPORTED
+    for series in imported.record.series:
+        if series.kind is SeriesKind.LOSS_TABLE:
+            assert series.points[0] == CurvePoint(0.0, 0.0)

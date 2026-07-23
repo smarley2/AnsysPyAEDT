@@ -162,9 +162,9 @@ def material_spec_from_material_record(
     *,
     bh_series_id: str | None = None,
 ) -> MaterialSpec:
-    """Build solver material data from an approved project snapshot."""
-    if material.status is not MaterialStatus.APPROVED:
-        raise PlanBuildError(("Only approved material records can be exported.",))
+    """Build solver material data from an imported or approved project snapshot."""
+    if material.status not in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED):
+        raise PlanBuildError(("Only imported or approved material records can be exported.",))
     if material.ref != core_record.material:
         raise PlanBuildError(("Material record identity does not match the selected core.",))
     errors = tuple(
@@ -182,7 +182,7 @@ def material_spec_from_material_record(
         if len(bh_series) > 1:
             raise PlanBuildError(
                 (
-                    "Approved material has multiple B-H series; provide an explicit "
+                    "Material revision has multiple B-H series; provide an explicit "
                     "bh_series_id before export.",
                 )
             )

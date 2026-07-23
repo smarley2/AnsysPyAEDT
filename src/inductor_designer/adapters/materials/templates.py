@@ -111,10 +111,10 @@ def _bh_rows(series: PointSeries) -> list[tuple[object, ...]]:
             series.series_id,
             series.conditions.temperature_c,
             series.conditions.dc_bias_a_per_m,
-            series.x_unit,
-            series.y_unit,
             from_canonical(point.x, series.x_unit),
+            series.x_unit,
             from_canonical(point.y, series.y_unit),
+            series.y_unit,
         )
         for point in series.points
     ]
@@ -127,10 +127,10 @@ def _loss_rows(series: PointSeries) -> list[tuple[object, ...]]:
             series.conditions.frequency_hz,
             series.conditions.temperature_c,
             series.conditions.dc_bias_a_per_m,
-            series.x_unit,
-            series.y_unit,
             from_canonical(point.x, series.x_unit),
+            series.x_unit,
             from_canonical(point.y, series.y_unit),
+            series.y_unit,
         )
         for point in series.points
     ]

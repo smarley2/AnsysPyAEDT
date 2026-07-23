@@ -7,6 +7,7 @@ from inductor_designer.adapters.materials.table_file import (
     ImportedMaterialDraft,
     import_material_file,
     import_material_file_as_draft,
+    import_material_file_as_imported,
 )
 from inductor_designer.adapters.materials.templates import (
     MaterialTemplateDownload,
@@ -23,5 +24,6 @@ __all__ = [
     "export_material_record_xlsx",
     "import_material_file",
     "import_material_file_as_draft",
+    "import_material_file_as_imported",
     "material_import_template",
 ]

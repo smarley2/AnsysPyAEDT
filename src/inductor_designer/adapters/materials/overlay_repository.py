@@ -4,7 +4,7 @@ import json
 import shutil
 import tempfile
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -302,3 +302,27 @@ class FileOverlayMaterialRepository:
     def source_bytes(self, ref: MaterialRef, revision_id: str) -> Mapping[str, bytes]:
         _, sources = self._load_verified(ref, revision_id)
         return sources
+
+    def delete_revision(self, ref: MaterialRef, revision_id: str) -> None:
+        revision_directory = self._revision_directory(ref, revision_id)
+        if not revision_directory.is_dir():
+            raise MaterialLookupError(f"unknown material revision: {ref!r} {revision_id}")
+        shutil.rmtree(revision_directory)
+
+    def delete_material(
+        self, ref: MaterialRef, protected_revision_ids: Collection[str] = ()
+    ) -> None:
+        revisions = self.list_revisions(ref)
+        protected = set(protected_revision_ids).intersection(revisions)
+        if protected:
+            values = ", ".join(sorted(protected))
+            raise ValueError(f"cannot delete material; revisions are pinned: {values}")
+        for revision_id in revisions:
+            self.delete_revision(ref, revision_id)
+        material_directory = self._material_directory(ref)
+        try:
+            material_directory.rmdir()
+            material_directory.parent.rmdir()
+            material_directory.parent.parent.rmdir()
+        except OSError:
+            pass

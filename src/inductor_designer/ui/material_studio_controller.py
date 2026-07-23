@@ -16,6 +16,7 @@ from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from inductor_designer.adapters.materials import (
     export_material_record_xlsx,
     import_material_file_as_draft,
+    import_material_file_as_imported,
     material_import_template,
 )
 from inductor_designer.application.ports.material_repository import (
@@ -26,7 +27,6 @@ from inductor_designer.application.services.material_drafts import (
     MaterialDraftSession,
     add_table_series,
     approve_material_session,
-    clone_revision_as_draft,
     derive_workbook_draft,
     remove_series,
     replace_table_series,
@@ -47,6 +47,7 @@ from inductor_designer.application.services.material_selection import (
     pin_material_revision,
 )
 from inductor_designer.domain.project import InductorProject
+from inductor_designer.domain.units import from_canonical
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -226,12 +227,17 @@ class MaterialStudioController(QObject):
     def _get_can_use_in_project(self) -> bool:
         return (
             self._session is not None
-            and self._session.record.status is MaterialStatus.APPROVED
+            and self._session.record.status in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED)
             and self._project is not None
             and self._project_save_callback is not None
         )
 
     canUseInProject = Property(bool, _get_can_use_in_project, notify=selectionChanged)
+
+    def _get_has_project(self) -> bool:
+        return self._project is not None
+
+    hasProject = Property(bool, _get_has_project, constant=True)
 
     @staticmethod
     def _material_dict(ref: MaterialRef) -> dict[str, object]:
@@ -285,8 +291,8 @@ class MaterialStudioController(QObject):
             {
                 "seriesId": series.series_id,
                 "index": index,
-                "x": point.x,
-                "y": point.y,
+                "x": from_canonical(point.x, series.x_unit),
+                "y": from_canonical(point.y, series.y_unit),
             }
             for index, point in enumerate(series.points)
         ]
@@ -300,6 +306,7 @@ class MaterialStudioController(QObject):
             "createdAt": record.created_at,
             "reviewedBy": record.reviewed_by or "",
             "approvedBy": record.approved_by or "",
+            "seriesCount": len(record.series),
             "relativePermeability": record.relative_permeability,
             "notes": record.notes,
             "sources": [
@@ -677,6 +684,10 @@ class MaterialStudioController(QObject):
             selected = True
 
         self._run_action(action)
+        if selected and self._revisions:
+            return self.selectRevision(str(self._revisions[0]["revisionId"]))
+        if selected:
+            self._set_status("The selected material has no stored revisions.")
         return selected
 
     @Slot(str, result=bool)
@@ -768,7 +779,7 @@ class MaterialStudioController(QObject):
                 return
             path = self._local_path(source_url)
             data = path.read_bytes()
-            imported = import_material_file_as_draft(
+            imported = import_material_file_as_imported(
                 path.name,
                 data,
                 created_at=self._now(),
@@ -777,16 +788,17 @@ class MaterialStudioController(QObject):
             source_snapshots: dict[str, tuple[CurvePoint, ...] | None] = {
                 item.series_id: item.points for item in session.record.series
             }
+            self._repository.save(session.record, dict(session.source_files))
             materials, revisions = self._library_values(session.record.ref)
-            self._remember_clean_state()
             self._source_point_snapshots = source_snapshots
             self._set_session(
                 session,
-                dirty=True,
-                saved=False,
+                dirty=False,
+                saved=True,
                 materials=materials,
                 revisions=revisions,
             )
+            self._set_clean_state()
             self.editorReset.emit()
             self._set_status(success_message)
 
@@ -794,7 +806,83 @@ class MaterialStudioController(QObject):
 
     @Slot(str)
     def importTable(self, source_url: str) -> None:
-        self._import_table(source_url, "Imported material table as a draft.")
+        self._import_table(source_url, "Imported material revision and stored it.")
+
+    @Slot(str)
+    def replaceSelectedMaterial(self, source_url: str) -> None:
+        if not source_url:
+            return
+
+        def action() -> None:
+            if self._reject_dirty_import():
+                return
+            if self._session is None or self._selected_ref is None:
+                raise ValueError("Select a material revision before replacing it.")
+            path = self._local_path(source_url)
+            imported = import_material_file_as_imported(
+                path.name,
+                path.read_bytes(),
+                created_at=self._now(),
+            )
+            if imported.record.ref != self._selected_ref:
+                raise ValueError(
+                    "Replacement material identity must match the selected manufacturer, "
+                    "material name, and grade."
+                )
+            previous = self._session.record
+            replacement = session_from_import(imported.record, imported.source_files)
+            self._repository.save(replacement.record, dict(replacement.source_files))
+            pinned = {
+                selection.revision_id
+                for selection in (() if self._project is None else self._project.materials)
+                if selection.ref == previous.ref
+            }
+            if (
+                previous.status is MaterialStatus.IMPORTED
+                and previous.revision_id != replacement.record.revision_id
+                and previous.revision_id not in pinned
+            ):
+                self._repository.delete_revision(previous.ref, previous.revision_id)
+            source_snapshots: dict[str, tuple[CurvePoint, ...] | None] = {
+                item.series_id: item.points for item in replacement.record.series
+            }
+            materials, revisions = self._library_values(replacement.record.ref)
+            self._source_point_snapshots = source_snapshots
+            self._set_session(
+                replacement,
+                dirty=False,
+                saved=True,
+                materials=materials,
+                revisions=revisions,
+            )
+            self._set_clean_state()
+            self.editorReset.emit()
+            self._set_status("Replaced selected material and stored the new revision.")
+
+        self._run_action(action)
+
+    @Slot()
+    def deleteSelectedMaterial(self) -> None:
+        def action() -> None:
+            if self._reject_dirty_import():
+                return
+            if self._selected_ref is None:
+                raise ValueError("Select a material before deleting it.")
+            pinned = tuple(
+                selection.revision_id
+                for selection in (() if self._project is None else self._project.materials)
+                if selection.ref == self._selected_ref
+            )
+            self._repository.delete_material(self._selected_ref, pinned)
+            self._selected_ref = None
+            self._revisions = []
+            self._clear_selection()
+            self._refresh_materials()
+            self._set_clean_state()
+            self.libraryChanged.emit()
+            self._set_status("Deleted selected material.")
+
+        self._run_action(action)
 
     @Slot(str)
     def exportSelectedWorkbook(self, destination_url: str) -> None:
@@ -879,12 +967,7 @@ class MaterialStudioController(QObject):
             raise ValueError("No material draft is selected.")
         if self._session.record.status is MaterialStatus.DRAFT:
             return self._session
-        return clone_revision_as_draft(
-            self._repository,
-            self._session.record.ref,
-            self._session.record.revision_id,
-            created_at=self._now(),
-        )
+        raise ValueError("Imported and approved material revisions are read-only.")
 
     def _replacement_editor_series(
         self,
@@ -927,6 +1010,10 @@ class MaterialStudioController(QObject):
         success_message: str,
         resolved_group: str,
     ) -> None:
+        if self._session is not None and self._session.record.status is not MaterialStatus.DRAFT:
+            self._set_status("Imported and approved material revisions are read-only.")
+            self.selectionChanged.emit()
+            return
         unresolved_groups = set(self._invalid_editor_groups)
         if unresolved_groups and resolved_group not in unresolved_groups:
             self._set_status("Apply or correct the visible editor input first.")
@@ -1243,7 +1330,7 @@ class MaterialStudioController(QObject):
             if self._project_save_callback is None:
                 raise ValueError("Project persistence is unavailable.")
             if self._session is None:
-                raise ValueError("Select an approved material revision first.")
+                raise ValueError("Select an imported or approved material revision first.")
             selected_id = bh_series_id.strip() or None
             updated = pin_material_revision(
                 self._project,

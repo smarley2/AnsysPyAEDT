@@ -293,8 +293,8 @@ follow-up validation and does not gate the milestone.
 ## Milestone 5: Material Studio
 
 - Import material characteristics only from CSV or XLSX spreadsheets.
-- Select material identities, revisions, and curve series; inspect canonical plots; edit table points; fit supported models; validate units and physics; and preserve provenance.
-- Export only approved material revisions to Maxwell.
+- Select material identities, revisions, and curve series; inspect read-only canonical plots; validate units and physics; and preserve provenance.
+- Export imported or approved material revisions to Maxwell.
 
 Exit criterion: a reviewer can reproduce a material record from its stored source metadata and transformation history.
 
@@ -309,16 +309,16 @@ claimed as live-verified.
 Implemented Tasks 1–12 deliver:
 
 1. canonical T/mT/G/kG, A/m/kA/m/Oe, and W/m³/kW/m³/mW/cm³ conversions;
-2. immutable material records with provenance and draft/reviewed/approved states;
+2. immutable material records with provenance and imported plus legacy lifecycle states;
 3. replayable canonical table points and per-series CSV provenance;
 4. stdlib Steinmetz fitting and B-H-derived mean relative permeability;
 5. unit-family, range, origin, monotonicity, duplication, slope, condition, and fit validation;
 6. deterministic JSON and CSV serde, SHA-256 provenance, and content-derived revision IDs;
 7. the repository port, in-memory fake, and atomic filesystem overlay with approved immutability, source-hash checks, and CSV/JSON agreement checks;
-8. canonical CSV import, draft construction, validation-gated review/approval, and optional loss fitting;
+8. canonical CSV/XLSX import, immediate imported-revision construction, validation, and optional loss fitting;
 9. full replay of source hashes, CSV transformations, fitted values, and revision identity;
 10. project schema v3 with exact material revision snapshots and v2 migration;
-11. approved nonlinear material export to Maxwell 2D/3D and FEMM, including ferrite unblock, explicit revision arbitration, manifest evidence, and rejection of ambiguous multiple B-H series; and
+11. imported/approved nonlinear material export to Maxwell 2D/3D and FEMM, including ferrite unblock, explicit revision arbitration, manifest evidence, and rejection of ambiguous multiple B-H series; and
 12. the reproduction CLI plus an end-to-end integration test covering tamper detection and solver-manifest propagation.
 
 The FEMM adapter uses the verified pyFEMM API spelling: singular
@@ -327,29 +327,32 @@ sets nonlinear permeability with `(B, H)` pairs and requires a truthy result
 from `set_power_ferrite_coreloss(cm, x, y)`.
 
 Packaged `material-import-template.csv` and `material-import-template.xlsx`
-resources, strict CSV/XLSX upload parsers, editable current-material workbook
-export, and new-draft reimport are implemented. They accept retained datasheet
-units including `A/m`, `Oe`, and `mW/cm3` while normalizing points to canonical
-SI units. The end-to-end integration test covers template import,
-review/approval, overlay persistence, replay, export, edit, and immutable-base
-reimport.
+resources, strict CSV/XLSX upload parsers, immediate imported-revision
+persistence, replacement/deletion guards, and read-only Material Studio are
+implemented. They accept retained datasheet units including `A/m`, `Oe`, and
+`mW/cm3` while normalizing points to canonical SI units. Loss imports add the
+solver-required origin to stored/generated data without changing the uploaded
+workbook. The end-to-end integration tests cover template import, overlay
+persistence, replay, replacement, explicit project pinning, and read-only
+plotting.
 
 Automated evidence covers fresh overlay save/load/replay, tampered record and
 source failures, schema v3 snapshot propagation, and recording-fake Maxwell 3D
 and FEMM manifests with a pinned revision and nonzero B-H point count. Full
 M5a non-live quality evidence is recorded in the Task 13 handoff commit.
 
-The 2026-07-20 spreadsheet-only redesign removes the unused image/PDF workflow
-because no user materials have been imported. Material Studio downloads CSV/XLSX
-templates, exports any selected revision as editable XLSX, reimports edits as a
-distinct draft, shows validation and fit results, lists every lifecycle revision,
-plots the selected canonical series, and performs explicit draft/review/approve
-transitions. The latest approved badge is advisory only. Project schema v4
-migrates v3 selections with `bhSeriesId: null`, and the user must explicitly pin
-one approved revision and B-H series when multiple series exist. Recording
-Maxwell 2D/3D and FEMM exports consume only that pinned snapshot and series.
+The 2026-07-23 approved read-only redesign removes the unused image/PDF and UI
+editing workflows because spreadsheets are the source of truth. Material Studio
+downloads CSV/XLSX templates, imports valid files immediately as `imported`,
+loads the newest stored revision with one material click, downloads the selected
+material as editable XLSX, previews canonical series with linear/log axes,
+replaces or deletes materials with project-reference guards,
+and explicitly pins one imported/approved revision and B-H series when multiple
+series exist. Project schema v4 migrates v3 selections with `bhSeriesId: null`.
+Recording Maxwell 2D/3D and FEMM exports consume only that pinned snapshot and
+series.
 
-M5b is **implementation ready but pending native acceptance evidence**, not complete:
+M5b is **implementation complete but pending native acceptance evidence**:
 the whole-change review and fresh complete suite/static gates pass, while native
 Windows manual UI acceptance has not yet been recorded. This computer cannot provide
 the required native Windows/high-DPI/FileDialog and manual Excel-compatible
@@ -358,12 +361,12 @@ run for this milestone.
 
 Remaining acceptance work and risks:
 
-- Import, review, and approve a real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
+- Import a legally usable real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
 - Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.
-- Confirm source licensing and redistribution rights before committing real datasheet bytes.
+- Confirm source licensing and redistribution rights before committing real workbook bytes to Git.
 - On Windows, manually verify keyboard/focus, scaling, file dialogs, template
-  download, Excel-compatible workbook edit/reimport, all revisions, lifecycle
-  actions, and explicit B-H selection.
+  and selected-material download, Excel-compatible workbook replacement, delete
+  confirmation, and explicit B-H selection.
 
 The completed M5b implementation work did not need live solver checks because it
 uses the stable, automated M5a services. The real-record import and `MATCH`
@@ -372,13 +375,13 @@ either milestone and for making live-solver claims. Source licensing must be
 confirmed before real datasheet bytes are committed or redistributed.
 
 The implemented M5b scope is the Guided Studio spreadsheet-only workflow:
-download CSV/XLSX templates, export any selected revision to editable XLSX,
-reimport edits as a new draft, select a material/revision/series, inspect its
-canonical curve plot, browse all revisions, perform review/approval, and pin one
-exact approved revision and B-H series. See the [spreadsheet-only M5b
-specification](../superpowers/specs/2026-07-20-material-studio-spreadsheet-only-design.md),
-[ADR 0002](../adr/0002-spreadsheet-only-material-ingestion.md), and
-[implementation plan](../superpowers/plans/2026-07-20-material-studio-spreadsheet-only.md).
+download CSV/XLSX templates, import immutable revisions, replace/delete stored
+materials, load the newest revision by selecting a material, download its XLSX,
+inspect its read-only linear/log curve plot, and pin one exact
+imported/approved revision and B-H series. See the
+[approved read-only imported-material specification](../superpowers/specs/2026-07-23-material-studio-readonly-imported-design.md),
+[ADR 0003](../adr/0003-read-only-imported-materials.md), and
+[implementation plan](../superpowers/plans/2026-07-23-material-studio-readonly-imported.md).
 
 Any future non-spreadsheet importer, OCR, image tracing, material MCP tool, or
 explicit-formula record requires a separately approved specification and plan.

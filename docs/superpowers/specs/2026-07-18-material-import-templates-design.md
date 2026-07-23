@@ -85,22 +85,27 @@ provenance; source metadata describes where its values came from.
 
 Columns:
 
-`series_id`, `temperature_c`, `dc_bias_a_per_m`, `h_unit`, `b_unit`, `h`, `b`
+`series_id`, `temperature_c`, `dc_bias_a_per_m`, `h`, `h_unit`, `b`, `b_unit`
 
 The sheet may contain multiple series. Rows sharing a `series_id` must repeat
-identical metadata. `h_unit` has a dropdown containing `A/m`, `kA/m`, and `Oe`.
-`b_unit` has a dropdown containing `T`, `mT`, `G`, and `kG`.
+identical metadata. Numeric H and B values sit immediately before their unit
+columns. `h_unit` has a dropdown containing `A/m`, `kA/m`, and `Oe`.
+`b_unit` has a dropdown containing `T`, `mT`, `G`, and `kG`. DC bias is
+optional condition metadata; blank means not supplied and `0` means explicitly
+zero bias.
 
 ### Loss Curves
 
 Columns:
 
-`series_id`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `b_unit`,
-`loss_unit`, `b`, `loss`
+`series_id`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `b`, `b_unit`,
+`loss`, `loss_unit`
 
 The sheet may contain multiple series. Rows sharing a `series_id` must repeat
-identical metadata. Frequency is required and positive. `b_unit` uses the B
-dropdown above; `loss_unit` contains `W/m3`, `kW/m3`, and `mW/cm3`.
+identical metadata. Frequency is required and positive. Numeric B and loss
+values sit immediately before their unit columns. `b_unit` uses the B dropdown
+above; `loss_unit` contains `W/m3`, `kW/m3`, and `mW/cm3`. DC bias remains
+optional measurement metadata and is not currently an independent solver input.
 
 The workbook embeds the short unit choices directly in each list validation
 and contains no support sheet. This decision avoids relying on worksheet

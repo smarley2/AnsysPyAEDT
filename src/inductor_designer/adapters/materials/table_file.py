@@ -4,6 +4,7 @@ import csv
 import io
 import math
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import PurePath
 from zipfile import BadZipFile
 
@@ -16,6 +17,7 @@ from openpyxl.worksheet.worksheet import Worksheet  # type: ignore[import-untype
 from inductor_designer.application.services.material_import import (
     MaterialImportError,
     new_draft_record,
+    new_imported_record,
 )
 from inductor_designer.application.services.material_table_import import (
     ImportedMaterialTable,
@@ -57,20 +59,20 @@ _BH_COLUMNS = (
     "series_id",
     "temperature_c",
     "dc_bias_a_per_m",
-    "h_unit",
-    "b_unit",
     "h",
+    "h_unit",
     "b",
+    "b_unit",
 )
 _LOSS_COLUMNS = (
     "series_id",
     "frequency_hz",
     "temperature_c",
     "dc_bias_a_per_m",
-    "b_unit",
-    "loss_unit",
     "b",
+    "b_unit",
     "loss",
+    "loss_unit",
 )
 
 
@@ -133,6 +135,14 @@ def _required_text(value: object, filename: str, location: str, field: str) -> s
     return value
 
 
+def _captured_at(value: object, filename: str, location: str) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return _required_text(value, filename, location, "captured_at")
+
+
 def _number(
     value: object,
     filename: str,
@@ -189,7 +199,7 @@ def _metadata(values: dict[str, object], filename: str, location: str) -> Materi
     manufacturer = _required_text(values["manufacturer"], filename, location, "manufacturer")
     material_name = _required_text(values["material_name"], filename, location, "material_name")
     grade = _required_text(values["grade"], filename, location, "grade")
-    captured_at = _required_text(values["captured_at"], filename, location, "captured_at")
+    captured_at = _captured_at(values["captured_at"], filename, location)
     description = _required_text(
         values["source_description"], filename, location, "source_description"
     )
@@ -362,8 +372,8 @@ def _material_metadata(filename: str, sheet: Worksheet) -> MaterialTableMetadata
         ref=MaterialRef(manufacturer, material_name, grade),
         source_url=source_url,
         source_page=_optional_page(values["source_page"], filename, locations["source_page"]),
-        captured_at=_required_text(
-            values["captured_at"], filename, locations["captured_at"], "captured_at"
+        captured_at=_captured_at(
+            values["captured_at"], filename, locations["captured_at"]
         ),
         source_description=_required_text(
             values["source_description"],
@@ -503,6 +513,34 @@ def import_material_file_as_draft(
         base_ref, base_revision_id = _workbook_lineage(filename, workbook)
     return ImportedMaterialDraft(
         record=new_draft_record(
+            imported.ref,
+            series=imported.series,
+            sources=imported.sources,
+            created_at=created_at,
+            notes=notes,
+        ),
+        source_files=imported.source_files,
+        base_ref=base_ref,
+        base_revision_id=base_revision_id,
+    )
+
+
+def import_material_file_as_imported(
+    filename: str,
+    data: bytes,
+    *,
+    created_at: str,
+    notes: str = "",
+) -> ImportedMaterialDraft:
+    """Import and validate a spreadsheet as an immediately usable revision."""
+    imported = import_material_file(filename, data)
+    base_ref: MaterialRef | None = None
+    base_revision_id: str | None = None
+    if PurePath(filename).suffix == ".xlsx":
+        workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
+        base_ref, base_revision_id = _workbook_lineage(filename, workbook)
+    return ImportedMaterialDraft(
+        record=new_imported_record(
             imported.ref,
             series=imported.series,
             sources=imported.sources,

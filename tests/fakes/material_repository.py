@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import datetime, timezone
 
 from inductor_designer.application.ports.material_repository import MaterialLookupError
@@ -126,3 +126,19 @@ class InMemoryMaterialRepository:
     def source_bytes(self, ref: MaterialRef, revision_id: str) -> Mapping[str, bytes]:
         self.get(ref, revision_id)
         return dict(self._sources[(ref, revision_id)])
+
+    def delete_revision(self, ref: MaterialRef, revision_id: str) -> None:
+        self.get(ref, revision_id)
+        del self._records[(ref, revision_id)]
+        del self._sources[(ref, revision_id)]
+
+    def delete_material(
+        self, ref: MaterialRef, protected_revision_ids: Collection[str] = ()
+    ) -> None:
+        revisions = set(self.list_revisions(ref))
+        protected = revisions.intersection(protected_revision_ids)
+        if protected:
+            values = ", ".join(sorted(protected))
+            raise ValueError(f"cannot delete material; revisions are pinned: {values}")
+        for revision_id in revisions:
+            self.delete_revision(ref, revision_id)

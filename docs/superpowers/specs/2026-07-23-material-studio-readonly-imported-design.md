@@ -1,6 +1,6 @@
 # Material Studio Read-Only Imported Materials Design
 
-**Status:** Draft for written review  
+**Status:** Approved 2026-07-23
 **Date:** 2026-07-23
 
 ## 1. Decision
@@ -21,11 +21,12 @@ needed, a B-H series.
 
 ### In scope
 
-- read-only material and revision browsing;
+- read-only material browsing with automatic newest-revision loading;
 - CSV/XLSX import with immediate persistence as an `Imported` revision;
 - replacement of the selected material from a new CSV/XLSX file;
 - deletion of a material with confirmation and project-reference protection;
-- read-only series selection and source/validation inspection;
+- read-only series selection and source inspection;
+- generated XLSX download of the selected material for offline editing;
 - curve preview with numeric axis ticks and independent linear/log X and Y
   controls;
 - explicit `Select for simulation` behavior when a project is loaded;
@@ -75,14 +76,16 @@ never deletes the user's original workbook outside the application overlay.
 
 ### Library and import actions
 
-The library remains selectable by material identity and stored revision. The
-revision view displays status, source traceability, validation counts, and
-series count as read-only information.
+The library is selectable by material identity. Selecting a material
+automatically loads its newest stored revision; revision lifecycle metadata and
+manual revision selection are not shown.
 
 The import area contains:
 
 - `XLSX template` (and the existing CSV template, if retained);
 - `Import CSV or XLSX` for a new material;
+- `Download selected material XLSX` for an editable workbook containing all
+  stored curves and metadata;
 - `Replace selected material`;
 - `Delete selected material`.
 
@@ -93,6 +96,7 @@ The following controls are removed from the page:
 - Series Metadata fields and `Apply series`;
 - direct point fields, `Apply`, and `Delete` point buttons;
 - imported/current point dump labels;
+- reviewer, approver, revision-list, fit, and validation panes;
 - edited-workbook reimport controls that imply in-UI editing.
 
 ### Simulation selection

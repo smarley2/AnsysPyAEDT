@@ -9,7 +9,10 @@ import pytest
 from openpyxl import load_workbook
 from PySide6.QtCore import QUrl
 
-from inductor_designer.adapters.materials import FileOverlayMaterialRepository
+from inductor_designer.adapters.materials import (
+    FileOverlayMaterialRepository,
+    export_material_record_xlsx,
+)
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.application.services.maxwell_export import (
@@ -73,7 +76,7 @@ def _set_material_metadata(workbook_path: Path) -> None:
 def _edit_exported_workbook(workbook_path: Path) -> None:
     workbook = load_workbook(workbook_path)
     loss = workbook["Loss Curves"]
-    loss["H2"] = 110.0
+    loss["G3"] = 110.0
     bh = workbook["B-H Curves"]
     source_rows = tuple(bh.iter_rows(min_row=2, values_only=True))
     for row in source_rows:
@@ -113,43 +116,36 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     assert template_path.read_bytes().startswith(b"PK")
     _set_material_metadata(template_path)
     controller.importTable(_file_url(template_path))
-    assert controller.selectedRevision["status"] == "draft"
-    controller.saveDraft()
-    controller.reviewDraft("reviewer@example.com")
-    controller.approveRevision("approver@example.com")
+    assert controller.selectedRevision["status"] == "imported"
 
     base_revision = str(controller.selectedRevision["revisionId"])
     ref = MaterialRef("Magnetics", "Kool Mu", "60")
     base_record = deepcopy(materials.get(ref, base_revision))
+    controller.useInProject("bh-25c")
+    assert controller.statusMessage == "Material revision saved to the project."
     exported_path = tmp_path / "selected-revision.xlsx"
-    controller.exportSelectedWorkbook(_file_url(exported_path))
+    exported_path.write_bytes(export_material_record_xlsx(base_record).data)
     _edit_exported_workbook(exported_path)
-    controller.importEditedWorkbook(_file_url(exported_path))
+    controller.replaceSelectedMaterial(_file_url(exported_path))
 
     edited_revision = str(controller.selectedRevision["revisionId"])
-    assert controller.selectedRevision["status"] == "draft"
+    assert controller.selectedRevision["status"] == "imported"
     assert edited_revision != base_revision
     assert materials.get(base_record.ref, base_revision) == base_record
-    controller.saveDraft()
-    controller.reviewDraft("reviewer-2@example.com")
-    controller.approveRevision("approver-2@example.com")
-
-    assert controller.selectedRevision["status"] == "approved"
     assert {item["revisionId"] for item in controller.revisions} == {
         base_revision,
         edited_revision,
     }
-    assert sum(bool(item["isLatestApproved"]) for item in controller.revisions) == 1
-    assert materials.get(base_record.ref, base_revision) == base_record
+    assert sum(bool(item["isLatestApproved"]) for item in controller.revisions) == 0
     edited = materials.get(base_record.ref, edited_revision)
-    assert edited.sources[: len(base_record.sources)] == base_record.sources
-    base_source_bytes = materials.source_bytes(base_record.ref, base_revision)
+    assert edited.sources[0].filename == exported_path.name
     edited_source_bytes = materials.source_bytes(base_record.ref, edited_revision)
-    assert all(edited_source_bytes[name] == data for name, data in base_source_bytes.items())
+    assert edited_source_bytes[exported_path.name] == exported_path.read_bytes()
     edited_loss = next(
         series for series in edited.series if series.series_id == "loss-100khz"
     )
-    assert edited_loss.points[0] == CurvePoint(0.05, 110_000.0)
+    assert edited_loss.points[0] == CurvePoint(0.0, 0.0)
+    assert edited_loss.points[1] == CurvePoint(0.05, 110_000.0)
     assert {
         series.series_id
         for series in edited.series
@@ -177,6 +173,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     controller.useInProject("")
     assert "multiple B-H series" in controller.statusMessage
     assert project_path.read_bytes() == before_pin
+    project_before_failed_pin = provider.current()
 
     from inductor_designer.adapters.persistence import project_repository as project_module
 
@@ -189,7 +186,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     controller.useInProject("bh-100c")
     assert controller.statusMessage == "replace failed"
     assert project_path.read_bytes() == before_pin
-    assert provider.current().materials == ()
+    assert provider.current() == project_before_failed_pin
     monkeypatch.setattr(project_module.os, "replace", real_replace)
 
     controller.useInProject("bh-100c")
@@ -249,7 +246,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
         assert manifest["coreMaterial"]["bhPointCount"] == 3
 
 
-def test_latest_suggestion_and_immutable_lifecycle_edits_never_pin_implicitly(
+def test_imported_material_edits_never_pin_implicitly(
     tmp_path: Path,
 ) -> None:
     repository = FileOverlayMaterialRepository(tmp_path / "overlay")
@@ -261,24 +258,16 @@ def test_latest_suggestion_and_immutable_lifecycle_edits_never_pin_implicitly(
     controller.downloadTemplate("xlsx", _file_url(workbook_path))
     _set_material_metadata(workbook_path)
     controller.importTable(_file_url(workbook_path))
-    controller.saveDraft()
-    controller.reviewDraft("reviewer@example.com")
 
     ref = MaterialRef("Magnetics", "Kool Mu", "60")
     revision_id = str(controller.selectedRevision["revisionId"])
-    reviewed = deepcopy(repository.get(ref, revision_id))
+    imported = deepcopy(repository.get(ref, revision_id))
     controller.setCanonicalPoint("bh-25c", 1, 90.0, 0.09)
-    assert controller.selectedRevision["status"] == "draft"
-    assert controller.selectedRevision["revisionId"] != revision_id
-    assert repository.get(ref, revision_id) == reviewed
-
-    assert controller.discardChanges()
-    controller.approveRevision("approver@example.com")
-    approved = deepcopy(repository.get(ref, revision_id))
-    controller.setCanonicalPoint("bh-25c", 1, 95.0, 0.095)
-    assert controller.selectedRevision["status"] == "draft"
-    assert controller.selectedRevision["revisionId"] != revision_id
-    assert repository.get(ref, revision_id) == approved
+    assert controller.statusMessage == "Imported and approved material revisions are read-only."
+    assert controller.selectedRevision["status"] == "imported"
+    assert controller.selectedRevision["revisionId"] == revision_id
+    assert not controller.dirty
+    assert repository.get(ref, revision_id) == imported
 
     persisted_projects = []
     library = MaterialStudioController(
@@ -289,6 +278,7 @@ def test_latest_suggestion_and_immutable_lifecycle_edits_never_pin_implicitly(
         project_save_callback=persisted_projects.append,
     )
     assert library.selectMaterial(ref.manufacturer, ref.name, ref.grade)
-    assert library.selectedRevision == {}
-    assert [item["isLatestApproved"] for item in library.revisions] == [True]
+    assert library.selectedRevision["revisionId"] == revision_id
+    assert library.selectedRevision["status"] == "imported"
+    assert [item["isLatestApproved"] for item in library.revisions] == [False]
     assert persisted_projects == []

@@ -111,6 +111,7 @@ class RecordingMaterialStudioController(QObject):
     canReview = Property(bool, lambda self: False, notify=selectionChanged)
     canApprove = Property(bool, lambda self: False, notify=selectionChanged)
     canUseInProject = Property(bool, lambda self: False, notify=selectionChanged)
+    hasProject = Property(bool, lambda self: False, constant=True)
     statusMessage = Property(str, lambda self: "Ready", notify=statusMessageChanged)
 
     @Slot(str, str, str, result=bool)
@@ -213,7 +214,6 @@ def test_material_page_has_no_image_workflow_and_exposes_curve_plot() -> None:
         "materialLibraryPane",
         "materialImportExportPane",
         "materialCurveWorkspace",
-        "materialValidationPane",
         "materialCurveEditor",
         "materialCurveCanvas",
         "curvePlotTitle",
@@ -229,25 +229,26 @@ def test_material_page_has_no_image_workflow_and_exposes_curve_plot() -> None:
         "cropSectionTitle",
         "xAxisSectionTitle",
         "yAxisSectionTitle",
+        "materialValidationPane",
+        "revisionList",
     ):
         assert root.findChild(QObject, name) is None, name
     assert app is not None
 
 
 @pytest.mark.ui
-def test_material_library_renders_and_selects_material_revision() -> None:
+def test_material_library_renders_material_without_revision_list() -> None:
     _app, _engine, root, _controller = _root(RecordingMaterialStudioController())
     material_list = root.findChild(QObject, "materialList")
     revision_list = root.findChild(QObject, "revisionList")
 
     assert material_list is not None
-    assert revision_list is not None
     assert material_list.property("count") == 1
-    assert revision_list.property("count") == 1
+    assert revision_list is None
 
 
 @pytest.mark.ui
-def test_validation_and_curve_labels_are_accessible() -> None:
+def test_curve_labels_are_accessible() -> None:
     _app, _engine, root, _controller = _root(RecordingMaterialStudioController())
     plot_details = root.findChild(QObject, "curvePlotDetails")
     x_label = root.findChild(QObject, "curvePlotXAxisLabel")

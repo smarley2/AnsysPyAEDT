@@ -113,6 +113,34 @@ def new_draft_record(
     return replace(record, revision_id=revision_id_for(record))
 
 
+def new_imported_record(
+    ref: MaterialRef,
+    *,
+    series: tuple[PointSeries, ...],
+    sources: tuple[SourceProvenance, ...],
+    created_at: str,
+    relative_permeability: float | None = None,
+    fit_steinmetz_from_losses: bool = True,
+    notes: str = "",
+) -> MaterialRecord:
+    """Build and validate an immediately persisted spreadsheet import."""
+    record = MaterialRecord(
+        ref=ref,
+        revision_id="",
+        status=MaterialStatus.IMPORTED,
+        created_at=created_at,
+        reviewed_by=None,
+        approved_by=None,
+        sources=sources,
+        series=series,
+        relative_permeability=relative_permeability,
+        steinmetz=_fit_loss_series(series) if fit_steinmetz_from_losses else None,
+        notes=notes,
+    )
+    _validate_transition(record)
+    return replace(record, revision_id=revision_id_for(record))
+
+
 def _validate_transition(record: MaterialRecord) -> None:
     if messages := _error_messages(validate_record(record)):
         raise MaterialImportError(messages)

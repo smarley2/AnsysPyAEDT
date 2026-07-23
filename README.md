@@ -8,7 +8,7 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). Milestone 5a (material records pipeline and approved nonlinear solver export) is implementation complete as of 2026-07-18, and its automated exit proof is green. The 2026-07-20 M5b redesign makes Material Studio spreadsheet-only: CSV/XLSX template download and upload, editable selected-revision XLSX export/reimport, every-revision browsing, lifecycle actions, selected-series curve plots, and explicit revision/B-H-series pinning in project schema v4. No user materials have been imported yet, so image/PDF digitization and OCR paths are removed rather than retained. Formal M5a/M5b acceptance also requires a real approved datasheet record with `MATCH` and live verification of the exact pinned revision and series in AEDT and FEMM.
+Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). The approved 2026-07-23 Material Studio design is spreadsheet-only: valid CSV/XLSX uploads are stored immediately as immutable `imported` revisions, the page is read-only after import, and replacement/deletion plus explicit revision/B-H-series project pinning are supported. No user workbook is added to Git automatically; filesystem overlay records can be committed when redistribution is permitted. Formal acceptance still requires live AEDT/FEMM verification of a legally usable material.
 
 - [Material records pipeline procedure](docs/development/material-records.md)
 - [CSV material import template](src/inductor_designer/resources/material_templates/material-import-template.csv)
@@ -16,6 +16,8 @@ Milestones 0–4.5 are accepted; their dates and live-verification scope are rec
 - [Milestone 5a material records plan](docs/superpowers/plans/2026-07-17-material-records-pipeline.md)
 - [Milestone 5b spreadsheet-only Material Studio specification](docs/superpowers/specs/2026-07-20-material-studio-spreadsheet-only-design.md)
 - [Milestone 5b spreadsheet-only Material Studio implementation plan](docs/superpowers/plans/2026-07-20-material-studio-spreadsheet-only.md)
+- [Approved read-only imported-material specification](docs/superpowers/specs/2026-07-23-material-studio-readonly-imported-design.md)
+- [Read-only imported-material implementation plan](docs/superpowers/plans/2026-07-23-material-studio-readonly-imported.md)
 - [MCP server and FEMM 2D backend automation](docs/development/automation-mcp-femm.md)
 - [Maxwell 2D generation procedure](docs/development/maxwell2d-generation.md)
 - [DC operating-point compatibility](docs/development/dc-bias-compatibility.md)

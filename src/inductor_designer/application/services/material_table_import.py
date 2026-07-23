@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from inductor_designer.application.services.material_import import (
     GENERATED_SERIES_SOURCE_DESCRIPTION,
     MaterialImportError,
     import_curve_csv,
 )
+from inductor_designer.domain.units import to_canonical
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -82,6 +83,17 @@ def _generated_source(
     )
 
 
+def _prepare_group(
+    group: list[MaterialTableRow],
+) -> tuple[tuple[MaterialTableRow, ...], bool]:
+    first = group[0]
+    if first.kind is not SeriesKind.LOSS_TABLE:
+        return tuple(group), False
+    if not all(to_canonical(row.x, row.x_unit) > 0.0 for row in group):
+        return tuple(group), False
+    return (replace(first, x=0.0, y=0.0), *group), True
+
+
 def _source_filename_key(filename: str) -> str:
     return sanitize_identifier(filename).casefold()
 
@@ -148,9 +160,22 @@ def import_material_rows(
     series: list[PointSeries] = []
     for series_id, group in grouped.items():
         first = group[0]
+        prepared_group, inserted_origin = _prepare_group(group)
         filename = f"series-{sanitize_identifier(series_id)}.csv"
-        data = ("x,y\n" + "".join(f"{row.x},{row.y}\n" for row in group)).encode()
-        source = _generated_source(metadata, filename, data)
+        data = ("x,y\n" + "".join(f"{row.x!r},{row.y!r}\n" for row in prepared_group)).encode()
+        source = _generated_source(
+            metadata,
+            filename,
+            data,
+        )
+        if inserted_origin:
+            source = replace(
+                source,
+                description=(
+                    f"{GENERATED_SERIES_SOURCE_DESCRIPTION}; "
+                    "inserted Maxwell-required loss origin at import"
+                ),
+            )
         sources.append(source)
         source_files.append((filename, data))
         series.append(

@@ -1,19 +1,20 @@
 # Material Records Pipeline
 
-Milestone 5a provides a traceable, deterministic path from source bytes to an
-approved magnetic-material revision and solver export. Milestone 5b exposes that
-path in the Guided Studio `Materials` page. The final M5b whole-change review is
-clean and the fresh complete non-live verification passes (672 tests, 22 UI
-tests, and 89.84% coverage). Native Windows manual acceptance remains pending,
-so M5b is not yet implementation-complete. Formal M5a/M5b acceptance also remains pending until
-a reviewer imports a real datasheet, obtains `MATCH`, and checks the exact pinned
-revision in live AEDT and FEMM; no live material handoff is claimed here.
+The material pipeline stores spreadsheet uploads as traceable, deterministic
+`imported` revisions and exports the selected immutable snapshot to Maxwell or
+FEMM. Material Studio is spreadsheet-only: it imports CSV/XLSX files, previews
+the stored curves, replaces or deletes revisions, and explicitly pins a
+revision and B-H series to the active project. Legacy approved records remain
+readable and usable.
 
 ## Overlay layout and integrity
 
-The default local overlay is `materials-overlay/`. It is intentionally not
-ignored: a reviewer may commit an approved record when the source material may
-legally be redistributed.
+The default local overlay is `materials-overlay/`. It is a filesystem-backed
+repository, not a database. It is intentionally available to Git: users may
+commit imported records and their source bytes for others only when the source
+material may legally be redistributed. The application never adds the original
+workbook to Git automatically; it copies the uploaded bytes into the selected
+revision's `sources/` directory.
 
 ```text
 materials-overlay/
@@ -53,9 +54,12 @@ checks require:
 - no overwrite of an existing approved revision.
 
 Saving stages and verifies the rendered record, source hashes, and CSV/JSON
-point agreement before installation. Draft and reviewed records with the same
-revision identifier may be replaced atomically; an approved stored revision is
-immutable. Normal loads recheck source hashes and CSV/JSON point agreement.
+point agreement before installation. Imported revisions are persisted
+immediately and are immutable in Material Studio. Replacement writes the new
+revision first, then removes the previous unpinned imported revision. A
+revision pinned by the active project is retained. Legacy draft/reviewed and
+approved records remain readable for compatibility; normal loads recheck source
+hashes and CSV/JSON point agreement.
 
 ## Material table templates and uploads
 
@@ -64,11 +68,14 @@ Two synthetic, self-describing templates are packaged with the application:
 - [material-import-template.xlsx](../../src/inductor_designer/resources/material_templates/material-import-template.xlsx)
 - [material-import-template.csv](../../src/inductor_designer/resources/material_templates/material-import-template.csv)
 
-Replace the synthetic example values before review. The workbook and CSV are
+Replace the synthetic example values before upload. The workbook and CSV are
 equivalent input formats: both produce the same canonical point series when
 they contain the same material data. The original upload is retained and
 hashed as supplemental provenance, while each series receives a generated CSV
-source so replay remains deterministic.
+source so replay remains deterministic. A loss series with only positive B
+values receives a generated `(0,0)` origin before persistence; the workbook
+source remains byte-for-byte unchanged and the generated source description
+records the normalization.
 
 The Excel workbook has four visible sheets:
 
@@ -76,8 +83,8 @@ The Excel workbook has four visible sheets:
 |---|---|---|
 | `Instructions` | explanatory text | Describes required fields, units, grouping, and replacement of synthetic rows. |
 | `Material` | `field`, `value` | Stores manufacturer, material name, grade, source URL/page, capture timestamp, and source description. |
-| `B-H Curves` | `series_id`, `temperature_c`, `dc_bias_a_per_m`, `h_unit`, `b_unit`, `h`, `b` | Stores H on the x-axis and B on the y-axis. |
-| `Loss Curves` | `series_id`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `b_unit`, `loss_unit`, `b`, `loss` | Stores B on the x-axis and loss density on the y-axis. |
+| `B-H Curves` | `series_id`, `temperature_c`, `dc_bias_a_per_m`, `h`, `h_unit`, `b`, `b_unit` | Stores H on the x-axis and B on the y-axis, with each value beside its unit. |
+| `Loss Curves` | `series_id`, `frequency_hz`, `temperature_c`, `dc_bias_a_per_m`, `b`, `b_unit`, `loss`, `loss_unit` | Stores B on the x-axis and loss density on the y-axis, with each value beside its unit. |
 
 Workbook dropdowns offer these retained datasheet units:
 
@@ -105,6 +112,22 @@ series, and physical checks. Formulas are rejected in material metadata and
 curve cells; enter typed values instead. A workbook must retain the four named
 visible sheets and their exact column headers.
 
+`grade` is the manufacturer/catalog designation that completes material
+identity; it is not a curve coordinate. `dc_bias_a_per_m` is optional measurement
+condition metadata. Leave it blank when the source does not report DC bias; use
+`0` only when the source explicitly reports zero bias. It is preserved with the
+series and used to distinguish conditions, but the current material-to-solver
+path does not use it as an independent calculation input.
+
+XLSX curve cells remain typed numeric values. Excel accepts and displays decimal
+comma or decimal point according to the user's regional settings. `captured_at`
+is required provenance text, but it does not require a special user format:
+ordinary text is preserved, and Excel-native date or datetime cells are
+normalized to ISO text during import. Uploading a downloaded template creates an
+immediately persisted `imported` revision, canonicalizes its points, and
+exposes the selected series to Material Studio's curve plot. No review or
+approval action is required.
+
 Use the packaged-resource and upload APIs without depending on repository
 paths:
 
@@ -112,7 +135,8 @@ paths:
 from pathlib import Path
 
 from inductor_designer.adapters.materials import (
-    import_material_file,
+    FileOverlayMaterialRepository,
+    import_material_file_as_imported,
     material_import_template,
 )
 
@@ -120,16 +144,23 @@ download = material_import_template("xlsx")  # use "csv" for the flat template
 Path(download.filename).write_bytes(download.data)
 
 uploaded_bytes = Path(download.filename).read_bytes()
-imported = import_material_file(download.filename, uploaded_bytes)
-print(imported.ref, tuple(series.series_id for series in imported.series))
+imported = import_material_file_as_imported(
+    download.filename,
+    uploaded_bytes,
+    created_at="2026-07-23T12:00:00+00:00",
+)
+FileOverlayMaterialRepository(Path("materials-overlay")).save(
+    imported.record,
+    dict(imported.source_files),
+)
+print(imported.record.ref, imported.record.status.value)
 ```
 
-Use the returned `sources` to build the record with `new_draft_record`, and pass
-the returned `source_files` to the overlay repository save, as shown by
-`tests/integration/test_material_table_upload.py`. Import never reviews or
-approves a record automatically.
+The legacy `import_material_file_as_draft` API remains available for migration
+and tests that exercise the old lifecycle. Material Studio uses the imported
+path above and passes the returned `source_files` to the overlay repository.
 
-## Download and edit the selected material
+## Workbook export API
 
 Any record with B-H or loss curves can be exported into a populated copy of
 the verified Excel template. Canonical points are converted back to each
@@ -157,61 +188,43 @@ edited = import_material_file_as_draft(
 assert edited.record.status.value == "draft"
 ```
 
-Reimport always creates a new draft revision and recomputes any supported loss
-fit from the edited tables. It does not overwrite, review, or approve the base
-revision. Scalar-only records have no editable curves and cannot be exported
-to this workbook.
+Reimport through this compatibility API creates a new draft revision and
+recomputes any supported loss fit from the edited tables. It does not overwrite
+the base revision. Material Studio exposes the same generated workbook through
+`Download selected material XLSX`; after editing it, use `Replace selected
+material` to import and store the new immutable revision immediately.
+Scalar-only records have no editable curves and cannot be exported to this
+workbook.
 
-The same operations are available in Material Studio. Use `CSV template` or
-`XLSX template` to save an example, or select any stored revision and use
-`Export selected revision` to create a populated workbook. Edit that workbook
-in Excel or a compatible workbook editor, then use `Reimport edited workbook`.
-The import always opens a new draft; it never overwrites the selected base
-revision.
-
-Material Studio accepts only CSV and XLSX material uploads. No user material
-records have been imported yet, so the former image/PDF digitization path was
-removed instead of being retained as a compatibility workflow. Select a
-material, revision, and series in the Materials page to inspect the canonical
-curve plot produced from the imported table.
+Material Studio accepts only CSV and XLSX material uploads. The former
+image/PDF digitization path was removed instead of being retained as a
+compatibility workflow. Select a material to load its newest revision
+automatically, then select a series in the Materials page to inspect the
+canonical curve plot produced from the imported table.
 
 ## Material Studio workflow
 
 Open the `Materials` step in Guided Studio and follow this sequence:
 
-1. Select a material identity. The library shows every stored `draft`,
-   `reviewed`, and `approved` revision, including timestamps, lifecycle actors,
-   validation counts, and source traceability (URL, page, capture time,
-   description, and SHA-256). `Suggested latest approved` is advisory only: it
-   neither selects a revision nor changes the project.
-2. Start from one of two spreadsheet sources:
-   - download the CSV or XLSX template, fill it, and import it; or
-   - select any revision, export its populated XLSX workbook, edit it in Excel
-     or a compatible editor, and reimport it as a new draft.
-3. Select a revision and then a B-H or loss series. The plot shows the canonical
-   points, visible point markers, axis units, and any frequency, temperature, or
-   DC-bias conditions. Changing the selected series changes the plot without
-   changing the material record.
-4. Add, delete, or numerically edit table points. Editing a reviewed or approved
-   revision first creates a distinct draft; no image conversion step is involved.
-5. Set the series ID and kind plus applicable frequency, temperature, and DC-bias
-   conditions. Blank optional conditions remain unspecified; physical zero is
-   stored as zero. Malformed values remain visible and block applying or saving
-   until corrected.
-6. Inspect source points, current points, fit coefficients/residuals, and grouped
-   validation issues together. Errors block review and approval; warnings remain
-   visible but do not bypass the existing lifecycle rules.
-7. `Save Draft`, enter a reviewer and choose `Review`, then enter an approver and
-   choose `Approve`. Editing a reviewed or approved revision first creates a
-   distinct draft, preserving the approved base unchanged.
-8. Choose an approved revision for the project. If it contains multiple B-H
-   series, explicitly choose the displayed series ID and its temperature/DC-bias
-   conditions before `Use in Project`; no series is chosen by timestamp or order.
-
-Leaving dirty Material Studio state, selecting another identity, or selecting
-another revision opens `Save`, `Discard`, and `Cancel` choices. A failed save
-keeps the pending navigation and unsaved state; `Cancel` stays on the current
-draft, and `Discard` restores the last stored state before navigating.
+1. Download the CSV or XLSX template, fill it, and choose `Import CSV or XLSX`.
+   A valid file is stored immediately as an `imported` immutable revision.
+2. Select a material identity and revision to inspect its read-only status,
+   provenance, validation issues, fit information, and series metadata.
+3. Select a B-H or loss series. The preview shows numeric X/Y tick values,
+   units, conditions, source filename, and visible markers. `Log X` and `Log Y`
+   are independent; non-positive points are omitted only from logarithmic
+   rendering and a notice explains this. Stored points are never changed.
+4. To change a material, choose `Replace selected material` and import a new
+   file with the same manufacturer, material name, and grade. The replacement
+   is saved first. The prior imported revision is removed unless the active
+   project pins it.
+5. To remove a material, choose `Delete selected material` and confirm. The
+   action is blocked if the active project pins any revision and never deletes
+   the original workbook outside the application overlay.
+6. When a project is loaded, choose `Select for simulation`. A revision with
+   multiple B-H series requires an explicit B-H series selection. Imported and
+   legacy approved revisions are accepted by simulation; project selection
+   remains explicit so the project stores the exact immutable snapshot.
 
 ## Worked CSV import in datasheet units
 
@@ -316,24 +329,26 @@ the canonical x value, and rounds to nine decimal places. For reference,
 The numbers and URL above are deliberately synthetic. Do not approve them as a
 real material record.
 
-## Review and approval rules
+## Validation and legacy lifecycle rules
 
-The lifecycle is `draft` → `reviewed` → `approved`; transitions cannot be
-skipped or reversed. Review and approval run material validation first and are
-blocked by errors. Checks cover unit families, physical ranges, B-H origin and
-strict B monotonicity, decreasing or duplicate H values, positive loss density,
-required loss frequency, relative-permeability range, nonempty records, and the
-presence of loss-series data when a Steinmetz fit is attached. A B-H slope below
-vacuum permeability is retained as a warning.
+Imported records are validated before persistence and are immediately usable by
+simulation. Checks cover unit families, physical ranges, B-H origin and strict
+B monotonicity, decreasing or duplicate H values, positive loss density,
+loss-origin rules, increasing loss B, required loss frequency,
+relative-permeability range, nonempty records, and the presence of loss-series
+data when a Steinmetz fit is attached. A B-H slope below vacuum permeability is
+retained as a warning. The legacy `draft` → `reviewed` → `approved` services
+remain for existing records and compatibility APIs; they are not exposed in
+Material Studio.
 
 Lifecycle validation does not recompute fitted coefficients or check their
 residuals against the loss points. When a stored record has a Steinmetz fit, the
 reproduction flow independently rebuilds its loss samples, recomputes the fit,
 and compares the complete stored and recomputed fit values.
 
-Approval records both reviewer and approver identities. It does not replace
-engineering review of the source, curve conditions, units, transcription,
-fit residuals, source licensing, or redistribution rights.
+The inserted loss origin is excluded from the Steinmetz fit because the fit
+uses logarithms. Source licensing and redistribution rights still require
+engineering review before an overlay is committed for other users.
 
 ## Reproduce a stored revision
 
@@ -361,7 +376,8 @@ Project schema v4 stores material selections as
 `{ref, revisionId, bhSeriesId, snapshot}`. The snapshot is the complete record
 used for generation. Schema v3 projects migrate deterministically by adding
 `bhSeriesId: null`; migration never guesses a series. A project must contain
-exactly one matching selection for the selected core when it uses an approved
+exactly one matching selection for the selected core when it uses an imported
+or approved
 record:
 
 - zero matches preserves the older powder-grade linear fallback;
@@ -369,10 +385,10 @@ record:
 - multiple matches block export as ambiguous.
 
 Export never queries `latest_approved` and never silently changes a saved
-project. The UI lists every revision, may suggest the most recent **approved**
-revision, and requires the user to select and persist one exact revision.
+project. The UI lists every revision and requires the user to select and persist
+one exact imported or approved revision.
 
-An approved record bypasses the powder-only fallback and therefore unblocks
+An imported or approved record bypasses the powder-only fallback and therefore unblocks
 ferrite core generation when it supplies scalar permeability or a usable B-H
 curve. Maxwell 2D and 3D receive nonlinear permeability as `(B, H)` pairs and,
 when present, the fitted Steinmetz parameters through
@@ -390,29 +406,25 @@ series can be selected directly. More than one B-H series requires an explicit
 `bhSeriesId`; project use and export block when it is absent. Maxwell 2D,
 Maxwell 3D, and FEMM consume only that pinned series from the stored snapshot.
 
-## Milestone 5b handoff and pending acceptance
+## Material Studio acceptance notes
 
 The spreadsheet-only workflow is the required M5b scope. The application has no
 OCR, image tracing, or PDF digitization path. Any future non-spreadsheet
 importer, material MCP tool, or explicit-formula record requires a separate
 approved specification and plan.
 
-M5b has automated evidence for library/revision listing, immutable draft
-editing, CSV/XLSX replay, schema v3-to-v4 migration, explicit B-H selection,
-recording-fake Maxwell/FEMM manifests, controller behavior, selected-series plot
-labels, and offscreen QML flows. This is not native Windows, Excel/FileDialog,
-high-DPI, or live-solver evidence. Before M5b can be marked implementation
-complete, record native Windows manual acceptance for keyboard/focus, scaling,
-file dialogs, template download, workbook edit/reimport, revision visibility,
-lifecycle, and explicit B-H selection.
+Automated evidence covers imported persistence, replacement/deletion guards,
+CSV/XLSX replay, loss-origin normalization, explicit B-H selection,
+recording-fake Maxwell/FEMM manifests, controller behavior, numeric linear/log
+plot labels, and offscreen QML flows. This is not native Windows,
+Excel/FileDialog, high-DPI, or live-solver evidence.
 
 Before formally accepting M5a or M5b, Fabio must:
 
-1. Import a legally usable real Magnetics Kool Mu 60 core-loss and B-H source,
-   review it, approve it under the reviewer's real name, and optionally commit
-   the overlay revision.
+1. Import a legally usable real Magnetics Kool Mu 60 core-loss and B-H source
+   and optionally commit the imported overlay revision.
 2. Pin that exact approved revision and B-H series in a schema v4 project,
    generate Maxwell 3D and FEMM, open both, and check the nonlinear B-H data and
    ferrite core-loss coefficients in AEDT plus every B-H point in FEMM.
 3. Run the reproduction CLI for that revision and obtain `MATCH`.
-4. Record the live evidence and explicitly accept Milestone 5a in the roadmap.
+4. Record the live evidence and explicitly accept Milestone 5 in the roadmap.

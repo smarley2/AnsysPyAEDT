@@ -209,8 +209,9 @@ def test_record_allows_supplemental_spreadsheet_provenance() -> None:
     assert record.sources[0].kind is SourceKind.SPREADSHEET
 
 
-def test_record_allows_empty_revision_only_for_transient_draft() -> None:
+def test_record_allows_empty_revision_only_for_transient_draft_or_imported() -> None:
     assert _record(revision_id="").revision_id == ""
+    assert _record(revision_id="", status=MaterialStatus.IMPORTED).revision_id == ""
 
     with pytest.raises(ValueError, match="revision_id"):
         _record(
