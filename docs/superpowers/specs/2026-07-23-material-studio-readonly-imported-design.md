@@ -1,6 +1,6 @@
 # Material Studio Read-Only Imported Materials Design
 
-**Status:** Approved 2026-07-23
+**Status:** Implemented; material-import MVP accepted 2026-07-23
 **Date:** 2026-07-23
 
 ## 1. Decision
@@ -157,6 +157,18 @@ References:
 - [FEMM manual](https://www.femm.info/Archives/doc/manual34.pdf)
 
 ## 6. Testing and acceptance
+
+### MVP acceptance
+
+The spreadsheet import and material-library workflow was accepted for the MVP
+on 2026-07-23. Acceptance covers template download, CSV/XLSX import, immediate
+validated persistence, automatic loading of the newest stored material data,
+read-only curve visualization, selected-material XLSX download, replacement,
+and guarded deletion.
+
+This acceptance does not claim live Maxwell or FEMM consumption of a real
+redistributable material dataset. Those checks remain part of solver-integration
+acceptance.
 
 Add tests before implementation for:
 

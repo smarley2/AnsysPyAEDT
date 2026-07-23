@@ -8,7 +8,7 @@ The first product increment focuses on commercial toroidal powder and ferrite co
 
 ## Project status
 
-Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). The approved 2026-07-23 Material Studio design is spreadsheet-only: valid CSV/XLSX uploads are stored immediately as immutable `imported` revisions, the page is read-only after import, and replacement/deletion plus explicit revision/B-H-series project pinning are supported. No user workbook is added to Git automatically; filesystem overlay records can be committed when redistribution is permitted. Formal acceptance still requires live AEDT/FEMM verification of a legally usable material.
+Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). The spreadsheet-only Material Studio import and library workflow was accepted for the MVP on 2026-07-23: valid CSV/XLSX uploads are stored immediately as immutable `imported` revisions, the page is read-only after import, and download/replacement/deletion plus explicit revision/B-H-series project pinning are supported. No user workbook is added to Git automatically; filesystem overlay records can be committed when redistribution is permitted. Live AEDT/FEMM verification of a legally usable material remains a separate solver-integration acceptance gate.
 
 - [Material records pipeline procedure](docs/development/material-records.md)
 - [CSV material import template](src/inductor_designer/resources/material_templates/material-import-template.csv)

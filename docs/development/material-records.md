@@ -204,6 +204,11 @@ canonical curve plot produced from the imported table.
 
 ## Material Studio workflow
 
+The spreadsheet import and local material-library workflow was accepted for the
+MVP on 2026-07-23. This acceptance covers import, persistence, visualization,
+XLSX download, replacement, and deletion; live solver consumption remains a
+separate acceptance gate.
+
 Open the `Materials` step in Guided Studio and follow this sequence:
 
 1. Download the CSV or XLSX template, fill it, and choose `Import CSV or XLSX`.

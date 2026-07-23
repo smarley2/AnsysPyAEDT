@@ -352,14 +352,14 @@ series exist. Project schema v4 migrates v3 selections with `bhSeriesId: null`.
 Recording Maxwell 2D/3D and FEMM exports consume only that pinned snapshot and
 series.
 
-M5b is **implementation complete but pending native acceptance evidence**:
-the whole-change review and fresh complete suite/static gates pass, while native
-Windows manual UI acceptance has not yet been recorded. This computer cannot provide
-the required native Windows/high-DPI/FileDialog and manual Excel-compatible
-workbook evidence. It also has no live Ansys AEDT or FEMM material-validation
-run for this milestone.
+The spreadsheet import and local material-library slice of M5b was **accepted
+for the MVP on 2026-07-23**. Acceptance covers template download, CSV/XLSX
+import, immediate persistence, one-click saved-material loading, read-only curve
+visualization, selected-material XLSX download, replacement, and guarded
+deletion. Native Windows packaging/high-DPI acceptance and live Ansys AEDT or
+FEMM material consumption remain separate milestone gates.
 
-Remaining acceptance work and risks:
+Remaining solver-integration and productization work:
 
 - Import a legally usable real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
 - Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.

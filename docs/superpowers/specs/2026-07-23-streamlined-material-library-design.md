@@ -1,7 +1,8 @@
 # Streamlined Material Library Design
 
-- Status: Approved
+- Status: Implemented; MVP accepted
 - Date: 2026-07-23
+- Accepted: 2026-07-23
 - Scope: Material Studio library and saved-material workflow
 
 ## Purpose
