@@ -20,8 +20,8 @@ before the next plan freezes assumptions that depend on it.
 - Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
   Material Studio workflow. Its acceptance is independent from the remaining
   M5a live-solver gate.
-- No detailed plan is active. After review of the roadmap realignment, the next
-  plan is the M5a closeout and support-scope cleanup.
+- The active detailed plan is the
+  [M5a live validation closeout](2026-07-24-m5a-live-validation-closeout.md).
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
@@ -49,7 +49,7 @@ executed. They do not override the current support and product scope.
 
 | Order | Milestone | Entry condition | Exit evidence |
 | --- | --- | --- | --- |
-| 5a closeout | Live material validation and support cleanup | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
+| 5a closeout | [Live material validation and support cleanup](2026-07-24-m5a-live-validation-closeout.md) | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
 | 6 | Project Foundation | M5a accepted | One backend-independent Project document round-trips and creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans with explicit RMS/peak and material state |
 | 7 | Guided Studio | M6 contracts accepted | A user authors, saves, reopens, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
 | 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
