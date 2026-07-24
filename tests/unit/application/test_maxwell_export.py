@@ -79,6 +79,42 @@ def test_export_builds_plan_and_calls_exporter(tmp_path: Path) -> None:
     assert request.non_graphical is True
 
 
+def test_maxwell_export_rejects_unsupported_aedt_target_before_adapter_call(
+    tmp_path: Path,
+) -> None:
+    exporter = RecordingMaxwell3dExporter()
+    project = replace(
+        three_d_project(),
+        target_release=AedtRelease(2024, 2),
+    )
+
+    with pytest.raises(MaxwellExportBlocked, match="Only AEDT 2025 R2 Commercial"):
+        export_maxwell3d(
+            project,
+            CATALOG,
+            exporter,
+            tmp_path,
+            capabilities=SNAPSHOT,
+        )
+
+    assert exporter.requests == []
+
+
+def test_maxwell_export_rejects_mismatched_capability_evidence(
+    tmp_path: Path,
+) -> None:
+    mismatched = replace(NATIVE_SNAPSHOT, release=AedtRelease(2026, 1))
+
+    with pytest.raises(MaxwellExportBlocked, match="does not match"):
+        export_maxwell3d(
+            three_d_project(),
+            CATALOG,
+            RecordingMaxwell3dExporter(),
+            tmp_path,
+            capabilities=mismatched,
+        )
+
+
 def test_export_resolves_matching_approved_material_snapshot(tmp_path: Path) -> None:
     material = make_multi_bh_material_record()
     selection = MaterialRevisionSelection(

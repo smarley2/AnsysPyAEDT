@@ -20,6 +20,7 @@ from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dExportRequest,
     MaxwellExportResult,
 )
+from inductor_designer.application.services.aedt_support import aedt_support_issues
 from inductor_designer.application.services.geometry_model import (
     GeometryModel,
     build_geometry_model,
@@ -62,6 +63,19 @@ class MaxwellExportOutcome:
     capabilities: CapabilitySnapshot
     decision: DcBiasDecision
     dimension: ModelDimension
+
+
+def _require_supported_aedt(
+    project: InductorProject,
+    capabilities: CapabilitySnapshot,
+) -> None:
+    issues = aedt_support_issues(
+        project.target_release,
+        project.target_edition,
+        capabilities,
+    )
+    if issues:
+        raise MaxwellExportBlocked(issues)
 
 
 def _validated_model(
@@ -111,6 +125,7 @@ def export_maxwell3d(
     capabilities: CapabilitySnapshot,
     non_graphical: bool = True,
 ) -> MaxwellExportOutcome:
+    _require_supported_aedt(project, capabilities)
     core_selection, model = _validated_model(project, catalog, ModelDimension.THREE_D)
     decision = select_dc_bias_strategy(capabilities, ModelDimension.THREE_D)
     selection = _selected_material_selection(project, core_selection)
@@ -155,6 +170,7 @@ def export_maxwell2d(
     capabilities: CapabilitySnapshot,
     non_graphical: bool = True,
 ) -> MaxwellExportOutcome:
+    _require_supported_aedt(project, capabilities)
     core_selection, model = _validated_model(project, catalog, ModelDimension.TWO_D)
     decision = select_dc_bias_strategy(capabilities, ModelDimension.TWO_D)
     selection = _selected_material_selection(project, core_selection)
