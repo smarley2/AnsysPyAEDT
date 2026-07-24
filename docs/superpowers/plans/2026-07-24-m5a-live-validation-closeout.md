@@ -1584,7 +1584,7 @@ if ($env:INDUCTOR_M5A_REVISION -notmatch '^[0-9a-f]{12}$') {
 This shell value is local execution state, not documentation. Do not edit
 `record.json` to change `60u` into `60`.
 
-- [ ] **Step 2: Obtain fresh reproduction evidence**
+- [x] **Step 2: Obtain fresh reproduction evidence**
 
 ```powershell
 python -m tools.reproduce_material `
@@ -1632,7 +1632,7 @@ $expectedMaterial = "Magnetics_High_Flux_60_r$env:INDUCTOR_M5A_REVISION"
 
 Do not copy screenshots or the generated project into Git.
 
-- [ ] **Step 5: Manually inspect the FEMM artifact**
+- [x] **Step 5: Manually inspect the FEMM artifact**
 
 Open the generated `.fem` file and verify:
 
