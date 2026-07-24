@@ -7,8 +7,8 @@ from tests.fakes.aedt_gateway import RecordingAedtGateway
 
 def test_recording_gateway_returns_both_dimensions_in_stable_order(tmp_path: Path) -> None:
     request = AedtProbeRequest(
-        release=AedtRelease.parse("2024.2"),
-        edition=AedtEdition.STUDENT,
+        release=AedtRelease.parse("2025.2"),
+        edition=AedtEdition.COMMERCIAL,
         non_graphical=False,
         output_directory=tmp_path,
     )

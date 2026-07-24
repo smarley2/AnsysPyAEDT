@@ -1,25 +1,5 @@
 schemaVersion: 1
 rows:
-  - release: "2024.2"
-    edition: commercial
-    status: out-of-scope
-    pyaedtVersion: null
-    maxwell2dTrivialProject: null
-    maxwell3dTrivialProject: null
-    includeDcFields3d: null
-    discoveredLimits: []
-    evidenceReviewedAt: null
-    evidenceReviewedBy: null
-  - release: "2024.2"
-    edition: student
-    status: out-of-scope
-    pyaedtVersion: null
-    maxwell2dTrivialProject: null
-    maxwell3dTrivialProject: null
-    includeDcFields3d: null
-    discoveredLimits: []
-    evidenceReviewedAt: null
-    evidenceReviewedBy: null
   - release: "2025.2"
     edition: commercial
     status: passed
@@ -36,13 +16,3 @@ rows:
       - "non-graphical SetDesignSettings fails on an empty 2D design; set model depth after geometry"
     evidenceReviewedAt: "2026-07-17T00:00:00Z"
     evidenceReviewedBy: fabio.posser (delegated live probe)
-  - release: "2025.2"
-    edition: student
-    status: out-of-scope
-    pyaedtVersion: null
-    maxwell2dTrivialProject: null
-    maxwell3dTrivialProject: null
-    includeDcFields3d: null
-    discoveredLimits: []
-    evidenceReviewedAt: null
-    evidenceReviewedBy: null

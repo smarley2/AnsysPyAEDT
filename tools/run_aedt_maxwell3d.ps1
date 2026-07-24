@@ -1,11 +1,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^(?:2024\.2|20(?:2[5-9]|[3-9][0-9])\.[12])$')]
+    [ValidateSet('2025.2')]
     [string]$Release,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('commercial', 'student')]
+    [ValidateSet('commercial')]
     [string]$Edition,
 
     [string]$Project = "tests\fixtures\sample_geometry_project.inductor.json",

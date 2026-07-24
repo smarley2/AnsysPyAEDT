@@ -7,6 +7,10 @@ from pathlib import Path
 
 from inductor_designer.adapters.pyaedt.gateway import PyaedtGateway
 from inductor_designer.application.ports.aedt_gateway import AedtGateway, AedtProbeRequest
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
 from inductor_designer.simulation.capabilities import AedtEdition, AedtRelease
 
 
@@ -62,8 +66,16 @@ def run_spike(
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the controlled AEDT compatibility spike.")
-    parser.add_argument("--release", required=True, help="AEDT release such as 2024.2")
-    parser.add_argument("--edition", required=True, choices=["commercial", "student"])
+    parser.add_argument(
+        "--release",
+        required=True,
+        choices=[str(SUPPORTED_AEDT_RELEASE)],
+    )
+    parser.add_argument(
+        "--edition",
+        required=True,
+        choices=[SUPPORTED_AEDT_EDITION.value],
+    )
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--graphical", action="store_true")

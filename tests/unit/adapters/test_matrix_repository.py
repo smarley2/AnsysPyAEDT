@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
@@ -10,6 +12,14 @@ from inductor_designer.simulation.capabilities import CapabilityReviewStatus
 
 ROOT = Path(__file__).resolve().parents[3]
 REAL_MATRIX = ROOT / "compatibility" / "aedt-matrix.yml"
+
+
+def test_real_matrix_contains_only_the_supported_environment() -> None:
+    data = yaml.safe_load(REAL_MATRIX.read_text(encoding="utf-8"))
+    assert [
+        (row["release"], row["edition"])
+        for row in data["rows"]
+    ] == [("2025.2", "commercial")]
 
 SYNTHETIC = """\
 schemaVersion: 1

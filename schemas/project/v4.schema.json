@@ -104,10 +104,9 @@
       "required": ["aedtRelease", "edition", "dimensionMode"],
       "properties": {
         "aedtRelease": {
-          "type": "string",
-          "pattern": "^(?:2024\\.2|20(?:2[5-9]|[3-9][0-9])\\.[12])$"
+          "const": "2025.2"
         },
-        "edition": {"enum": ["commercial", "student"]},
+        "edition": {"const": "commercial"},
         "dimensionMode": {"enum": ["2d", "3d"]}
       }
     },

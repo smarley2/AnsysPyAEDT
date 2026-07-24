@@ -94,6 +94,27 @@ def test_migrate_v1_to_v4(schema_repository: SchemaRepository) -> None:
     schema_repository.validate_project(migrated)
 
 
+@pytest.mark.parametrize(
+    ("release", "edition"),
+    [
+        ("2024.2", "commercial"),
+        ("2025.2", "student"),
+        ("2026.1", "commercial"),
+    ],
+)
+def test_v4_rejects_every_unsupported_aedt_target(
+    schema_repository: SchemaRepository,
+    release: str,
+    edition: str,
+) -> None:
+    document = schema_repository.migrate_project(_v1_document())
+    document["target"]["aedtRelease"] = release
+    document["target"]["edition"] = edition
+
+    with pytest.raises(ValidationError):
+        schema_repository.validate_project(document)
+
+
 def test_migrate_v2_to_v4_adds_empty_materials(
     schema_repository: SchemaRepository,
 ) -> None:
