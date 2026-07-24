@@ -4,6 +4,12 @@ Milestone 4.5 exposes the designer over MCP for AI-driven sessions and adds
 FEMM as a user-selectable alternative to Ansys Maxwell for the 2D equivalent
 model, including an in-loop solve with R/L result extraction.
 
+> **Current planning status (2026-07-24):** The implemented nine-tool MCP
+> surface is retained, but no MCP expansion, parity, or external-client
+> validation belongs to M5a–M11. FEMM remains an active Windows-application
+> backend. Future MCP work requires a separately approved scope after the
+> Guided Studio and normalized result workflow are stable.
+
 ## MCP server
 
 ### Prerequisites

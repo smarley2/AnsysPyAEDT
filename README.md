@@ -1,14 +1,24 @@
 # PyAEDT Inductor Designer
 
-PyAEDT Inductor Designer is a planned Windows desktop application and AEDT extension for creating parametric inductor models in Ansys Maxwell 2D and 3D through PyAEDT.
+PyAEDT Inductor Designer is a standalone Windows application for creating
+parametric inductor models in Ansys Maxwell 2D/3D through PyAEDT and in FEMM
+2D.
 
 This is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Ansys, Inc. Ansys, Maxwell, and AEDT are trademarks of their respective owner.
 
-The first product increment focuses on commercial toroidal powder and ferrite cores, round-wire windings, AC Magnetic simulations, multiple windings, material traceability, and compatibility with AEDT 2024 R2 or newer in Commercial and Student editions.
+The first product release focuses on commercial and manual toroidal cores,
+round-wire windings, AC Magnetic simulations, multiple windings, material
+traceability, and AEDT 2025 R2 Commercial. Other AEDT releases and Student
+editions are not supported targets.
 
 ## Project status
 
-Milestones 0–4.5 are accepted; their dates and live-verification scope are recorded in the [ROADMAP](docs/development/ROADMAP.md). The spreadsheet-only Material Studio import and library workflow was accepted for the MVP on 2026-07-23: valid CSV/XLSX uploads are stored immediately as immutable `imported` revisions, the page is read-only after import, and download/replacement/deletion plus explicit revision/B-H-series project pinning are supported. No user workbook is added to Git automatically; filesystem overlay records can be committed when redistribution is permitted. Live AEDT/FEMM verification of a legally usable material remains a separate solver-integration acceptance gate.
+Milestones 0–4.5 and M5b are accepted; their dates and live-verification scope
+are recorded in the [ROADMAP](docs/development/ROADMAP.md). M5a remains open
+only for real-material `MATCH` reproduction and live AEDT/FEMM material
+handoff. The remaining roadmap now completes the backend-independent Project
+document, Guided Studio, solver execution and normalized results, reliability,
+and finally Windows packaging.
 
 - [Material records pipeline procedure](docs/development/material-records.md)
 - [CSV material import template](src/inductor_designer/resources/material_templates/material-import-template.csv)
@@ -33,12 +43,14 @@ Milestones 0–4.5 are accepted; their dates and live-verification scope are rec
 
 Read the canonical design:
 
+- [`docs/superpowers/specs/2026-07-24-mvp-roadmap-realignment-design.md`](docs/superpowers/specs/2026-07-24-mvp-roadmap-realignment-design.md)
 - [`docs/superpowers/specs/2026-07-12-pyaedt-inductor-application-design.md`](docs/superpowers/specs/2026-07-12-pyaedt-inductor-application-design.md)
 - [`docs/superpowers/plans/README.md`](docs/superpowers/plans/README.md)
 - [`docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md`](docs/superpowers/plans/2026-07-13-foundation-compatibility-spike.md)
 - [`docs/architecture/README.md`](docs/architecture/README.md)
 - [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md)
 - [`docs/development/coordination.md`](docs/development/coordination.md)
+- [`CONTEXT.md`](CONTEXT.md)
 
 ## Documentation language
 

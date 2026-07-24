@@ -1,43 +1,71 @@
 # Implementation Plan Index
 
-This directory is the execution index for the approved [PyAEDT Inductor Designer product and architecture design](../specs/2026-07-12-pyaedt-inductor-application-design.md).
+This directory is the execution index for the approved
+[MVP roadmap realignment](../specs/2026-07-24-mvp-roadmap-realignment-design.md).
+The original
+[product and architecture design](../specs/2026-07-12-pyaedt-inductor-application-design.md)
+remains authoritative only where the realignment does not supersede it.
 
-Implementation plans are deliberately written one milestone at a time. Each milestone must finish with working, independently testable software and verified interfaces before the next plan freezes assumptions that depend on it.
+Implementation plans are written one milestone at a time. Each milestone must
+finish with working, independently testable software and accepted interfaces
+before the next plan freezes assumptions that depend on it.
 
-Milestone 0 status: **Accepted 2026-07-13**, scoped to the AEDT 2025 R2 Commercial release available on the development machine. The 2024 R2 and 2025 R2 Student rows stay `out-of-scope` until a later milestone targets them; see the [validation plan](../../development/VALIDATION_PLAN.md).
+## Current status
 
-Milestone 1 status: **Accepted 2026-07-14**. Powder-core records reviewed against the 2025 Magnetics catalog; ferrite records stay `draft` until their catalog review.
+- Milestones 0–4.5 are accepted with the dates and exact live-verification
+  scope recorded in the [roadmap](../../development/ROADMAP.md).
+- Milestone 5a is implementation-complete but not accepted. A legally usable
+  real material, reproduction `MATCH`, and live AEDT 2025 R2 Commercial/FEMM
+  handoff remain required.
+- Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
+  Material Studio workflow. Its acceptance is independent from the remaining
+  M5a live-solver gate.
+- No detailed plan is active. After review of the roadmap realignment, the next
+  plan is the M5a closeout and support-scope cleanup.
 
-Milestone 2 status: **Accepted 2026-07-15** (exit tests green; interactive preview reviewed; one-closed-loop-per-turn model confirmed).
+The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
+application is the only product UI. Existing MCP functionality from M4.5
+remains in the repository, but MCP expansion or parity is future work and does
+not gate the active roadmap.
 
-Milestones 3, 4, and 4.5 status: **Accepted 2026-07-16**, **Accepted 2026-07-17**, and **Accepted 2026-07-17**, respectively. See the roadmap for the exact live-verification scope.
+## Completed and historical plans
 
-Milestone 5a status: **Implementation complete, automated exit proof green, acceptance pending 2026-07-18**. A real approved datasheet record, `MATCH` reproduction, and live AEDT/FEMM material handoff remain required. M5b implementation may start now, but those checks must pass before either milestone is accepted.
+| Order | Milestone | Detailed plan | Accepted evidence |
+| --- | --- | --- | --- |
+| 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Non-AEDT CI and controlled AEDT 2025 R2 Commercial spike |
+| 1 | Toroid domain and catalogs | [2026-07-13-toroid-domain-and-catalogs.md](2026-07-13-toroid-domain-and-catalogs.md) | Versioned project round trip with reviewed commercial core and multiple windings |
+| 2 | Geometry and live preview | [2026-07-14-geometry-and-live-preview.md](2026-07-14-geometry-and-live-preview.md) | Deterministic toroid/winding geometry, property tests, golden manifest, and reviewed preview |
+| 3 | Maxwell 3D MVP | [2026-07-16-maxwell3d-mvp.md](2026-07-16-maxwell3d-mvp.md) | AEDT 2025 R2 Commercial opens a generated ready-to-solve Maxwell 3D project |
+| 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Live Maxwell 2D/3D evidence and explicit native/blocked DC behavior |
+| 4.5 | MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Accepted FEMM 2D generation/solve and the implemented nine-tool MCP surface |
+| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Automated source replay is green; real-material and live-solver evidence remain open |
+| 5b | Spreadsheet-only Material Studio | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md), [read-only revision](2026-07-23-material-studio-readonly-imported.md), [streamlined library](2026-07-23-streamlined-material-library.md) | Accepted CSV/XLSX import, immutable library, plotting, download, replacement/deletion, and project pinning |
+| 5b history | Superseded manual Material Studio UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only; image/PDF and UI-editing instructions do not describe the product |
 
-Milestone 5b status: **Spreadsheet-only redesign in progress 2026-07-20**. The prior manual image/PDF workflow is superseded because no user materials have been imported. The active plan keeps CSV/XLSX import, table editing, lifecycle, project pinning, and visual curve inspection; any future non-spreadsheet ingestion requires a separately approved scope.
+Historical plans retain the decisions and evidence valid when they were
+executed. They do not override the current support and product scope.
 
-| Order | Milestone | Detailed plan | Entry condition | Exit evidence |
-| --- | --- | --- | --- | --- |
-| 0 | Foundation and compatibility spike | [2026-07-13-foundation-compatibility-spike.md](2026-07-13-foundation-compatibility-spike.md) | Approved product design | Non-AEDT CI passes; controlled runs create and save trivial Maxwell 2D and 3D projects; capability results are recorded for the release matrix |
-| 1 | Toroid domain and catalogs | [2026-07-13-toroid-domain-and-catalogs.md](2026-07-13-toroid-domain-and-catalogs.md) | Milestone 0 contracts accepted | Versioned project round trip with reviewed commercial core and multiple windings |
-| 2 | Geometry and live preview | [2026-07-14-geometry-and-live-preview.md](2026-07-14-geometry-and-live-preview.md) | Project and catalog schemas accepted | Deterministic toroid/winding geometry passes property and golden-manifest tests |
-| 3 | Maxwell 3D MVP | [2026-07-16-maxwell3d-mvp.md](2026-07-16-maxwell3d-mvp.md) | Geometry intermediate representation accepted | Supported AEDT installation opens a generated ready-to-solve Maxwell 3D project |
-| 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Maxwell 3D gateway and manifest accepted | Valid 2D equivalents and explicit native/fallback DC-bias decisions across the release matrix |
-| 4.5 | Automation interfaces — MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Maxwell 2D and DC-bias generation accepted | MCP client creates a valid project, generates a ready-to-solve Maxwell design, runs a FEMM solve of the 2D equivalent, and reads back per-winding R/L, with the backend chosen per call |
-| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Material interface and solver export requirements accepted | Automated source replay is green; real datasheet approval and live solver handoff remain pending |
-| 5b | Material Studio spreadsheet-only UI | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md) | Stable M5a automated interfaces and explicit removal decision | CSV/XLSX-only import, table editing, lifecycle, project pinning, selected-series plot, and complete non-solver verification |
-| 5b history | Superseded Material Studio manual UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only | Retained for decision history; its image/PDF ingestion instructions no longer describe the application |
-| 5c (optional) | Future material ingestion | Written only after a new explicit need and approved scope | Spreadsheet-only M5b accepted | Separately defined evidence for any new non-spreadsheet importer |
-| 6 | Productization | Written after Milestone 5 review | Desktop and extension workflows accepted | Installer and extension pass Commercial and Student release validation |
-| 7 | Additional core families | One plan per core family after toroid release criteria pass | Toroid workflow released | Each family has independent schemas, invariants, previews, adapters, and fixtures |
+## Remaining milestone sequence
+
+| Order | Milestone | Entry condition | Exit evidence |
+| --- | --- | --- | --- |
+| 5a closeout | Live material validation and support cleanup | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
+| 6 | Project Foundation | M5a accepted | One backend-independent Project document round-trips and creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans with explicit RMS/peak and material state |
+| 7 | Guided Studio | M6 contracts accepted | A user authors, saves, reopens, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
+| 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
+| 9 | Reliability | M8 run/result contracts accepted | Autosave, recovery, undo/redo, cancellation recovery, and redacted diagnostics survive forced failures |
+| 10 | Windows Release | M9 reliability accepted | A clean Windows install completes the workflow against AEDT 2025 R2 Commercial and publishes release notes/checksums |
+| 11 | Additional Core Families | Toroidal Windows release accepted | Each approved family has an independent design, schema, invariants, preview, solver mapping, fixtures, and live evidence |
 
 ## Execution rule
 
-Only one detailed milestone plan is active at a time. Every completed milestone closes with:
+Only one detailed milestone plan is active at a time. Every completed milestone
+closes with:
 
-1. Exact automated and controlled-AEDT test results.
+1. Exact automated and controlled-solver test results.
 2. Accepted public interfaces and schema versions.
-3. Documented compatibility findings and unresolved risks.
+3. Documented physical assumptions, compatibility findings, and unresolved
+   risks.
 4. A clean Git commit and handoff.
 5. The detailed plan for the next milestone.
 
@@ -45,13 +73,15 @@ Only one detailed milestone plan is active at a time. Every completed milestone 
 
 | Specification area | Delivery milestone |
 | --- | --- |
-| Shared modular architecture, dependency inversion, schemas, diagnostics foundation, test strategy, and AEDT release/edition capability evidence | 0 |
-| Toroid project model, commercial Magnetics core records, conductor catalog, multiple winding definitions, units, snapshots, and migrations | 1 |
-| Solver-independent 3D geometry, approximate 2D intermediate geometry, packing, collisions, leads, naming, symmetry proof, and persistent preview | 2 |
-| Ready-to-solve Maxwell 3D geometry, materials, solid/stranded windings, excitations, region, boundaries, mesh, setup, and supported reports | 3 |
-| Maxwell 2D equivalent, native Include DC Fields, AEDT 2024 R2 operating-point fallback, compatibility warnings, and generation manifest | 4 |
-| Traceable CSV/XLSX material workflow, fitting, physical checks, review, approval, visual curve inspection, and solver export | 5 |
-| Guided Studio completion, autosave/recovery, undo/redo, cancellation, AEDT extension, PyInstaller, Inno Setup, release matrix, checksums, and release documentation | 6 |
-| E, PQ, EQ, EER, and subsequently approved core-family plugins | 7 |
+| Real material reproduction and live AEDT/FEMM consumption; single supported AEDT target cleanup | 5a closeout |
+| Backend-independent Design/Operating Point/Simulation Recipe; per-run backend; explicit RMS/peak; manifests/results contracts | 6 |
+| Complete Core/Windings/Materials/Simulation/Review UI; shareable project lifecycle; reactive preview; generation | 7 |
+| Solver execution; progress/cancellation; R/L/Z, losses, energy, B/J maximum and area mean, convergence, JSON/CSV | 8 |
+| Autosave, recovery, undo/redo, interrupted-run handling, actionable diagnostics | 9 |
+| Resource discovery, PyInstaller, Inno Setup, clean-install and AEDT 2025 R2 Commercial release validation | 10 |
+| Independently implemented non-toroidal core families | 11 |
 
-Deferred transient, thermal, mechanical, optimization, converter co-simulation, cloud, and non-round-conductor work requires a separately approved specification before it enters this index.
+AEDT 2024 R2, Student editions, an AEDT extension, edited-`*.aedt` round-trip,
+automatic symmetry, automatic sweeps, MCP expansion, transient, thermal,
+mechanical, optimization, converter co-simulation, cloud services, and
+non-round conductors require a separately approved future specification.

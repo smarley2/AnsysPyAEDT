@@ -41,8 +41,8 @@ never reported as successful.
 - DC operating currents are recorded in the manifest and, as of Milestone 4,
   applied natively (via the `AC Magnetic with DC` solution type) when the
   reviewed capability matrix confirms native DC support; see
-  `docs/development/dc-bias-compatibility.md` for the decision table and the
-  2024 R2 fallback status.
+  `docs/development/dc-bias-compatibility.md` for the single-target decision
+  table and unsupported-case behavior.
 - Full model only; symmetry stays data-level (Milestone 2 plan output).
 - Exact PyAEDT keyword names were verified against the installed pyaedt by
   the AEDT integration test; the recording fakes mirror the adapter's calls.

@@ -1,37 +1,27 @@
-# Foundation Validation Plan
+# Supported Environment Validation Plan
 
-## Purpose and current status
+## Purpose
 
-This plan tells an operator how to collect the remaining evidence for Milestone 0 without relying on conversation history. The foundation implementation and validation infrastructure exist. Hosted non-AEDT CI success is recorded below; real AEDT execution and Milestone 0 completion are not recorded.
+This plan defines the reproducible evidence required for the only supported
+Ansys environment: AEDT 2025 R2 Commercial. Historical AEDT 2024 R2 and Student
+matrix rows establish no current support claim and are removed during the M5a
+closeout.
 
-No supported AEDT 2024 R2 or 2025 R2 Student executable is installed on the development machine. The 2025.2 Commercial row is reviewed and passed; the other three rows are `out-of-scope` for this milestone (no machine, no license). They become required again if a future milestone targets a Student or 2024 R2 release.
+## Required environment
 
-## Scope and release/edition matrix
+| Product | Required target |
+| --- | --- |
+| Operating system | Windows |
+| AEDT | 2025 R2 (`2025.2`) |
+| Edition | Commercial |
+| PyAEDT | Exact installed version recorded in evidence |
+| FEMM | User-installed FEMM 4.2 when validating the optional FEMM backend |
 
-Collect reviewed evidence for every required row:
+Support is based on observed behavior, never inferred from version numbers.
 
-| Release target | Edition | Runner release value |
-| --- | --- | --- |
-| AEDT 2024 R2 | Commercial | `2024.2` |
-| AEDT 2024 R2 | Student | `2024.2` |
-| Latest installed AEDT | Commercial | Exact installed `YYYY.R` value |
-| Latest installed AEDT | Student | Exact installed `YYYY.R` value |
+## Phase A: Non-solver release gates
 
-The latest installed Commercial and Student releases may differ. Record the exact release used for each row during matrix review.
-
-## Phase A: Hosted non-AEDT CI
-
-Recorded evidence:
-
-- [GitHub Actions run 29234286379](https://github.com/smarley2/AnsysPyAEDT/actions/runs/29234286379) passed for commit `1f24ff3`.
-- The successful jobs were quality, Windows Python 3.10, Windows Python 3.13, Ubuntu Python 3.10, and Ubuntu Python 3.13.
-- The quality job ran Ruff, mypy, and architecture checks. Each test job installed UI dependencies and ran the non-AEDT coverage suite defined by the [hosted CI workflow](../../.github/workflows/ci.yml).
-
-This run satisfies the hosted non-AEDT CI evidence requirement for Task 11. It does not satisfy the local clean-environment gates or any controlled AEDT requirement.
-
-## Phase B: Local clean-environment release gates
-
-From a clean checkout and fresh virtual environment, run the exact Task 11 non-AEDT release gates:
+From a clean checkout and fresh virtual environment:
 
 ```powershell
 python -m pip install -e ".[dev,ui]"
@@ -41,67 +31,85 @@ python -m tools.check_architecture
 python -m pytest -m "not aedt and not femm" --cov=inductor_designer --cov-report=term-missing
 ```
 
-The installation must succeed; Ruff, mypy, and the boundary checker must exit successfully; all selected tests must pass; and branch-aware coverage must be at least 80 percent.
+The installation and every command must succeed. Review `git status --short`
+for only intentional files. Generated projects, solver output, raw material
+sources without redistribution permission, credentials, license details, and
+machine-specific evidence remain outside Git.
 
-Then run the Task 11 repository-hygiene checks:
+## Phase B: Controlled AEDT capability run
 
-```powershell
-git status --short
-git check-ignore artifacts/compatibility/example/evidence.json example.aedt
-```
-
-Review `git status` for only intentional handoff edits and confirm that both generated-artifact examples are reported as ignored. Do not proceed with unexpected solver output, credentials, license details, or unrelated files in the worktree.
-
-## Phase C: Controlled AEDT runs
-
-Follow the full [AEDT compatibility procedure](aedt-compatibility-testing.md) on a Windows machine with the exact release and edition under test, an appropriate license, and the AEDT development dependencies installed.
-
-Use this command pattern from the repository root for each row:
+Follow the [AEDT compatibility procedure](aedt-compatibility-testing.md) on a
+Windows machine with AEDT 2025 R2 Commercial and a valid license:
 
 ```powershell
-.\tools\run_aedt_spike.ps1 -Release <YYYY.R> -Edition <commercial|student> -Graphical
+.\tools\run_aedt_spike.ps1 -Release 2025.2 -Edition commercial -Graphical
 ```
 
-Run `2024.2` once for each edition. Then run each latest-installed row with that edition's exact installed release value. Use graphical mode first so startup and edition behavior are observed rather than assumed.
+Confirm that the observed session is exactly AEDT `2025.2` Commercial, record
+the exact PyAEDT version, reopen both generated projects, and verify the native
+3D `AC Magnetic with DC` behavior described in
+[DC operating-point compatibility](dc-bias-compatibility.md).
 
-For every run, retain the generated `evidence.json` and Maxwell projects outside Git long enough for review. Confirm that the runner exits successfully when the spike succeeds, `requestedEnvironment` matches each artifact's `observedSession`, the exact PyAEDT version is present, and both Maxwell 2D and Maxwell 3D artifact results are complete. Stop without updating the matrix if an observed session differs from the requested release or edition. Check evidence for personal paths, license information, credentials, or other sensitive machine details before sharing it.
+## Phase C: M5a real-material gate
 
-## Phase D: Manual inspection and matrix update
+Use a legally usable material workbook and the
+[material-record procedure](material-records.md):
 
-For each controlled run:
+1. Preserve source identity, hash, conditions, and redistribution decision.
+2. Import and pin the exact material revision and B-H series.
+3. Run the reproduction command and require `MATCH`.
+4. Generate Maxwell 3D and FEMM artifacts from that same pinned revision.
+5. In AEDT 2025 R2 Commercial, inspect the nonlinear B-H data and supported
+   core-loss representation.
+6. In FEMM, verify every expected singular `mi_addbhpoint` call is reflected in
+   the material definition.
+7. Record exact application, PyAEDT, AEDT, pyfemm, and FEMM versions.
 
-1. Open both generated projects and confirm that the named rectangle or box exists.
-2. Confirm that each project saved, closed, and reopens without a repair warning.
-3. Inspect Maxwell 3D for the Include DC Fields capability and record only the observed result in `manualReview.includeDcFields3d`.
-4. Record reproducible Student restrictions in `manualReview.discoveredLimits` without personal, license-server, or machine-path details; add the reviewer GitHub handle and ISO-8601 UTC time to `manualReview.reviewedBy` and `manualReview.reviewedAt`. The generated fields start null or empty and `capabilities.reviewStatus` remains `unreviewed`.
-5. Review all evidence, then update only the matching row in the [AEDT compatibility matrix](../../compatibility/aedt-matrix.yml) to `passed` or `failed`.
-6. Copy manually reviewed capability values from evidence and add the exact PyAEDT version, ISO-8601 UTC review time, and reviewer GitHub handle.
-7. Delete local generated artifacts after review when they are no longer needed; never commit them.
+M5a remains open until this evidence is reviewed. M5b is already accepted and
+does not depend on this gate.
 
-If a latest-installed row used a concrete release, replace `latest-installed` only in that matching row with the exact reviewed `YYYY.R` value.
+## Phase D: M8 simulation/result gate
 
-## Acceptance and gating rules
+For Maxwell 3D, Maxwell 2D, and FEMM, run one controlled Operating Point and
+verify:
 
-- Never infer AEDT or PyAEDT support, Include DC Fields availability, or Student restrictions from version numbers.
-- Hosted evidence must cover Windows and Linux on Python 3.10 and 3.13.
-- Local clean-environment gates must pass with at least 80 percent branch-aware coverage.
-- Every **required** controlled AEDT row must contain reviewed evidence. Milestone 0 cannot close while any required row remains `unverified`. Rows marked `out-of-scope` are not required and are revisited only when a later milestone changes the support matrix.
-- A `failed` row is valid observed evidence, but it does not establish support. Its cause, compatibility policy, and effect on the Milestone 0 exit criterion must be documented and accepted before closure.
-- Task 11 remains pending until all four controlled rows have reviewed evidence and the other Milestone 0 gates are satisfied.
-- Milestone 1 planning and implementation remain blocked until Milestone 0 is formally accepted.
-- Generated AEDT projects and raw local evidence remain outside Git.
+- effective AC RMS and peak currents and winding phases;
+- generated geometry, material assignments, setup, and solver completion;
+- result units, conventions, dimensional labels, and approximation warnings;
+- R/L/Z and each supported matrix;
+- copper/core/total loss and magnetic energy availability;
+- B/J maximum and Area-Weighted Mean extraction;
+- convergence and failure diagnostics; and
+- JSON/CSV agreement with the Run Manifest.
 
-## Operator checklist
+Every requested unsupported quantity must be explicitly unavailable with a
+reason.
 
-- [ ] Use a clean checkout and fresh virtual environment.
-- [x] Complete and review the hosted quality job and all four non-AEDT test-matrix jobs.
-- [ ] Run the Phase B release and hygiene commands exactly as shown.
-- [ ] Prepare a supported licensed Windows AEDT environment for each required release and edition.
-- [ ] Run the graphical controlled spike for all four rows.
-- [ ] Manually reopen and inspect both projects from every run.
-- [ ] Review evidence for exact versions, observed capabilities, restrictions, and sensitive data.
-- [ ] Update only the matching matrix row after each evidence review.
-- [ ] Confirm that no required matrix row remains `unverified` (`out-of-scope` is fine).
-- [ ] Record any failed row's cause and accepted compatibility policy.
-- [ ] Keep generated AEDT artifacts and raw evidence out of Git.
-- [ ] Complete Task 11 only after all acceptance and gating rules above are satisfied.
+## Phase E: M10 clean-install gate
+
+Install the packaged application on a clean controlled Windows environment.
+Without a source checkout, complete:
+
+1. New Project.
+2. Core, winding, material, and Operating Point authoring.
+3. Save, close, open, and edit the Project document.
+4. Generate Only for each backend.
+5. Generate and Solve for each installed backend.
+6. Result inspection and JSON/CSV export.
+7. Confirmed Maxwell 3D Geometry-Only AEDT Project generation for a Manual core
+   without material.
+8. AEDT 2025 R2 Commercial project reopen and manual edit.
+
+The application must locate packaged schemas, catalogs, templates,
+compatibility evidence, and other resources without repository-relative paths.
+
+## Evidence and acceptance rules
+
+- Keep raw controlled-run evidence in ignored artifact directories.
+- Remove credentials, license-server data, user names, and unrelated personal
+  paths before sharing evidence.
+- A failed observed run is valid diagnostic evidence but does not establish
+  support.
+- A partial solver artifact is never a successful run.
+- No AEDT release or edition other than 2025 R2 Commercial is a required or
+  implied target.

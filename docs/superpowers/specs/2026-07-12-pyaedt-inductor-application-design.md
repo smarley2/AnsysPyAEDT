@@ -1,11 +1,20 @@
 # PyAEDT Inductor Designer — Product and Architecture Design
 
-- Status: Approved in collaborative design review
+- Status: Superseded in part by the 2026-07-24 MVP roadmap realignment
 - Date: 2026-07-12
 - Documentation language: English
 - Target platform: Windows
 - Minimum AEDT release: 2024 R2
 - Supported editions: Commercial and Student
+
+> **Current authority:** The
+> [2026-07-24 MVP roadmap realignment](2026-07-24-mvp-roadmap-realignment-design.md)
+> supersedes this document's product-surface, AEDT support, project/run,
+> AC-current, and delivery-sequence decisions. In particular, the current
+> product is a standalone Windows application for AEDT 2025 R2 Commercial only;
+> there is no AEDT extension, Student/2024 support, or edited-`*.aedt`
+> round-trip. This document remains authoritative for unchanged modularity,
+> toroidal geometry, material provenance, and general testing principles.
 
 ## 1. Purpose
 

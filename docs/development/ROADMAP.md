@@ -1,17 +1,28 @@
 # Development Roadmap
 
+> **Current authority:** The
+> [2026-07-24 MVP roadmap realignment](../superpowers/specs/2026-07-24-mvp-roadmap-realignment-design.md)
+> replaces the remaining delivery sequence and narrows the product to the
+> standalone Windows application and AEDT 2025 R2 Commercial. Milestones 0–5
+> below retain their historical implementation and acceptance evidence; the
+> active sequence begins with the M5a closeout and continues through M11.
+
 ## Milestone 0: Foundation and compatibility spike
 
 - Establish Python packaging, quality gates, schemas, CI, and documentation.
-- Prove connection to AEDT 2024 R2 and a current AEDT release through PyAEDT.
+- Prove connection to the available AEDT release through PyAEDT.
 - Prove a minimal PySide6/QML application and Qt Quick 3D preview.
-- Record a capability matrix for Commercial and Student editions.
+- Record observed compatibility evidence without inferring unsupported targets.
 
 Exit criterion: a documented spike creates and saves a trivial Maxwell 2D and 3D design without domain-to-PyAEDT coupling.
 
 ### Current state
 
-Milestone 0 is **accepted** as of 2026-07-13. Acceptance scope is deliberately limited to the AEDT 2025 R2 Commercial release available on the development machine; the 2024 R2 (Commercial and Student) and 2025 R2 Student rows stay `out-of-scope` and become required again only when a later milestone targets those releases. Milestone 1 is unblocked.
+Milestone 0 is **accepted** as of 2026-07-13. Acceptance scope is deliberately
+limited to the AEDT 2025 R2 Commercial release available on the development
+machine. The 2026-07-24 scope decision permanently removes 2024 R2 and Student
+rows from the active product roadmap; they do not become required in a later
+milestone without a new approved scope decision. Milestone 1 is unblocked.
 
 Implemented foundation deliverables:
 
@@ -22,7 +33,9 @@ Implemented foundation deliverables:
 - A machine-readable compatibility-spike CLI.
 - A minimal PySide6/QML Guided Studio shell with a Qt Quick 3D preview smoke path.
 - A hosted non-AEDT CI definition.
-- A controlled AEDT runner, compatibility procedure, and four-row release/edition matrix.
+- A controlled AEDT runner, compatibility procedure, and the historical
+  four-row release/edition matrix. M5a reduces the active support data to the
+  single current target.
 
 Verified non-AEDT evidence:
 
@@ -34,9 +47,11 @@ Verified non-AEDT evidence:
 Remaining evidence:
 
 - The 2025 R2 Commercial row is reviewed and passed (evidence on disk under `artifacts/compatibility/2025.2-commercial/`, gitignored).
-- The 2024 R2 (Commercial and Student) and 2025 R2 Student rows are marked `out-of-scope` for Milestone 0 because no matching AEDT executable or license is available on the development machine.
+- Historical 2024 R2 and Student rows are `out-of-scope` and establish no
+  current support claim.
 
-Task 11 is closed: the 2025.2 Commercial review is accepted and the remaining Milestone 0 gates pass. Milestone 1 is unblocked. The deferred rows become required again only when a later milestone targets a Student or 2024 R2 release.
+Task 11 is closed: the 2025.2 Commercial review is accepted and the remaining
+Milestone 0 gates pass. Milestone 1 is unblocked.
 
 ## Milestone 1: Toroid domain and catalogs
 
@@ -168,7 +183,7 @@ Exit criterion is verified by `tools/run_aedt_maxwell3d.ps1` plus a manual open 
 
 - Generate the documented 2D equivalent cross-sectional model.
 - Use native 3D Include DC Fields where supported.
-- Implement the AEDT 2024 R2 Magnetostatic plus incremental-linearization fallback.
+- Identify unsupported operating-point paths and block them explicitly.
 - Make approximations and capability differences visible in the project manifest and UI.
 
 Exit criterion: release-matrix fixtures generate valid projects and identify native versus approximate operating-point treatment.
@@ -208,11 +223,10 @@ pyaedt limits. Implemented deliverables:
   `compatibility/aedt-matrix.yml` rows into `CapabilitySnapshot` values.
 - DC-bias strategy selection (`select_dc_bias_strategy`) wired into 3D
   generation: native DC through the "AC Magnetic with DC" solution type and
-  per-winding `DC Current` values when the matrix confirms support; the
-  2024 R2 magnetostatic-incremental fallback and the 2D case are identified
-  in the manifest but blocked from generation (decision D4, 2026-07-16 — no
-  2024 R2 installation exists, and the fallback is a physical no-op until
-  Milestone 5's nonlinear material data).
+  per-winding `DC Current` values when the matrix confirms support. Historical
+  2024 R2 and 2D fallback candidates were identified but blocked from
+  generation. The 2026-07-24 support decision removes the 2024 strategy from
+  active scope instead of implementing it.
 - The Maxwell 2D stack: solver-independent plan types and `build_maxwell2d_plan`
   from `PlanarModel`, the `Maxwell2dExporter` application port, the staged
   `PyaedtMaxwell2dExporter` (14 stages including launch and save), the
@@ -223,8 +237,8 @@ pyaedt limits. Implemented deliverables:
   and approximation status.
 - The exit-criterion integration test, `tests/integration/test_release_matrix.py`.
 
-The 2024 R2 rows stay `out-of-scope` per D4 and were not part of this
-acceptance.
+The 2024 R2 rows were not part of this acceptance and are not current product
+targets.
 
 ## Milestone 4.5: Automation interfaces — MCP server and FEMM 2D backend
 
@@ -288,7 +302,9 @@ procedure, tool list, and verified-limits detail.
 Milestone 4.5 is **accepted** as of 2026-07-17: Fabio Posser validated the
 FEMM results and the Guided Studio generation flow. Driving
 `inductor-designer-mcp` from an external MCP client remains an open
-follow-up validation and does not gate the milestone.
+follow-up validation and does not gate the milestone. The existing MCP surface
+is retained, but no MCP expansion, parity, or validation work belongs to
+M5a–M11.
 
 ## Milestone 5: Material Studio
 
@@ -356,8 +372,9 @@ The spreadsheet import and local material-library slice of M5b was **accepted
 for the MVP on 2026-07-23**. Acceptance covers template download, CSV/XLSX
 import, immediate persistence, one-click saved-material loading, read-only curve
 visualization, selected-material XLSX download, replacement, and guarded
-deletion. Native Windows packaging/high-DPI acceptance and live Ansys AEDT or
-FEMM material consumption remain separate milestone gates.
+deletion. M5b is closed. Native Windows packaging/high-DPI acceptance belongs
+to M10, while live Ansys AEDT/FEMM material consumption belongs only to the M5a
+closeout.
 
 Remaining solver-integration and productization work:
 
@@ -369,10 +386,10 @@ Remaining solver-integration and productization work:
   confirmation, and explicit B-H selection.
 
 The completed M5b implementation work did not need live solver checks because it
-uses the stable, automated M5a services. The real-record import and `MATCH`
-reproduction plus live AEDT/FEMM handoff remain hard gates for formally accepting
-either milestone and for making live-solver claims. Source licensing must be
-confirmed before real datasheet bytes are committed or redistributed.
+uses the stable, automated M5a services. The real-record import, `MATCH`
+reproduction, and live AEDT/FEMM handoff remain hard gates for accepting M5a and
+for making live-solver material claims. Source licensing must be confirmed
+before real datasheet bytes are committed or redistributed.
 
 The implemented M5b scope is the Guided Studio spreadsheet-only workflow:
 download CSV/XLSX templates, import immutable revisions, replace/delete stored
@@ -389,16 +406,102 @@ explicit-formula record requires a separately approved specification and plan.
 See also the [material records procedure](material-records.md) and the
 [Milestone 5a implementation plan](../superpowers/plans/2026-07-17-material-records-pipeline.md).
 
-## Milestone 6: Productization
+## Milestone 5a closeout: Live material validation and support cleanup
 
-- Package the Windows application with PyInstaller and Inno Setup.
-- Package the AEDT extension separately.
-- Add recovery, diagnostics, reports, release notes, checksums, and the controlled AEDT release checklist.
+- Remove AEDT 2024 R2, Student, and magnetostatic-fallback product policies.
+- Keep AEDT 2025 R2 Commercial as the only supported target.
+- Import a legally usable real material and obtain reproduction `MATCH`.
+- Verify the exact pinned material revision in live Maxwell 3D and FEMM
+  artifacts.
 
-Exit criterion: the installer and extension pass the Commercial/Student compatibility matrix.
+Exit criterion: `MATCH`, licensing handling, and live AEDT 2025 R2
+Commercial/FEMM material-consumption evidence are accepted.
 
-## Milestone 7: Additional core families
+## Milestone 6: Project Foundation
 
-- Add E, PQ, EQ, EER, and other approved commercial geometries as independent geometry plugins.
+- Replace fixed project dimensional mode with a backend-independent Design,
+  Operating Point, and Simulation Recipe.
+- Select Maxwell 3D, Maxwell 2D, or FEMM through a per-execution Run Request.
+- Store AC RMS current and convert it once to solver peak amplitude.
+- Define Run Manifest and Normalized Result Set contracts.
+- Represent unresolved core materials and the confirmed Maxwell 3D
+  geometry-only operation.
+- Introduce the replacement schema as a clean break; no legacy project
+  migration is required.
 
-Exit criterion: each family has its own catalog schema, geometry invariants, previews, Maxwell adapters, and integration fixtures.
+Exit criterion: one Project document round-trips deterministically and creates
+validated plans for all three backends with identical physical inputs and
+explicit RMS/peak and material-state evidence.
+
+## Milestone 7: Guided Studio
+
+- Implement New/Open/Save for compatible shareable Project documents.
+- Implement functional Core, Windings, Materials, Simulation, and Review pages.
+- Support catalog and Manual toroidal cores and complete winding authoring.
+- Make the preview reactive to valid geometry edits.
+- Select a backend and execute Generate Only through the existing adapters.
+- Display validation, approximations, and informational Symmetry Suggestions.
+- Remove the hardcoded startup Design.
+
+Exit criterion: a user starts with an empty Project document, authors and
+reviews a toroidal Design, saves and reopens it, and generates each supported
+backend artifact. A materialless Manual core can generate only a confirmed
+geometry-only Maxwell 3D artifact.
+
+## Milestone 8: Simulation and Results
+
+- Execute one Operating Point in Maxwell 3D, Maxwell 2D, and FEMM.
+- Activate Generate and Solve in the Guided Studio.
+- Provide progress, cancellation, durable status, and failed-stage diagnostics.
+- Honor AC RMS current and phase; enable DC bias only where live-validated.
+- Extract R/L/Z, supported matrices, copper/core/total loss, magnetic energy,
+  convergence, and solver diagnostics.
+- Extract B and J maximum and Area-Weighted Mean values in peak and RMS
+  conventions.
+- Use deterministic Representative Cross Sections in 3D and direct regional
+  area integration in 2D.
+- Export normalized JSON and CSV with explicit unavailable reasons.
+
+Exit criterion: controlled runs for all three backends produce traceable
+Normalized Result Sets in which every requested quantity is evidenced or
+explicitly unavailable.
+
+## Milestone 9: Reliability
+
+- Add autosave, crash recovery, and application-wide undo/redo.
+- Recover interrupted runs without claiming partial success.
+- Add actionable installation, license, material, file, and convergence errors.
+- Produce redacted logs and a diagnostic bundle.
+
+Exit criterion: forced UI and solver failures preserve the last valid Project
+document and produce sufficient redacted evidence for diagnosis.
+
+## Milestone 10: Windows Release
+
+- Resolve packaged resources outside the source checkout.
+- Package the application with PyInstaller and Inno Setup.
+- Detect AEDT 2025 R2 Commercial and optional FEMM installation.
+- Run the complete flow on a clean Windows installation.
+- Publish release notes and checksums.
+
+Exit criterion: the installed application completes authoring, generation,
+optional solving, result export, save, and reopen against AEDT 2025 R2
+Commercial.
+
+## Milestone 11: Additional Core Families
+
+- Add E, PQ, EQ, EER, and other approved commercial geometries as independent
+  geometry components after the toroidal Windows release.
+
+Exit criterion: each family has its own approved design, catalog/schema needs,
+geometry invariants, preview, solver mapping, fixtures, and live evidence.
+
+## Deferred beyond the active roadmap
+
+- MCP expansion or parity.
+- AEDT extension and edited-`*.aedt` round-trip.
+- AEDT 2024 R2 and Student support.
+- Automatic symmetry model generation.
+- Automatic frequency, current, or parameter sweeps.
+- Transient, thermal, mechanical, optimization, converter co-simulation,
+  cloud, collaborative remote databases, and non-round conductors.
