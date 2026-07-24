@@ -270,6 +270,15 @@ def test_xlsx_normalizes_excel_date_for_captured_at() -> None:
     assert result.sources[0].captured_at == "2026-07-23T00:00:00"
 
 
+def test_xlsx_coerces_numeric_grade_to_text() -> None:
+    result = import_material_file(
+        "numeric-grade.xlsx",
+        _workbook_bytes(cell_value=("Material", "B4", 60)),
+    )
+
+    assert result.ref == MaterialRef("Example", "Ferrite", "60")
+
+
 def test_xlsx_rejects_missing_material_value_column() -> None:
     _assert_import_error(
         "missing-material-column.xlsx",

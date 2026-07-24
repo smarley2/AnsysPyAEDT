@@ -109,9 +109,13 @@ def _workbook_lineage(
     ) != 1:
         raise _fail(filename, "_MaterialStudio", "invalid Material Studio lineage marker")
     ref = MaterialRef(
-        _required_text(values["manufacturer"], filename, "_MaterialStudio!B4", "manufacturer"),
-        _required_text(values["material_name"], filename, "_MaterialStudio!B5", "material_name"),
-        _required_text(values["grade"], filename, "_MaterialStudio!B6", "grade"),
+        _required_identity_text(
+            values["manufacturer"], filename, "_MaterialStudio!B4", "manufacturer"
+        ),
+        _required_identity_text(
+            values["material_name"], filename, "_MaterialStudio!B5", "material_name"
+        ),
+        _required_identity_text(values["grade"], filename, "_MaterialStudio!B6", "grade"),
     )
     revision_id = _required_text(
         values["base_revision_id"], filename, "_MaterialStudio!B7", "base_revision_id"
@@ -133,6 +137,20 @@ def _required_text(value: object, filename: str, location: str, field: str) -> s
     if not isinstance(value, str) or not value.strip():
         raise _fail(filename, location, f"{field} must not be blank")
     return value
+
+
+def _required_identity_text(value: object, filename: str, location: str, field: str) -> str:
+    if isinstance(value, str):
+        text = value
+    elif type(value) is int:
+        text = str(value)
+    elif type(value) is float and math.isfinite(value):
+        text = str(int(value)) if value.is_integer() else str(value)
+    else:
+        raise _fail(filename, location, f"{field} must be text or a finite number")
+    if not text.strip():
+        raise _fail(filename, location, f"{field} must not be blank")
+    return text
 
 
 def _captured_at(value: object, filename: str, location: str) -> str:
@@ -196,9 +214,13 @@ def _validate_units(
 
 
 def _metadata(values: dict[str, object], filename: str, location: str) -> MaterialTableMetadata:
-    manufacturer = _required_text(values["manufacturer"], filename, location, "manufacturer")
-    material_name = _required_text(values["material_name"], filename, location, "material_name")
-    grade = _required_text(values["grade"], filename, location, "grade")
+    manufacturer = _required_identity_text(
+        values["manufacturer"], filename, location, "manufacturer"
+    )
+    material_name = _required_identity_text(
+        values["material_name"], filename, location, "material_name"
+    )
+    grade = _required_identity_text(values["grade"], filename, location, "grade")
     captured_at = _captured_at(values["captured_at"], filename, location)
     description = _required_text(
         values["source_description"], filename, location, "source_description"
@@ -356,13 +378,13 @@ def _material_metadata(filename: str, sheet: Worksheet) -> MaterialTableMetadata
         missing = ", ".join(key for key in _MATERIAL_KEYS if key not in values)
         raise _fail(filename, "Material!A2", f"missing material keys: {missing}")
 
-    manufacturer = _required_text(
+    manufacturer = _required_identity_text(
         values["manufacturer"], filename, locations["manufacturer"], "manufacturer"
     )
-    material_name = _required_text(
+    material_name = _required_identity_text(
         values["material_name"], filename, locations["material_name"], "material_name"
     )
-    grade = _required_text(values["grade"], filename, locations["grade"], "grade")
+    grade = _required_identity_text(values["grade"], filename, locations["grade"], "grade")
     source_url = values["source_url"]
     if source_url is None:
         source_url = ""
