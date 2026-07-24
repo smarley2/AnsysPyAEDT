@@ -32,10 +32,15 @@ def test_2025_r1_3d_uses_native_dc_fields_when_observed() -> None:
     assert decision.approximate is False
 
 
-def test_2024_r2_3d_uses_documented_incremental_fallback() -> None:
-    decision = select_dc_bias_strategy(snapshot("2024.2", False), ModelDimension.THREE_D)
-    assert decision.strategy is DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK
-    assert decision.approximate is True
+def test_reviewed_environment_without_native_dc_is_blocked_without_fallback() -> None:
+    decision = select_dc_bias_strategy(
+        snapshot("2025.2", False),
+        ModelDimension.THREE_D,
+    )
+
+    assert decision.strategy is DcBiasStrategy.BLOCKED
+    assert decision.approximate is False
+    assert "no fallback is supported" in decision.reason
 
 
 def test_2d_dc_bias_is_blocked_until_a_supported_policy_exists() -> None:
@@ -68,7 +73,7 @@ def test_native_flag_before_2025_r1_is_rejected_as_inconsistent_evidence() -> No
 @pytest.mark.parametrize(
     ("release", "include_dc_fields"),
     [("2025.1", True), ("2024.2", False)],
-    ids=["native-flag", "fallback-flag"],
+    ids=["native-flag", "non-native-flag"],
 )
 def test_unreviewed_boolean_evidence_cannot_select_a_3d_strategy(
     release: str,
@@ -90,7 +95,7 @@ def test_later_release_without_native_capability_remains_blocked() -> None:
     decision = select_dc_bias_strategy(snapshot("2025.1", False), ModelDimension.THREE_D)
 
     assert decision.strategy is DcBiasStrategy.BLOCKED
-    assert "only approved for AEDT 2024 R2" in decision.reason
+    assert "no fallback is supported" in decision.reason
 
 
 @pytest.mark.parametrize(

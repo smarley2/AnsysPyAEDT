@@ -19,7 +19,6 @@ __all__ = [
 
 class DcBiasStrategy(str, Enum):
     NATIVE_INCLUDE_DC_FIELDS = "native-include-dc-fields"
-    MAGNETOSTATIC_INCREMENTAL_FALLBACK = "magnetostatic-incremental-fallback"
     BLOCKED = "blocked"
 
 
@@ -79,15 +78,9 @@ def select_dc_bias_strategy(
             False,
             "The 3D Include DC Fields capability has not been reviewed for this environment.",
         )
-    if capabilities.release == AedtRelease(2024, 2):
-        return DcBiasDecision(
-            DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK,
-            True,
-            "Use the documented Magnetostatic operating-point and "
-            "incremental-linearization approximation.",
-        )
     return DcBiasDecision(
         DcBiasStrategy.BLOCKED,
         False,
-        "The incremental-linearization fallback is only approved for AEDT 2024 R2.",
+        "Native 3D DC bias is unavailable in this reviewed environment; "
+        "no fallback is supported.",
     )

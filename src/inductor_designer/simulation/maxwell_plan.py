@@ -251,9 +251,4 @@ def dc_bias_notes(
                 "effect on a linear material."
             )
         return tuple(notes)
-    if decision.strategy is DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK:
-        return (
-            "DC operating currents are recorded but not applied; the 2024 R2 "
-            "Magnetostatic fallback is deferred until a 2024 R2 installation exists.",
-        )
     return (f"DC operating currents are recorded but not applied: {decision.reason}",)

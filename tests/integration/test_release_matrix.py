@@ -4,13 +4,10 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-import pytest
-
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
 from inductor_designer.application.services.maxwell_export import (
-    MaxwellExportBlocked,
     export_maxwell2d,
     export_maxwell3d,
     generation_manifest_json,
@@ -31,13 +28,6 @@ rows:
     edition: commercial
     status: passed
     includeDcFields3d: true
-    discoveredLimits: []
-    evidenceReviewedAt: "2026-07-17T00:00:00Z"
-    evidenceReviewedBy: fabio
-  - release: "2024.2"
-    edition: commercial
-    status: passed
-    includeDcFields3d: false
     discoveredLimits: []
     evidenceReviewedAt: "2026-07-17T00:00:00Z"
     evidenceReviewedBy: fabio
@@ -72,17 +62,6 @@ def test_synthetic_native_row_identifies_native(tmp_path: Path) -> None:
     assert payload["dcBias"]["strategy"] == "native-include-dc-fields"
     assert payload["dcBias"]["approximate"] is False
     assert payload["dcBias"]["appliedCurrentsA"] is not None
-
-
-def test_product_boundary_rejects_synthetic_2024_target(tmp_path: Path) -> None:
-    matrix = tmp_path / "m.yml"
-    matrix.write_text(SYNTHETIC, encoding="utf-8")
-
-    with pytest.raises(
-        MaxwellExportBlocked,
-        match="Only AEDT 2025 R2 Commercial",
-    ):
-        manifest_3d(matrix, AedtRelease(2024, 2), tmp_path)
 
 
 def test_two_d_is_always_blocked_and_marked_approximate_model(tmp_path: Path) -> None:

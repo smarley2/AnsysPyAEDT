@@ -137,9 +137,6 @@ def test_mixed_frequencies_refused() -> None:
 
 
 NATIVE = DcBiasDecision(DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS, False, "native ok")
-FALLBACK = DcBiasDecision(
-    DcBiasStrategy.MAGNETOSTATIC_INCREMENTAL_FALLBACK, True, "2024 R2 fallback"
-)
 BLOCKED = DcBiasDecision(DcBiasStrategy.BLOCKED, False, "unreviewed")
 
 
@@ -156,19 +153,12 @@ def test_native_decision_without_dc_current_keeps_eddy_current_solution() -> Non
     assert plan.solution_type == "EddyCurrent"
 
 
-def test_fallback_decision_keeps_eddy_current_solution() -> None:
-    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=FALLBACK)
-    assert plan.solution_type == "EddyCurrent"
-
-
-def test_fallback_decision_notes_deferral() -> None:
-    plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=FALLBACK)
-    assert any("deferred" in note and "2024 R2" in note for note in plan.notes)
-
-
-def test_blocked_decision_notes_reason() -> None:
+def test_blocked_decision_keeps_eddy_current_and_records_reason() -> None:
     plan = build((make_definition(dc_current_a=5.0),), dc_bias_decision=BLOCKED)
+
+    assert plan.solution_type == "EddyCurrent"
     assert any("unreviewed" in note for note in plan.notes)
+    assert not any("Magnetostatic" in note for note in plan.notes)
 
 
 def test_zero_dc_current_emits_no_dc_notes() -> None:
