@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         CurrentProjectProvider,
         GenerationController,
     )
+    from inductor_designer.ui.guided_studio_controller import GuidedStudioController
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
     from inductor_designer.ui.preview_geometry import PreviewEntry
 
@@ -33,6 +34,7 @@ def create_engine(
     generation_controller: GenerationController | None = None,
     backend_choices: list[str] | None = None,
     material_studio_controller: MaterialStudioController | None = None,
+    guided_studio_controller: GuidedStudioController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -40,6 +42,7 @@ def create_engine(
     engine = QQmlApplicationEngine()
     if preview_entries is not None:
         engine.rootContext().setContextProperty("previewEntries", preview_entries)
+    engine.rootContext().setContextProperty("guidedStudioController", guided_studio_controller)
     engine.rootContext().setContextProperty("simulationSummary", simulation_summary or [])
     engine.rootContext().setContextProperty("generationController", generation_controller)
     engine.rootContext().setContextProperty("backendChoices", backend_choices or [])
@@ -223,12 +226,24 @@ def main() -> int:
         project_save_callback=project_save_callback,
     )
 
+    guided_studio_controller: GuidedStudioController | None = None
+    if project is not None:
+        from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
+        from inductor_designer.ui.guided_studio_controller import GuidedStudioController
+
+        guided_studio_controller = GuidedStudioController(
+            project,
+            SqliteCatalogRepository(args.catalog),
+            project_save_callback,
+        )
+
     engine = create_engine(
         preview_entries,
         simulation_summary,
         generation_controller,
         backend_choices,
         material_studio_controller,
+        guided_studio_controller,
     )
     roots = engine.rootObjects()
     if not roots:
