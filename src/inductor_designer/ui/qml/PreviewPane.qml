@@ -3,14 +3,18 @@ import QtQuick3D
 import QtQuick3D.Helpers
 
 Rectangle {
-    color: "#111827"
+    objectName: "previewPane"
+    color: "#f8f7f4"
 
-    property bool hasPreviewEntries: typeof previewEntries !== "undefined"
+    property var previewModel: guidedStudioController !== null
+        ? guidedStudioController.previewEntries
+        : (typeof previewEntries !== "undefined" ? previewEntries : [])
+    property bool hasPreviewEntries: previewModel.length > 0
 
     View3D {
         anchors.fill: parent
         environment: SceneEnvironment {
-            clearColor: hasPreviewEntries ? "#1a1a2e" : "#111827"
+            clearColor: hasPreviewEntries ? "#f8f7f4" : "#eef0f2"
             backgroundMode: SceneEnvironment.Color
         }
 
@@ -48,7 +52,7 @@ Rectangle {
         }
 
         Repeater3D {
-            model: hasPreviewEntries ? previewEntries : []
+            model: previewModel
             Model {
                 geometry: modelData.geometry
                 scale: Qt.vector3d(1000, 1000, 1000) // meters -> millimeters for camera sanity
