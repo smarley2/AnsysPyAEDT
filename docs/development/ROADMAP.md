@@ -422,7 +422,11 @@ Commercial/FEMM material-consumption evidence are accepted.
 - Replace fixed project dimensional mode with a backend-independent Design,
   Operating Point, and Simulation Recipe.
 - Select Maxwell 3D, Maxwell 2D, or FEMM through a per-execution Run Request.
+- Store one shared frequency plus winding and core temperatures in the
+  Operating Point; remove frequency from individual windings.
 - Store AC RMS current and convert it once to solver peak amplitude.
+- Pin one exact compatible core-material revision and record Manual-core
+  compatibility acknowledgment.
 - Define Run Manifest and Normalized Result Set contracts.
 - Represent unresolved core materials and the confirmed Maxwell 3D
   geometry-only operation.
@@ -436,17 +440,28 @@ explicit RMS/peak and material-state evidence.
 ## Milestone 7: Guided Studio
 
 - Implement New/Open/Save for compatible shareable Project documents.
-- Implement functional Core, Windings, Materials, Simulation, and Review pages.
+- Implement the `Core & Material`, `Windings`, `Preliminary`, `Simulation`, and
+  `Review` flow.
+- Filter catalog cores and material revisions in both directions.
+- Open Material Studio in a separate window and refresh material choices when
+  it closes.
 - Support catalog and Manual toroidal cores and complete winding authoring.
+- Enforce numeric editors and enumerated selectors at the UI boundary.
+- Calculate and display solver-independent preliminary B, J, DC-resistance
+  wire loss, and supported core loss.
 - Make the preview reactive to valid geometry edits.
 - Select a backend and execute Generate Only through the existing adapters.
 - Display validation, approximations, and informational Symmetry Suggestions.
 - Remove the hardcoded startup Design.
 
 Exit criterion: a user starts with an empty Project document, authors and
-reviews a toroidal Design, saves and reopens it, and generates each supported
-backend artifact. A materialless Manual core can generate only a confirmed
-geometry-only Maxwell 3D artifact.
+reviews a toroidal Design, inspects traceable preliminary estimates or explicit
+unavailable reasons, saves and reopens it, and generates each supported backend
+artifact. A materialless Manual core can generate only a confirmed geometry-only
+Maxwell 3D artifact.
+
+Detailed requirements and physical assumptions:
+[2026-07-26 preliminary calculations and Guided flow](../superpowers/specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md).
 
 ## Milestone 8: Simulation and Results
 

@@ -280,9 +280,14 @@ Scope:
 - introduce the backend-independent Project document;
 - introduce Design, Operating Point, Simulation Recipe, Run Request, Run
   Manifest, and Normalized Result Set contracts;
+- store one shared operating-point frequency plus explicit winding and core
+  temperatures;
 - remove fixed `dimensionMode`;
 - replace ambiguous AC magnitude with explicit AC RMS current;
+- remove frequency from individual winding definitions;
 - convert RMS to peak exactly once in solver-independent planning;
+- pin one exact compatible core-material revision and record Manual-core
+  compatibility acknowledgment;
 - represent unresolved core material explicitly;
 - define Maxwell 3D geometry-only generation;
 - update fixtures and examples through a deliberate schema break; and
@@ -297,18 +302,27 @@ inputs, explicit RMS/peak evidence, and operation-specific material validation.
 Scope:
 
 - implement New/Open/Save for compatible shareable Project documents;
-- implement functional Core, Windings, Materials, Simulation, and Review pages;
+- implement the approved `Core & Material`, `Windings`, `Preliminary`,
+  `Simulation`, and `Review` flow;
+- filter catalog cores and material revisions in both directions;
+- open Material Studio in a separate window and refresh material choices when
+  it closes;
 - support catalog and Manual toroidal cores;
 - support complete winding authoring;
+- enforce numeric editors and enumerated selectors at the UI boundary;
+- calculate and display the solver-independent preliminary B, J,
+  DC-resistance wire loss, and supported core loss defined by the
+  [2026-07-26 preliminary-calculation design](2026-07-26-preliminary-calculations-and-guided-flow-design.md);
 - make preview updates reactive;
 - select a backend and execute `Generate Only` through the existing adapters;
 - display validation, approximations, and Symmetry Suggestions; and
 - remove the hardcoded startup Design.
 
 Exit criterion: starting from an empty project, a user can author, save, reopen,
-review, and `Generate Only` a valid toroidal Design for each backend. A
-materialless Manual core can produce only the confirmed Maxwell 3D
-Geometry-Only AEDT Project.
+review, inspect traceable preliminary estimates or explicit unavailable reasons,
+and `Generate Only` a valid toroidal Design for each backend. A materialless
+Manual core can produce only the confirmed Maxwell 3D Geometry-Only AEDT
+Project.
 
 ### M8 — Simulation and Results
 

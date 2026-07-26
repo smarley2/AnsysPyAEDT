@@ -345,3 +345,36 @@ Starting from a valid toroidal project, a user can:
 
 No preliminary result includes or implies conductor eddy-current, skin,
 proximity, local-field, leakage, thermal-rise, or solver-derived behavior.
+
+## 12. Milestone ownership and execution gate
+
+This specification is the complete approved requirements record for this M7
+change. Requirements do not need to be brainstormed again after M6.
+
+M6 owns only the prerequisite contracts and persistence changes:
+
+- one shared `frequency_hz` in the Operating Point;
+- explicit `winding_temperature_c` and `core_temperature_c`;
+- AC RMS current naming and the single RMS-to-peak conversion;
+- removal of per-winding frequency;
+- an exact pinned core-material revision;
+- Manual-core material-compatibility acknowledgment; and
+- deterministic round-trip of those values in the replacement Project schema.
+
+M7 owns:
+
+- the `Core & Material`, `Windings`, `Preliminary`, `Simulation`, and `Review`
+  flow;
+- bidirectional core/material filtering;
+- the separate Material Studio window and library refresh;
+- numeric validators and enumerated selectors;
+- the complete solver-independent estimator defined in sections 5–8;
+- partial result availability and diagnostics;
+- reactive Preliminary presentation; and
+- the existing Generate Only Guided Studio exit criterion.
+
+The detailed M7 implementation plan is written after M6 acceptance, when its
+actual contract names and replacement schema are stable. That plan must cite
+this specification, copy its physical constants and exclusions verbatim, and
+must not reopen approved product or physics decisions unless M6 proves a direct
+contradiction.

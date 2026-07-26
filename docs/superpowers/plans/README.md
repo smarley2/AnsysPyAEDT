@@ -50,8 +50,8 @@ executed. They do not override the current support and product scope.
 | Order | Milestone | Entry condition | Exit evidence |
 | --- | --- | --- | --- |
 | 5a closeout | [Live material validation and support cleanup](2026-07-24-m5a-live-validation-closeout.md) | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
-| 6 | Project Foundation | M5a accepted | One backend-independent Project document round-trips and creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans with explicit RMS/peak and material state |
-| 7 | Guided Studio | M6 contracts accepted | A user authors, saves, reopens, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
+| 6 | Project Foundation | M5a accepted | One backend-independent Project document round-trips shared frequency, winding/core temperatures, RMS currents, and exact core-material state, then creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans |
+| 7 | Guided Studio and Preliminary Estimates | M6 contracts accepted | A user authors, saves, reopens, inspects analytical B/J/wire/core-loss estimates or explicit unavailable reasons, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
 | 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
 | 9 | Reliability | M8 run/result contracts accepted | Autosave, recovery, undo/redo, cancellation recovery, and redacted diagnostics survive forced failures |
 | 10 | Windows Release | M9 reliability accepted | A clean Windows install completes the workflow against AEDT 2025 R2 Commercial and publishes release notes/checksums |
@@ -74,8 +74,8 @@ closes with:
 | Specification area | Delivery milestone |
 | --- | --- |
 | Real material reproduction and live AEDT/FEMM consumption; single supported AEDT target cleanup | 5a closeout |
-| Backend-independent Design/Operating Point/Simulation Recipe; per-run backend; explicit RMS/peak; manifests/results contracts | 6 |
-| Complete Core/Windings/Materials/Simulation/Review UI; shareable project lifecycle; reactive preview; generation | 7 |
+| Backend-independent Design/Operating Point/Simulation Recipe; shared frequency and temperatures; exact core-material pin; per-run backend; explicit RMS/peak; manifests/results contracts | 6 |
+| Approved Core & Material/Windings/Preliminary/Simulation/Review UI; separate Material Studio; analytical estimates; shareable project lifecycle; reactive preview; generation | 7 |
 | Solver execution; progress/cancellation; R/L/Z, losses, energy, B/J maximum and area mean, convergence, JSON/CSV | 8 |
 | Autosave, recovery, undo/redo, interrupted-run handling, actionable diagnostics | 9 |
 | Resource discovery, PyInstaller, Inno Setup, clean-install and AEDT 2025 R2 Commercial release validation | 10 |
@@ -85,3 +85,12 @@ AEDT 2024 R2, Student editions, an AEDT extension, edited-`*.aedt` round-trip,
 automatic symmetry, automatic sweeps, MCP expansion, transient, thermal,
 mechanical, optimization, converter co-simulation, cloud services, and
 non-round conductors require a separately approved future specification.
+
+## M7 scope lock
+
+The approved
+[preliminary calculations and Guided flow design](../specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md)
+fully records M7 product behavior, analytical formulas, physical constants,
+exclusions, validation, and acceptance criteria. Write the detailed M7
+implementation plan after M6 acceptance so it targets stable contracts. Do not
+repeat discovery or redesign unless M6 exposes a documented contradiction.
