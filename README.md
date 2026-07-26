@@ -23,7 +23,7 @@ release.
 | --- | --- |
 | Foundation through solver generation (M0–M4.5) | Accepted. This includes deterministic toroid geometry and preview, live-verified Maxwell 3D/2D generation on AEDT 2025 R2 Commercial, native validated 3D DC bias, FEMM 2D generation/solve, and the existing nine-tool MCP surface. |
 | Spreadsheet-only Material Studio (M5b) | Accepted. CSV/XLSX import, immutable local revisions, plotting, download, replacement/deletion guards, and exact project pinning are implemented. |
-| Live material closeout (M5a) | Still open. A redistributable High Flux 60 validation record, fresh reproduction `MATCH`, and FEMM inspection exist; live AEDT material inspection, sanitized evidence, and the final quality gates still prevent acceptance. |
+| Live material closeout (M5a) | Still open. High Flux 60 validation revision `2271f4f7644f`, fresh reproduction `MATCH`, and FEMM inspection exist; controlled AEDT inspection, sanitized licensing/redistribution evidence, and the final quality gates still prevent acceptance. |
 | Guided Studio UI | A Canvas First shell and a tested editable-winding slice are integrated. Valid edits rebuild the real solver-independent preview and can be saved. Core selection, complete project authoring, preliminary estimates, review, and non-hardcoded New/Open/Save are still M7 work. |
 | Project and run contracts (M6) | Approved but not implemented. The current schema is replaced in M6 by the backend-independent Project/Run model described below. |
 | Simulation results, reliability, and packaging (M8–M10) | Planned. Normalized results, run recovery, autosave/undo, installer creation, and clean-machine release validation are not complete. |

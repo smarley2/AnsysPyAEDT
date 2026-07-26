@@ -1,7 +1,10 @@
 # Milestone 5a: Material Records Pipeline Implementation Plan
 
 > Historical plan note (2026-07-20): the image/PDF extraction portions described
-> below are superseded by the approved [spreadsheet-only Material Studio design](2026-07-20-material-studio-spreadsheet-only-design.md). The current application accepts material uploads only as CSV/XLSX tables; this file remains for milestone decision history.
+> below are superseded by the approved
+> [spreadsheet-only Material Studio design](../specs/2026-07-20-material-studio-spreadsheet-only-design.md).
+> The current application accepts material uploads only as CSV/XLSX tables; this
+> file remains for milestone decision history.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

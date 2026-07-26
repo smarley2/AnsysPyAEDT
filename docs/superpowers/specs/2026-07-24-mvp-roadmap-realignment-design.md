@@ -9,6 +9,13 @@
 - Related decisions: [ADR 0004](../../adr/0004-standalone-windows-and-single-aedt-target.md),
   [ADR 0005](../../adr/0005-backend-independent-projects.md), and
   [ADR 0006](../../adr/0006-rms-project-current-and-peak-solver-excitation.md)
+- Extended by:
+  [2026-07-26 Preliminary calculations and Guided flow](2026-07-26-preliminary-calculations-and-guided-flow-design.md)
+
+> Milestone status in this document is the baseline recorded at design
+> approval. Current execution status is maintained in the
+> [implementation-plan index](../plans/README.md) and
+> [development roadmap](../../development/ROADMAP.md).
 
 ## 1. Purpose
 
@@ -149,6 +156,13 @@ One exception supports CAD handoff:
 This exception does not apply to `Generate and Solve`, Maxwell 2D, or FEMM.
 
 ## 7. Guided Studio workflow
+
+> **Current step authority:** The
+> [2026-07-26 Guided flow](2026-07-26-preliminary-calculations-and-guided-flow-design.md)
+> replaces the step ordering below with `Core & Material`, `Windings`,
+> `Preliminary`, `Simulation`, and `Review`, and moves Material Studio into a
+> separate window. The lifecycle, generation, and result boundaries below
+> remain in force.
 
 The completed M8 Windows application uses the established steps:
 

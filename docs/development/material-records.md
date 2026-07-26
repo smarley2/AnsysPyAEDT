@@ -209,6 +209,11 @@ MVP on 2026-07-23. This acceptance covers import, persistence, visualization,
 XLSX download, replacement, and deletion; live solver consumption remains a
 separate acceptance gate.
 
+The current M5b UI exposes this workflow in a `Materials` Guided Studio step.
+The approved M7 flow moves Material Studio to a separate window launched from
+`Core & Material`; the procedure below describes the implemented M5b interface
+until that transition is complete.
+
 Open the `Materials` step in Guided Studio and follow this sequence:
 
 1. Download the CSV or XLSX template, fill it, and choose `Import CSV or XLSX`.
@@ -404,32 +409,36 @@ B-H series ID, B-H point count, and fit coefficients.
 FEMM receives the same `(B, H)` table. The adapter deliberately calls the
 singular pyFEMM API `mi_addbhpoint(name, b, h)` once per point; there is no bulk
 `mi_addbhpoints` call in the implementation. This API shape is covered by fake
-adapter tests but still requires verification in a real FEMM session.
+adapter tests and the exact point parser. Validation revision `2271f4f7644f`
+reproduces as `MATCH`, and its generated FEMM artifact has been inspected.
+Controlled AEDT inspection and the sanitized acceptance record remain open.
 
 For zero B-H series, the scalar-permeability path remains available. One B-H
 series can be selected directly. More than one B-H series requires an explicit
 `bhSeriesId`; project use and export block when it is absent. Maxwell 2D,
 Maxwell 3D, and FEMM consume only that pinned series from the stored snapshot.
 
-## Material Studio acceptance notes
+## Material Studio and M5a acceptance notes
 
-The spreadsheet-only workflow is the required M5b scope. The application has no
-OCR, image tracing, or PDF digitization path. Any future non-spreadsheet
-importer, material MCP tool, or explicit-formula record requires a separate
+The spreadsheet-only workflow is the accepted M5b scope. The application has
+no OCR, image tracing, or PDF digitization path. Any future non-spreadsheet
+importer, material MCP tool, or explicit-formula record requires a separately
 approved specification and plan.
 
 Automated evidence covers imported persistence, replacement/deletion guards,
 CSV/XLSX replay, loss-origin normalization, explicit B-H selection,
 recording-fake Maxwell/FEMM manifests, controller behavior, numeric linear/log
-plot labels, and offscreen QML flows. This is not native Windows,
-Excel/FileDialog, high-DPI, or live-solver evidence.
+plot labels, and offscreen QML flows. Native Windows packaging, file-dialog, and
+high-DPI acceptance belongs to M10.
 
-Before formally accepting M5a or M5b, Fabio must:
+M5a remains open. Validation revision `2271f4f7644f` and its exact B-H selection
+have fresh `MATCH` and FEMM inspection evidence in the active closeout plan.
+Before accepting M5a:
 
-1. Import a legally usable real Magnetics Kool Mu 60 core-loss and B-H source
-   and optionally commit the imported overlay revision.
-2. Pin that exact approved revision and B-H series in a schema v4 project,
-   generate Maxwell 3D and FEMM, open both, and check the nonlinear B-H data and
-   ferrite core-loss coefficients in AEDT plus every B-H point in FEMM.
-3. Run the reproduction CLI for that revision and obtain `MATCH`.
-4. Record the live evidence and explicitly accept Milestone 5 in the roadmap.
+1. Run the controlled AEDT 2025 R2 Commercial handoff and inspect nonlinear B-H
+   data, ferrite core-loss coefficients, DC current persistence, validation,
+   save, and reopen behavior.
+2. Write and review the sanitized evidence document with exact revisions,
+   versions, observed checks, and the licensing/redistribution decision.
+3. Run every final quality and controlled-material gate, then update the
+   roadmap and plan index only if all evidence passes.

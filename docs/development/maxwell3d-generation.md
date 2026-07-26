@@ -35,9 +35,11 @@ never reported as successful.
 
 ## Milestone 3 scope notes
 
-- Core material is a linear draft model derived from the powder grade
-  (relative permeability = grade, conductivity 0). Real material records
-  arrive with Material Studio (Milestone 5). Ferrite cores refuse to export.
+- When schema v4 contains no pinned imported/approved material, the historical
+  powder-grade fallback derives a linear relative permeability from a numeric
+  powder grade. A pinned imported/approved revision instead exports its selected
+  nonlinear B-H series and available Steinmetz fit. That path also supports
+  ferrite cores when the pinned record supplies usable material data.
 - DC operating currents are recorded in the manifest and, as of Milestone 4,
   applied natively (via the `AC Magnetic with DC` solution type) when the
   reviewed capability matrix confirms native DC support; see

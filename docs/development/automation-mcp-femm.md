@@ -90,7 +90,10 @@ gets a structured result.
 
 ### Backend selection
 
-Project files are backend-agnostic; the backend is chosen per call.
+The CLI and MCP choose the 2D backend per call. The current schema v4 still
+contains `dimensionMode`; callers therefore need a 2D project or the documented
+CLI force option. M6 removes that field and makes the Project document itself
+backend-independent.
 
 CLI:
 
@@ -117,8 +120,9 @@ backend off the UI thread and streams stage/result lines into the panel.
   magnitude only; when a circuit's phase is nonzero, the adapter emits a
   message noting the phase was not applied rather than silently dropping it.
   Multi-phase FEMM excitation is deferred.
-- **Loss integrals are deferred to Milestone 5**, alongside nonlinear
-  material data for both backends.
+- **Normalized loss and field-result extraction is M8 work.** M5 implemented
+  pinned nonlinear material transfer for Maxwell and FEMM, but it did not add
+  the normalized result contract or loss integrals.
 - **Bore-interior air region lesson:** the core bore interior (`r <
   r_inner`) needs its own air block label at the origin — FEMM analysis
   otherwise fails with "Material properties have not been defined for all
@@ -139,5 +143,6 @@ Live run on FEMM 4.2 (2026-07-17), CLI: `python -m tools.generate_maxwell2d
   geometry.
 
 These numbers are a smoke-test sanity check (nonzero, symmetric, right order
-of magnitude), not an engineering acceptance figure — comparing them against
-an equivalent AEDT 2D or 3D solve is part of Milestone 4.5 acceptance.
+of magnitude), not an engineering acceptance figure. Milestone 4.5 is accepted;
+traceable cross-backend comparison belongs to the M8 normalized-results
+validation rather than retroactively gating M4.5.

@@ -14,9 +14,10 @@ before the next plan freezes assumptions that depend on it.
 
 - Milestones 0–4.5 are accepted with the dates and exact live-verification
   scope recorded in the [roadmap](../../development/ROADMAP.md).
-- Milestone 5a is implementation-complete but not accepted. A legally usable
-  real material, reproduction `MATCH`, and live AEDT 2025 R2 Commercial/FEMM
-  handoff remain required.
+- Milestone 5a is implementation-complete but not accepted. Validation revision
+  `2271f4f7644f` reproduces as `MATCH` and its FEMM artifact has been inspected.
+  Controlled AEDT 2025 R2 Commercial handoff/inspection, sanitized evidence
+  including licensing handling, and the final quality gates remain open.
 - Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
   Material Studio workflow. Its acceptance is independent from the remaining
   M5a live-solver gate.
@@ -38,7 +39,7 @@ not gate the active roadmap.
 | 3 | Maxwell 3D MVP | [2026-07-16-maxwell3d-mvp.md](2026-07-16-maxwell3d-mvp.md) | AEDT 2025 R2 Commercial opens a generated ready-to-solve Maxwell 3D project |
 | 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Live Maxwell 2D/3D evidence and explicit native/blocked DC behavior |
 | 4.5 | MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Accepted FEMM 2D generation/solve and the implemented nine-tool MCP surface |
-| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Automated source replay is green; real-material and live-solver evidence remain open |
+| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Automated replay and recording exports are green; validation revision `2271f4f7644f` reports `MATCH` and has FEMM inspection, while AEDT and final acceptance evidence remain open |
 | 5b | Spreadsheet-only Material Studio | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md), [read-only revision](2026-07-23-material-studio-readonly-imported.md), [streamlined library](2026-07-23-streamlined-material-library.md) | Accepted CSV/XLSX import, immutable library, plotting, download, replacement/deletion, and project pinning |
 | 5b history | Superseded manual Material Studio UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only; image/PDF and UI-editing instructions do not describe the product |
 

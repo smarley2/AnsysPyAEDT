@@ -52,12 +52,13 @@ partial design is never reported as successful.
   routing, or three-dimensional leakage/proximity effects (design spec §6.4).
   The generation manifest and Guided Studio summary label the result
   approximate.
-- Core material is the same linear draft model used in 3D (relative
-  permeability = grade, conductivity 0). Ferrite cores refuse export.
+- Without a pinned imported/approved material, numeric powder grades use the
+  historical linear-permeability fallback. A pinned imported/approved revision
+  exports its selected nonlinear B-H series and available Steinmetz fit and can
+  support ferrite cores when the record contains usable material data.
 - DC operating-point generation is blocked in 2D regardless of capability
   matrix state; see `docs/development/dc-bias-compatibility.md`.
-- Exact PyAEDT keyword names (`create_circle(origin=...)`, the 4-argument
-  `create_air_region`, `model_depth` as a unit string, `MatrixACMagnetic` on
-  Maxwell2d) are best-effort until verified against the installed pyaedt by
-  the `aedt`-marked integration test; the recording fakes mirror the
-  adapter's calls.
+- Exact PyAEDT calls were corrected through live AEDT 2025 R2 Commercial
+  verification. The adapter uses `create_region` for the 2D air region, assigns
+  an explicit balloon boundary, sets `model_depth` after geometry exists, and
+  mirrors the verified calls in recording fakes and `aedt`-marked tests.

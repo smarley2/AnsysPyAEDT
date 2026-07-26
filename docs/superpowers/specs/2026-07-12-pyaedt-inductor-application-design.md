@@ -13,8 +13,12 @@
 > AC-current, and delivery-sequence decisions. In particular, the current
 > product is a standalone Windows application for AEDT 2025 R2 Commercial only;
 > there is no AEDT extension, Student/2024 support, or edited-`*.aedt`
-> round-trip. This document remains authoritative for unchanged modularity,
-> toroidal geometry, material provenance, and general testing principles.
+> round-trip. The
+> [2026-07-26 Preliminary calculations and Guided flow design](2026-07-26-preliminary-calculations-and-guided-flow-design.md)
+> additionally replaces the Guided Studio step ordering and defines the
+> solver-independent estimator. This document remains authoritative for
+> unchanged modularity, toroidal geometry, material provenance, and general
+> testing principles.
 
 ## 1. Purpose
 

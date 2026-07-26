@@ -295,9 +295,10 @@ Guided Studio backend selector and Generate action.
 
 Deferred/known limits: circuit phase is not yet applied to FEMM circuits
 (magnitude-only excitation; a message is emitted when a circuit's phase is
-nonzero); loss integrals are deferred to Milestone 5 alongside nonlinear
-material data. See `docs/development/automation-mcp-femm.md` for the full
-procedure, tool list, and verified-limits detail.
+nonzero). Nonlinear material transfer was implemented in M5; normalized loss
+and field-result extraction belongs to M8. See
+`docs/development/automation-mcp-femm.md` for the full procedure, tool list, and
+verified-limits detail.
 
 Milestone 4.5 is **accepted** as of 2026-07-17: Fabio Posser validated the
 FEMM results and the Guided Studio generation flow. Driving
@@ -316,11 +317,13 @@ Exit criterion: a reviewer can reproduce a material record from its stored sourc
 
 ### Current state
 
-Milestone 5a is **implementation complete but not accepted** as of 2026-07-18.
-The automated exit-criterion integration proof is green; a real approved
-datasheet record and live AEDT/FEMM handoff are still pending. No real material
-datasheet has been approved and no solver behavior from this milestone is
-claimed as live-verified.
+Milestone 5a is **implementation complete but not accepted**. The automated
+exit-criterion integration proof is green. A High Flux 60 validation overlay
+with exact revision `2271f4f7644f` is committed, fresh reproduction reports
+`MATCH`, and manual FEMM inspection is recorded in the active closeout plan.
+M5a remains open because the controlled AEDT material handoff and inspection,
+the sanitized evidence record including licensing/redistribution handling, and
+the final quality gates are not complete.
 
 Implemented Tasks 1–12 deliver:
 
@@ -376,20 +379,26 @@ deletion. M5b is closed. Native Windows packaging/high-DPI acceptance belongs
 to M10, while live Ansys AEDT/FEMM material consumption belongs only to the M5a
 closeout.
 
-Remaining solver-integration and productization work:
+Remaining M5a acceptance work:
 
-- Import a legally usable real Magnetics Kool Mu 60 B-H and core-loss source, then obtain `MATCH` from the reproduction CLI.
-- Generate and open Maxwell 3D and FEMM outputs using that exact pinned revision; verify nonlinear B-H data and ferrite-loss coefficients in AEDT and every singular `mi_addbhpoint` result in FEMM.
-- Confirm source licensing and redistribution rights before committing real workbook bytes to Git.
+- Run and inspect the controlled AEDT 2025 R2 Commercial handoff using exact
+  revision `2271f4f7644f`.
+- Record sanitized AEDT and FEMM evidence, exact tool versions, and the
+  licensing/redistribution decision without committing generated solver output
+  or sensitive machine data.
+- Run the final non-solver, UI, static, architecture, and controlled-material
+  gates before marking M5a accepted.
+
+Remaining M10 productization work:
+
 - On Windows, manually verify keyboard/focus, scaling, file dialogs, template
   and selected-material download, Excel-compatible workbook replacement, delete
   confirmation, and explicit B-H selection.
 
 The completed M5b implementation work did not need live solver checks because it
-uses the stable, automated M5a services. The real-record import, `MATCH`
-reproduction, and live AEDT/FEMM handoff remain hard gates for accepting M5a and
-for making live-solver material claims. Source licensing must be confirmed
-before real datasheet bytes are committed or redistributed.
+uses the stable, automated M5a services. The recorded `MATCH` and FEMM
+inspection do not establish AEDT material support or close M5a without the
+remaining controlled evidence and review.
 
 The implemented M5b scope is the Guided Studio spreadsheet-only workflow:
 download CSV/XLSX templates, import immutable revisions, replace/delete stored
