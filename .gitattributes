@@ -1,0 +1,5 @@
+# Material overlay records carry content-derived revision IDs and recorded
+# SHA-256 hashes over their exact bytes. Git must never rewrite line endings
+# there, or `tools/reproduce_material` reports a false mismatch on checkout
+# with core.autocrlf=true.
+materials-overlay/** -text

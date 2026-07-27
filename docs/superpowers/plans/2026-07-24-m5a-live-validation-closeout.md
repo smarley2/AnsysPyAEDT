@@ -43,10 +43,16 @@ AEDT 2025 R2 Commercial, pyfemm/FEMM 4.2, PowerShell, Ruff, strict mypy.
   of PyAEDT, Qt, SQLite, and operating-system APIs.
 - Never edit generated catalog indexes. Build them from canonical catalog
   sources.
-- Never commit the real workbook, real overlay, generated `.aedt`/`.fem` files,
-  raw solver logs, credentials, license details, or personal machine paths.
-- Stage files explicitly. Do not stage `.DS_Store`, `materials-overlay/`,
-  `outputs/`, or `artifacts/`.
+- Never commit generated `.aedt`/`.fem` files, raw solver logs, credentials,
+  license details, or personal machine paths.
+- **Amended 2026-07-27 by Fabio Posser:** the material overlay is a shared
+  database. `materials-overlay/` and its source bytes are tracked so colleagues
+  get the records on checkout and add more the same way. This supersedes the
+  original "never commit the real workbook, real overlay" constraint. Because
+  recorded SHA-256 hashes cover exact bytes, `.gitattributes` must keep
+  `materials-overlay/** -text`.
+- Stage files explicitly. Do not stage `.DS_Store`, `outputs/`, or
+  `artifacts/`.
 - Existing MCP code is not part of this milestone.
 
 ## Starting Evidence and Acceptance Material
@@ -1556,7 +1562,7 @@ committed before M5a is marked accepted.
 - Produces reviewed, sanitized documentation only.
 - Does not produce a committed material record or solver artifact.
 
-- [ ] **Step 1: Prepare and import the acceptance workbook**
+- [x] **Step 1: Prepare and import the acceptance workbook**
 
 On the controlled Windows machine:
 
@@ -1597,7 +1603,7 @@ python -m tools.reproduce_material `
 
 Expected: stdout is exactly `MATCH` and the process exits 0.
 
-- [ ] **Step 3: Run both live handoff tests**
+- [x] **Step 3: Run both live handoff tests**
 
 ```powershell
 .\tools\run_m5a_material_validation.ps1 `
@@ -1837,6 +1843,31 @@ approved roadmap realignment and create the detailed M6 Project Foundation
 implementation plan before changing its schema or runtime contracts.
 
 ---
+
+## Post-plan finding, 2026-07-27: M5a cannot be accepted as written
+
+Tasks 1–5 are complete. Task 6 produced real, reviewed material evidence
+(`docs/development/m5a-live-material-validation.md`): the pinned High Flux 60
+revision reaches AEDT and FEMM with its full 501-point B-H curve and its
+Steinmetz coefficients, and design validation passes.
+
+Then the design was solved for the first time, and it does not solve at
+production size. See `docs/development/dc-bias-solve-limitation.md`. The
+`AC Magnetic with DC` solution type refines its internal DC and AC meshes
+independently and then fails to map the DC field onto the AC mesh on our
+revolved geometry. Only one adaptive pass on both steps solves, and that does
+not converge.
+
+This invalidates a premise of this plan rather than any of its delivered work.
+Task 2 deleted the magnetostatic-incremental fallback as unsupported on the
+grounds that the native path worked; the native path is now known to work only
+for small models. Task 7 Step 6 must therefore not be executed: M5a stays open
+until a DC-bias configuration exists that both solves and converges.
+
+Also outstanding, neither blocking the above nor fixed here: the exporter never
+writes mass density (agreed value 8176 kg/m³, to become a mandatory Material
+Studio template column), and PyAEDT writes malformed Steinmetz units that we
+should overwrite after the call.
 
 ## Requirement Coverage
 
