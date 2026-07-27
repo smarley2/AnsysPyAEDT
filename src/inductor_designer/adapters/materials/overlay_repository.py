@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import time
 import uuid
 from collections.abc import Collection, Mapping
 from datetime import datetime, timezone
@@ -21,6 +22,32 @@ from inductor_designer.materials.serde import (
     points_csv,
     sha256_hex,
 )
+
+_REPLACE_ATTEMPTS = 5
+_REPLACE_BACKOFF_S = 0.1
+
+
+def _replace_directory(source: Path, destination: Path) -> None:
+    """Swap a directory into place, tolerating transient Windows locks.
+
+    On Windows a directory rename fails with ``PermissionError`` (WinError 5)
+    while any process still holds a handle inside the tree; a virus scanner or
+    the search indexer touching freshly written files is enough. Retrying a few
+    times clears it, and the caller's backup/restore path still covers a real
+    failure.
+
+    ponytail: fixed short retry, not a lock; if this ever proves too short the
+    next step is to make the attempt count configurable rather than to sleep
+    longer by default.
+    """
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_BACKOFF_S * (attempt + 1))
 
 
 def _material_sort_key(ref: MaterialRef) -> tuple[str, str, str, str, str, str]:
@@ -280,19 +307,19 @@ class FileOverlayMaterialRepository:
             self._verify_points(staged, staging)
 
             if revision_directory.exists():
-                revision_directory.replace(backup)
+                _replace_directory(revision_directory, backup)
             try:
-                staging.replace(revision_directory)
+                _replace_directory(staging, revision_directory)
             except BaseException:
                 if backup.exists():
-                    backup.replace(revision_directory)
+                    _replace_directory(backup, revision_directory)
                 raise
             if backup.exists():
                 try:
                     shutil.rmtree(backup)
                 except BaseException:
-                    revision_directory.replace(staging)
-                    backup.replace(revision_directory)
+                    _replace_directory(revision_directory, staging)
+                    _replace_directory(backup, revision_directory)
                     shutil.rmtree(staging, ignore_errors=True)
                     raise
         finally:

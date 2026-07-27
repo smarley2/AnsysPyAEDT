@@ -256,3 +256,48 @@ def test_delete_material_blocks_pinned_revision_and_then_removes_all(tmp_path: P
     repository.delete_material(first.ref)
 
     assert repository.list_materials() == ()
+
+
+def test_directory_swap_retries_transient_windows_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A virus scanner or indexer briefly holding a handle must not fail a save."""
+    source = tmp_path / "staging"
+    source.mkdir()
+    destination = tmp_path / "final"
+    attempts: list[int] = []
+    real_replace = Path.replace
+
+    def flaky_replace(self: Path, target: Path) -> Path:
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise PermissionError(5, "Access is denied")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", flaky_replace)
+    monkeypatch.setattr(overlay_repository, "_REPLACE_BACKOFF_S", 0.0)
+
+    overlay_repository._replace_directory(source, destination)
+
+    assert len(attempts) == 3
+    assert destination.is_dir()
+
+
+def test_directory_swap_gives_up_after_the_last_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "staging"
+    source.mkdir()
+    attempts: list[int] = []
+
+    def always_locked(self: Path, target: Path) -> Path:
+        attempts.append(1)
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr(Path, "replace", always_locked)
+    monkeypatch.setattr(overlay_repository, "_REPLACE_BACKOFF_S", 0.0)
+
+    with pytest.raises(PermissionError):
+        overlay_repository._replace_directory(source, tmp_path / "final")
+
+    assert len(attempts) == overlay_repository._REPLACE_ATTEMPTS
