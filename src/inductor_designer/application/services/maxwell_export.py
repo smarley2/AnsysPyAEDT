@@ -88,6 +88,12 @@ class RunGenerationFailed(RuntimeError):
         super().__init__("; ".join(manifest.diagnostics))
 
 
+class _AdapterDispatchError(Exception):
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+        super().__init__(str(error))
+
+
 def _project_name(project: InductorProject) -> str:
     return sanitize_identifier(project.name)
 
@@ -101,29 +107,33 @@ def _export_maxwell3d_plan(
     non_graphical: bool,
 ) -> MaxwellExportResult:
     if isinstance(planned_run, GeometryOnlyRunPlan):
-        return exporter.export_geometry_only(
-            Maxwell3dGeometryOnlyRequest(
-                plan=planned_run.solver_plan,
-                release=SUPPORTED_AEDT_RELEASE,
-                edition=SUPPORTED_AEDT_EDITION,
-                non_graphical=non_graphical,
-                output_directory=output_directory,
-                project_name=_project_name(project),
-            )
-        )
-    plan = planned_run.solver_plan
-    if not isinstance(plan, Maxwell3dDesignPlan):
-        raise TypeError("Maxwell 3D run planning returned a non-Maxwell 3D plan.")
-    return exporter.export(
-        Maxwell3dExportRequest(
-            plan=plan,
+        geometry_request = Maxwell3dGeometryOnlyRequest(
+            plan=planned_run.solver_plan,
             release=SUPPORTED_AEDT_RELEASE,
             edition=SUPPORTED_AEDT_EDITION,
             non_graphical=non_graphical,
             output_directory=output_directory,
             project_name=_project_name(project),
         )
+        try:
+            return exporter.export_geometry_only(geometry_request)
+        except Exception as error:
+            raise _AdapterDispatchError(error) from error
+    plan = planned_run.solver_plan
+    if not isinstance(plan, Maxwell3dDesignPlan):
+        raise TypeError("Maxwell 3D run planning returned a non-Maxwell 3D plan.")
+    export_request = Maxwell3dExportRequest(
+        plan=plan,
+        release=SUPPORTED_AEDT_RELEASE,
+        edition=SUPPORTED_AEDT_EDITION,
+        non_graphical=non_graphical,
+        output_directory=output_directory,
+        project_name=_project_name(project),
     )
+    try:
+        return exporter.export(export_request)
+    except Exception as error:
+        raise _AdapterDispatchError(error) from error
 
 
 def _export_maxwell2d_plan(
@@ -137,16 +147,18 @@ def _export_maxwell2d_plan(
     plan = planned_run.solver_plan
     if not isinstance(plan, Maxwell2dDesignPlan):
         raise TypeError("Maxwell 2D run planning returned a non-Maxwell 2D plan.")
-    return exporter.export(
-        Maxwell2dExportRequest(
-            plan=plan,
-            release=SUPPORTED_AEDT_RELEASE,
-            edition=SUPPORTED_AEDT_EDITION,
-            non_graphical=non_graphical,
-            output_directory=output_directory,
-            project_name=f"{_project_name(project)}_2d",
-        )
+    request = Maxwell2dExportRequest(
+        plan=plan,
+        release=SUPPORTED_AEDT_RELEASE,
+        edition=SUPPORTED_AEDT_EDITION,
+        non_graphical=non_graphical,
+        output_directory=output_directory,
+        project_name=f"{_project_name(project)}_2d",
     )
+    try:
+        return exporter.export(request)
+    except Exception as error:
+        raise _AdapterDispatchError(error) from error
 
 
 def _export_femm_plan(
@@ -158,14 +170,16 @@ def _export_femm_plan(
     problem = planned_run.solver_plan
     if not isinstance(problem, FemmProblem):
         raise TypeError("FEMM run planning returned a non-FEMM problem.")
-    return solver.solve(
-        FemmSolveRequest(
-            problem=problem,
-            output_directory=output_directory,
-            project_name=f"{_project_name(project)}_2d",
-            analyze=False,
-        )
+    request = FemmSolveRequest(
+        problem=problem,
+        output_directory=output_directory,
+        project_name=f"{_project_name(project)}_2d",
+        analyze=False,
     )
+    try:
+        return solver.solve(request)
+    except Exception as error:
+        raise _AdapterDispatchError(error) from error
 
 
 def _material_state(project: InductorProject) -> ManifestMaterialState:
@@ -354,6 +368,29 @@ def _failed_manifest(
     )
 
 
+def _generation_failure(
+    project: InductorProject,
+    planned_run: PlannedRun,
+    error: Exception,
+    *,
+    run_id: str,
+    application_version: str,
+) -> RunGenerationFailed:
+    diagnostic = f"{type(error).__name__}: {error}"
+    return RunGenerationFailed(
+        planned_run,
+        _failed_manifest(
+            project,
+            planned_run,
+            diagnostic,
+            run_id=run_id,
+            application_version=application_version,
+            solver_version=None,
+            adapter_version=None,
+        ),
+    )
+
+
 def generate_run(
     project: InductorProject,
     request: RunRequest,
@@ -409,21 +446,18 @@ def generate_run(
                 femm_solver,
                 output_directory,
             )
-    except Exception as error:
-        diagnostic = f"{type(error).__name__}: {error}"
-        failed_manifest = _failed_manifest(
+    except _AdapterDispatchError as dispatch_failure:
+        raise _generation_failure(
             project,
             planned_run,
-            diagnostic,
+            dispatch_failure.error,
             run_id=run_id,
             application_version=application_version,
-            solver_version=None,
-            adapter_version=None,
-        )
-        raise RunGenerationFailed(planned_run, failed_manifest) from error
+        ) from dispatch_failure.error
 
     if (
-        isinstance(adapter_result, FemmSolveResult)
+        request.backend is RunBackend.FEMM
+        and isinstance(adapter_result, FemmSolveResult)
         and (adapter_result.analyzed or adapter_result.results is not None)
     ):
         diagnostic = (
@@ -444,13 +478,22 @@ def generate_run(
             ),
         )
 
-    manifest = _manifest_for_result(
-        project,
-        planned_run,
-        adapter_result,
-        run_id=run_id,
-        application_version=application_version,
-    )
+    try:
+        manifest = _manifest_for_result(
+            project,
+            planned_run,
+            adapter_result,
+            run_id=run_id,
+            application_version=application_version,
+        )
+    except Exception as error:
+        raise _generation_failure(
+            project,
+            planned_run,
+            error,
+            run_id=run_id,
+            application_version=application_version,
+        ) from error
     return RunOutcome(
         planned_run=planned_run,
         adapter_result=adapter_result,

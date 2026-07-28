@@ -356,6 +356,91 @@ def test_adapter_exception_carries_failed_manifest_evidence(
     assert manifest.solver_version is None
 
 
+def _wrong_femm_result() -> FemmSolveResult:
+    return FemmSolveResult(
+        fem_path=Path("outputs/wrong.fem"),
+        analyzed=True,
+        results={},
+        messages=("wrong-result",),
+        adapter_version="wrong-femm-adapter",
+        solver_version="wrong-femm-solver",
+    )
+
+
+class WrongResultMaxwell3dExporter(RecordingMaxwell3dExporter):
+    def export(self, request: Maxwell3dExportRequest) -> FemmSolveResult:
+        return _wrong_femm_result()
+
+
+class WrongResultMaxwell2dExporter(RecordingMaxwell2dExporter):
+    def export(self, request: Maxwell2dExportRequest) -> FemmSolveResult:
+        return _wrong_femm_result()
+
+
+class WrongResultFemmSolver(RecordingFemmSolver):
+    def solve(self, request: FemmSolveRequest) -> MaxwellExportResult:
+        return MaxwellExportResult(
+            project_path=Path("outputs/wrong.aedt"),
+            design_name="WrongResult",
+            pyaedt_version="wrong-maxwell-adapter",
+            stages=(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("backend", "diagnostic"),
+    [
+        (
+            RunBackend.MAXWELL_3D,
+            "TypeError: Maxwell run returned a non-Maxwell adapter result.",
+        ),
+        (
+            RunBackend.MAXWELL_2D,
+            "TypeError: Maxwell run returned a non-Maxwell adapter result.",
+        ),
+        (
+            RunBackend.FEMM,
+            "TypeError: FEMM run returned a non-FEMM adapter result.",
+        ),
+    ],
+)
+def test_wrong_adapter_result_carries_failed_manifest_evidence(
+    backend: RunBackend,
+    diagnostic: str,
+) -> None:
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project_for_runs(),
+            RunRequest(backend, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=WrongResultMaxwell3dExporter(),
+            maxwell2d_exporter=WrongResultMaxwell2dExporter(),
+            femm_solver=WrongResultFemmSolver(),
+            run_id=f"wrong-result-{backend.value}",
+            application_version="0.6.0-test",
+        )
+
+    failure = raised.value
+    manifest = failure.manifest
+    assert isinstance(failure.__cause__, TypeError)
+    assert manifest.status is RunStatus.FAILED
+    assert manifest.stages == (
+        ManifestStage(
+            name="generate",
+            status=StageStatus.FAILED,
+            diagnostic=diagnostic,
+        ),
+    )
+    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.artifacts == ()
+    assert manifest.results is None
+    assert manifest.windings[0].ac_rms_current_a == 2.0
+    assert manifest.adapter_version is None
+    assert manifest.solver_version is None
+
+
 class NonconformingFemmSolver(RecordingFemmSolver):
     def __init__(
         self,
