@@ -77,6 +77,17 @@ class RunOutcome:
     manifest: RunManifest
 
 
+class RunGenerationFailed(RuntimeError):
+    def __init__(
+        self,
+        planned_run: PlannedRun,
+        manifest: RunManifest,
+    ) -> None:
+        self.planned_run = planned_run
+        self.manifest = manifest
+        super().__init__("; ".join(manifest.diagnostics))
+
+
 def _project_name(project: InductorProject) -> str:
     return sanitize_identifier(project.name)
 
@@ -252,6 +263,34 @@ def _manifest_for_result(
         stages, status, diagnostics, artifacts = _maxwell_evidence(result)
         solver_version = str(SUPPORTED_AEDT_RELEASE)
         adapter_version = result.pyaedt_version
+    return _build_manifest(
+        project,
+        planned_run,
+        run_id=run_id,
+        application_version=application_version,
+        solver_version=solver_version,
+        adapter_version=adapter_version,
+        stages=stages,
+        status=status,
+        diagnostics=diagnostics,
+        artifacts=artifacts,
+    )
+
+
+def _build_manifest(
+    project: InductorProject,
+    planned_run: PlannedRun,
+    *,
+    run_id: str,
+    application_version: str,
+    solver_version: str | None,
+    adapter_version: str | None,
+    stages: tuple[ManifestStage, ...],
+    status: RunStatus,
+    diagnostics: tuple[str, ...],
+    artifacts: tuple[ManifestArtifact, ...],
+) -> RunManifest:
+    backend = planned_run.request.backend
     return RunManifest(
         run_id=run_id,
         project_id=project.project_id,
@@ -285,6 +324,36 @@ def _manifest_for_result(
     )
 
 
+def _failed_manifest(
+    project: InductorProject,
+    planned_run: PlannedRun,
+    diagnostic: str,
+    *,
+    run_id: str,
+    application_version: str,
+    solver_version: str | None,
+    adapter_version: str | None,
+) -> RunManifest:
+    return _build_manifest(
+        project,
+        planned_run,
+        run_id=run_id,
+        application_version=application_version,
+        solver_version=solver_version,
+        adapter_version=adapter_version,
+        stages=(
+            ManifestStage(
+                name="generate",
+                status=StageStatus.FAILED,
+                diagnostic=diagnostic,
+            ),
+        ),
+        status=RunStatus.FAILED,
+        diagnostics=(diagnostic,),
+        artifacts=(),
+    )
+
+
 def generate_run(
     project: InductorProject,
     request: RunRequest,
@@ -301,42 +370,78 @@ def generate_run(
 ) -> RunOutcome:
     if request.mode is RunMode.GENERATE_AND_SOLVE:
         raise MaxwellExportBlocked((_GENERATE_AND_SOLVE_BLOCK,))
-    support_issues = aedt_support_issues(
-        SUPPORTED_AEDT_RELEASE,
-        SUPPORTED_AEDT_EDITION,
-        capabilities,
-    )
-    if support_issues:
-        raise MaxwellExportBlocked(support_issues)
+    if request.backend is not RunBackend.FEMM:
+        support_issues = aedt_support_issues(
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION,
+            capabilities,
+        )
+        if support_issues:
+            raise MaxwellExportBlocked(support_issues)
 
     planned_run = plan_run(project, request, catalog, capabilities)
     adapter_result: AdapterResult
-    if request.backend is RunBackend.MAXWELL_3D:
-        adapter_result = _export_maxwell3d_plan(
+    try:
+        if request.backend is RunBackend.MAXWELL_3D:
+            adapter_result = _export_maxwell3d_plan(
+                project,
+                planned_run,
+                maxwell3d_exporter,
+                output_directory,
+                non_graphical=non_graphical,
+            )
+        elif request.backend is RunBackend.MAXWELL_2D:
+            if not isinstance(planned_run, SolveReadyRunPlan):
+                raise TypeError("Maxwell 2D unexpectedly produced a Geometry-Only plan.")
+            adapter_result = _export_maxwell2d_plan(
+                project,
+                planned_run,
+                maxwell2d_exporter,
+                output_directory,
+                non_graphical=non_graphical,
+            )
+        else:
+            if not isinstance(planned_run, SolveReadyRunPlan):
+                raise TypeError("FEMM unexpectedly produced a Geometry-Only plan.")
+            adapter_result = _export_femm_plan(
+                project,
+                planned_run,
+                femm_solver,
+                output_directory,
+            )
+    except Exception as error:
+        diagnostic = f"{type(error).__name__}: {error}"
+        failed_manifest = _failed_manifest(
             project,
             planned_run,
-            maxwell3d_exporter,
-            output_directory,
-            non_graphical=non_graphical,
+            diagnostic,
+            run_id=run_id,
+            application_version=application_version,
+            solver_version=None,
+            adapter_version=None,
         )
-    elif request.backend is RunBackend.MAXWELL_2D:
-        if not isinstance(planned_run, SolveReadyRunPlan):
-            raise TypeError("Maxwell 2D unexpectedly produced a Geometry-Only plan.")
-        adapter_result = _export_maxwell2d_plan(
-            project,
-            planned_run,
-            maxwell2d_exporter,
-            output_directory,
-            non_graphical=non_graphical,
+        raise RunGenerationFailed(planned_run, failed_manifest) from error
+
+    if (
+        isinstance(adapter_result, FemmSolveResult)
+        and (adapter_result.analyzed or adapter_result.results is not None)
+    ):
+        diagnostic = (
+            "FEMM Generate Only adapter returned nonconforming evidence: "
+            f"analyzed={adapter_result.analyzed}, "
+            f"results_present={adapter_result.results is not None}."
         )
-    else:
-        if not isinstance(planned_run, SolveReadyRunPlan):
-            raise TypeError("FEMM unexpectedly produced a Geometry-Only plan.")
-        adapter_result = _export_femm_plan(
-            project,
+        raise RunGenerationFailed(
             planned_run,
-            femm_solver,
-            output_directory,
+            _failed_manifest(
+                project,
+                planned_run,
+                diagnostic,
+                run_id=run_id,
+                application_version=application_version,
+                solver_version=adapter_result.solver_version,
+                adapter_version=adapter_result.adapter_version,
+            ),
         )
 
     manifest = _manifest_for_result(

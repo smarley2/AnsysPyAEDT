@@ -6,8 +6,22 @@ from pathlib import Path
 
 import pytest
 
+from inductor_designer.application.ports.femm_solver import (
+    FemmSolveRequest,
+    FemmSolveResult,
+)
+from inductor_designer.application.ports.maxwell2d_exporter import (
+    Maxwell2dExportRequest,
+)
+from inductor_designer.application.ports.maxwell_exporter import (
+    Maxwell3dExportRequest,
+    Maxwell3dExportResult,
+    Maxwell3dGeometryOnlyRequest,
+    MaxwellExportResult,
+)
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    RunGenerationFailed,
     RunOutcome,
     generate_run,
     run_manifest_json,
@@ -20,10 +34,12 @@ from inductor_designer.simulation.capabilities import (
 )
 from inductor_designer.simulation.run_contracts import (
     DimensionalRepresentation,
+    ManifestStage,
     RunBackend,
     RunMode,
     RunRequest,
     RunStatus,
+    StageStatus,
 )
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
@@ -225,3 +241,181 @@ def test_confirmed_unresolved_run_uses_geometry_only_adapter_boundary() -> None:
     assert outcome.manifest.geometry_only is True
     assert outcome.manifest.material.resolved is False
     assert outcome.manifest.results is None
+
+
+def test_femm_generate_only_ignores_mismatched_aedt_capability_snapshot() -> None:
+    maxwell3d = RecordingMaxwell3dExporter()
+    maxwell2d = RecordingMaxwell2dExporter()
+    femm = RecordingFemmSolver()
+    mismatched = replace(CAPABILITIES, release=AedtRelease(2026, 1))
+
+    outcome = generate_run(
+        project_for_runs(),
+        RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+        CATALOG,
+        mismatched,
+        OUTPUT_DIRECTORY,
+        maxwell3d_exporter=maxwell3d,
+        maxwell2d_exporter=maxwell2d,
+        femm_solver=femm,
+        run_id="m6-femm-independent",
+        application_version="0.6.0-test",
+    )
+
+    assert outcome.manifest.status is RunStatus.SUCCEEDED
+    assert maxwell3d.requests == []
+    assert maxwell3d.geometry_only_requests == []
+    assert maxwell2d.requests == []
+    assert len(femm.requests) == 1
+
+
+class RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+    def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
+        raise RuntimeError("maxwell-3d adapter boom")
+
+    def export_geometry_only(
+        self, request: Maxwell3dGeometryOnlyRequest
+    ) -> Maxwell3dExportResult:
+        raise RuntimeError("maxwell-3d geometry-only adapter boom")
+
+
+class RaisingMaxwell2dExporter(RecordingMaxwell2dExporter):
+    def export(self, request: Maxwell2dExportRequest) -> MaxwellExportResult:
+        raise RuntimeError("maxwell-2d adapter boom")
+
+
+class RaisingFemmSolver(RecordingFemmSolver):
+    def solve(self, request: FemmSolveRequest) -> FemmSolveResult:
+        raise RuntimeError("femm adapter boom")
+
+
+@pytest.mark.parametrize(
+    ("backend", "geometry_only", "diagnostic"),
+    [
+        (RunBackend.MAXWELL_3D, False, "RuntimeError: maxwell-3d adapter boom"),
+        (
+            RunBackend.MAXWELL_3D,
+            True,
+            "RuntimeError: maxwell-3d geometry-only adapter boom",
+        ),
+        (RunBackend.MAXWELL_2D, False, "RuntimeError: maxwell-2d adapter boom"),
+        (RunBackend.FEMM, False, "RuntimeError: femm adapter boom"),
+    ],
+)
+def test_adapter_exception_carries_failed_manifest_evidence(
+    backend: RunBackend,
+    geometry_only: bool,
+    diagnostic: str,
+) -> None:
+    project = project_for_runs()
+    if geometry_only:
+        project = replace(
+            project,
+            design=replace(project.design, core_material=None),
+        )
+    request = RunRequest(
+        backend,
+        RunMode.GENERATE_ONLY,
+        confirm_geometry_only=geometry_only,
+    )
+
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project,
+            request,
+            CATALOG,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=RaisingMaxwell3dExporter(),
+            maxwell2d_exporter=RaisingMaxwell2dExporter(),
+            femm_solver=RaisingFemmSolver(),
+            run_id=f"failed-{backend.value}",
+            application_version="0.6.0-test",
+        )
+
+    failure = raised.value
+    manifest = failure.manifest
+    assert failure.planned_run.request is request
+    assert manifest.status is RunStatus.FAILED
+    assert manifest.geometry_only is geometry_only
+    assert manifest.stages == (
+        ManifestStage(
+            name="generate",
+            status=StageStatus.FAILED,
+            diagnostic=diagnostic,
+        ),
+    )
+    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.artifacts == ()
+    assert manifest.results is None
+    assert manifest.windings[0].ac_rms_current_a == 2.0
+    assert manifest.windings[0].ac_peak_current_a == pytest.approx(
+        2.0 * math.sqrt(2.0)
+    )
+    assert manifest.adapter_version is None
+    assert manifest.solver_version is None
+
+
+class NonconformingFemmSolver(RecordingFemmSolver):
+    def __init__(
+        self,
+        *,
+        analyzed: bool,
+        results_present: bool,
+    ) -> None:
+        super().__init__()
+        self._analyzed = analyzed
+        self._results_present = results_present
+
+    def solve(self, request: FemmSolveRequest) -> FemmSolveResult:
+        result = super().solve(request)
+        return replace(
+            result,
+            analyzed=self._analyzed,
+            results={} if self._results_present else None,
+        )
+
+
+@pytest.mark.parametrize(
+    ("analyzed", "results_present"),
+    [(True, False), (False, True), (True, True)],
+)
+def test_nonconforming_femm_generate_only_result_is_failed_evidence(
+    analyzed: bool,
+    results_present: bool,
+) -> None:
+    solver = NonconformingFemmSolver(
+        analyzed=analyzed,
+        results_present=results_present,
+    )
+
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project_for_runs(),
+            RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=RecordingMaxwell3dExporter(),
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=solver,
+            run_id="failed-femm-contract",
+            application_version="0.6.0-test",
+        )
+
+    failure = raised.value
+    diagnostic = (
+        "FEMM Generate Only adapter returned nonconforming evidence: "
+        f"analyzed={analyzed}, results_present={results_present}."
+    )
+    manifest = failure.manifest
+    assert manifest.status is RunStatus.FAILED
+    assert manifest.stages[0].name == "generate"
+    assert manifest.stages[0].status is StageStatus.FAILED
+    assert manifest.stages[0].diagnostic == diagnostic
+    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.artifacts == ()
+    assert manifest.results is None
+    assert manifest.adapter_version == "recording-fake"
+    assert manifest.solver_version is None
+    assert len(solver.requests) == 1
