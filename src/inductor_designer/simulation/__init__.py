@@ -1,1 +1,45 @@
-"""Package boundary; public interfaces are exported explicitly by feature modules."""
+"""Solver-independent simulation contracts."""
+
+from inductor_designer.simulation.run_contracts import (
+    ComplexValue,
+    CurrentConvention,
+    DimensionalRepresentation,
+    EffectiveWindingInput,
+    ManifestArtifact,
+    ManifestMaterialState,
+    ManifestStage,
+    MatrixValue,
+    NormalizedQuantity,
+    NormalizedResultSet,
+    ResultAvailability,
+    ResultQuantity,
+    RunBackend,
+    RunManifest,
+    RunMode,
+    RunRequest,
+    RunStatus,
+    StageStatus,
+    effective_winding_inputs,
+)
+
+__all__ = (
+    "ComplexValue",
+    "CurrentConvention",
+    "DimensionalRepresentation",
+    "EffectiveWindingInput",
+    "ManifestArtifact",
+    "ManifestMaterialState",
+    "ManifestStage",
+    "MatrixValue",
+    "NormalizedQuantity",
+    "NormalizedResultSet",
+    "ResultAvailability",
+    "ResultQuantity",
+    "RunBackend",
+    "RunManifest",
+    "RunMode",
+    "RunRequest",
+    "RunStatus",
+    "StageStatus",
+    "effective_winding_inputs",
+)
