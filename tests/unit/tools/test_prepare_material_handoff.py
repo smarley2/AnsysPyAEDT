@@ -105,6 +105,9 @@ def test_prepare_material_handoff_writes_project_and_sanitized_evidence(
     assert evidence["materialRevision"] == record.revision_id
     assert evidence["bhSeriesId"] == "bh-25c"
     assert evidence["bhPointCount"] == len(bh_series.points)
+    # Density must appear in the evidence: it reaches the solver, so a run
+    # recorded without it cannot be audited.
+    assert evidence["massDensityKgPerM3"] == record.mass_density_kg_per_m3
     assert len(evidence["lossFrequenciesHz"]) >= 2
     assert evidence["steinmetz"] is not None
     assert "points" not in json.dumps(evidence).casefold()

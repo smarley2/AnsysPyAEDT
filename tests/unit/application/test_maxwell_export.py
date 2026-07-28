@@ -136,6 +136,7 @@ def test_export_resolves_matching_approved_material_snapshot(tmp_path: Path) -> 
     assert outcome.plan.core.material.bh_series_id == "bh-100c"
     payload = json.loads(generation_manifest_json(outcome))
     assert payload["coreMaterial"]["bhPointCount"] == 2
+    assert payload["coreMaterial"]["massDensityKgPerM3"] == 4800.0
     assert payload["coreMaterial"]["steinmetz"] == {"k": 2.5, "alpha": 1.4, "beta": 2.3}
     assert payload["coreMaterial"]["materialRevision"] == "0123456789ab"
     assert payload["coreMaterial"]["bhSeriesId"] == "bh-100c"

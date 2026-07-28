@@ -318,7 +318,7 @@ Exit criterion: a reviewer can reproduce a material record from its stored sourc
 ### Current state
 
 Milestone 5a is **accepted (2026-07-28, Fabio Posser)**. The High Flux 60
-validation revision `2271f4f7644f` reproduces as `MATCH` and reaches AEDT 2025 R2
+validation revision `94e880a99b98` reproduces as `MATCH` and reaches AEDT 2025 R2
 Commercial in both 3D and 2D and FEMM 4.2 with its full 501-point nonlinear B-H
 curve and its Steinmetz coefficients. Evidence is recorded in
 `m5a-live-material-validation.md`.
@@ -331,10 +331,15 @@ needed. See `dc-bias-solve-limitation.md`. The lesson worth carrying forward is
 that design validation passing is not evidence that a design solves — M4 and M5a
 both relied on it and shipped a non-solving export unnoticed.
 
-Two defects found during that work remain open and do not block M5a: the exporter
-never writes mass density (agreed value 8176 kg/m³, to become a mandatory
-Material Studio template column), and PyAEDT writes malformed units on the
-Steinmetz coefficients.
+Mass density, also found during that work, is now a required record field with a
+mandatory Material Studio template column, written to the AEDT material by both
+adapters. Because revision ids are content-derived, the original validation
+material `2271f4f7644f` had to be re-imported to gain its 8176 kg/m³ and became
+`94e880a99b98`, with all curve data unchanged.
+
+One defect remains open and does not block M5a: PyAEDT writes malformed units on
+the Steinmetz coefficients (`core_loss_cm` gains `A_per_meter`, `core_loss_x`
+gains `tesla`). AEDT parses the magnitudes correctly, so results are unaffected.
 
 Implemented Tasks 1–12 deliver:
 
@@ -393,7 +398,7 @@ closeout.
 Completed M5a acceptance work:
 
 - Ran and inspected the controlled AEDT 2025 R2 Commercial handoff using exact
-  revision `2271f4f7644f`, in Maxwell 3D and Maxwell 2D, plus FEMM 4.2.
+  revision `94e880a99b98`, in Maxwell 3D and Maxwell 2D, plus FEMM 4.2.
 - Recorded sanitized AEDT and FEMM evidence with exact tool versions and the
   redistribution decision, committing no generated solver output.
 - Ran the final non-solver, UI, static, architecture, and controlled-material

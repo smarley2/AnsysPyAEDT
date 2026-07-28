@@ -307,6 +307,7 @@ def _core_material_block(plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan) -> dic
     return {
         "name": plan.core.material.name,
         "relativePermeability": plan.core.material.relative_permeability,
+        "massDensityKgPerM3": plan.core.material.mass_density_kg_per_m3,
         "conductivitySPerM": plan.core.material.conductivity_s_per_m,
         "draft": plan.core.material.draft,
         "bhPointCount": len(plan.core.material.bh_curve),

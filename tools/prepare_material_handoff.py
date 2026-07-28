@@ -79,6 +79,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "materialRevision": preparation.record.revision_id,
             "bhSeriesId": preparation.bh_series_id,
             "bhPointCount": preparation.bh_point_count,
+            "massDensityKgPerM3": preparation.record.mass_density_kg_per_m3,
             "lossFrequenciesHz": list(preparation.loss_frequencies_hz),
             "steinmetz": {
                 "k": fit.k,

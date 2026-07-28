@@ -15,7 +15,7 @@ before the next plan freezes assumptions that depend on it.
 - Milestones 0–4.5 are accepted with the dates and exact live-verification
   scope recorded in the [roadmap](../../development/ROADMAP.md).
 - Milestone 5a is **accepted as of 2026-07-28**. Validation revision
-  `2271f4f7644f` reproduces as `MATCH` and reaches AEDT 2025 R2 Commercial in
+  `94e880a99b98` reproduces as `MATCH` and reaches AEDT 2025 R2 Commercial in
   Maxwell 3D and Maxwell 2D and FEMM 4.2 with its 501-point nonlinear B-H curve
   and Steinmetz coefficients, and the 3D design solves. Evidence is in
   [m5a-live-material-validation.md](../../development/m5a-live-material-validation.md);
@@ -42,7 +42,7 @@ not gate the active roadmap.
 | 3 | Maxwell 3D MVP | [2026-07-16-maxwell3d-mvp.md](2026-07-16-maxwell3d-mvp.md) | AEDT 2025 R2 Commercial opens a generated ready-to-solve Maxwell 3D project |
 | 4 | Maxwell 2D and DC operating point | [2026-07-16-maxwell2d-dc-compat.md](2026-07-16-maxwell2d-dc-compat.md) | Live Maxwell 2D/3D evidence and explicit native/blocked DC behavior |
 | 4.5 | MCP server and FEMM 2D backend | [2026-07-17-automation-mcp-femm.md](2026-07-17-automation-mcp-femm.md) | Accepted FEMM 2D generation/solve and the implemented nine-tool MCP surface |
-| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Automated replay and recording exports are green; validation revision `2271f4f7644f` reports `MATCH` and has FEMM inspection, while AEDT and final acceptance evidence remain open |
+| 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Accepted 2026-07-28: revision `94e880a99b98` reports `MATCH` and reaches Maxwell 3D, Maxwell 2D and FEMM, and the 3D design solves |
 | 5b | Spreadsheet-only Material Studio | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md), [read-only revision](2026-07-23-material-studio-readonly-imported.md), [streamlined library](2026-07-23-streamlined-material-library.md) | Accepted CSV/XLSX import, immutable library, plotting, download, replacement/deletion, and project pinning |
 | 5b history | Superseded manual Material Studio UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only; image/PDF and UI-editing instructions do not describe the product |
 

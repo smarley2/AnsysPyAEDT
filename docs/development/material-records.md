@@ -409,7 +409,7 @@ B-H series ID, B-H point count, and fit coefficients.
 FEMM receives the same `(B, H)` table. The adapter deliberately calls the
 singular pyFEMM API `mi_addbhpoint(name, b, h)` once per point; there is no bulk
 `mi_addbhpoints` call in the implementation. This API shape is covered by fake
-adapter tests and the exact point parser. Validation revision `2271f4f7644f`
+adapter tests and the exact point parser. Validation revision `94e880a99b98`
 reproduces as `MATCH`, and its generated FEMM artifact has been inspected.
 Controlled AEDT inspection and the sanitized acceptance record remain open.
 
@@ -431,7 +431,7 @@ recording-fake Maxwell/FEMM manifests, controller behavior, numeric linear/log
 plot labels, and offscreen QML flows. Native Windows packaging, file-dialog, and
 high-DPI acceptance belongs to M10.
 
-**M5a was accepted on 2026-07-28.** Validation revision `2271f4f7644f` and its
+**M5a was accepted on 2026-07-28.** Validation revision `94e880a99b98` and its
 exact B-H selection reach AEDT 2025 R2 Commercial in Maxwell 3D and Maxwell 2D
 and FEMM 4.2 with the full 501-point nonlinear curve and the fitted Steinmetz
 coefficients, and the 3D design solves. The reviewed evidence, exact tool
@@ -478,5 +478,8 @@ column populated, which produces a **new revision id**. Any pinned project,
 evidence document, or validation runner that referenced the old revision has to be
 repointed at the new one.
 
-Known affected: `Magnetics / High Flux / 60` revision `2271f4f7644f`, the M5a
-validation material. Its measured density is **8176 kg/m³** (130 g in 15 900 mm³).
+This has already been carried out once. `Magnetics / High Flux / 60` revision
+`2271f4f7644f`, the original M5a validation material, was re-imported on
+2026-07-28 with its measured **8176 kg/m³** (130 g in 15 900 mm³) and became
+revision **`94e880a99b98`**. The curve data is unchanged: same 501 B-H points,
+same 550 and 502 loss points, same Steinmetz coefficients.
