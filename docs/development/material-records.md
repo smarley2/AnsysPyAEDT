@@ -483,3 +483,11 @@ This has already been carried out once. `Magnetics / High Flux / 60` revision
 2026-07-28 with its measured **8176 kg/m³** (130 g in 15 900 mm³) and became
 revision **`94e880a99b98`**. The curve data is unchanged: same 501 B-H points,
 same 550 and 502 loss points, same Steinmetz coefficients.
+
+The superseded revision was then deleted from the overlay, so the shared database
+contains no record this build cannot read. It remains in Git history if the
+original bytes are ever needed. Note that the surviving record cites the
+template-shaped `HighFlux60-reimport.xlsx` as its workbook provenance rather than
+the manufacturer's original `MagneticsHighFlux60u.xlsx`; the two carry identical
+curve data, and the original's hash is recorded in the Git history of this
+document's predecessor.
