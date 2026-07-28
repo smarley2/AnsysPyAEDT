@@ -14,6 +14,10 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
+from inductor_designer.application.services.aedt_support import (  # noqa: E402
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease  # noqa: E402
 from inductor_designer.ui.generation_controller import (  # noqa: E402
     CurrentProjectProvider,
@@ -110,7 +114,7 @@ def test_project_provider_publishes_only_after_persistence_succeeds() -> None:
     assert provider.current() is updated
 
 
-def test_generation_resolves_provider_release_edition_and_output_name_at_invocation(
+def test_generation_uses_current_project_and_fixed_supported_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from inductor_designer.adapters.catalog import sqlite_repository
@@ -120,12 +124,7 @@ def test_generation_resolves_provider_release_edition_and_output_name_at_invocat
     from inductor_designer.ui import generation_lines
 
     original = make_project()
-    updated = replace(
-        original,
-        name="provider changed project",
-        target_release=AedtRelease(2025, 1),
-        target_edition=AedtEdition.STUDENT,
-    )
+    updated = replace(original, name="provider changed project")
     provider = CurrentProjectProvider(original)
     capability_calls: list[tuple[AedtRelease, AedtEdition]] = []
     generation_calls: list[tuple[object, object]] = []
@@ -164,7 +163,7 @@ def test_generation_resolves_provider_release_edition_and_output_name_at_invocat
     controller.generate("Maxwell 3D")
     _wait_until_idle(app, controller)
 
-    assert capability_calls == [(AedtRelease(2025, 1), AedtEdition.STUDENT)]
+    assert capability_calls == [(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)]
     assert generation_calls[0][0] is updated
     assert generation_calls[0][1] == (
         Path("artifacts") / "studio" / "provider_changed_project"

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
+from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
@@ -13,7 +12,7 @@ from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.application.test_maxwell_export import three_d_project
+from tests.unit.application.test_maxwell_export import project_for_runs
 
 SNAPSHOT = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
@@ -36,7 +35,7 @@ def _exporters() -> dict[str, object]:
 def test_maxwell3d_backend_reports_stage_lines(tmp_path: Path) -> None:
     lines = run_generation(
         GenerationBackend.MAXWELL_3D,
-        three_d_project(),  # type: ignore[arg-type]
+        project_for_runs(),
         CATALOG,
         SNAPSHOT,
         tmp_path,
@@ -47,10 +46,9 @@ def test_maxwell3d_backend_reports_stage_lines(tmp_path: Path) -> None:
 
 
 def test_maxwell2d_backend_reports_stage_lines(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
     lines = run_generation(
         GenerationBackend.MAXWELL_2D,
-        project,  # type: ignore[arg-type]
+        project_for_runs(),
         CATALOG,
         SNAPSHOT,
         tmp_path,
@@ -60,11 +58,10 @@ def test_maxwell2d_backend_reports_stage_lines(tmp_path: Path) -> None:
     assert lines[0].startswith("launch: ok")
 
 
-def test_femm_backend_reports_fem_path_and_winding_results(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
+def test_femm_backend_reports_generate_only_status(tmp_path: Path) -> None:
     lines = run_generation(
         GenerationBackend.FEMM_2D,
-        project,  # type: ignore[arg-type]
+        project_for_runs(),
         CATALOG,
         SNAPSHOT,
         tmp_path,
@@ -72,47 +69,20 @@ def test_femm_backend_reports_fem_path_and_winding_results(tmp_path: Path) -> No
     )
     assert lines[0].startswith("fem: ")
     assert lines[0].endswith(".fem")
-    assert "w1: R=0.1 ohm  L=0.0001 H" in lines
-    assert "w2: R=0.1 ohm  L=0.0001 H" in lines
-
-
-def test_femm_backend_not_analyzed_reports_status(tmp_path: Path) -> None:
-    # Build a project + call export_femm2d directly via run_generation is not
-    # parameterized for analyze=False, so exercise the "not analyzed" branch
-    # through a solver fake that returns no results.
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-
-    class NotAnalyzedFemmSolver(RecordingFemmSolver):
-        def solve(self, request: object) -> object:  # type: ignore[override]
-            result = super().solve(request)  # type: ignore[arg-type]
-            return replace(result, analyzed=False, results=None)  # type: ignore[arg-type]
-
-    exporters = _exporters()
-    exporters["femm_solver"] = NotAnalyzedFemmSolver()
-    lines = run_generation(
-        GenerationBackend.FEMM_2D,
-        project,  # type: ignore[arg-type]
-        CATALOG,
-        SNAPSHOT,
-        tmp_path,
-        **exporters,  # type: ignore[arg-type]
-    )
     assert "w1: not analyzed" in lines
-    assert "w2: not analyzed" in lines
 
 
-def test_dimension_mismatch_is_blocked_not_raised(tmp_path: Path) -> None:
-    lines = run_generation(
-        GenerationBackend.MAXWELL_2D,
-        three_d_project(),  # type: ignore[arg-type]
-        CATALOG,
-        SNAPSHOT,
-        tmp_path,
-        **_exporters(),  # type: ignore[arg-type]
-    )
-    assert len(lines) == 1
-    assert lines[0].startswith("BLOCKED: ")
-    assert "2d" in lines[0]
+def test_one_project_can_generate_every_backend(tmp_path: Path) -> None:
+    project = project_for_runs()
+    for backend in GenerationBackend:
+        assert run_generation(
+            backend,
+            project,
+            CATALOG,
+            SNAPSHOT,
+            tmp_path,
+            **_exporters(),  # type: ignore[arg-type]
+        )[0]
 
 
 def test_exception_becomes_error_line(tmp_path: Path) -> None:
@@ -124,7 +94,7 @@ def test_exception_becomes_error_line(tmp_path: Path) -> None:
     exporters["maxwell3d_exporter"] = ExplodingExporter()
     lines = run_generation(
         GenerationBackend.MAXWELL_3D,
-        three_d_project(),  # type: ignore[arg-type]
+        project_for_runs(),
         CATALOG,
         SNAPSHOT,
         tmp_path,

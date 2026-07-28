@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,10 @@ from inductor_designer.application.services.material_drafts import (  # noqa: E4
     save_material_session,
     session_from_import,
 )
-from inductor_designer.domain.project import InductorProject  # noqa: E402
+from inductor_designer.domain.project import (  # noqa: E402
+    InductorProject,
+    ManualCoreSelection,
+)
 from inductor_designer.ui.material_studio_controller import (  # noqa: E402
     MaterialStudioController,
 )
@@ -60,9 +64,17 @@ def _controller(
     with_project: bool = True,
 ) -> tuple[MaterialStudioController, list[InductorProject]]:
     saved_projects: list[InductorProject] = []
+    project = make_project()
+    project = replace(
+        project,
+        design=replace(
+            project.design,
+            core=ManualCoreSelection(0.03279, 0.02009, 0.01067, 0.0),
+        ),
+    )
     controller = MaterialStudioController(
         repository,
-        project=make_project() if with_project else None,
+        project=project if with_project else None,
         project_save_callback=saved_projects.append if with_project else None,
         now=lambda: "2026-07-19T10:00:00+00:00",
     )
@@ -334,4 +346,6 @@ def test_approved_bh_series_can_be_pinned_to_project() -> None:
     controller.useInProject("bh-25c")
 
     assert len(saved_projects) == 1
-    assert saved_projects[0].materials[0].bh_series_id == "bh-25c"
+    selection = saved_projects[0].design.core_material
+    assert selection is not None
+    assert selection.bh_series_id == "bh-25c"

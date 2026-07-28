@@ -16,13 +16,10 @@ from inductor_designer.adapters.materials import (
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.application.services.maxwell_export import (
-    MaxwellExportBlocked,
-    export_femm2d,
-    export_maxwell3d,
-    femm_manifest_json,
-    generation_manifest_json,
+    generate_run,
 )
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
+from inductor_designer.application.services.run_planning import RunPlanningError
+from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import CurvePoint, SeriesKind
@@ -30,6 +27,7 @@ from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
 from inductor_designer.ui.generation_controller import CurrentProjectProvider
 from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
 from inductor_designer.ui.main import _persist_and_publish_project
@@ -92,7 +90,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture_document = json.loads(PROJECT_FIXTURE.read_text(encoding="utf-8"))
-    assert fixture_document["schemaVersion"] == 3
+    assert fixture_document["schemaVersion"] == 5
 
     overlay = tmp_path / "overlay"
     materials = FileOverlayMaterialRepository(overlay)
@@ -153,19 +151,31 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     } == {"bh-25c", "bh-100c"}
 
     exporter = RecordingMaxwell3dExporter()
+    base_project = projects.load(PROJECT_FIXTURE)
     unselected_project = replace(
-        projects.load(PROJECT_FIXTURE),
-        materials=(
-            MaterialRevisionSelection(ref, edited_revision, edited, None),
+        base_project,
+        design=replace(
+            base_project.design,
+            core_material=MaterialRevisionSelection(
+                ref,
+                edited_revision,
+                edited,
+                None,
+            ),
         ),
     )
-    with pytest.raises(MaxwellExportBlocked, match="multiple B-H series"):
-        export_maxwell3d(
+    with pytest.raises(RunPlanningError, match="multiple B-H series"):
+        generate_run(
             unselected_project,
+            RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
             CATALOG,
-            exporter,
+            CAPABILITIES,
             tmp_path / "blocked-maxwell",
-            capabilities=CAPABILITIES,
+            maxwell3d_exporter=exporter,
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            run_id="blocked-unselected-material",
+            application_version="material-studio-test",
         )
     assert exporter.requests == []
 
@@ -191,11 +201,12 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
 
     controller.useInProject("bh-100c")
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
-    assert persisted_document["schemaVersion"] == 4
-    assert persisted_document["materials"][0]["revisionId"] == edited_revision
-    assert persisted_document["materials"][0]["bhSeriesId"] == "bh-100c"
+    assert persisted_document["schemaVersion"] == 5
+    assert persisted_document["design"]["coreMaterial"]["revisionId"] == edited_revision
+    assert persisted_document["design"]["coreMaterial"]["bhSeriesId"] == "bh-100c"
     reloaded = projects.load(project_path)
-    selection = reloaded.materials[0]
+    selection = reloaded.design.core_material
+    assert selection is not None
     assert selection.snapshot == edited
     assert selection.revision_id == edited_revision
     assert selection.bh_series_id == "bh-100c"
@@ -222,28 +233,39 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
         ).points
     )
 
-    maxwell = export_maxwell3d(
+    zero_dc_project = replace(
         reloaded,
-        CATALOG,
-        RecordingMaxwell3dExporter(),
-        tmp_path / "maxwell",
-        capabilities=CAPABILITIES,
+        operating_point=replace(
+            reloaded.operating_point,
+            windings=tuple(
+                replace(winding, dc_current_a=0.0)
+                for winding in reloaded.operating_point.windings
+            ),
+        ),
     )
-    femm = export_femm2d(
-        replace(reloaded, dimension_mode=ModelDimension.TWO_D),
-        CATALOG,
-        RecordingFemmSolver(),
-        tmp_path / "femm",
-        capabilities=CAPABILITIES,
-        analyze=False,
+    outcomes = tuple(
+        generate_run(
+            zero_dc_project,
+            RunRequest(backend, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            tmp_path / backend.value,
+            maxwell3d_exporter=RecordingMaxwell3dExporter(),
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            run_id=f"material-studio-{backend.value}",
+            application_version="material-studio-test",
+        )
+        for backend in (RunBackend.MAXWELL_3D, RunBackend.FEMM)
     )
-    for manifest in (
-        json.loads(generation_manifest_json(maxwell)),
-        json.loads(femm_manifest_json(femm)),
-    ):
-        assert manifest["coreMaterial"]["materialRevision"] == edited_revision
-        assert manifest["coreMaterial"]["bhSeriesId"] == "bh-100c"
-        assert manifest["coreMaterial"]["bhPointCount"] == 3
+    for outcome in outcomes:
+        assert outcome.manifest.material.revision_id == edited_revision
+        assert outcome.manifest.material.bh_series_id == "bh-100c"
+        assert len(
+            next(
+                item for item in selection.snapshot.series if item.series_id == "bh-100c"
+            ).points
+        ) == 3
 
 
 def test_imported_material_edits_never_pin_implicitly(

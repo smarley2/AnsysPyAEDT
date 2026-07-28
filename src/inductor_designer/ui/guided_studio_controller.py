@@ -16,7 +16,10 @@ from inductor_designer.ui.preview_geometry import PreviewEntry, build_preview_en
 
 if TYPE_CHECKING:
     from inductor_designer.application.ports.catalog import CatalogRepository
-    from inductor_designer.domain.project import InductorProject
+    from inductor_designer.domain.project import (
+        InductorProject,
+        WindingOperatingPoint,
+    )
     from inductor_designer.domain.winding import WindingDefinition
 
 
@@ -48,10 +51,17 @@ class GuidedStudioController(QObject):
         self._project = project
         self._catalog = catalog
         self._save_callback = save_callback
-        self._selected_winding_id = project.windings[0].winding_id if project.windings else ""
+        self._selected_winding_id = (
+            project.design.windings[0].winding_id
+            if project.design.windings
+            else ""
+        )
         self._dirty = False
         self._status_message = "Ready"
-        self._windings = self._winding_rows(project.windings)
+        self._windings = self._winding_rows(
+            project.design.windings,
+            project.operating_point.windings,
+        )
         self._preview_entries = self._build_preview(project)
 
     def _build_preview(self, project: InductorProject) -> list[PreviewEntry]:
@@ -59,15 +69,19 @@ class GuidedStudioController(QObject):
         return build_preview_entries(model)
 
     @staticmethod
-    def _winding_rows(windings: tuple[WindingDefinition, ...]) -> list[dict[str, object]]:
+    def _winding_rows(
+        windings: tuple[WindingDefinition, ...],
+        operating_points: tuple[WindingOperatingPoint, ...],
+    ) -> list[dict[str, object]]:
+        points_by_id = {item.winding_id: item for item in operating_points}
         return [
             {
                 "windingId": winding.winding_id,
                 "label": winding.label,
                 "turns": winding.turns,
                 "conductor": winding.conductor_name,
-                "acMagnitudeA": winding.ac_magnitude_a,
-                "acPhaseDeg": winding.ac_phase_deg,
+                "acRmsCurrentA": points_by_id[winding.winding_id].ac_rms_current_a,
+                "acPhaseDeg": points_by_id[winding.winding_id].ac_phase_deg,
                 "startAngleDeg": winding.start_angle_deg,
                 "sectorDeg": winding.sector_deg,
                 "spacingMm": winding.min_spacing_m * 1000.0,
@@ -151,10 +165,6 @@ class GuidedStudioController(QObject):
             return replace(winding, turns=turns)
         if field == "conductor":
             return replace(winding, conductor_name=value.strip())
-        if field == "acMagnitudeA":
-            return replace(winding, ac_magnitude_a=cls._number(value, "AC current"))
-        if field == "acPhaseDeg":
-            return replace(winding, ac_phase_deg=cls._number(value, "AC phase"))
         if field == "startAngleDeg":
             return replace(winding, start_angle_deg=cls._number(value, "Start angle"))
         if field == "sectorDeg":
@@ -168,6 +178,25 @@ class GuidedStudioController(QObject):
             return replace(winding, winding_direction=WindingDirection(value))
         raise ValueError(f"Unsupported winding field: {field}")
 
+    @classmethod
+    def _updated_operating_point(
+        cls,
+        operating_point: WindingOperatingPoint,
+        field: str,
+        value: str,
+    ) -> WindingOperatingPoint:
+        if field == "acRmsCurrentA":
+            return replace(
+                operating_point,
+                ac_rms_current_a=cls._number(value, "AC RMS current"),
+            )
+        if field == "acPhaseDeg":
+            return replace(
+                operating_point,
+                ac_phase_deg=cls._number(value, "AC phase"),
+            )
+        raise ValueError(f"Unsupported operating-point field: {field}")
+
     @Slot(str, str, str, result=bool)
     def setWindingField(self, winding_id: str, field: str, value: str) -> bool:
         index = next(
@@ -179,19 +208,50 @@ class GuidedStudioController(QObject):
             self._set_status(f"Unable to apply change: unknown winding {winding_id}")
             return False
 
-        current = self._project.windings[index]
         try:
-            updated_winding = self._updated_winding(current, field, value)
-            updated_windings = list(self._project.windings)
-            updated_windings[index] = updated_winding
-            updated_project = replace(self._project, windings=tuple(updated_windings))
+            if field in {"acRmsCurrentA", "acPhaseDeg"}:
+                operating_points = list(self._project.operating_point.windings)
+                operating_index = next(
+                    position
+                    for position, item in enumerate(operating_points)
+                    if item.winding_id == winding_id
+                )
+                operating_points[operating_index] = self._updated_operating_point(
+                    operating_points[operating_index],
+                    field,
+                    value,
+                )
+                updated_project = replace(
+                    self._project,
+                    operating_point=replace(
+                        self._project.operating_point,
+                        windings=tuple(operating_points),
+                    ),
+                )
+            else:
+                updated_windings = list(self._project.design.windings)
+                updated_windings[index] = self._updated_winding(
+                    updated_windings[index],
+                    field,
+                    value,
+                )
+                updated_project = replace(
+                    self._project,
+                    design=replace(
+                        self._project.design,
+                        windings=tuple(updated_windings),
+                    ),
+                )
             preview_entries = self._build_preview(updated_project)
-        except (GeometryModelError, ValueError) as error:
+        except (GeometryModelError, StopIteration, ValueError) as error:
             self._set_status(f"Unable to apply change: {error}")
             return False
 
         self._project = updated_project
-        self._windings = self._winding_rows(updated_project.windings)
+        self._windings = self._winding_rows(
+            updated_project.design.windings,
+            updated_project.operating_point.windings,
+        )
         self._preview_entries = preview_entries
         self._set_dirty(True)
         self._set_status(f"Updated {winding_id}")

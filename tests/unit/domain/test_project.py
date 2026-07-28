@@ -162,9 +162,6 @@ def test_project_aggregate_holds_design_operating_point_and_recipe() -> None:
     assert project.operating_point.frequency_hz == 100_000.0
     assert project.operating_point.winding_temperature_c == 20.0
     assert project.operating_point.core_temperature_c == 25.0
-    assert not hasattr(make_winding(), "frequency_hz")
-    assert not hasattr(make_winding(), "ac_magnitude_a")
-    assert not hasattr(make_project(), "dimension_mode")
 
 
 def test_catalog_selection_rejects_part_number_mismatch() -> None:

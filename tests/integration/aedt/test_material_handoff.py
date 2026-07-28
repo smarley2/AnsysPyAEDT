@@ -13,12 +13,20 @@ from inductor_designer.adapters.compatibility.matrix_repository import (
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
 from inductor_designer.application.services.maxwell_export import (
-    export_maxwell3d,
-    generation_manifest_json,
+    generate_run,
+    run_manifest_json,
 )
 from inductor_designer.domain.project import CatalogCoreSelection
 from inductor_designer.materials.records import SeriesKind
+from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
+from tests.fakes.femm_solver import RecordingFemmSolver
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tools.build_catalog import build
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -40,12 +48,10 @@ def test_prepared_material_reaches_aedt_and_manifest_preserves_snapshot() -> Non
     assert project_path.is_file()
     repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     project = repository.load(project_path)
-    assert isinstance(project.core, CatalogCoreSelection)
-    selection = next(
-        material
-        for material in project.materials
-        if material.ref == project.core.snapshot.material
-    )
+    assert isinstance(project.design.core, CatalogCoreSelection)
+    selection = project.design.core_material
+    assert selection is not None
+    assert selection.ref == project.design.core.snapshot.material
     bh_series = next(
         series
         for series in selection.snapshot.series
@@ -60,33 +66,37 @@ def test_prepared_material_reaches_aedt_and_manifest_preserves_snapshot() -> Non
     catalog = SqliteCatalogRepository(index)
     capabilities = MatrixCapabilityRepository(
         ROOT / "compatibility" / "aedt-matrix.yml"
-    ).snapshot_for(project.target_release, project.target_edition)
+    ).snapshot_for(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)
 
-    outcome = export_maxwell3d(
+    outcome = generate_run(
         project,
+        RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
         catalog,
-        PyaedtMaxwell3dExporter(),
+        capabilities,
         aedt_output,
-        capabilities=capabilities,
+        maxwell3d_exporter=PyaedtMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id="m5a-live-maxwell-3d",
+        application_version="m5a-live-test",
     )
-    manifest_path = aedt_output / "generation-manifest.json"
-    manifest_path.write_text(generation_manifest_json(outcome), encoding="utf-8")
+    manifest_path = aedt_output / "run-manifest.json"
+    manifest_path.write_text(run_manifest_json(outcome.manifest), encoding="utf-8")
 
-    failed = [stage for stage in outcome.result.stages if not stage.succeeded]
-    assert outcome.result.succeeded(), failed
-    assert outcome.result.project_path.is_file()
-    stage_names = {stage.name for stage in outcome.result.stages}
+    result = outcome.adapter_result
+    failed = [stage for stage in result.stages if not stage.succeeded]
+    assert result.succeeded(), failed
+    assert result.project_path.is_file()
+    stage_names = {stage.name for stage in result.stages}
     assert {"materials", "validate", "save"} <= stage_names
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    material = manifest["coreMaterial"]
-    assert material["materialRevision"] == selection.revision_id
+    material = manifest["material"]
+    assert material["revisionId"] == selection.revision_id
     assert material["bhSeriesId"] == selection.bh_series_id
-    assert material["bhPointCount"] == len(bh_series.points)
+    plan = outcome.planned_run.solver_plan
+    assert isinstance(plan, Maxwell3dDesignPlan)
+    assert len(plan.core.material.bh_curve) == len(bh_series.points)
     fit = selection.snapshot.steinmetz
     assert fit is not None
-    assert material["steinmetz"] == {
-        "k": fit.k,
-        "alpha": fit.alpha,
-        "beta": fit.beta,
-    }
+    assert plan.core.material.steinmetz == fit

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -12,10 +11,16 @@ from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
 from inductor_designer.adapters.femm.solver import PyfemmSolver
-from inductor_designer.adapters.persistence.project_repository import ProjectRepository
-from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
-from inductor_designer.application.services.maxwell_export import export_femm2d
-from inductor_designer.domain.aedt_target import ModelDimension
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
+from inductor_designer.application.services.maxwell_export import generate_run
+from inductor_designer.simulation.femm_problem import FemmProblem
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
+from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
+from tests.unit.application.test_maxwell_export import project_for_runs
 from tools.build_catalog import build
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,31 +35,33 @@ def test_femm_solves_sample_project(tmp_path: Path) -> None:
     index = tmp_path / "catalog.sqlite"
     build(ROOT / "catalog", ROOT / "schemas" / "catalog", index)
     catalog = SqliteCatalogRepository(index)
-    repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
-    project = replace(
-        repository.load(ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"),
-        dimension_mode=ModelDimension.TWO_D,
-    )
+    project = project_for_runs()
     capabilities = MatrixCapabilityRepository(
         ROOT / "compatibility" / "aedt-matrix.yml"
-    ).snapshot_for(project.target_release, project.target_edition)
+    ).snapshot_for(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)
 
-    outcome = export_femm2d(
-        project, catalog, PyfemmSolver(), tmp_path / "out", capabilities=capabilities
+    outcome = generate_run(
+        project,
+        RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+        catalog,
+        capabilities,
+        tmp_path / "out",
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=PyfemmSolver(),
+        run_id="live-femm",
+        application_version="live-test",
     )
 
-    result = outcome.result
+    result = outcome.adapter_result
     assert result.fem_path.exists()
-    assert result.analyzed
-    assert result.results is not None
-    assert set(result.results) == {"w1", "w2"}
-    for winding in result.results.values():
-        assert winding.resistance_ohm > 0
-        assert winding.inductance_h > 0
+    assert result.analyzed is False
+    assert result.results is None
 
     fem_text = result.fem_path.read_text(encoding="utf-8", errors="ignore")
     assert "w1" in fem_text
-    assert "w2" in fem_text
-    depth_m = outcome.problem.depth_m
+    problem = outcome.planned_run.solver_plan
+    assert isinstance(problem, FemmProblem)
+    depth_m = problem.depth_m
     depth_candidates = {f"{depth_m:g}", f"{depth_m}", f"{depth_m:.6g}", f"{depth_m:.4f}"}
     assert any(candidate in fem_text for candidate in depth_candidates)

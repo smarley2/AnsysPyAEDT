@@ -17,12 +17,9 @@ from inductor_designer.application.services.material_import import (
     review_material,
 )
 from inductor_designer.application.services.maxwell_export import (
-    export_femm2d,
-    export_maxwell3d,
-    femm_manifest_json,
-    generation_manifest_json,
+    generate_run,
 )
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
+from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.domain.project import CatalogCoreSelection, MaterialRevisionSelection
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -38,7 +35,9 @@ from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
 from tests.fakes.femm_solver import RecordingFemmSolver
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
 from tests.unit.domain.test_project import make_project
@@ -110,9 +109,9 @@ def _record() -> tuple[MaterialRecord, dict[str, bytes]]:
         source=provenance["bh.csv"],
     )
     project = make_project()
-    assert isinstance(project.core, CatalogCoreSelection)
+    assert isinstance(project.design.core, CatalogCoreSelection)
     draft = new_draft_record(
-        project.core.snapshot.material,
+        project.design.core.snapshot.material,
         series=(*loss_series, bh_series),
         sources=tuple(provenance.values()),
         created_at="2026-07-18T09:00:00+00:00",
@@ -159,42 +158,57 @@ def test_material_sources_reproduce_through_project_and_recording_exports(
 
     project_repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     project_path = tmp_path / "material-project.inductor.json"
+    project = make_project()
     project_repository.save(
         replace(
-            make_project(),
-            materials=(MaterialRevisionSelection(loaded.ref, loaded.revision_id, loaded, "bh"),),
+            project,
+            design=replace(
+                project.design,
+                core_material=MaterialRevisionSelection(
+                    loaded.ref,
+                    loaded.revision_id,
+                    loaded,
+                    "bh",
+                ),
+            ),
+            operating_point=replace(
+                project.operating_point,
+                windings=tuple(
+                    replace(winding, dc_current_a=0.0)
+                    for winding in project.operating_point.windings
+                ),
+            ),
         ),
         project_path,
     )
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
-    assert persisted_document["schemaVersion"] == 4
-    assert persisted_document["materials"][0]["bhSeriesId"] == "bh"
+    assert persisted_document["schemaVersion"] == 5
+    assert persisted_document["design"]["coreMaterial"]["bhSeriesId"] == "bh"
     fresh_project = project_repository.load(project_path)
-    assert fresh_project.materials[0].snapshot == loaded
-    assert fresh_project.materials[0].bh_series_id == "bh"
+    selection = fresh_project.design.core_material
+    assert selection is not None
+    assert selection.snapshot == loaded
+    assert selection.bh_series_id == "bh"
 
-    maxwell_outcome = export_maxwell3d(
-        fresh_project,
-        CATALOG,
-        RecordingMaxwell3dExporter(),
-        tmp_path / "maxwell",
-        capabilities=CAPABILITIES,
+    outcomes = tuple(
+        generate_run(
+            fresh_project,
+            RunRequest(backend, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            tmp_path / backend.value,
+            maxwell3d_exporter=RecordingMaxwell3dExporter(),
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            run_id=f"reproducibility-{backend.value}",
+            application_version="reproducibility-test",
+        )
+        for backend in (RunBackend.MAXWELL_3D, RunBackend.FEMM)
     )
-    femm_outcome = export_femm2d(
-        replace(fresh_project, dimension_mode=ModelDimension.TWO_D),
-        CATALOG,
-        RecordingFemmSolver(),
-        tmp_path / "femm",
-        capabilities=CAPABILITIES,
-        analyze=False,
-    )
-    for manifest in (
-        json.loads(generation_manifest_json(maxwell_outcome)),
-        json.loads(femm_manifest_json(femm_outcome)),
-    ):
-        assert manifest["coreMaterial"]["materialRevision"] == loaded.revision_id
-        assert manifest["coreMaterial"]["bhSeriesId"] == "bh"
-        assert manifest["coreMaterial"]["bhPointCount"] > 0
+    for outcome in outcomes:
+        assert outcome.manifest.material.revision_id == loaded.revision_id
+        assert outcome.manifest.material.bh_series_id == "bh"
+        assert selection.snapshot.series
 
     record_tamper = tmp_path / "record-tamper"
     shutil.copytree(overlay, record_tamper)

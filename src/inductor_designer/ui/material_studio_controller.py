@@ -832,11 +832,14 @@ class MaterialStudioController(QObject):
             previous = self._session.record
             replacement = session_from_import(imported.record, imported.source_files)
             self._repository.save(replacement.record, dict(replacement.source_files))
-            pinned = {
-                selection.revision_id
-                for selection in (() if self._project is None else self._project.materials)
-                if selection.ref == previous.ref
-            }
+            selection = (
+                None if self._project is None else self._project.design.core_material
+            )
+            pinned = (
+                {selection.revision_id}
+                if selection is not None and selection.ref == previous.ref
+                else set()
+            )
             if (
                 previous.status is MaterialStatus.IMPORTED
                 and previous.revision_id != replacement.record.revision_id
@@ -868,10 +871,13 @@ class MaterialStudioController(QObject):
                 return
             if self._selected_ref is None:
                 raise ValueError("Select a material before deleting it.")
-            pinned = tuple(
-                selection.revision_id
-                for selection in (() if self._project is None else self._project.materials)
-                if selection.ref == self._selected_ref
+            selection = (
+                None if self._project is None else self._project.design.core_material
+            )
+            pinned = (
+                (selection.revision_id,)
+                if selection is not None and selection.ref == self._selected_ref
+                else ()
             )
             self._repository.delete_material(self._selected_ref, pinned)
             self._selected_ref = None

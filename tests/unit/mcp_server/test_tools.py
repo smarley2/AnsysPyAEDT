@@ -1,17 +1,23 @@
 from __future__ import annotations
 
-import copy
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
+from inductor_designer.adapters.persistence.project_repository import (
+    project_from_document,
+    project_to_document,
+)
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.mcp_server import tools
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"
@@ -41,16 +47,29 @@ def context(catalog_index: Path, tmp_path: Path) -> tools.ToolContext:
 
 @pytest.fixture()
 def document() -> dict[str, object]:
-    return dict(json.loads(FIXTURE.read_text(encoding="utf-8")))
-
-
-@pytest.fixture()
-def document_2d(document: dict[str, object]) -> dict[str, object]:
-    doc = copy.deepcopy(document)
-    target = dict(doc["target"])  # type: ignore[arg-type]
-    target["dimensionMode"] = "2d"
-    doc["target"] = target
-    return doc
+    project = project_from_document(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    material = make_approved_material_record()
+    return project_to_document(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core_material=MaterialRevisionSelection(
+                    material.ref,
+                    material.revision_id,
+                    material,
+                    "bh",
+                ),
+            ),
+            operating_point=replace(
+                project.operating_point,
+                windings=tuple(
+                    replace(winding, dc_current_a=0.0)
+                    for winding in project.operating_point.windings
+                ),
+            ),
+        )
+    )
 
 
 def _save(context: tools.ToolContext, doc: dict[str, object], path: Path) -> None:
@@ -123,28 +142,30 @@ def test_generate_maxwell3d_returns_manifest_and_writes_evidence(
     target = tmp_path / "saved.inductor.json"
     _save(context, document, target)
     result = tools.generate_maxwell3d(context, str(target))
-    assert result["backend"] == "aedt"
-    assert result["succeeded"] is True
-    evidence = context.output_root / "M2_golden_sample" / "generation-manifest.json"
+    assert result["backend"] == "maxwell-3d"
+    assert result["status"] == "succeeded"
+    assert result["mode"] == "generate-only"
+    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
     assert evidence.is_file()
     assert json.loads(evidence.read_text(encoding="utf-8")) == result
 
 
 def test_generate_2d_femm_backend_has_results(
-    context: tools.ToolContext, document_2d: dict[str, object], tmp_path: Path
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
     target = tmp_path / "saved.inductor.json"
-    _save(context, document_2d, target)
-    result = tools.generate_2d(context, str(target), backend="femm")
+    _save(context, document, target)
+    result = tools.generate_2d(context, str(target), backend="femm", analyze=False)
     assert result["backend"] == "femm"
-    assert result["femmResults"] is not None
-    evidence = context.output_root / "M2_golden_sample" / "femm-manifest.json"
+    assert result["status"] == "succeeded"
+    assert result["results"] is None
+    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
     assert evidence.is_file()
     assert json.loads(evidence.read_text(encoding="utf-8")) == result
 
 
 def test_generate_2d_femm_solver_raising_returns_error_dict(
-    context: tools.ToolContext, document_2d: dict[str, object], tmp_path: Path
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
     class _RaisingFemmSolver:
         def solve(self, request: object) -> object:
@@ -160,18 +181,37 @@ def test_generate_2d_femm_solver_raising_returns_error_dict(
         femm_solver=_RaisingFemmSolver(),  # type: ignore[arg-type]
     )
     target = tmp_path / "saved.inductor.json"
-    _save(broken_context, document_2d, target)
-    result = tools.generate_2d(broken_context, str(target), backend="femm")
+    _save(broken_context, document, target)
+    result = tools.generate_2d(
+        broken_context,
+        str(target),
+        backend="femm",
+        analyze=False,
+    )
     assert "error" in result
 
 
 def test_generate_2d_bogus_backend_returns_error(
-    context: tools.ToolContext, document_2d: dict[str, object], tmp_path: Path
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
     target = tmp_path / "saved.inductor.json"
-    _save(context, document_2d, target)
+    _save(context, document, target)
     result = tools.generate_2d(context, str(target), backend="bogus")
     assert "error" in result
+
+
+def test_generate_2d_analyze_true_reports_m8_block(
+    context: tools.ToolContext,
+    document: dict[str, object],
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "saved.inductor.json"
+    _save(context, document, target)
+    result = tools.generate_2d(context, str(target), backend="femm", analyze=True)
+    assert result["issues"] == [
+        "Generate and Solve execution belongs to M8; "
+        "M6 only validates its Run Request."
+    ]
 
 
 def test_read_manifest_roundtrip(
@@ -180,7 +220,7 @@ def test_read_manifest_roundtrip(
     target = tmp_path / "saved.inductor.json"
     _save(context, document, target)
     generated = tools.generate_maxwell3d(context, str(target))
-    result = tools.read_manifest(context, "M2_golden_sample/generation-manifest.json")
+    result = tools.read_manifest(context, "M2_golden_sample/run-manifest.json")
     assert result == generated
 
 

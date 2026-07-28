@@ -23,7 +23,7 @@ Pane {
         const item = currentWinding()
         turnsField.text = item.turns === undefined ? "" : String(item.turns)
         conductorField.text = item.conductor === undefined ? "" : String(item.conductor)
-        currentField.text = item.acMagnitudeA === undefined ? "" : String(item.acMagnitudeA)
+        currentField.text = item.acRmsCurrentA === undefined ? "" : String(item.acRmsCurrentA)
         phaseField.text = item.acPhaseDeg === undefined ? "" : String(item.acPhaseDeg)
         startAngleField.text = item.startAngleDeg === undefined ? "" : String(item.startAngleDeg)
         sectorField.text = item.sectorDeg === undefined ? "" : String(item.sectorDeg)
@@ -74,7 +74,7 @@ Pane {
             }
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Set excitation and placement. The canvas updates from validated geometry.")
+                text: qsTr("Set the operating point and placement. The canvas updates from validated geometry.")
                 wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
@@ -149,13 +149,13 @@ Pane {
                     selectByMouse: true
                     onEditingFinished: windingsPanel.applyField("conductor", conductorField)
                 }
-                Label { text: qsTr("AC current") }
+                Label { text: qsTr("AC RMS current") }
                 TextField {
                     id: currentField
                     objectName: "windingCurrentField"
                     Layout.fillWidth: true
                     selectByMouse: true
-                    onEditingFinished: windingsPanel.applyField("acMagnitudeA", currentField)
+                    onEditingFinished: windingsPanel.applyField("acRmsCurrentA", currentField)
                 }
                 Label { text: qsTr("AC phase") }
                 TextField {

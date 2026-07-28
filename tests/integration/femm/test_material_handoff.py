@@ -15,12 +15,19 @@ from inductor_designer.adapters.compatibility.matrix_repository import (
 from inductor_designer.adapters.femm.solver import PyfemmSolver
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
-from inductor_designer.application.services.maxwell_export import (
-    export_femm2d,
-    femm_manifest_json,
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
 )
-from inductor_designer.domain.aedt_target import ModelDimension
+from inductor_designer.application.services.maxwell_export import (
+    generate_run,
+    run_manifest_json,
+)
 from inductor_designer.domain.project import CatalogCoreSelection
+from inductor_designer.simulation.femm_problem import FemmProblem
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
+from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tools.build_catalog import build
 from tools.femm_material_evidence import read_material_bh_points
 
@@ -44,11 +51,19 @@ def test_prepared_material_reaches_femm_with_exact_bh_points() -> None:
     project_path = Path(project_value)
     assert project_path.is_file()
     repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
+    loaded = repository.load(project_path)
+    # This test isolates material transfer. M6 blocks nonzero DC for FEMM.
     project = replace(
-        repository.load(project_path),
-        dimension_mode=ModelDimension.TWO_D,
+        loaded,
+        operating_point=replace(
+            loaded.operating_point,
+            windings=tuple(
+                replace(winding, dc_current_a=0.0)
+                for winding in loaded.operating_point.windings
+            ),
+        ),
     )
-    assert isinstance(project.core, CatalogCoreSelection)
+    assert isinstance(project.design.core, CatalogCoreSelection)
 
     femm_output = Path(artifact_root_value) / "femm"
     index = femm_output / "catalog.sqlite"
@@ -56,25 +71,37 @@ def test_prepared_material_reaches_femm_with_exact_bh_points() -> None:
     catalog = SqliteCatalogRepository(index)
     capabilities = MatrixCapabilityRepository(
         ROOT / "compatibility" / "aedt-matrix.yml"
-    ).snapshot_for(project.target_release, project.target_edition)
+    ).snapshot_for(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)
 
-    outcome = export_femm2d(
+    outcome = generate_run(
         project,
+        RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
         catalog,
-        PyfemmSolver(),
+        capabilities,
         femm_output,
-        capabilities=capabilities,
-        analyze=False,
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=PyfemmSolver(),
+        run_id="m5a-live-femm",
+        application_version="m5a-live-test",
     )
-    manifest_path = femm_output / "femm-manifest.json"
-    manifest_path.write_text(femm_manifest_json(outcome), encoding="utf-8")
+    manifest_path = femm_output / "run-manifest.json"
+    manifest_path.write_text(run_manifest_json(outcome.manifest), encoding="utf-8")
 
-    assert outcome.result.fem_path.is_file()
-    assert outcome.result.analyzed is False
-    expected_points = outcome.plan.core.material.bh_curve
+    result = outcome.adapter_result
+    assert result.fem_path.is_file()
+    assert result.analyzed is False
+    problem = outcome.planned_run.solver_plan
+    assert isinstance(problem, FemmProblem)
+    material_name = problem.core.material
+    expected_points = next(
+        material.bh_points
+        for material in problem.materials
+        if material.name == material_name
+    )
     actual_points = read_material_bh_points(
-        outcome.result.fem_path,
-        outcome.plan.core.material.name,
+        result.fem_path,
+        material_name,
     )
     assert expected_points
     assert len(actual_points) == len(expected_points)
@@ -82,11 +109,8 @@ def test_prepared_material_reaches_femm_with_exact_bh_points() -> None:
         assert actual == pytest.approx(expected)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    material = manifest["coreMaterial"]
-    selection = next(
-        item
-        for item in project.materials
-        if item.ref == project.core.snapshot.material
-    )
-    assert material["materialRevision"] == selection.revision_id
+    material = manifest["material"]
+    selection = project.design.core_material
+    assert selection is not None
+    assert material["revisionId"] == selection.revision_id
     assert material["bhSeriesId"] == selection.bh_series_id

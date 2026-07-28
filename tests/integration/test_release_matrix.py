@@ -1,22 +1,26 @@
 from __future__ import annotations
 
-import json
-from dataclasses import replace
 from pathlib import Path
 
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
-from inductor_designer.application.services.maxwell_export import (
-    export_maxwell2d,
-    export_maxwell3d,
-    generation_manifest_json,
+from inductor_designer.application.services.maxwell_export import RunOutcome, generate_run
+from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
+from inductor_designer.simulation.capabilities import DcBiasStrategy
+from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.run_contracts import (
+    DimensionalRepresentation,
+    RunBackend,
+    RunMode,
+    RunRequest,
+    RunStatus,
 )
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
+from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.application.test_maxwell_export import three_d_project
+from tests.unit.application.test_maxwell_export import project_for_runs
 
 ROOT = Path(__file__).resolve().parents[2]
 REAL_MATRIX = ROOT / "compatibility" / "aedt-matrix.yml"
@@ -34,49 +38,51 @@ rows:
 """
 
 
-def manifest_3d(matrix: Path, release: AedtRelease, tmp_path: Path) -> dict[str, object]:
+def generate(matrix: Path, backend: RunBackend, tmp_path: Path) -> RunOutcome:
     capabilities = MatrixCapabilityRepository(matrix).snapshot_for(
-        release, AedtEdition.COMMERCIAL
+        AedtRelease(2025, 2),
+        AedtEdition.COMMERCIAL,
     )
-    project = replace(three_d_project(), target_release=release)  # type: ignore[type-var]
-    outcome = export_maxwell3d(
-        project, CATALOG, RecordingMaxwell3dExporter(), tmp_path,  # type: ignore[arg-type]
-        capabilities=capabilities,
+    return generate_run(
+        project_for_runs(),
+        RunRequest(backend, RunMode.GENERATE_ONLY),
+        CATALOG,
+        capabilities,
+        tmp_path,
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id=f"release-matrix-{backend.value}",
+        application_version="release-matrix-test",
     )
-    return json.loads(generation_manifest_json(outcome))
 
 
 def test_real_matrix_2025_2_identifies_native(tmp_path: Path) -> None:
-    # includeDcFields3d reviewed true on 2026-07-17 (live probe on AEDT 2025.2).
-    payload = manifest_3d(REAL_MATRIX, AedtRelease(2025, 2), tmp_path)
-    assert payload["succeeded"] is True
-    assert payload["dcBias"]["strategy"] == "native-include-dc-fields"
-    assert payload["dcBias"]["approximate"] is False
-    assert payload["solutionType"] == "AC Magnetic with DC"
+    outcome = generate(REAL_MATRIX, RunBackend.MAXWELL_3D, tmp_path)
+    plan = outcome.planned_run.solver_plan
+    assert isinstance(plan, Maxwell3dDesignPlan)
+    assert plan.dc_bias is not None
+    assert plan.dc_bias.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS
+    assert plan.dc_bias.approximate is False
+    assert outcome.manifest.status is RunStatus.SUCCEEDED
 
 
 def test_synthetic_native_row_identifies_native(tmp_path: Path) -> None:
     matrix = tmp_path / "m.yml"
     matrix.write_text(SYNTHETIC, encoding="utf-8")
-    payload = manifest_3d(matrix, AedtRelease(2025, 2), tmp_path)
-    assert payload["dcBias"]["strategy"] == "native-include-dc-fields"
-    assert payload["dcBias"]["approximate"] is False
-    assert payload["dcBias"]["appliedCurrentsA"] is not None
+    outcome = generate(matrix, RunBackend.MAXWELL_3D, tmp_path)
+    plan = outcome.planned_run.solver_plan
+    assert isinstance(plan, Maxwell3dDesignPlan)
+    assert plan.dc_bias is not None
+    assert plan.dc_bias.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS
 
 
-def test_two_d_is_always_blocked_and_marked_approximate_model(tmp_path: Path) -> None:
+def test_two_d_manifest_is_marked_approximate_model(tmp_path: Path) -> None:
     matrix = tmp_path / "m.yml"
     matrix.write_text(SYNTHETIC, encoding="utf-8")
-    capabilities = MatrixCapabilityRepository(matrix).snapshot_for(
-        AedtRelease(2025, 2), AedtEdition.COMMERCIAL
+    outcome = generate(matrix, RunBackend.MAXWELL_2D, tmp_path)
+    assert outcome.manifest.status is RunStatus.SUCCEEDED
+    assert outcome.manifest.dimensional_representation is (
+        DimensionalRepresentation.EQUIVALENT_CROSS_SECTION
     )
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-    outcome = export_maxwell2d(
-        project, CATALOG, RecordingMaxwell2dExporter(), tmp_path,  # type: ignore[arg-type]
-        capabilities=capabilities,
-    )
-    payload = json.loads(generation_manifest_json(outcome))
-    assert payload["succeeded"] is True
-    assert payload["dimension"] == "2d"
-    assert payload["dcBias"]["strategy"] == "blocked"
-    assert any("approximate" in note for note in payload["notes"])
+    assert any("approximate" in warning for warning in outcome.manifest.warnings)

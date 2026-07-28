@@ -29,15 +29,19 @@ def test_editing_winding_rebuilds_real_preview_and_can_be_saved() -> None:
     assert [item["windingId"] for item in controller.windings] == ["w1"]
     assert controller.selectedWindingId == "w1"
     assert controller.dirty is False
+    assert controller.windings[0]["acRmsCurrentA"] == 2.0
 
     assert controller.setWindingField("w1", "turns", "24") is True
+    assert controller.setWindingField("w1", "acRmsCurrentA", "3.5") is True
 
     assert controller.windings[0]["turns"] == 24
+    assert controller.windings[0]["acRmsCurrentA"] == 3.5
     assert controller.previewEntries[1].geometry is not before
     assert controller.dirty is True
 
     assert controller.saveDraft() is True
-    assert saved and saved[0].windings[0].turns == 24
+    assert saved and saved[0].design.windings[0].turns == 24
+    assert saved[0].operating_point.windings[0].ac_rms_current_a == 3.5
     assert controller.dirty is False
 
 

@@ -3,53 +3,68 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from inductor_designer.adapters.persistence.project_repository import ProjectRepository
+from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
+from tests.unit.application.test_maxwell_export import project_for_runs
 from tools.generate_maxwell2d import main
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURE = ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"
 
 
-def test_main_exports_sample_project_forced_2d(tmp_path: Path) -> None:
+def _fixture(tmp_path: Path) -> Path:
+    fixture = tmp_path / "resolved.inductor.json"
+    ProjectRepository(SchemaRepository(ROOT / "schemas")).save(
+        project_for_runs(),
+        fixture,
+    )
+    return fixture
+
+
+def test_main_exports_sample_project_to_maxwell_2d(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.json"
     exit_code = main(
         [
-            "--project", str(FIXTURE),
+            "--project", str(_fixture(tmp_path)),
             "--output-directory", str(tmp_path / "out"),
             "--evidence", str(evidence),
-            "--force-2d",
         ],
         exporter=RecordingMaxwell2dExporter(),
     )
     assert exit_code == 0
     payload = json.loads(evidence.read_text(encoding="utf-8"))
-    assert payload["succeeded"] is True
-    assert payload["dimension"] == "2d"
-    assert payload["designName"] == "Inductor2D"
-    assert payload["dcBias"]["strategy"] == "blocked"
+    assert payload["backend"] == "maxwell-2d"
+    assert payload["mode"] == "generate-only"
+    assert payload["status"] == "succeeded"
+    assert payload["dimensionalRepresentation"] == "equivalent-cross-section"
 
 
-def test_main_blocks_3d_project_without_force(tmp_path: Path) -> None:
-    exit_code = main(
-        [
-            "--project", str(FIXTURE),
-            "--output-directory", str(tmp_path / "out"),
-            "--evidence", str(tmp_path / "evidence.json"),
-        ],
-        exporter=RecordingMaxwell2dExporter(),
-    )
-    assert exit_code == 1
+def test_force_2d_option_is_removed(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--project",
+                str(_fixture(tmp_path)),
+                "--output-directory",
+                str(tmp_path / "out"),
+                "--evidence",
+                str(tmp_path / "evidence.json"),
+                "--force-2d",
+            ],
+            exporter=RecordingMaxwell2dExporter(),
+        )
 
 
 def test_main_exports_femm_backend(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.json"
     exit_code = main(
         [
-            "--project", str(FIXTURE),
+            "--project", str(_fixture(tmp_path)),
             "--output-directory", str(tmp_path / "out"),
             "--evidence", str(evidence),
-            "--force-2d",
             "--backend", "femm",
         ],
         femm_solver=RecordingFemmSolver(),
@@ -57,22 +72,24 @@ def test_main_exports_femm_backend(tmp_path: Path) -> None:
     assert exit_code == 0
     payload = json.loads(evidence.read_text(encoding="utf-8"))
     assert payload["backend"] == "femm"
-    assert set(payload["femmResults"]) == {"w1", "w2"}
+    assert payload["mode"] == "generate-only"
+    assert payload["status"] == "succeeded"
+    assert payload["results"] is None
 
 
-def test_main_femm_backend_no_analyze(tmp_path: Path) -> None:
-    evidence = tmp_path / "evidence.json"
-    exit_code = main(
-        [
-            "--project", str(FIXTURE),
-            "--output-directory", str(tmp_path / "out"),
-            "--evidence", str(evidence),
-            "--force-2d",
-            "--backend", "femm",
-            "--no-analyze",
-        ],
-        femm_solver=RecordingFemmSolver(),
-    )
-    assert exit_code == 0
-    payload = json.loads(evidence.read_text(encoding="utf-8"))
-    assert payload["femmResults"] is None
+def test_no_analyze_option_is_removed(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--project",
+                str(_fixture(tmp_path)),
+                "--output-directory",
+                str(tmp_path / "out"),
+                "--evidence",
+                str(tmp_path / "evidence.json"),
+                "--backend",
+                "femm",
+                "--no-analyze",
+            ],
+            femm_solver=RecordingFemmSolver(),
+        )

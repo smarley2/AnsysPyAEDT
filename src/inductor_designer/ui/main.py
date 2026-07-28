@@ -71,16 +71,10 @@ def _load_preview_entries(project: InductorProject, catalog_path: Path) -> list[
     return build_preview_entries(model)
 
 
-def _load_simulation_summary(project: InductorProject, matrix_path: Path) -> list[str]:
-    from inductor_designer.adapters.compatibility.matrix_repository import (
-        MatrixCapabilityRepository,
-    )
+def _load_simulation_summary(project: InductorProject) -> list[str]:
     from inductor_designer.application.services.simulation_summary import simulation_summary
 
-    capabilities = MatrixCapabilityRepository(matrix_path).snapshot_for(
-        project.target_release, project.target_edition
-    )
-    return list(simulation_summary(project, capabilities))
+    return list(simulation_summary(project))
 
 
 def _build_generation_controller(
@@ -93,6 +87,10 @@ def _build_generation_controller(
     from inductor_designer.adapters.femm.solver import PyfemmSolver
     from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
     from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
+    from inductor_designer.application.services.aedt_support import (
+        SUPPORTED_AEDT_EDITION,
+        SUPPORTED_AEDT_RELEASE,
+    )
     from inductor_designer.geometry.naming import sanitize_identifier
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
@@ -105,7 +103,10 @@ def _build_generation_controller(
 
     def runner(backend_label: str) -> tuple[str, ...]:
         project = project_provider.current()
-        capabilities = matrix.snapshot_for(project.target_release, project.target_edition)
+        capabilities = matrix.snapshot_for(
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION,
+        )
         output_directory = Path("artifacts") / "studio" / sanitize_identifier(project.name)
         backend = GenerationBackend(backend_label)
         return run_generation(
@@ -178,7 +179,7 @@ def main() -> int:
         try:
             project = _load_project(args.project)
             preview_entries = _load_preview_entries(project, args.catalog)
-            simulation_summary = _load_simulation_summary(project, args.matrix)
+            simulation_summary = _load_simulation_summary(project)
         except GeometryModelError as error:
             for issue in error.issues:
                 print(issue, file=sys.stderr)

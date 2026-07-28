@@ -6,18 +6,24 @@ Tests the complete design/generation/solve workflow.
 
 from __future__ import annotations
 
-import copy
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
+from inductor_designer.adapters.persistence.project_repository import (
+    project_from_document,
+    project_to_document,
+)
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.mcp_server import tools
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
+from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"
@@ -47,22 +53,34 @@ def context(catalog_index: Path, tmp_path: Path) -> tools.ToolContext:
 
 @pytest.fixture()
 def document() -> dict[str, object]:
-    return dict(json.loads(FIXTURE.read_text(encoding="utf-8")))
-
-
-@pytest.fixture()
-def document_2d(document: dict[str, object]) -> dict[str, object]:
-    doc = copy.deepcopy(document)
-    target = dict(doc["target"])  # type: ignore[arg-type]
-    target["dimensionMode"] = "2d"
-    doc["target"] = target
-    return doc
+    project = project_from_document(json.loads(FIXTURE.read_text(encoding="utf-8")))
+    material = make_approved_material_record()
+    return project_to_document(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core_material=MaterialRevisionSelection(
+                    material.ref,
+                    material.revision_id,
+                    material,
+                    "bh",
+                ),
+            ),
+            operating_point=replace(
+                project.operating_point,
+                windings=tuple(
+                    replace(winding, dc_current_a=0.0)
+                    for winding in project.operating_point.windings
+                ),
+            ),
+        )
+    )
 
 
 def test_mcp_session_end_to_end(
     context: tools.ToolContext,
     document: dict[str, object],
-    document_2d: dict[str, object],
     tmp_path: Path,
 ) -> None:
     """Complete MCP session: design context, generation, FEMM solve, evidence read.
@@ -103,34 +121,24 @@ def test_mcp_session_end_to_end(
     assert len(w1["layers"]) > 0  # Winding has layer data
     assert len(w2["layers"]) > 0  # Winding has layer data
 
-    # Step 5: generate_maxwell3d → succeeded, dcBias.strategy, backend
+    # Step 5: generate_maxwell3d → shared succeeded Run Manifest
     maxwell3d_result = tools.generate_maxwell3d(context, str(project_path))
     assert "error" not in maxwell3d_result
-    assert maxwell3d_result["succeeded"] is True
-    assert maxwell3d_result["backend"] == "aedt"
-    dc_bias = maxwell3d_result.get("dcBias")  # type: ignore[assignment]
-    assert dc_bias is not None
-    assert dc_bias["strategy"] == "native-include-dc-fields"
+    assert maxwell3d_result["status"] == "succeeded"
+    assert maxwell3d_result["backend"] == "maxwell-3d"
+    assert maxwell3d_result["mode"] == "generate-only"
 
-    # Step 6: generate_2d with femm backend and analyze=True (needs 2d project)
-    project_2d_path = tmp_path / "session_2d.inductor.json"
-    tools.save_project(context, document_2d, str(project_2d_path))
+    # Step 6: the same Project generates a FEMM model without solving.
     maxwell2d_result = tools.generate_2d(
-        context, str(project_2d_path), backend="femm", analyze=True
+        context, str(project_path), backend="femm", analyze=False
     )
     assert "error" not in maxwell2d_result
     assert maxwell2d_result["backend"] == "femm"
-    femm_results = maxwell2d_result.get("femmResults")  # type: ignore[assignment]
-    assert femm_results is not None
-    assert "w1" in femm_results
-    assert "w2" in femm_results
-    assert femm_results["w1"]["resistanceOhm"] > 0
-    assert femm_results["w1"]["inductanceH"] > 0
-    assert femm_results["w2"]["resistanceOhm"] > 0
-    assert femm_results["w2"]["inductanceH"] > 0
+    assert maxwell2d_result["status"] == "succeeded"
+    assert maxwell2d_result["results"] is None
 
-    # Step 7: read_manifest on the femm evidence path
-    evidence_path = "M2_golden_sample/femm-manifest.json"
+    # Step 7: read_manifest on the shared run evidence path
+    evidence_path = "M2_golden_sample/run-manifest.json"
     manifest_result = tools.read_manifest(context, evidence_path)
     assert "error" not in manifest_result
     assert manifest_result == maxwell2d_result

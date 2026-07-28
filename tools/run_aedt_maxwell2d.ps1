@@ -24,8 +24,7 @@ $arguments = @(
     '-m', 'tools.generate_maxwell2d',
     '--project', $Project,
     '--output-directory', $outputDirectory,
-    '--evidence', $evidence,
-    '--force-2d'
+    '--evidence', $evidence
 )
 if ($Graphical) { $arguments += '--graphical' }
 

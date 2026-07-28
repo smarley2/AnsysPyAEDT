@@ -11,7 +11,9 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
+from inductor_designer import __version__
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
@@ -25,18 +27,19 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.application.ports.femm_solver import FemmSolver
 from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExporter
 from inductor_designer.application.ports.maxwell_exporter import Maxwell3dExporter
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
 from inductor_designer.application.services.geometry_model import build_geometry_model
 from inductor_designer.application.services.maxwell_export import (
-    Backend2d,
-    export_femm2d,
-    export_maxwell2d,
-    export_maxwell3d,
-    femm_manifest_json,
-    generation_manifest_json,
+    generate_run,
+    run_manifest_json,
 )
 from inductor_designer.domain.validation import validate_project as domain_validate_project
 from inductor_designer.geometry.manifest import build_manifest
 from inductor_designer.geometry.naming import sanitize_identifier
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
 
 # Every tool below catches plain Exception rather than raising: besides the
 # expected OSError/ValueError/KeyError/ValidationError from loading and
@@ -109,8 +112,8 @@ def save_project(
     context: ToolContext, document: Mapping[str, object], path: str
 ) -> dict[str, object]:
     try:
-        migrated = context.schemas.migrate_project(document)
-        project = project_from_document(migrated)
+        context.schemas.validate_project(document)
+        project = project_from_document(document)
         target = Path(path)
         ProjectRepository(context.schemas).save(project, target)
     except Exception as error:
@@ -152,18 +155,27 @@ def generate_maxwell3d(context: ToolContext, path: str) -> dict[str, object]:
     try:
         project = ProjectRepository(context.schemas).load(Path(path))
         capabilities = MatrixCapabilityRepository(context.matrix_path).snapshot_for(
-            project.target_release, project.target_edition
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION,
         )
         output_dir = _output_dir(context, project.name)
-        outcome = export_maxwell3d(
+        outcome = generate_run(
             project,
+            RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
             context.catalog,
-            context.maxwell3d_exporter,
+            capabilities,
             output_dir,
-            capabilities=capabilities,
+            maxwell3d_exporter=context.maxwell3d_exporter,
+            maxwell2d_exporter=context.maxwell2d_exporter,
+            femm_solver=context.femm_solver,
+            run_id=str(uuid4()),
+            application_version=__version__,
         )
-        manifest_text = generation_manifest_json(outcome)
-        (output_dir / "generation-manifest.json").write_text(manifest_text, encoding="utf-8")
+        manifest_text = run_manifest_json(outcome.manifest)
+        (output_dir / "run-manifest.json").write_text(
+            manifest_text,
+            encoding="utf-8",
+        )
     except Exception as error:
         return _failure(error)
     return dict(json.loads(manifest_text))
@@ -172,38 +184,43 @@ def generate_maxwell3d(context: ToolContext, path: str) -> dict[str, object]:
 def generate_2d(
     context: ToolContext, path: str, backend: str = "aedt", analyze: bool = True
 ) -> dict[str, object]:
-    try:
-        backend_2d = Backend2d(backend)
-    except Exception as error:
-        return _failure(error)
+    run_backend = {
+        "aedt": RunBackend.MAXWELL_2D,
+        "femm": RunBackend.FEMM,
+    }.get(backend)
+    if run_backend is None:
+        return _failure(ValueError(f"Unknown 2D backend: {backend!r}"))
     try:
         project = ProjectRepository(context.schemas).load(Path(path))
         capabilities = MatrixCapabilityRepository(context.matrix_path).snapshot_for(
-            project.target_release, project.target_edition
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION,
         )
         output_dir = _output_dir(context, project.name)
-        if backend_2d is Backend2d.FEMM:
-            femm_outcome = export_femm2d(
-                project,
-                context.catalog,
-                context.femm_solver,
-                output_dir,
-                capabilities=capabilities,
-                analyze=analyze,
-            )
-            manifest_text = femm_manifest_json(femm_outcome)
-            evidence_name = "femm-manifest.json"
-        else:
-            outcome = export_maxwell2d(
-                project,
-                context.catalog,
-                context.maxwell2d_exporter,
-                output_dir,
-                capabilities=capabilities,
-            )
-            manifest_text = generation_manifest_json(outcome)
-            evidence_name = "generation-manifest.json"
-        (output_dir / evidence_name).write_text(manifest_text, encoding="utf-8")
+        outcome = generate_run(
+            project,
+            RunRequest(
+                run_backend,
+                (
+                    RunMode.GENERATE_AND_SOLVE
+                    if analyze
+                    else RunMode.GENERATE_ONLY
+                ),
+            ),
+            context.catalog,
+            capabilities,
+            output_dir,
+            maxwell3d_exporter=context.maxwell3d_exporter,
+            maxwell2d_exporter=context.maxwell2d_exporter,
+            femm_solver=context.femm_solver,
+            run_id=str(uuid4()),
+            application_version=__version__,
+        )
+        manifest_text = run_manifest_json(outcome.manifest)
+        (output_dir / "run-manifest.json").write_text(
+            manifest_text,
+            encoding="utf-8",
+        )
     except Exception as error:
         return _failure(error)
     return dict(json.loads(manifest_text))

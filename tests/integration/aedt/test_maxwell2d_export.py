@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,11 +9,16 @@ from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRe
 from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
-from inductor_designer.adapters.persistence.project_repository import ProjectRepository
-from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
-from inductor_designer.application.services.maxwell_export import export_maxwell2d
-from inductor_designer.domain.aedt_target import ModelDimension
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
+from inductor_designer.application.services.maxwell_export import generate_run
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
+from tests.fakes.femm_solver import RecordingFemmSolver
+from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
+from tests.unit.application.test_maxwell_export import project_for_runs
 from tools.build_catalog import build
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,20 +35,25 @@ def test_generated_2d_project_is_ready_to_solve(tmp_path: Path) -> None:
     index = tmp_path / "catalog.sqlite"
     build(ROOT / "catalog", ROOT / "schemas" / "catalog", index)
     catalog = SqliteCatalogRepository(index)
-    repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
-    project = replace(
-        repository.load(ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json"),
-        dimension_mode=ModelDimension.TWO_D,
-    )
+    project = project_for_runs()
     capabilities = MatrixCapabilityRepository(
         ROOT / "compatibility" / "aedt-matrix.yml"
-    ).snapshot_for(project.target_release, project.target_edition)
+    ).snapshot_for(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)
 
-    outcome = export_maxwell2d(
-        project, catalog, PyaedtMaxwell2dExporter(), tmp_path / "out",
-        capabilities=capabilities,
+    outcome = generate_run(
+        project,
+        RunRequest(RunBackend.MAXWELL_2D, RunMode.GENERATE_ONLY),
+        catalog,
+        capabilities,
+        tmp_path / "out",
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=PyaedtMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id="live-maxwell-2d",
+        application_version="live-test",
     )
 
-    failed = [stage for stage in outcome.result.stages if not stage.succeeded]
-    assert outcome.result.succeeded(), failed
-    assert outcome.result.project_path.exists()
+    result = outcome.adapter_result
+    failed = [stage for stage in result.stages if not stage.succeeded]
+    assert result.succeeded(), failed
+    assert result.project_path.exists()

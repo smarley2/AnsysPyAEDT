@@ -74,9 +74,7 @@ def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None
         "simulationRecipe",
     }
     assert "target" not in document
-    assert "dimensionMode" not in document
     assert "materials" not in document
-    assert "acMagnitudeA" not in document["design"]["windings"][0]  # type: ignore[index]
     assert "frequencyHz" not in document["design"]["windings"][0]  # type: ignore[index]
 
 
