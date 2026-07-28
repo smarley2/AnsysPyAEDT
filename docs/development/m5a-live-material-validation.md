@@ -227,8 +227,7 @@ copper of the round wire, so reported DC resistance runs about 2.7% high. Fabio
 accepted that on 2026-07-28 in exchange for a solve that completes with full
 adaptivity; 24 sides would cut it to 1.1%.
 
-Two defects were found while investigating. The first is now fixed; the second
-remains open and did not block acceptance.
+Two defects were found while investigating. Both are now fixed.
 
 1. **Mass density was never exported — fixed.** The exporter wrote permeability,
    conductivity and core loss only, so AEDT showed the material as massless.
@@ -240,12 +239,13 @@ remains open and did not block acceptance.
    The measured value is 130 g / 15 900 mm³ = **8176 kg/m³**, and the re-import
    changed nothing else: same 501 B-H points, same 550 and 502 loss points, same
    Steinmetz coefficients.
-2. **PyAEDT writes malformed Steinmetz units.** `material.py:2937-2938`
-   hardcodes `f"{cm}A_per_meter"` and `f"{x}tesla"`, so the saved project holds
+2. **PyAEDT wrote malformed Steinmetz units — fixed.** `material.py:2937-2938`
+   hardcodes `f"{cm}A_per_meter"` and `f"{x}tesla"`, so saved projects held
    `core_loss_cm='28.766524299A_per_meter'` and `core_loss_x='1.311tesla'`.
-   Ansys' own TDK library writes plain numbers. AEDT parses the magnitudes
-   correctly and the solve is unaffected, but we should overwrite both
-   properties after the call rather than ship wrong units.
+   Ansys' own TDK library writes plain numbers, and so does PyAEDT's other
+   core-loss setter. Both adapters now rewrite the two properties after the call.
+   Verified live: the saved 3D and 2D projects hold
+   `core_loss_cm='28.766524299'` and `core_loss_x='1.311'`.
 
 ## Nothing outstanding
 

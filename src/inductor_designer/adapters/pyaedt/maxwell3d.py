@@ -4,6 +4,9 @@ import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.material_props import (
+    apply_steinmetz_unit_fix,
+)
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
 from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dExportRequest,
@@ -90,6 +93,7 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
         )
         if not accepted:
             raise RuntimeError("PyAEDT rejected the ferrite core-loss model.")
+        apply_steinmetz_unit_fix(material, spec.steinmetz)
     return f"Material {spec.name} created (draft={spec.draft})."
 
 

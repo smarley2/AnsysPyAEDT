@@ -337,9 +337,10 @@ adapters. Because revision ids are content-derived, the original validation
 material `2271f4f7644f` had to be re-imported to gain its 8176 kg/m³ and became
 `94e880a99b98`, with all curve data unchanged.
 
-One defect remains open and does not block M5a: PyAEDT writes malformed units on
-the Steinmetz coefficients (`core_loss_cm` gains `A_per_meter`, `core_loss_x`
-gains `tesla`). AEDT parses the magnitudes correctly, so results are unaffected.
+The PyAEDT unit defect found alongside it is also fixed: `set_power_ferrite_coreloss`
+tagged `core_loss_cm` with `A_per_meter` and `core_loss_x` with `tesla`, and both
+adapters now rewrite them as plain numbers, matching Ansys' shipped libraries.
+Verified in live 3D and 2D projects.
 
 Implemented Tasks 1–12 deliver:
 

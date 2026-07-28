@@ -298,3 +298,28 @@ def test_catalog_material_without_density_sets_no_mass_density(tmp_path: Path) -
     assert result.succeeded()  # type: ignore[attr-defined]
 
     assert [n for n, _ in app.calls if n == "material.set.mass_density"] == []
+
+
+def test_steinmetz_coefficients_are_written_without_bogus_units(tmp_path: Path) -> None:
+    """PyAEDT tags cm with A_per_meter and x with tesla, which Steinmetz
+    coefficients are not. Ansys' own libraries write plain numbers."""
+    from dataclasses import replace
+
+    app = FakeMaxwell3dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+
+    result = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app)).export(request)
+
+    assert result.succeeded()
+    updates = [k for n, k in app.calls if n == "material.update"]
+    assert updates, "the adapter must push the corrected properties"
+    props = updates[-1]["props"]
+    assert props["core_loss_cm"] == "2.5"
+    assert props["core_loss_x"] == "1.4"
+    assert "A_per_meter" not in props["core_loss_cm"]
+    assert "tesla" not in props["core_loss_x"]

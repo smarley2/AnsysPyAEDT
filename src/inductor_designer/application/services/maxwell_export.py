@@ -288,6 +288,9 @@ def _dc_bias_block(
         "strategy": decision.strategy.value,
         "approximate": decision.approximate,
         "reason": decision.reason,
+        # Read from the plan, so this is what the export intended to apply, not
+        # proof AEDT accepted it. Pair it with "succeeded" and the per-stage
+        # records in the same manifest before treating it as an observation.
         "appliedCurrentsA": applied,
     }
 

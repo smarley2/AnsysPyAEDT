@@ -411,7 +411,8 @@ singular pyFEMM API `mi_addbhpoint(name, b, h)` once per point; there is no bulk
 `mi_addbhpoints` call in the implementation. This API shape is covered by fake
 adapter tests and the exact point parser. Validation revision `94e880a99b98`
 reproduces as `MATCH`, and its generated FEMM artifact has been inspected.
-Controlled AEDT inspection and the sanitized acceptance record remain open.
+Controlled AEDT inspection and the sanitized acceptance record are complete; see
+[m5a-live-material-validation.md](m5a-live-material-validation.md).
 
 For zero B-H series, the scalar-permeability path remains available. One B-H
 series can be selected directly. More than one B-H series requires an explicit

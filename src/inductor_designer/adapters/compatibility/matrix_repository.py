@@ -11,6 +11,8 @@ from inductor_designer.simulation.capabilities import (
     CapabilitySnapshot,
 )
 
+SUPPORTED_MATRIX_SCHEMA_VERSION = 1
+
 
 class MatrixCapabilityRepository:
     """CapabilitySnapshot source backed by compatibility/aedt-matrix.yml.
@@ -25,6 +27,14 @@ class MatrixCapabilityRepository:
 
     def snapshot_for(self, release: AedtRelease, edition: AedtEdition) -> CapabilitySnapshot:
         data = yaml.safe_load(self._path.read_text(encoding="utf-8"))
+        # This file decides whether native DC bias is used, so a format it does
+        # not understand must not be read optimistically.
+        version = data.get("schemaVersion") if isinstance(data, dict) else None
+        if version != SUPPORTED_MATRIX_SCHEMA_VERSION:
+            raise ValueError(
+                f"{self._path.name}: unsupported compatibility matrix schemaVersion "
+                f"{version!r}; this build reads {SUPPORTED_MATRIX_SCHEMA_VERSION}"
+            )
         rows: list[dict[str, Any]] = data.get("rows", []) if isinstance(data, dict) else []
         for row in rows:
             if str(row.get("release")) == str(release) and row.get("edition") == edition.value:

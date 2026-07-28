@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from inductor_designer.adapters.compatibility.matrix_repository import (
@@ -77,3 +78,15 @@ def test_synthetic_rows_carry_flags(tmp_path: Path) -> None:
     fallback = repo.snapshot_for(AedtRelease(2024, 2), AedtEdition.COMMERCIAL)
     assert fallback.include_dc_fields_3d is False
     assert fallback.review_status is CapabilityReviewStatus.REVIEWED
+
+
+def test_unsupported_matrix_schema_version_is_rejected(tmp_path: Path) -> None:
+    """The matrix decides whether native DC bias is used, so an unknown format
+    must fail loudly rather than be read as if it were understood."""
+    path = tmp_path / "aedt-matrix.yml"
+    path.write_text("schemaVersion: 99\nrows: []\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsupported compatibility matrix schemaVersion"):
+        MatrixCapabilityRepository(path).snapshot_for(
+            AedtRelease(2025, 2), AedtEdition.COMMERCIAL
+        )

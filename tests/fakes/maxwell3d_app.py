@@ -57,6 +57,15 @@ class _FakeMaterial:
         self._log = log
         self._name = name
         self._coreloss_result = coreloss_result
+        # Real PyAEDT materials expose _props plus update(); the adapter rewrites
+        # the Steinmetz unit strings through them.
+        self._props: dict[str, Any] = {}
+
+    def update(self) -> bool:
+        self._log.append(
+            ("material.update", {"material": self._name, "props": dict(self._props)})
+        )
+        return True
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_"):
@@ -68,6 +77,12 @@ class _FakeMaterial:
         self._log.append(
             ("material.set_power_ferrite_coreloss", {"material": self._name, **kwargs})
         )
+        if self._coreloss_result:
+            # Mirror the PyAEDT defect the adapter corrects: cm and x are stored
+            # with bogus unit suffixes (material.py:2937-2938).
+            self._props["core_loss_cm"] = f"{kwargs.get('cm')}A_per_meter"
+            self._props["core_loss_x"] = f"{kwargs.get('x')}tesla"
+            self._props["core_loss_y"] = str(kwargs.get("y"))
         return self._coreloss_result
 
 
