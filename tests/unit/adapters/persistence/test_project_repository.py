@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -192,6 +193,46 @@ def test_save_is_deterministic(tmp_path: Path) -> None:
     repo.save(project, second)
 
     assert first.read_bytes() == second.read_bytes()
+
+
+def test_load_rejects_nonfinite_number_with_actionable_path(tmp_path: Path) -> None:
+    document = project_to_document(make_project())
+    document["design"]["windings"][0]["minSpacingM"] = float("nan")  # type: ignore[index]
+    path = tmp_path / "nonfinite.inductor.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"design.windings\[0\].minSpacingM must be finite",
+    ):
+        repository().load(path)
+
+
+def test_save_uses_standards_compliant_json_even_if_validation_is_bypassed(
+    tmp_path: Path,
+) -> None:
+    class _ValidationBypass(SchemaRepository):
+        def validate_project(self, document: object) -> None:
+            return
+
+    project = make_project(
+        design=replace(
+            make_project().design,
+            windings=(
+                replace(
+                    make_project().design.windings[0],
+                    min_spacing_m=float("nan"),
+                ),
+            ),
+        )
+    )
+    repo = ProjectRepository(_ValidationBypass(SCHEMAS))
+
+    with pytest.raises(
+        ValueError,
+        match="standards-compliant JSON.*non-finite numeric value",
+    ):
+        repo.save(project, tmp_path / "nonfinite.inductor.json")
 
 
 def test_save_replace_failure_preserves_existing_file_and_cleans_temp(

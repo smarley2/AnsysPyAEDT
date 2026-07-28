@@ -10,7 +10,10 @@ from inductor_designer.application.ports.femm_solver import FemmSolveRequest
 from inductor_designer.simulation.femm_problem import femm_problem_from_plan
 from tests.fakes.femm_module import FakeFemmModule, FakeFemmModuleFactory
 from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
-from tests.unit.simulation.test_plan_builder import make_definition
+from tests.unit.simulation.test_plan_builder import (
+    make_definition,
+    make_effective,
+)
 from tests.unit.simulation.test_plan_builder2d import build2d
 
 
@@ -94,6 +97,32 @@ def test_nonlinear_bh_points_are_added_after_material(tmp_path: Path) -> None:
     ]
     names = [name for name, _ in module.calls]
     assert names.index("mi_addmaterial") < names.index("mi_addbhpoint")
+
+
+def test_peak_current_and_phase_are_applied_as_complex_circuit_current(
+    tmp_path: Path,
+) -> None:
+    plan = build2d(
+        (make_definition(),),
+        (make_effective(phase_deg=30.0),),
+    )
+    request = FemmSolveRequest(
+        problem=femm_problem_from_plan(plan),
+        output_directory=tmp_path,
+        project_name="phased_inductor",
+        analyze=False,
+    )
+    module = FakeFemmModule()
+
+    PyfemmSolver(module_factory=FakeFemmModuleFactory(module)).solve(request)
+
+    calls = [args for name, args in module.calls if name == "mi_addcircprop"]
+    assert len(calls) == 1
+    assert calls[0][0] == "w1"
+    assert calls[0][1] == pytest.approx(
+        complex(2.449489742783178, 1.414213562373095)
+    )
+    assert calls[0][2] == 1
 
 
 def test_resistance_and_inductance_math(tmp_path: Path) -> None:

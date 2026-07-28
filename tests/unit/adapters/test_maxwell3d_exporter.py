@@ -72,7 +72,7 @@ def test_geometry_only_export_has_only_geometry_stages_and_calls(
     )
 
     assert tuple(stage.name for stage in result.stages) == GEOMETRY_ONLY_STAGE_NAMES
-    assert result.succeeded()
+    assert result.succeeded(GEOMETRY_ONLY_STAGE_NAMES)
     assert "solution_type" not in factory.create_kwargs[0]
     names = [name for name, _ in app.calls]
     assert names.count("modeler.create_polyline") == 5
@@ -108,7 +108,7 @@ def test_successful_export_runs_every_stage_in_order(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
     result = run(tmp_path, app)
     assert tuple(stage.name for stage in result.stages) == STAGE_NAMES  # type: ignore[attr-defined]
-    assert result.succeeded()  # type: ignore[attr-defined]
+    assert result.succeeded(STAGE_NAMES)  # type: ignore[attr-defined]
     assert app.released == [(True, True)]
 
 
@@ -142,7 +142,7 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
 
     result = exporter.export(request)
 
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     assert (
         "material.set.permeability",
         {
@@ -175,7 +175,7 @@ def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:
 
     result = exporter.export(request)
 
-    assert not result.succeeded()
+    assert not result.succeeded(STAGE_NAMES)
     material_stage = next(stage for stage in result.stages if stage.name == "materials")
     assert material_stage.succeeded is False
     assert "core-loss" in material_stage.message
@@ -184,7 +184,7 @@ def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:
 def test_failing_stage_truncates_and_still_releases(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp(raise_on="AssignMatrix")
     result = run(tmp_path, app)
-    assert not result.succeeded()  # type: ignore[attr-defined]
+    assert not result.succeeded(STAGE_NAMES)  # type: ignore[attr-defined]
     assert result.stages[-2].name == "matrix"  # type: ignore[attr-defined]
     assert result.stages[-2].succeeded is False  # type: ignore[attr-defined]
     assert "boom" in result.stages[-2].message  # type: ignore[attr-defined]
@@ -198,7 +198,7 @@ def test_failing_stage_truncates_and_still_releases(tmp_path: Path) -> None:
 def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp(falsy_on="create_air_region")
     result = run(tmp_path, app)
-    assert not result.succeeded()  # type: ignore[attr-defined]
+    assert not result.succeeded(STAGE_NAMES)  # type: ignore[attr-defined]
     assert result.stages[-2].name == "region"  # type: ignore[attr-defined]
     assert result.stages[-2].succeeded is False  # type: ignore[attr-defined]
     assert result.stages[-1].name == "save"  # type: ignore[attr-defined]
@@ -228,7 +228,7 @@ def test_excitations_group_coils_into_windings(tmp_path: Path) -> None:
 def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
     result = run(tmp_path, app)
-    assert result.succeeded()  # type: ignore[attr-defined]
+    assert result.succeeded(STAGE_NAMES)  # type: ignore[attr-defined]
     names = [name for name, _ in app.calls]
     eddy = [k for n, k in app.calls if n == "eddy_effects_on"]
     assert eddy[0]["enable_eddy_effects"] is True
@@ -289,7 +289,7 @@ def test_native_dc_sets_winding_dc_current_and_solution_type(tmp_path: Path) -> 
     factory = FakeMaxwell3dAppFactory(app)
     exporter = PyaedtMaxwell3dExporter(app_factory=factory)
     result = exporter.export(native_request(tmp_path))
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     assert factory.create_kwargs[0]["solution_type"] == SOLUTION_TYPE_DC
     setup_updates = [k for n, k in app.calls if n == "setup.update"]
     assert "IncludeDcFields" not in setup_updates[0]["props"]
@@ -333,7 +333,7 @@ def test_native_dc_only_applies_to_nonzero_windings(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
     exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
     result = exporter.export(request)
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     dc_sets = [k for n, k in app.calls if n == "winding.set_prop"]
     assert dc_sets == [{"name": "w1", "key": "DC Current", "value": "5A"}]
     winding_updates = [k for n, k in app.calls if n == "winding.update"]
@@ -358,7 +358,7 @@ def test_mass_density_reaches_the_aedt_material(tmp_path: Path) -> None:
 
     result = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app)).export(request)
 
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     densities = [k["value"] for n, k in app.calls if n == "material.set.mass_density"]
     assert densities == [4800.0]
 
@@ -378,7 +378,7 @@ def test_steinmetz_coefficients_are_written_without_bogus_units(tmp_path: Path) 
 
     result = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app)).export(request)
 
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     updates = [k for n, k in app.calls if n == "material.update"]
     assert updates, "the adapter must push the corrected properties"
     props = updates[-1]["props"]

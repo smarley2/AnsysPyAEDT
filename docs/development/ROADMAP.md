@@ -292,10 +292,11 @@ while replacing the backend dispatch and separate manifests with shared Run
 Requests and Run Manifests. The current `generate_maxwell2d` CLI selects
 `--backend aedt|femm` and always submits Generate Only.
 
-Deferred/known limits: circuit phase is not yet applied to FEMM circuits
-(magnitude-only excitation; a message is emitted when a circuit's phase is
-nonzero). Nonlinear material transfer was implemented in M5; normalized loss
-and field-result extraction belongs to M8. See
+The original M4.5 adapter deferred FEMM circuit phase. The M6 final-review fix
+now converts the planned AC peak magnitude and phase to one complex FEMM
+circuit-current phasor at the adapter boundary without another RMS conversion.
+Nonlinear material transfer was implemented in M5; normalized loss and
+field-result extraction belongs to M8. See
 `docs/development/automation-mcp-femm.md` for the full procedure, tool list, and
 verified-limits detail.
 
@@ -481,9 +482,12 @@ The accepted implementation:
   contracts;
 - routes Generate Only through recording/live adapter ports and preserves
   truthful failed-run evidence;
+- carries generation-permitted validation warnings into Run Manifests and
+  requires exact operation-specific Maxwell stage sequences for success;
+- writes and loads standards-compliant finite-number-only v5 JSON;
 - blocks Generate and Solve until M8; and
 - permits unresolved material only for a separately confirmed Maxwell 3D
-  Geometry-Only artifact with no solve-ready stages.
+  Geometry-Only artifact with no solve-ready stages or DC-capability gate.
 
 Acceptance is proven by
 `tests/integration/test_project_round_trip.py`, the three M6 golden Run

@@ -10,6 +10,7 @@ from inductor_designer.adapters.compatibility.matrix_repository import (
     MatrixCapabilityRepository,
 )
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
+from inductor_designer.application.ports.maxwell2d_exporter import STAGE_NAMES_2D
 from inductor_designer.application.services.aedt_support import (
     SUPPORTED_AEDT_EDITION,
     SUPPORTED_AEDT_RELEASE,
@@ -55,5 +56,5 @@ def test_generated_2d_project_is_ready_to_solve(tmp_path: Path) -> None:
 
     result = outcome.adapter_result
     failed = [stage for stage in result.stages if not stage.succeeded]
-    assert result.succeeded(), failed
+    assert result.succeeded(STAGE_NAMES_2D), failed
     assert result.project_path.exists()

@@ -92,6 +92,11 @@ def plan_run(
         for issue in validation_issues
         if issue.category is ValidationCategory.ERROR
     )
+    validation_warnings = tuple(
+        f"{issue.code}: {issue.message}"
+        for issue in validation_issues
+        if issue.category is ValidationCategory.WARNING
+    )
     if errors:
         raise RunPlanningError(errors)
 
@@ -141,6 +146,24 @@ def plan_run(
                     "acknowledgment.",
                 )
             )
+    effective_inputs = effective_winding_inputs(project.operating_point)
+    if geometry_only:
+        try:
+            geometry_only_plan = build_geometry_only_maxwell3d_plan(
+                model.core,
+                model.packings,
+                project.design.windings,
+                model.bare_diameter_m,
+            )
+        except PlanBuildError as error:
+            raise RunPlanningError(error.issues) from error
+        return GeometryOnlyRunPlan(
+            request=request,
+            effective_inputs=effective_inputs,
+            solver_plan=geometry_only_plan,
+            warnings=validation_warnings + (_GEOMETRY_ONLY_WARNING,),
+        )
+
     dimension = (
         ModelDimension.THREE_D
         if request.backend is RunBackend.MAXWELL_3D
@@ -153,21 +176,7 @@ def plan_run(
     if dc_requested and dc_bias_decision.strategy is DcBiasStrategy.BLOCKED:
         raise RunPlanningError((dc_bias_decision.reason,))
 
-    effective_inputs = effective_winding_inputs(project.operating_point)
     try:
-        if geometry_only:
-            return GeometryOnlyRunPlan(
-                request=request,
-                effective_inputs=effective_inputs,
-                solver_plan=build_geometry_only_maxwell3d_plan(
-                    model.core,
-                    model.packings,
-                    project.design.windings,
-                    model.bare_diameter_m,
-                ),
-                warnings=(_GEOMETRY_ONLY_WARNING,),
-            )
-
         assert material is not None
         if request.backend is RunBackend.MAXWELL_3D:
             solver_plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan | FemmProblem = (
@@ -213,5 +222,5 @@ def plan_run(
         request=request,
         effective_inputs=effective_inputs,
         solver_plan=solver_plan,
-        warnings=warnings,
+        warnings=validation_warnings + warnings,
     )

@@ -118,12 +118,14 @@ Guided Studio: the Simulation section's backend dropdown lists "Maxwell 3D",
 "Maxwell 2D (Ansys)", and "FEMM 2D"; the Generate button runs the selected
 backend off the UI thread and streams stage/result lines into the panel.
 
-## Verified limits (as of live verification, 2026-07-17)
+## Verified behavior and limits
 
-- **Circuit phase is not applied to FEMM circuits yet.** FEMM circuits carry
-  magnitude only; when a circuit's phase is nonzero, the adapter emits a
-  message noting the phase was not applied rather than silently dropping it.
-  Multi-phase FEMM excitation is deferred.
+- **Circuit phase is applied at the FEMM adapter boundary.** Solver-independent
+  planning supplies the already-converted AC peak magnitude and stored phase.
+  The adapter converts that polar pair to the complex current accepted by
+  `mi_addcircprop`; it performs no RMS-to-peak conversion. The M6 acceptance
+  test proves that `2.8284271247461903 A peak` at `30°` reaches FEMM as
+  approximately `2.449489742783178 + 1.414213562373095j A`.
 - **Normalized loss and field-result extraction is M8 work.** M5 implemented
   pinned nonlinear material transfer for Maxwell and FEMM, but it did not add
   the normalized result contract or loss integrals.

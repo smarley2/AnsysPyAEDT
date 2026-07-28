@@ -119,13 +119,40 @@ adapter performs it. AEDT support remains exactly 2025 R2 Commercial. Both 2D
 golden manifests retain the explicit equivalent-cross-section warning, and the
 Geometry-Only adapter has no solve-ready stages.
 
+The final review fix wave closed six additional evidence gaps:
+
+- FEMM now applies the planned AC peak magnitude and phase as one complex
+  circuit-current phasor at its adapter boundary;
+- returned failed Maxwell stages and missing, extra, or out-of-order stage
+  sequences raise `RunGenerationFailed` with the failed manifest intact;
+- `WARNING` validation findings enter planned-run and manifest warnings while
+  `INFO` findings do not;
+- confirmed unresolved-material Geometry-Only records effective stored inputs
+  without a solve-ready DC-capability gate;
+- v5 validation/load rejects every nonfinite numeric value with an exact
+  document path and save uses `allow_nan=False`; and
+- direct Maxwell result consumers must supply the exact expected 3D, 2D, or
+  Geometry-Only stage sequence when evaluating success.
+
+The final review gate selected 821 non-live tests: all 821 passed, 7 live tests
+were deselected, 76 existing warnings remained, and total coverage was 86.66%
+(87% rounded). The first full run observed the existing Material Studio
+reflow timing test before its binding settled; that test passed immediately in
+isolation and the fresh complete rerun passed. Ruff, strict mypy across 102
+source files, architecture, stale-symbol, one-conversion, and diff checks were
+clean. The fix wave uses conventional commit message
+`fix: close m6 final review findings`; its exact hash is recorded in the
+out-of-commit handoff.
+
 Unresolved risks:
 
 - The final gate emitted 76 existing Python `ResourceWarning`s, primarily for
   SQLite connections (the initial pre-change baseline emitted 82). They do not
   fail the gate but remain cleanup work.
 - M6 adds no live-solver claim and did not repeat the accepted M5a live AEDT or
-  FEMM runs.
+  FEMM runs. The complex FEMM call is covered through the real adapter against
+  the protocol fake and matches the official FEMM/pyFEMM complex-argument
+  contract, but the seven live tests remain deselected.
 - Generate and Solve remains intentionally blocked until M8; M6 defines its
   request/result contracts but does not execute or populate results.
 

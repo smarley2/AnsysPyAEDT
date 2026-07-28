@@ -19,6 +19,7 @@ from inductor_designer.adapters.persistence.schema_repository import SchemaRepos
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
 from inductor_designer.application.ports.maxwell_exporter import (
+    STAGE_NAMES,
     Maxwell3dExporter,
     Maxwell3dExportResult,
 )
@@ -102,7 +103,7 @@ def main(
     for stage in result.stages:
         status = "ok" if stage.succeeded else "FAILED"
         print(f"{stage.name}: {status} - {stage.message}")
-    return 0 if result.succeeded() else 1
+    return 0 if result.succeeded(STAGE_NAMES) else 1
 
 
 if __name__ == "__main__":

@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from inductor_designer.adapters.femm.solver import PyfemmSolver
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.application.ports.femm_solver import FemmSolveRequest
 from inductor_designer.application.services.maxwell_export import (
     RunOutcome,
     generate_run,
@@ -37,6 +39,7 @@ from inductor_designer.simulation.run_contracts import (
     RunMode,
     RunRequest,
 )
+from tests.fakes.femm_module import FakeFemmModule, FakeFemmModuleFactory
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
@@ -171,6 +174,31 @@ def _assert_native_plans_consume_operating_point_and_material(
     assert femm_core_material.bh_points == ((0.0, 0.0), (0.03, 120.0))
 
 
+def _assert_femm_adapter_applies_peak_phasor(
+    outcome: RunOutcome,
+    tmp_path: Path,
+) -> None:
+    problem = outcome.planned_run.solver_plan
+    assert isinstance(problem, FemmProblem)
+    module = FakeFemmModule()
+    PyfemmSolver(module_factory=FakeFemmModuleFactory(module)).solve(
+        FemmSolveRequest(
+            problem=problem,
+            output_directory=tmp_path,
+            project_name="m6-femm-phase-acceptance",
+            analyze=False,
+        )
+    )
+
+    calls = [args for name, args in module.calls if name == "mi_addcircprop"]
+    assert len(calls) == 1
+    assert calls[0][0] == "w1"
+    assert calls[0][1] == pytest.approx(
+        complex(2.449489742783178, 1.414213562373095)
+    )
+    assert calls[0][2] == 1
+
+
 def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None:
     repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     first_path = tmp_path / "first.inductor.json"
@@ -222,6 +250,10 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
 
     outcomes = _generate_all_backends(loaded)
     _assert_native_plans_consume_operating_point_and_material(outcomes)
+    _assert_femm_adapter_applies_peak_phasor(
+        outcomes[RunBackend.FEMM],
+        tmp_path,
+    )
 
     project_with_femm_dc = replace(
         loaded,

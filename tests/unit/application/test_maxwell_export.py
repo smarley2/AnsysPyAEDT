@@ -11,13 +11,17 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
 )
 from inductor_designer.application.ports.maxwell2d_exporter import (
+    STAGE_NAMES_2D,
     Maxwell2dExportRequest,
 )
 from inductor_designer.application.ports.maxwell_exporter import (
+    GEOMETRY_ONLY_STAGE_NAMES,
+    STAGE_NAMES,
     Maxwell3dExportRequest,
     Maxwell3dExportResult,
     Maxwell3dGeometryOnlyRequest,
     MaxwellExportResult,
+    StageRecord,
 )
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
@@ -354,6 +358,219 @@ def test_adapter_exception_carries_failed_manifest_evidence(
     )
     assert manifest.adapter_version is None
     assert manifest.solver_version is None
+
+
+class ReturnedFailedMaxwell3dExporter(RecordingMaxwell3dExporter):
+    @staticmethod
+    def _fail_stage(
+        result: Maxwell3dExportResult,
+        stage_name: str,
+    ) -> Maxwell3dExportResult:
+        return replace(
+            result,
+            stages=tuple(
+                replace(
+                    stage,
+                    succeeded=False,
+                    message=f"{stage_name} returned failure",
+                )
+                if stage.name == stage_name
+                else stage
+                for stage in result.stages
+            ),
+        )
+
+    def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
+        return self._fail_stage(super().export(request), "materials")
+
+    def export_geometry_only(
+        self,
+        request: Maxwell3dGeometryOnlyRequest,
+    ) -> Maxwell3dExportResult:
+        return self._fail_stage(super().export_geometry_only(request), "core")
+
+
+class ReturnedFailedMaxwell2dExporter(RecordingMaxwell2dExporter):
+    def export(self, request: Maxwell2dExportRequest) -> MaxwellExportResult:
+        result = super().export(request)
+        return replace(
+            result,
+            stages=tuple(
+                replace(
+                    stage,
+                    succeeded=False,
+                    message="materials returned failure",
+                )
+                if stage.name == "materials"
+                else stage
+                for stage in result.stages
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("backend", "geometry_only", "failed_stage", "diagnostic"),
+    [
+        (
+            RunBackend.MAXWELL_3D,
+            False,
+            "materials",
+            "materials returned failure",
+        ),
+        (
+            RunBackend.MAXWELL_3D,
+            True,
+            "core",
+            "core returned failure",
+        ),
+        (
+            RunBackend.MAXWELL_2D,
+            False,
+            "materials",
+            "materials returned failure",
+        ),
+    ],
+)
+def test_returned_failed_maxwell_stage_raises_with_preserved_manifest(
+    backend: RunBackend,
+    geometry_only: bool,
+    failed_stage: str,
+    diagnostic: str,
+) -> None:
+    project = project_for_runs()
+    if geometry_only:
+        project = replace(
+            project,
+            design=replace(project.design, core_material=None),
+        )
+
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project,
+            RunRequest(
+                backend,
+                RunMode.GENERATE_ONLY,
+                confirm_geometry_only=geometry_only,
+            ),
+            CATALOG,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=ReturnedFailedMaxwell3dExporter(),
+            maxwell2d_exporter=ReturnedFailedMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            run_id=f"returned-failure-{backend.value}",
+            application_version="0.6.0-test",
+        )
+
+    manifest = raised.value.manifest
+    assert manifest.status is RunStatus.FAILED
+    stage = next(stage for stage in manifest.stages if stage.name == failed_stage)
+    assert stage.status is StageStatus.FAILED
+    assert stage.diagnostic == diagnostic
+    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.geometry_only is geometry_only
+    assert manifest.results is None
+
+
+def _mutate_stage_sequence(
+    stages: tuple[StageRecord, ...],
+    mutation: str,
+) -> tuple[StageRecord, ...]:
+    if mutation == "missing":
+        return stages[:2] + stages[3:]
+    if mutation == "extra":
+        return stages[:-1] + (
+            StageRecord(name="extra", succeeded=True, message="unexpected"),
+            stages[-1],
+        )
+    return (stages[1], stages[0]) + stages[2:]
+
+
+class NonconformingStageMaxwell3dExporter(RecordingMaxwell3dExporter):
+    def __init__(self, mutation: str) -> None:
+        super().__init__()
+        self._mutation = mutation
+
+    def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
+        result = super().export(request)
+        return replace(
+            result,
+            stages=_mutate_stage_sequence(result.stages, self._mutation),
+        )
+
+    def export_geometry_only(
+        self,
+        request: Maxwell3dGeometryOnlyRequest,
+    ) -> Maxwell3dExportResult:
+        result = super().export_geometry_only(request)
+        return replace(
+            result,
+            stages=_mutate_stage_sequence(result.stages, self._mutation),
+        )
+
+
+class NonconformingStageMaxwell2dExporter(RecordingMaxwell2dExporter):
+    def __init__(self, mutation: str) -> None:
+        super().__init__()
+        self._mutation = mutation
+
+    def export(self, request: Maxwell2dExportRequest) -> MaxwellExportResult:
+        result = super().export(request)
+        return replace(
+            result,
+            stages=_mutate_stage_sequence(result.stages, self._mutation),
+        )
+
+
+@pytest.mark.parametrize(
+    ("backend", "geometry_only", "expected_stages"),
+    [
+        (RunBackend.MAXWELL_3D, False, STAGE_NAMES),
+        (RunBackend.MAXWELL_3D, True, GEOMETRY_ONLY_STAGE_NAMES),
+        (RunBackend.MAXWELL_2D, False, STAGE_NAMES_2D),
+    ],
+)
+@pytest.mark.parametrize("mutation", ["missing", "extra", "out-of-order"])
+def test_nonconforming_maxwell_stage_sequence_is_failed_manifest(
+    backend: RunBackend,
+    geometry_only: bool,
+    expected_stages: tuple[str, ...],
+    mutation: str,
+) -> None:
+    project = project_for_runs()
+    if geometry_only:
+        project = replace(
+            project,
+            design=replace(project.design, core_material=None),
+        )
+
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project,
+            RunRequest(
+                backend,
+                RunMode.GENERATE_ONLY,
+                confirm_geometry_only=geometry_only,
+            ),
+            CATALOG,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=NonconformingStageMaxwell3dExporter(mutation),
+            maxwell2d_exporter=NonconformingStageMaxwell2dExporter(mutation),
+            femm_solver=RecordingFemmSolver(),
+            run_id=f"nonconforming-stages-{backend.value}-{mutation}",
+            application_version="0.6.0-test",
+        )
+
+    manifest = raised.value.manifest
+    assert manifest.status is RunStatus.FAILED
+    assert manifest.stages[-1].name == "stage-sequence"
+    assert manifest.stages[-1].status is StageStatus.FAILED
+    assert manifest.diagnostics == (
+        "Maxwell adapter stage sequence mismatch: "
+        f"expected {expected_stages!r}; received "
+        f"{tuple(stage.name for stage in manifest.stages[:-1])!r}.",
+    )
 
 
 def _wrong_femm_result() -> FemmSolveResult:

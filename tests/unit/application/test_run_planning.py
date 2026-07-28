@@ -132,6 +132,32 @@ def test_all_backends_receive_identical_effective_inputs() -> None:
     )
 
 
+def test_generation_permitted_validation_warnings_are_preserved_deterministically() -> None:
+    project = project_with_material()
+    project = replace(
+        project,
+        design=replace(
+            project.design,
+            manual_material_compatibility_acknowledged=True,
+        ),
+    )
+
+    planned = plan_run(
+        project,
+        RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
+        CATALOG,
+        capability_snapshot(),
+    )
+
+    assert planned.warnings == (
+        "core.snapshot.draft: Catalog record 0077071A7 is a draft pending review.",
+    )
+    assert not any(
+        "core-material.acknowledgment-unused" in warning
+        for warning in planned.warnings
+    )
+
+
 def test_confirmed_unresolved_maxwell3d_generate_only_builds_geometry_only_plan() -> None:
     planned = plan_run(
         replace(
@@ -152,10 +178,30 @@ def test_confirmed_unresolved_maxwell3d_generate_only_builds_geometry_only_plan(
     assert isinstance(planned, GeometryOnlyRunPlan)
     assert isinstance(planned.solver_plan, GeometryOnlyMaxwell3dPlan)
     assert planned.warnings == (
+        "core.snapshot.draft: Catalog record 0077071A7 is a draft pending review.",
         "Core material is unresolved. This confirmed Maxwell 3D Generate Only run "
         "creates geometry only; it has no material assignments, excitations, setup, "
         "mesh, reports, or solve-ready claim.",
     )
+
+
+@pytest.mark.parametrize("include_dc_fields_3d", [False, None])
+def test_confirmed_geometry_only_records_nonzero_dc_without_capability_gate(
+    include_dc_fields_3d: bool | None,
+) -> None:
+    planned = plan_run(
+        make_project(),
+        RunRequest(
+            RunBackend.MAXWELL_3D,
+            RunMode.GENERATE_ONLY,
+            confirm_geometry_only=True,
+        ),
+        CATALOG,
+        capability_snapshot(include_dc_fields_3d=include_dc_fields_3d),
+    )
+
+    assert isinstance(planned, GeometryOnlyRunPlan)
+    assert planned.effective_inputs[0].dc_current_a == 5.0
 
 
 @pytest.mark.parametrize(

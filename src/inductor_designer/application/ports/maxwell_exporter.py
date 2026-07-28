@@ -72,16 +72,15 @@ class Maxwell3dExportResult:
     pyaedt_version: str
     stages: tuple[StageRecord, ...]
 
-    def succeeded(self) -> bool:
+    def succeeded(self, expected_stage_names: tuple[str, ...]) -> bool:
         """A partial design is never successful (design spec §12).
 
-        Success = every recorded stage succeeded and the run reached "save".
-        Stage counts differ between the 3D and 2D exporters.
+        Success requires the operation's exact typed stage sequence and every
+        stage succeeding.
         """
         return (
-            bool(self.stages)
+            tuple(stage.name for stage in self.stages) == expected_stage_names
             and all(stage.succeeded for stage in self.stages)
-            and self.stages[-1].name == "save"
         )
 
 

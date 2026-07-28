@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,37 @@ def test_v5_requires_operating_point_current_direction(
     del document["operatingPoint"]["windings"][0]["currentDirection"]  # type: ignore[index]
 
     with pytest.raises(ValidationError):
+        schema_repository.validate_project(document)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("design", "windings", 0, "minSpacingM"), float("nan")),
+        (
+            ("design", "core", "snapshot", "outerDiameter", "nominalM"),
+            float("inf"),
+        ),
+    ],
+)
+def test_v5_rejects_nonfinite_numbers_with_document_path(
+    schema_repository: SchemaRepository,
+    path: tuple[str | int, ...],
+    value: float,
+) -> None:
+    document = project_to_document(make_project())
+    target: object = document
+    for part in path[:-1]:
+        target = target[part]  # type: ignore[index]
+    target[path[-1]] = value  # type: ignore[index]
+
+    expected_path = "design.windings[0].minSpacingM"
+    if value == float("inf"):
+        expected_path = "design.core.snapshot.outerDiameter.nominalM"
+    with pytest.raises(
+        ValueError,
+        match=rf"{re.escape(expected_path)} must be finite",
+    ):
         schema_repository.validate_project(document)
 
 

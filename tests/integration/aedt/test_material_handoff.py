@@ -13,6 +13,7 @@ from inductor_designer.adapters.compatibility.matrix_repository import (
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
+from inductor_designer.application.ports.maxwell_exporter import STAGE_NAMES
 from inductor_designer.application.services.aedt_support import (
     SUPPORTED_AEDT_EDITION,
     SUPPORTED_AEDT_RELEASE,
@@ -85,7 +86,7 @@ def test_prepared_material_reaches_aedt_and_manifest_preserves_snapshot() -> Non
 
     result = outcome.adapter_result
     failed = [stage for stage in result.stages if not stage.succeeded]
-    assert result.succeeded(), failed
+    assert result.succeeded(STAGE_NAMES), failed
     assert result.project_path.is_file()
     stage_names = {stage.name for stage in result.stages}
     assert {"materials", "validate", "save"} <= stage_names

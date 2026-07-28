@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,18 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 LATEST_PROJECT_SCHEMA_VERSION = 5
+
+
+def _validate_finite_numbers(value: object, path: str = "") -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{path or '<root>'} must be finite")
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            item_path = f"{path}.{key}" if path else str(key)
+            _validate_finite_numbers(item, item_path)
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _validate_finite_numbers(item, f"{path}[{index}]")
 
 
 class SchemaRepository:
@@ -24,6 +37,7 @@ class SchemaRepository:
         return loaded
 
     def validate_project(self, document: Mapping[str, object]) -> None:
+        _validate_finite_numbers(document)
         version = document.get("schemaVersion")
         if version != LATEST_PROJECT_SCHEMA_VERSION:
             raise ValueError(

@@ -10,6 +10,8 @@ from inductor_designer.simulation.femm_problem import FemmProblem
 
 @dataclass(frozen=True, slots=True)
 class FemmSolveRequest:
+    """FEMM request whose problem circuits carry AC peak magnitude and phase."""
+
     problem: FemmProblem
     output_directory: Path
     project_name: str
@@ -18,6 +20,8 @@ class FemmSolveRequest:
 
 @dataclass(frozen=True, slots=True)
 class FemmWindingResult:
+    """Extracted complex circuit quantities stored as Cartesian ``(real, imag)``."""
+
     resistance_ohm: float
     inductance_h: float
     current_a: tuple[float, float]

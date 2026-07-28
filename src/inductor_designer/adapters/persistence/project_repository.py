@@ -255,7 +255,21 @@ class ProjectRepository:
     def save(self, project: InductorProject, path: Path) -> None:
         document = project_to_document(project)
         self._schemas.validate_project(document)
-        serialized = json.dumps(document, indent=2, sort_keys=True) + "\n"
+        try:
+            serialized = (
+                json.dumps(
+                    document,
+                    allow_nan=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+        except ValueError as error:
+            raise ValueError(
+                "Project cannot be serialized as standards-compliant JSON "
+                f"because it contains a non-finite numeric value: {error}"
+            ) from error
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{path.name}.",
             suffix=".tmp",

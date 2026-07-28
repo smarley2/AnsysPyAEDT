@@ -25,7 +25,7 @@ def test_full_stage_sequence_and_release(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp()
     result = run(tmp_path, app)
     assert tuple(stage.name for stage in result.stages) == STAGE_NAMES_2D
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES_2D)
     assert app.released == [(True, True)]
 
 
@@ -70,7 +70,7 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
 
     result = exporter.export(request)
 
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES_2D)
     assert (
         "material.set.permeability",
         {
@@ -101,7 +101,7 @@ def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:
 
     result = exporter.export(request)
 
-    assert not result.succeeded()
+    assert not result.succeeded(STAGE_NAMES_2D)
     material_stage = next(stage for stage in result.stages if stage.name == "materials")
     assert material_stage.succeeded is False
     assert "core-loss" in material_stage.message
@@ -110,7 +110,7 @@ def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:
 def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp(raise_on="assign_matrix")
     result = run(tmp_path, app)
-    assert not result.succeeded()
+    assert not result.succeeded(STAGE_NAMES_2D)
     assert result.stages[-2].name == "matrix"
     assert result.stages[-2].succeeded is False
     assert "boom" in result.stages[-2].message
@@ -124,7 +124,7 @@ def test_failing_stage_truncates_and_releases(tmp_path: Path) -> None:
 def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp(falsy_on="create_region")
     result = run(tmp_path, app)
-    assert not result.succeeded()
+    assert not result.succeeded(STAGE_NAMES_2D)
     assert result.stages[-2].name == "region"
     assert result.stages[-2].succeeded is False
     assert result.stages[-1].name == "save"
@@ -137,7 +137,7 @@ def test_falsy_region_return_fails_stage_and_still_saves(tmp_path: Path) -> None
 def test_falsy_balloon_return_fails_stage_and_still_saves(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp(falsy_on="assign_balloon")
     result = run(tmp_path, app)
-    assert not result.succeeded()
+    assert not result.succeeded(STAGE_NAMES_2D)
     assert result.stages[-2].name == "region"
     assert result.stages[-2].succeeded is False
     assert "assign_balloon" in result.stages[-2].message
@@ -153,7 +153,7 @@ def test_initial_mesh_uses_the_slider_only(tmp_path: Path) -> None:
     3D workaround for the DC-bias mapping failure cannot be applied here."""
     app = FakeMaxwell2dApp()
     result = run(tmp_path, app)
-    assert result.succeeded()  # type: ignore[attr-defined]
+    assert result.succeeded(STAGE_NAMES_2D)  # type: ignore[attr-defined]
 
     initial_mesh = [k for n, k in app.calls if n == "mesh.assign_initial_mesh_from_slider"]
     assert len(initial_mesh) == 1

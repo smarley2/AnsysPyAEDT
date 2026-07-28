@@ -57,7 +57,7 @@ def test_fake_records_request_and_reports_full_stage_sequence(tmp_path: Path) ->
     result = exporter.export(request)
     assert exporter.requests == [request]
     assert tuple(stage.name for stage in result.stages) == STAGE_NAMES
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES)
     assert result.project_path == tmp_path / "Boost_inductor.aedt"
     assert result.design_name == "Inductor3D"
 
@@ -73,7 +73,7 @@ def test_fake_records_geometry_only_request_and_restricted_stages(
     assert exporter.requests == []
     assert exporter.geometry_only_requests == [request]
     assert tuple(stage.name for stage in result.stages) == GEOMETRY_ONLY_STAGE_NAMES
-    assert result.succeeded()
+    assert result.succeeded(GEOMETRY_ONLY_STAGE_NAMES)
     assert result.design_name == "Inductor3D_GeometryOnly"
 
 
@@ -81,10 +81,10 @@ def test_result_not_succeeded_when_stages_incomplete(tmp_path: Path) -> None:
     exporter = RecordingMaxwell3dExporter()
     full = exporter.export(make_request(tmp_path))
     truncated = replace(full, stages=full.stages[:3])
-    assert not truncated.succeeded()
+    assert not truncated.succeeded(STAGE_NAMES)
 
 
-def test_extra_stage_before_save_still_succeeds(tmp_path: Path) -> None:
+def test_extra_stage_before_save_does_not_succeed(tmp_path: Path) -> None:
     from dataclasses import replace
 
     from inductor_designer.application.ports.maxwell_exporter import StageRecord
@@ -92,7 +92,7 @@ def test_extra_stage_before_save_still_succeeds(tmp_path: Path) -> None:
     full = RecordingMaxwell3dExporter().export(make_request(tmp_path))
     extra = StageRecord(name="extra", succeeded=True, message="stage counts may vary")
     augmented = replace(full, stages=full.stages[:-1] + (extra, full.stages[-1]))
-    assert augmented.succeeded()
+    assert not augmented.succeeded(STAGE_NAMES)
 
 
 def test_failed_stage_never_succeeds(tmp_path: Path) -> None:
@@ -106,4 +106,4 @@ def test_failed_stage_never_succeeds(tmp_path: Path) -> None:
         stages=full.stages[:-1]
         + (StageRecord(name="save", succeeded=False, message="disk full"),),
     )
-    assert not broken.succeeded()
+    assert not broken.succeeded(STAGE_NAMES)

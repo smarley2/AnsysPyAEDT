@@ -11,10 +11,13 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
 )
 from inductor_designer.application.ports.maxwell2d_exporter import (
+    STAGE_NAMES_2D,
     Maxwell2dExporter,
     Maxwell2dExportRequest,
 )
 from inductor_designer.application.ports.maxwell_exporter import (
+    GEOMETRY_ONLY_STAGE_NAMES,
+    STAGE_NAMES,
     Maxwell3dExporter,
     Maxwell3dExportRequest,
     Maxwell3dGeometryOnlyRequest,
@@ -197,6 +200,7 @@ def _material_state(project: InductorProject) -> ManifestMaterialState:
 
 def _maxwell_evidence(
     result: MaxwellExportResult,
+    expected_stage_names: tuple[str, ...],
 ) -> tuple[
     tuple[ManifestStage, ...],
     RunStatus,
@@ -213,8 +217,31 @@ def _maxwell_evidence(
         )
         for stage in result.stages
     )
-    status = RunStatus.SUCCEEDED if result.succeeded() else RunStatus.FAILED
+    received_stage_names = tuple(stage.name for stage in result.stages)
+    all_stages_succeeded = bool(result.stages) and all(
+        stage.succeeded for stage in result.stages
+    )
+    sequence_diagnostic: str | None = None
+    if all_stages_succeeded and received_stage_names != expected_stage_names:
+        sequence_diagnostic = (
+            "Maxwell adapter stage sequence mismatch: "
+            f"expected {expected_stage_names!r}; received {received_stage_names!r}."
+        )
+        stages += (
+            ManifestStage(
+                name="stage-sequence",
+                status=StageStatus.FAILED,
+                diagnostic=sequence_diagnostic,
+            ),
+        )
+    status = (
+        RunStatus.SUCCEEDED
+        if all_stages_succeeded and received_stage_names == expected_stage_names
+        else RunStatus.FAILED
+    )
     diagnostics = tuple(stage.message for stage in result.stages if not stage.succeeded)
+    if sequence_diagnostic is not None:
+        diagnostics += (sequence_diagnostic,)
     saved = any(stage.name == "save" and stage.succeeded for stage in result.stages)
     artifacts = (
         (
@@ -274,7 +301,17 @@ def _manifest_for_result(
     else:
         if not isinstance(result, MaxwellExportResult):
             raise TypeError("Maxwell run returned a non-Maxwell adapter result.")
-        stages, status, diagnostics, artifacts = _maxwell_evidence(result)
+        expected_stage_names = (
+            GEOMETRY_ONLY_STAGE_NAMES
+            if isinstance(planned_run, GeometryOnlyRunPlan)
+            else STAGE_NAMES
+            if backend is RunBackend.MAXWELL_3D
+            else STAGE_NAMES_2D
+        )
+        stages, status, diagnostics, artifacts = _maxwell_evidence(
+            result,
+            expected_stage_names,
+        )
         solver_version = str(SUPPORTED_AEDT_RELEASE)
         adapter_version = result.pyaedt_version
     return _build_manifest(
@@ -494,6 +531,8 @@ def generate_run(
             run_id=run_id,
             application_version=application_version,
         ) from error
+    if manifest.status is RunStatus.FAILED:
+        raise RunGenerationFailed(planned_run, manifest)
     return RunOutcome(
         planned_run=planned_run,
         adapter_result=adapter_result,

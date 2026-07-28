@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import math
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from inductor_designer.application.ports.femm_solver import FemmSolveRequest
 from inductor_designer.simulation.femm_problem import femm_problem_from_plan
@@ -29,13 +33,21 @@ def test_fake_records_request_with_analyze_true(tmp_path: Path) -> None:
     assert solver.requests == [request]
     assert result.fem_path == tmp_path / "test_inductor.fem"
     assert result.analyzed is True
-    assert result.messages == ("recorded",)
+    assert result.messages == ("recorded peak-current phasors",)
     assert result.adapter_version == "recording-fake"
     assert result.solver_version is None
 
 
 def test_fake_returns_one_result_per_circuit_when_analyzed(tmp_path: Path) -> None:
     request, solver = make_problem(tmp_path)
+    circuit = request.problem.circuits[0]
+    request = replace(
+        request,
+        problem=replace(
+            request.problem,
+            circuits=(replace(circuit, phase_deg=30.0),),
+        ),
+    )
     result = solver.solve(request)
 
     assert result.results is not None
@@ -48,9 +60,12 @@ def test_fake_returns_one_result_per_circuit_when_analyzed(tmp_path: Path) -> No
         assert winding_result.inductance_h == 1e-4
         assert winding_result.voltage_v == (0.2, 0.126)
         assert winding_result.flux_linkage_wb == (1e-4, 0.0)
-        # current_a should match circuit peak current
+        # The fake mirrors the real adapter's polar peak/phase boundary.
         circuit = next(c for c in request.problem.circuits if c.name == circuit_name)
-        assert winding_result.current_a == (circuit.current_peak_a, 0.0)
+        assert winding_result.current_a == (
+            pytest.approx(math.sqrt(6.0)),
+            pytest.approx(math.sqrt(2.0)),
+        )
 
 
 def test_fake_returns_none_results_when_not_analyzed(tmp_path: Path) -> None:
@@ -66,7 +81,7 @@ def test_fake_returns_none_results_when_not_analyzed(tmp_path: Path) -> None:
     assert result.analyzed is False
     assert result.results is None
     assert result.fem_path == tmp_path / "test_inductor.fem"
-    assert result.messages == ("recorded",)
+    assert result.messages == ("recorded peak-current phasors",)
 
 
 def test_fake_fem_path_is_under_output_directory(tmp_path: Path) -> None:

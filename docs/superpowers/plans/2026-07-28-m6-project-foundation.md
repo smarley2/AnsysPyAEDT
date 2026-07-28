@@ -1087,10 +1087,14 @@ PlannedRun = SolveReadyRunPlan | GeometryOnlyRunPlan
 5. If unresolved, allow only the confirmed Geometry-Only matrix row.
 6. For a resolved catalog core, recheck exact material identity.
 7. For a resolved Manual core, require compatibility acknowledgment.
-8. Select DC capability by Run backend dimensional representation.
-9. Call `effective_winding_inputs` exactly once.
-10. Build the selected native solver plan from those effective inputs, or call
-    `build_geometry_only_maxwell3d_plan` for the confirmed exception.
+8. Call `effective_winding_inputs` exactly once.
+9. For the confirmed Geometry-Only exception, build and return
+   `build_geometry_only_maxwell3d_plan` with those effective stored inputs.
+   Do not select DC capability because this operation creates no excitation,
+   setup, or solve.
+10. For solve-ready plans only, select DC capability by Run backend
+    dimensional representation.
+11. Build the selected native solver plan from those effective inputs.
 
 The Geometry-Only warning text must be:
 
@@ -1657,6 +1661,63 @@ primarily for SQLite connections (the initial baseline reported 82); M6
 intentionally adds no new live-solver claim; Generate and Solve remains blocked
 until M8.
 
+### Final review fix wave
+
+The final whole-branch review exposed six contract gaps. Each fix used a
+focused failure-first cycle:
+
+```text
+FEMM peak+30° phase boundary:
+  RED: 3 failed (adapter call, port fake, M6 acceptance)
+  GREEN: 3 passed
+Validation-warning propagation:
+  RED: 1 failed
+  GREEN: 1 passed
+Geometry-Only nonzero stored DC with unavailable capability:
+  RED: 2 failed
+  GREEN: 2 passed
+Finite-only v5 validation/load/save:
+  RED: 4 failed
+  GREEN: 4 passed
+Returned failed Maxwell stages and exact 3D/2D/Geometry-Only sequences:
+  RED: 12 failed
+  GREEN: 12 passed
+Generic Maxwell exact-sequence helper:
+  RED: extra-stage contract failed against the old method
+  GREEN: 18 contract/application sequence tests passed
+```
+
+The implementation now:
+
+- converts an already-planned AC peak magnitude plus phase to a complex FEMM
+  circuit current with no additional RMS conversion;
+- raises `RunGenerationFailed` for both exceptions and normally returned
+  failed Maxwell results, preserving their manifest diagnostics;
+- accepts Maxwell success only for the exact expected operation-specific stage
+  sequence and records a failed `stage-sequence` evidence stage for an
+  otherwise all-success malformed sequence;
+- preserves `WARNING` validation findings in deterministic order before
+  solver/approximation warnings while excluding `INFO`;
+- returns confirmed unresolved-material Geometry-Only before selecting DC
+  capability, while retaining the effective stored inputs in its manifest;
+  solve-ready DC policy is unchanged; and
+- recursively rejects NaN and infinities with exact v5 document paths on
+  direct validation/load and serializes with `allow_nan=False`.
+
+The combined focused gate passed 146 tests. The first complete non-live run
+reported 820 passes plus one unrelated Material Studio reflow timing failure;
+that test passed immediately in isolation. A fresh full process then reported:
+
+```text
+821 passed, 7 deselected, 76 warnings in 10.10s
+total coverage 86.66% (87% rounded)
+```
+
+No catalog/material canonical source, physical value, B-H/core-loss series,
+facet setting, mesh setting, or RMS-to-peak formula changed. The phase path is
+verified non-live through the real FEMM adapter and protocol fake; the live
+AEDT/FEMM tests remain intentionally deselected.
+
 ## Final Acceptance Checklist
 
 - [x] One v5 Project round-trips byte-identically.
@@ -1665,15 +1726,24 @@ until M8.
 - [x] Frequency and temperatures are shared Operating Point fields.
 - [x] Each Design winding has exactly one Operating Point entry.
 - [x] AC RMS and AC peak are explicit; conversion exists once.
+- [x] FEMM applies planned peak magnitude and phase as one complex current at
+  the adapter boundary without another RMS conversion.
 - [x] One exact compatible material revision and B-H series are pinned.
 - [x] A Manual core/material pair with acknowledgment true persists
   byte-identically and validates without errors.
 - [x] Confirmed Maxwell 3D Geometry-Only is the sole unresolved-material run.
+- [x] Geometry-Only records effective stored inputs without a solve-ready DC
+  capability gate.
 - [x] Maxwell 3D, Maxwell 2D, and FEMM plans share identical effective inputs
   and consume the same frequency, peak current, phase, zero-DC policy,
   direction/sign, material revision identity, and selected B-H data.
 - [x] Run Manifest and Normalized Result Set contracts are immutable and
   backend-labeled.
+- [x] Generation-permitted validation warnings enter Run Manifests; INFO does
+  not.
+- [x] v5 validation/load/save cannot accept or emit NaN or infinity.
+- [x] Maxwell success requires the exact 3D, 2D, or Geometry-Only stage
+  sequence, and returned adapter failures preserve failed manifests.
 - [x] All non-live tests, Ruff, strict mypy, architecture checks, coverage, and
   diff hygiene pass.
 - [x] M6 acceptance evidence and M7 handoff are recorded.

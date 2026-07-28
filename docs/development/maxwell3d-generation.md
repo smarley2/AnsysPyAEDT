@@ -49,6 +49,9 @@ never reported as successful.
   create only core/winding geometry and save the AEDT project; they do not
   create material assignments, terminals, excitations, region, mesh, setup,
   matrix, reports, validation, results, or a solve-ready claim.
+- Geometry-Only still records the effective stored Operating Point inputs in
+  its Run Manifest. Nonzero stored DC does not require native DC capability for
+  this operation because the adapter creates no excitation, setup, or solve.
 - Project/UI current is AC RMS. Solver-independent run planning records it and
   converts it once to the AC peak amplitude consumed unchanged by the adapter.
 - DC operating currents are recorded in the manifest and, as of Milestone 4,

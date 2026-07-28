@@ -39,13 +39,14 @@
   "solverVersion": null,
   "stages": [
     {
-      "diagnostic": "recorded",
+      "diagnostic": "recorded peak-current phasors",
       "name": "generate",
       "status": "succeeded"
     }
   ],
   "status": "succeeded",
   "warnings": [
+    "core.snapshot.draft: Catalog record 0077071A7 is a draft pending review.",
     "The 2D model is a documented approximate XY cross-section equivalent; turns and polarity are represented through coil and winding assignments, and model depth derives from the core height."
   ],
   "windingTemperatureC": 45.0,

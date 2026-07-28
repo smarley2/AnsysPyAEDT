@@ -115,7 +115,9 @@
     }
   ],
   "status": "succeeded",
-  "warnings": [],
+  "warnings": [
+    "core.snapshot.draft: Catalog record 0077071A7 is a draft pending review."
+  ],
   "windingTemperatureC": 45.0,
   "windings": [
     {

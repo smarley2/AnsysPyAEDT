@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import cmath
 import math
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
@@ -132,16 +133,15 @@ class PyfemmSolver:
                     femm.mi_addbhpoint(material.name, b, h)
             messages.append(f"{len(problem.materials)} materials added.")
 
-            phase_deferred = False
             for circuit in problem.circuits:
-                femm.mi_addcircprop(circuit.name, circuit.current_peak_a, 1)
-                if circuit.phase_deg != 0.0:
-                    phase_deferred = True
-            messages.append(f"{len(problem.circuits)} circuits added.")
-            if phase_deferred:
-                messages.append(
-                    "Circuit phase not applied; deferred pending live FEMM verification."
+                current = cmath.rect(
+                    circuit.current_peak_a,
+                    math.radians(circuit.phase_deg),
                 )
+                femm.mi_addcircprop(circuit.name, current, 1)
+            messages.append(
+                f"{len(problem.circuits)} peak-current circuit phasor(s) added."
+            )
 
             _add_circle(femm, 0.0, 0.0, problem.core.r_outer_m)
             _add_circle(femm, 0.0, 0.0, problem.core.r_inner_m)

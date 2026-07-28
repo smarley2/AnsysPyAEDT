@@ -29,6 +29,6 @@ def test_fake_records_and_reports_full_stage_sequence(tmp_path: Path) -> None:
     result = exporter.export(request)
     assert exporter.requests == [request]
     assert tuple(stage.name for stage in result.stages) == STAGE_NAMES_2D
-    assert result.succeeded()
+    assert result.succeeded(STAGE_NAMES_2D)
     assert result.project_path == tmp_path / "Boost_inductor_2d.aedt"
     assert result.design_name == "Inductor2D"

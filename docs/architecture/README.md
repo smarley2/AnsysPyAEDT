@@ -94,7 +94,9 @@ the selected B-H series. The only unresolved-material operation is an explicitly
 confirmed Maxwell 3D Generate Only request. It uses a separate Geometry-Only
 plan and adapter method with only core/winding geometry and no material,
 excitation, region, mesh, setup, matrix, report, validation, result, or
-solve-ready claim.
+solve-ready claim. It records the effective stored Operating Point inputs but
+does not consult solve-ready DC capability because it creates no excitation,
+setup, or solve.
 
 M7 uses the approved Guided flow:
 
@@ -119,7 +121,9 @@ estimate to QML-facing rows; QML contains no physical formulas.
    Maxwell 2D, or FEMM.
 5. The UI and Project store AC RMS current. Solver-independent planning
    converts it exactly once to the peak amplitudes consumed by Maxwell and
-   FEMM.
+   FEMM. FEMM converts the planned peak magnitude and phase to one complex
+   circuit-current phasor at the adapter boundary without another RMS
+   conversion.
 6. Projects pin the exact material revision and B-H series. Catalog or material
    updates never mutate saved project behavior silently.
 7. Generated AEDT and FEMM projects are independent outputs and are never
