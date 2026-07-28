@@ -301,3 +301,22 @@ def test_directory_swap_gives_up_after_the_last_attempt(
         overlay_repository._replace_directory(source, tmp_path / "final")
 
     assert len(attempts) == overlay_repository._REPLACE_ATTEMPTS
+
+
+def test_listing_skips_an_unreadable_record_instead_of_failing(tmp_path: Path) -> None:
+    """One stale or hand-edited record must not hide every other material, nor
+    take the application down at startup — that also blocks the re-import that
+    would replace it."""
+    source = b"h,b\n0,0\n100,0.2\n"
+    good = _record(source, revision_id="111111111111")
+    repository = FileOverlayMaterialRepository(tmp_path)
+    repository.save(good, {"bh-source.csv": source})
+
+    stale_directory = tmp_path / "Stale" / "Material" / "G1" / "222222222222"
+    stale_directory.mkdir(parents=True)
+    (stale_directory / "record.json").write_text('{"revisionId": "222222222222"}', encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="skipping unreadable material record"):
+        materials = repository.list_materials()
+
+    assert materials == (good.ref,)

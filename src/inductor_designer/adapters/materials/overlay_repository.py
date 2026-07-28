@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import time
 import uuid
+import warnings
 from collections.abc import Collection, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -205,7 +206,19 @@ class FileOverlayMaterialRepository:
         for path in self._root.glob("*/*/*/*/record.json"):
             if any(part.startswith(".") for part in path.relative_to(self._root).parts[:-1]):
                 continue
-            record = material_record_from_json(self._document(path))
+            # Listing must survive a record this build cannot parse — one written
+            # by an older schema, for instance. Aborting the whole listing took the
+            # application down at startup, which also blocked the very import that
+            # would have replaced the offending record. Integrity problems in a
+            # record that *does* parse still raise below.
+            try:
+                record = material_record_from_json(self._document(path))
+            except ValueError as error:
+                warnings.warn(
+                    f"skipping unreadable material record {path}: {error}",
+                    stacklevel=2,
+                )
+                continue
             revision_directory = path.parent
             if revision_directory != self._revision_directory(
                 record.ref, record.revision_id
