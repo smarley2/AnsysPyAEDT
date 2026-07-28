@@ -153,17 +153,32 @@ Verified in the saved 2D project `M2_golden_sample_2d.aedt`: the material
 `property_type='nonlinear'`, the B-H table holds `Points[1002: ...]` = 501 pairs,
 the core-loss coefficients are present, and the initial-mesh slider is at 6.
 
-## Confirmation re-run
+## Final confirmation run against the accepted code
 
-The controlled validation was run a second time after the overlay-save retry fix
-(Task 7 Step 4), and reproduced this evidence exactly: reproduction and handoff
-preparation both printed `MATCH`, and both tagged live tests passed —
-`2 passed, 1 warning in 56.26s`, followed by `M5a live validation completed.`
+The controlled validation was re-run against the exporter as it now ships — 16
+faceted conductors and the TAU mesh settings — so this evidence corresponds to
+the shipping code rather than an earlier revision:
 
-Repository gates at that point: 713 non-solver tests passed, 36 UI tests passed,
-`ruff`, `mypy src tools`, `tools/check_architecture.py` and `git diff --check`
-all exited 0, and the removed-support-path audits returned no matches outside
-historical plan documents.
+```
+MATCH / MATCH
+test_material_handoff.py       PASSED
+test_material_handoff_2d.py    PASSED
+femm/test_material_handoff.py  PASSED
+3 passed, 1 warning in 93.81s
+M5a live validation completed.
+```
+
+Verified in that run's saved 3D project: `XSectionNumSegments='16'`,
+`MeshMethod='AnsoftTAU'`, curvilinear `Apply=false`, 501 B-H pairs, and
+`DC Current='5A'` on both windings.
+
+Repository gates: 714 non-solver tests passed, 36 UI tests passed, `ruff`,
+`mypy src tools`, `tools/check_architecture.py` and `git diff --check` all exited
+0, and the removed-support-path audits returned no matches outside historical
+plan documents.
+
+An earlier confirmation run, before the solve work, passed the then-two live
+tests in 56.26s after the overlay-save retry fix (Task 7 Step 4).
 
 ## Artifacts
 
@@ -176,23 +191,37 @@ committed:
 - `live/femm/M2_golden_sample_2d.fem` and `live/femm/femm-manifest.json`
 - `live/aedt/catalog.sqlite`, `live/femm/catalog.sqlite`
 
-## Solve status — M5a is NOT accepted
+## Solve status — resolved, and M5a is accepted
 
-Everything above concerns the material **reaching** the solvers, and all of it
-holds. It does not establish that the exported design **solves**, and it does
-not: at this model size the AEDT solve fails with
-`Map linked data onto target mesh failed`. The root cause is unrelated to the
-material — Ansys' own nonlinear `steel_1008` fails identically on the same
-geometry — and is documented with full evidence in
+Everything above concerns the material **reaching** the solvers. That is
+necessary but not sufficient: the exported design also has to solve, and
+originally it did not. `AC Magnetic with DC` failed with
+`Map linked data onto target mesh failed`, on curved surfaces. The cause was
+never the material — Ansys' own nonlinear `steel_1008` failed identically on the
+same geometry.
+
+The shipping fix, verified solving by Fabio Posser on 2026-07-28 with adaptive
+refinement at the shipped defaults, is two changes that are both required:
+
+1. **16-sided conductors** — `CONDUCTOR_FACETS = 16`, with the coil terminal
+   sheets faceted to the same count.
+2. **TAU initial mesh settings with curvilinear meshing disabled** — slider 6,
+   dynamic surface resolution off, flex meshing off.
+
+Round wire with the mesh settings alone still fails, so neither half can be
+dropped. Full investigation, including the dead ends, is in
 [dc-bias-solve-limitation.md](dc-bias-solve-limitation.md).
 
-This matters for how the evidence above should be read. `Design validation
-passed` is an AEDT check on model consistency, not a solvability guarantee.
-M4 and M5a both took validation as sufficient, which is why a non-solving
-export reached this point unnoticed.
+The lesson worth keeping: `Design validation passed` is an AEDT consistency
+check, not a solvability guarantee. M4 and M5a both treated it as sufficient,
+which is how a non-solving export got this far unnoticed.
 
-Consequently M5a stays open. Two defects found while investigating are also
-still open and are not fixed by this document:
+Accepted cost of the faceted conductor: an inscribed 16-gon carries 97.4% of the
+copper of the round wire, so reported DC resistance runs about 2.7% high. Fabio
+accepted that on 2026-07-28 in exchange for a solve that completes with full
+adaptivity; 24 sides would cut it to 1.1%.
+
+Two defects found while investigating remain open and did not block acceptance:
 
 1. **Mass density is never exported.** The exporter writes permeability,
    conductivity and core loss only. Measured value for this material:

@@ -431,14 +431,21 @@ recording-fake Maxwell/FEMM manifests, controller behavior, numeric linear/log
 plot labels, and offscreen QML flows. Native Windows packaging, file-dialog, and
 high-DPI acceptance belongs to M10.
 
-M5a remains open. Validation revision `2271f4f7644f` and its exact B-H selection
-have fresh `MATCH` and FEMM inspection evidence in the active closeout plan.
-Before accepting M5a:
+**M5a was accepted on 2026-07-28.** Validation revision `2271f4f7644f` and its
+exact B-H selection reach AEDT 2025 R2 Commercial in Maxwell 3D and Maxwell 2D
+and FEMM 4.2 with the full 501-point nonlinear curve and the fitted Steinmetz
+coefficients, and the 3D design solves. The reviewed evidence, exact tool
+versions, redistribution decision, and every observed check are recorded in
+[m5a-live-material-validation.md](m5a-live-material-validation.md).
 
-1. Run the controlled AEDT 2025 R2 Commercial handoff and inspect nonlinear B-H
-   data, ferrite core-loss coefficients, DC current persistence, validation,
-   save, and reopen behavior.
-2. Write and review the sanitized evidence document with exact revisions,
-   versions, observed checks, and the licensing/redistribution decision.
-3. Run every final quality and controlled-material gate, then update the
-   roadmap and plan index only if all evidence passes.
+Making the design solve required 16-sided conductors plus TAU initial mesh
+settings with curvilinear meshing disabled; see
+[dc-bias-solve-limitation.md](dc-bias-solve-limitation.md). Faceting costs 2.6%
+of the conductor copper area, so reported DC resistance runs about 2.7% high.
+
+Still open, and not blocking M5a: material records carry no mass density, so the
+exporter cannot write it. The measured value for this material is 8176 kg/m³
+(130 g in 15 900 mm³) and the agreed direction is to add density to the record
+and make it a mandatory Material Studio template column. That change invalidates
+revision `2271f4f7644f`, which has none, so it forces a re-import and a new
+revision id.

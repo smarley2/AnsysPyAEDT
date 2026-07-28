@@ -317,13 +317,24 @@ Exit criterion: a reviewer can reproduce a material record from its stored sourc
 
 ### Current state
 
-Milestone 5a is **implementation complete but not accepted**. The automated
-exit-criterion integration proof is green. A High Flux 60 validation overlay
-with exact revision `2271f4f7644f` is committed, fresh reproduction reports
-`MATCH`, and manual FEMM inspection is recorded in the active closeout plan.
-M5a remains open because the controlled AEDT material handoff and inspection,
-the sanitized evidence record including licensing/redistribution handling, and
-the final quality gates are not complete.
+Milestone 5a is **accepted (2026-07-28, Fabio Posser)**. The High Flux 60
+validation revision `2271f4f7644f` reproduces as `MATCH` and reaches AEDT 2025 R2
+Commercial in both 3D and 2D and FEMM 4.2 with its full 501-point nonlinear B-H
+curve and its Steinmetz coefficients. Evidence is recorded in
+`m5a-live-material-validation.md`.
+
+Acceptance additionally required making the exported design **solve**, which it
+originally did not. `AC Magnetic with DC` failed while mapping the DC field onto
+the AC mesh across curved surfaces. The shipping fix is 16-sided conductors plus
+TAU initial mesh settings with curvilinear meshing disabled; both halves are
+needed. See `dc-bias-solve-limitation.md`. The lesson worth carrying forward is
+that design validation passing is not evidence that a design solves — M4 and M5a
+both relied on it and shipped a non-solving export unnoticed.
+
+Two defects found during that work remain open and do not block M5a: the exporter
+never writes mass density (agreed value 8176 kg/m³, to become a mandatory
+Material Studio template column), and PyAEDT writes malformed units on the
+Steinmetz coefficients.
 
 Implemented Tasks 1–12 deliver:
 
@@ -379,15 +390,16 @@ deletion. M5b is closed. Native Windows packaging/high-DPI acceptance belongs
 to M10, while live Ansys AEDT/FEMM material consumption belongs only to the M5a
 closeout.
 
-Remaining M5a acceptance work:
+Completed M5a acceptance work:
 
-- Run and inspect the controlled AEDT 2025 R2 Commercial handoff using exact
-  revision `2271f4f7644f`.
-- Record sanitized AEDT and FEMM evidence, exact tool versions, and the
-  licensing/redistribution decision without committing generated solver output
-  or sensitive machine data.
-- Run the final non-solver, UI, static, architecture, and controlled-material
-  gates before marking M5a accepted.
+- Ran and inspected the controlled AEDT 2025 R2 Commercial handoff using exact
+  revision `2271f4f7644f`, in Maxwell 3D and Maxwell 2D, plus FEMM 4.2.
+- Recorded sanitized AEDT and FEMM evidence with exact tool versions and the
+  redistribution decision, committing no generated solver output.
+- Ran the final non-solver, UI, static, architecture, and controlled-material
+  gates.
+- Made the exported 3D design solve, which acceptance originally rested on
+  without anyone having checked it.
 
 Remaining M10 productization work:
 

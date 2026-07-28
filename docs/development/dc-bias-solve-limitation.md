@@ -1,4 +1,13 @@
-# Native DC-bias solves fail above a model-size threshold
+# Native DC-bias solves and the curved-surface mapping failure
+
+**Resolved 2026-07-28.** The shipping configuration is 16-sided conductors plus
+TAU initial mesh settings with curvilinear meshing disabled, verified solving by
+Fabio Posser on AEDT 2025 R2 with adaptive refinement at the shipped defaults.
+Both halves are required; either alone fails. The rest of this document is the
+investigation that established it, kept because the dead ends are expensive to
+rediscover.
+
+## Background
 
 Maxwell 3D solution type `AC Magnetic with DC` exports and validates correctly
 but **fails during the solve** on production-sized toroid models. Design
@@ -51,6 +60,8 @@ Small models survive because the two meshes stay close enough to interpolate.
 | 10 turns, 2 adaptive passes both steps | map failed |
 | **10 turns, 1 adaptive pass both steps** | **solves, 14m24s, no errors** |
 | 10 turns, 1 pass, after a solved magnetostatic design in the same project | solves, 2m30s, no errors (mesh import itself failed; see below) |
+| 10 turns, TAU mesh settings, curvilinear off, **round** conductor, default adaptivity | fails |
+| **10 turns, TAU mesh settings, curvilinear off, 16-sided conductor, default adaptivity** | **solves** — the shipping configuration |
 
 Excluded as causes:
 
@@ -165,12 +176,21 @@ curvilinear=False, dynamic_surface=False, flex_mesh=False)`, and two unit tests
 pin the values so curvilinear meshing cannot be switched back on unnoticed.
 
 Adaptive refinement is left at the shipped defaults, so the earlier workaround of
-forcing one pass is no longer needed, and neither is faceting the conductor.
+forcing one pass is no longer needed.
 
-**Not yet confirmed by a solve.** The configuration is implemented and the
-generated project validates; the run that proves it is
-`artifacts/mesh-fix-round-wire/` with the original round conductor and default
-adaptivity.
+**The mesh settings alone are not sufficient.** Tested 2026-07-28 by Fabio
+Posser: `artifacts/mesh-fix-round-wire/`, which pairs these settings with the
+original **round** conductor and default adaptivity, still fails. An earlier
+revision of this document claimed the mesh configuration superseded conductor
+faceting; that was wrong.
+
+Both changes are required together — the mesh settings **and** a faceted
+conductor. That is consistent with the failure mode: the settings stop AEDT
+generating curved *elements*, but a round wire still presents curved *surfaces*
+for the mapper to work across. Removing both is what clears it.
+
+The combination under test is `artifacts/faceted-wire/facets-16/`: 16-sided
+conductors plus these mesh settings, default adaptivity.
 
 ### Maxwell 2D
 
@@ -180,19 +200,44 @@ be applied there. Only the surface-approximation slider carries over, and the 2D
 adapter sets it to the same level. 2D never links a DC solution into an AC one,
 so it does not hit this failure mode at all.
 
-## Superseded workarounds
+## Conductor faceting — the second half of the fix
 
-Kept for the record, since each one cost a solve to establish:
+`CONDUCTOR_FACETS` in the 3D adapter sets the number of flat facets on the
+conductor cross-section, and the coil terminal's `num_sides` must match it. It
+still defaults to `0` (true circle) pending a solve that confirms the 16-sided
+combination, and pending the copper-area decision below.
 
-- **One adaptive pass on both steps** solves (14m24s) but reports
-  `Adaptive Passes did not converge`, so its accuracy was never established. The
-  exporter was deliberately not changed to adopt it.
-- **Faceting the conductor cross-section** into an N-gon removes the curved
-  surfaces and validates, but an inscribed polygon carries less copper — 90.0% at
-  8 sides, 97.4% at 16 — which raises DC resistance. `CONDUCTOR_FACETS` in the 3D
-  adapter still exposes it, defaulting to `0` (true circle).
-  Faceting the conductor alone fails validation with
-  `Find conduction path: '..._Coil (Face_N)' is not on any conduction path`,
-  because the coil terminal sheets are built separately and a round terminal
-  overhangs a faceted conductor. Conductor and terminal must use the same side
-  count — a coupling in the exporter that nothing had exercised before.
+Faceting the conductor **without** faceting the terminal fails validation with
+`Find conduction path: '..._Coil (Face_N)' is not on any conduction path`: the
+terminal sheets are built separately, and a round terminal overhangs a faceted
+conductor. Conductor and terminal must use the same side count — a coupling in
+the exporter that nothing had exercised before.
+
+### The copper-area cost, still undecided
+
+An inscribed regular N-gon carries less copper than the wire circle it replaces,
+so DC resistance rises by roughly the inverse:
+
+| Sides | Copper area vs round | DC resistance |
+| --- | --- | --- |
+| 8 | 90.0% | about 11% high |
+| 16 | 97.4% | about 2.7% high |
+| 24 | 98.9% | about 1.1% high |
+
+This is a change to the numbers the tool reports, not a meshing detail, and it
+needs an explicit decision before faceting becomes the default. Options:
+
+1. Accept it at a high side count.
+2. Compensate the cross-section width by `sqrt(pi / ((n/2) sin(2pi/n)))` so the
+   areas match. This widens the conductor envelope, which the clearance and
+   packing checks validated against the round diameter, so it can create overlaps
+   those checks already approved.
+3. Keep round wire for reporting and facet only for solving, which means two
+   geometries to keep consistent.
+
+## Superseded workaround
+
+**One adaptive pass on both steps** solves (14m24s) but reports
+`Adaptive Passes did not converge`, so its accuracy was never established. The
+exporter was deliberately not changed to adopt it, and the mesh settings remove
+the need for it.

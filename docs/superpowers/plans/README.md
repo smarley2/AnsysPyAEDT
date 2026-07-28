@@ -14,15 +14,18 @@ before the next plan freezes assumptions that depend on it.
 
 - Milestones 0–4.5 are accepted with the dates and exact live-verification
   scope recorded in the [roadmap](../../development/ROADMAP.md).
-- Milestone 5a is implementation-complete but not accepted. Validation revision
-  `2271f4f7644f` reproduces as `MATCH` and its FEMM artifact has been inspected.
-  Controlled AEDT 2025 R2 Commercial handoff/inspection, sanitized evidence
-  including licensing handling, and the final quality gates remain open.
+- Milestone 5a is **accepted as of 2026-07-28**. Validation revision
+  `2271f4f7644f` reproduces as `MATCH` and reaches AEDT 2025 R2 Commercial in
+  Maxwell 3D and Maxwell 2D and FEMM 4.2 with its 501-point nonlinear B-H curve
+  and Steinmetz coefficients, and the 3D design solves. Evidence is in
+  [m5a-live-material-validation.md](../../development/m5a-live-material-validation.md);
+  the solve fix is in
+  [dc-bias-solve-limitation.md](../../development/dc-bias-solve-limitation.md).
 - Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
-  Material Studio workflow. Its acceptance is independent from the remaining
-  M5a live-solver gate.
-- The active detailed plan is the
-  [M5a live validation closeout](2026-07-24-m5a-live-validation-closeout.md).
+  Material Studio workflow.
+- **Milestone 6, Project Foundation, is next.** It has no detailed plan yet; the
+  next worker must write one from the approved roadmap realignment before
+  changing any schema or runtime contract.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5

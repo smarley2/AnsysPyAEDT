@@ -166,6 +166,16 @@ def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     assert "modeler.create_air_region" in names
     mesh_calls = [k for n, k in app.calls if n == "mesh.assign_length_mesh"]
     assert len(mesh_calls) == 2
+    # Conductor and terminal must share the facet count: a round terminal on a
+    # faceted conductor fails validation with a missing conduction path.
+    polylines = [k for n, k in app.calls if n == "modeler.create_polyline"]
+    conductor_segments = {
+        k["xsection_num_seg"] for k in polylines if k.get("xsection_type") == "Circle"
+    }
+    assert conductor_segments == {16}
+    circles = [k for n, k in app.calls if n == "modeler.create_circle"]
+    assert {k["num_sides"] for k in circles} == {16}
+
     initial_mesh = [k for n, k in app.calls if n == "mesh.assign_initial_mesh_from_slider"]
     assert len(initial_mesh) == 1
     # These exact settings are what makes an AC Magnetic with DC solve complete;

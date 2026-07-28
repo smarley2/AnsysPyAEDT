@@ -105,19 +105,19 @@ def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
 
 
-# Number of flat facets per conductor cross-section. 0 keeps a true circle.
+# Number of flat facets per conductor cross-section. 0 would keep a true circle.
 #
 # A round conductor gives Maxwell nothing but curved surfaces, and the DC-bias
-# solve fails while mapping its DC field onto the AC mesh precisely there (see
-# docs/development/dc-bias-solve-limitation.md). Faceting the wire removes those
-# surfaces. Note that an inscribed N-gon carries less copper than the circle it
-# replaces — about 10% less at N=8, 2.5% at N=16 — which raises DC resistance,
-# so this is not a free change.
+# solve fails while mapping its DC field onto the AC mesh precisely there. 16
+# facets plus the initial mesh settings below is the combination Fabio Posser
+# verified solves on AEDT 2025 R2; the mesh settings alone with round wire do not.
+# See docs/development/dc-bias-solve-limitation.md.
 #
-# ponytail: provisional module-level knob while the effect on the solve is being
-# verified on real hardware; promote to the project schema, with the conductor
-# area decision made explicitly, once it is confirmed.
-CONDUCTOR_FACETS = 0
+# Accepted cost: an inscribed 16-gon carries 97.4% of the copper of the wire
+# circle, so reported DC resistance runs about 2.7% high. Fabio accepted that on
+# 2026-07-28 in exchange for a solve that completes with full adaptivity. Raising
+# this to 24 cuts the error to 1.1% if that ever matters.
+CONDUCTOR_FACETS = 16
 
 # Initial mesh settings. TAU with curvilinear meshing disabled is what makes the
 # DC-bias solve complete; Maxwell 2D offers neither TAU nor the curvilinear

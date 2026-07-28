@@ -1613,7 +1613,7 @@ Expected: stdout is exactly `MATCH` and the process exits 0.
 Expected: one AEDT-tagged and one FEMM-tagged material handoff test pass. The
 runner writes only ignored files beneath `artifacts/material-validation/`.
 
-- [ ] **Step 4: Manually inspect the generated AEDT project**
+- [x] **Step 4: Manually inspect the generated AEDT project**
 
 Open the generated `.aedt` project and verify all of the following against the
 local `preflight.json` and pinned Project snapshot:
@@ -1799,7 +1799,7 @@ rg -n -i \
 
 Expected: no output.
 
-- [ ] **Step 6: Mark M5a accepted only after every gate passes**
+- [x] **Step 6: Mark M5a accepted only after every gate passes**
 
 After Steps 1–5 pass:
 
@@ -1810,7 +1810,7 @@ After Steps 1–5 pass:
 - replace the old “before accepting M5a or M5b” wording in
   `docs/development/material-records.md` with the accepted evidence link.
 
-- [ ] **Step 7: Commit, publish, and confirm repository hygiene**
+- [x] **Step 7: Commit, publish, and confirm repository hygiene**
 
 Check every completed box in this plan, including this final acceptance step,
 then stage exactly:
@@ -1844,7 +1844,41 @@ implementation plan before changing its schema or runtime contracts.
 
 ---
 
-## Post-plan finding, 2026-07-27: M5a cannot be accepted as written
+## Outcome, 2026-07-28: M5a accepted
+
+**Accepted by Fabio Posser on 2026-07-28.** Evidence:
+`docs/development/m5a-live-material-validation.md`.
+
+The unticked checkboxes under Tasks 1–5 are a bookkeeping artefact, not
+outstanding work. Those tasks were delivered in commits `cb9f420`, `c839197`,
+`7c25d52`, `2f5bae4` and `93bab4f`; the boxes were simply never maintained during
+execution. They are deliberately left unticked rather than back-filled, because
+nobody verified them step by step after the fact.
+
+Acceptance required work this plan did not anticipate. The section below records
+the problem as it stood on 2026-07-27, followed by the resolution.
+
+### Resolution
+
+The exported 3D design did not solve. `AC Magnetic with DC` failed while mapping
+the DC field onto the AC mesh across curved surfaces. Fixed by two changes that
+are both required — 16-sided conductors and TAU initial mesh settings with
+curvilinear meshing disabled — verified solving with adaptive refinement at the
+shipped defaults. Full investigation:
+`docs/development/dc-bias-solve-limitation.md`.
+
+A second gap surfaced while closing out: the material handoff had only ever been
+proven for Maxwell 3D and FEMM, never Maxwell 2D, although this plan's
+requirement table claims "reach AEDT" without qualifying the dimension.
+`tests/integration/aedt/test_material_handoff_2d.py` closes it and now runs in
+`tools/run_m5a_material_validation.ps1` with the other two.
+
+Left open deliberately, neither blocking acceptance: mass density is never
+exported (agreed value 8176 kg/m³, to become a mandatory Material Studio template
+column, which will force a re-import and a new revision id), and PyAEDT writes
+malformed units on the Steinmetz coefficients.
+
+### The problem as it stood on 2026-07-27
 
 Tasks 1–5 are complete. Task 6 produced real, reviewed material evidence
 (`docs/development/m5a-live-material-validation.md`): the pinned High Flux 60
