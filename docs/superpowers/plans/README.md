@@ -23,9 +23,11 @@ before the next plan freezes assumptions that depend on it.
   [dc-bias-solve-limitation.md](../../development/dc-bias-solve-limitation.md).
 - Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
   Material Studio workflow.
-- **Milestone 6, Project Foundation, is next.** Its
-  [detailed implementation plan](2026-07-28-m6-project-foundation.md) is active;
-  no schema or runtime contract changes start outside that plan.
+- Milestone 6, Project Foundation, is **accepted as of 2026-07-28**. Its
+  [detailed implementation plan](2026-07-28-m6-project-foundation.md) records
+  the implemented schema-v5 Project/Run contracts and exact acceptance
+  evidence. M7 planning is the next task; this acceptance record does not write
+  that plan.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
@@ -45,6 +47,7 @@ not gate the active roadmap.
 | 5a | Material records pipeline and solver export | [2026-07-17-material-records-pipeline.md](2026-07-17-material-records-pipeline.md) | Accepted 2026-07-28: revision `94e880a99b98` reports `MATCH` and reaches Maxwell 3D, Maxwell 2D and FEMM, and the 3D design solves |
 | 5b | Spreadsheet-only Material Studio | [2026-07-20-material-studio-spreadsheet-only.md](2026-07-20-material-studio-spreadsheet-only.md), [read-only revision](2026-07-23-material-studio-readonly-imported.md), [streamlined library](2026-07-23-streamlined-material-library.md) | Accepted CSV/XLSX import, immutable library, plotting, download, replacement/deletion, and project pinning |
 | 5b history | Superseded manual Material Studio UI | [2026-07-19-material-studio-ui.md](2026-07-19-material-studio-ui.md) | Historical record only; image/PDF and UI-editing instructions do not describe the product |
+| 6 | Project Foundation | [2026-07-28-m6-project-foundation.md](2026-07-28-m6-project-foundation.md) | Accepted schema-v5 Project round trip; identical effective inputs and golden Run Manifests for Maxwell 3D, Maxwell 2D, and FEMM |
 
 Historical plans retain the decisions and evidence valid when they were
 executed. They do not override the current support and product scope.
@@ -54,7 +57,6 @@ executed. They do not override the current support and product scope.
 | Order | Milestone | Entry condition | Exit evidence |
 | --- | --- | --- | --- |
 | 5a closeout | [Live material validation and support cleanup](2026-07-24-m5a-live-validation-closeout.md) | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
-| 6 | Project Foundation | M5a accepted; [detailed plan active](2026-07-28-m6-project-foundation.md) | One backend-independent Project document round-trips shared frequency, winding/core temperatures, RMS currents, and exact core-material state, then creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans |
 | 7 | Guided Studio and Preliminary Estimates | M6 contracts accepted | A user authors, saves, reopens, inspects analytical B/J/wire/core-loss estimates or explicit unavailable reasons, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
 | 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
 | 9 | Reliability | M8 run/result contracts accepted | Autosave, recovery, undo/redo, cancellation recovery, and redacted diagnostics survive forced failures |
@@ -71,7 +73,56 @@ closes with:
 3. Documented physical assumptions, compatibility findings, and unresolved
    risks.
 4. A clean Git commit and handoff.
-5. The detailed plan for the next milestone.
+5. A clean handoff naming the next detailed-plan task.
+
+## M6 acceptance evidence
+
+Implementation and review commits are:
+
+`e26315c`, `0946fca`, `560732c`, `5194cab`, `3e0a682`, `b709909`,
+`c8c61c0`, `86a9f67`, `79e982f`, `24ca082`, `63b50d6`, `c5c158b`, and
+`ed62bda`. The Task 9 acceptance record is the commit containing this index
+with message `docs: accept m6 project foundation`; its exact hash is recorded
+in the Task 9 handoff report because a commit cannot contain its own hash.
+
+The clean-process gate ran these exact commands:
+
+```bash
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy src tools
+.venv/bin/python -m tools.check_architecture
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
+  .venv/bin/python -m pytest -m "not aedt and not femm" \
+  --cov=inductor_designer --cov-report=term-missing
+git diff --check
+.venv/bin/python -m pytest tests/integration/test_project_round_trip.py -q
+```
+
+The final gate reported Ruff clean, strict mypy clean across 102 source files,
+architecture and diff checks clean, 800 passed and 7 deselected in 9.84
+seconds, and 86.55% total coverage (87% in the rounded table). The strengthened
+explicit M6 integration test passed 1 test in 0.20 seconds and matches the
+three golden Run Manifests byte-for-byte after a byte-identical v5
+save/load/save. A controlled mutation that removed the RMS-to-peak conversion
+made that test fail before the normal green run.
+
+The physical/compatibility audit found no changes to catalog or material source
+data, B-H/core-loss series, the accepted 16-facet conductor, AnsoftTAU initial
+mesh method, slider level 6, region padding, or mesh-length formulas. The sole
+RMS-to-peak conversion remains in solver-independent run contracts; no solver
+adapter performs it. AEDT support remains exactly 2025 R2 Commercial. Both 2D
+golden manifests retain the explicit equivalent-cross-section warning, and the
+Geometry-Only adapter has no solve-ready stages.
+
+Unresolved risks:
+
+- The final gate emitted 76 existing Python `ResourceWarning`s, primarily for
+  SQLite connections (the initial pre-change baseline emitted 82). They do not
+  fail the gate but remain cleanup work.
+- M6 adds no live-solver claim and did not repeat the accepted M5a live AEDT or
+  FEMM runs.
+- Generate and Solve remains intentionally blocked until M8; M6 defines its
+  request/result contracts but does not execute or populate results.
 
 ## Approved specification coverage
 
@@ -96,5 +147,7 @@ The approved
 [preliminary calculations and Guided flow design](../specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md)
 fully records M7 product behavior, analytical formulas, physical constants,
 exclusions, validation, and acceptance criteria. Write the detailed M7
-implementation plan after M6 acceptance so it targets stable contracts. Do not
-repeat discovery or redesign unless M6 exposes a documented contradiction.
+implementation plan as the next task so it targets the now-stable M6
+contracts. This M6 task intentionally does not write that plan. Do not repeat
+discovery or redesign unless implementation exposes a documented
+contradiction.

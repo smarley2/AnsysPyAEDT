@@ -5,7 +5,7 @@
 > replaces the remaining delivery sequence and narrows the product to the
 > standalone Windows application and AEDT 2025 R2 Commercial. Milestones 0–5
 > below retain their historical implementation and acceptance evidence; the
-> active sequence begins with the M5a closeout and continues through M11.
+> active sequence now begins with M7 and continues through M11.
 
 ## Milestone 0: Foundation and compatibility spike
 
@@ -63,12 +63,13 @@ Exit criterion: a versioned project selects a commercial core, defines multiple 
 
 ### Current state
 
-Milestone 1 is **accepted** as of 2026-07-14. The exit criterion is proven by
-`tests/integration/test_project_round_trip.py`; the ten powder-core records are
-reviewed against the 2025 Magnetics Powder Cores Catalog. The five ferrite
-records remain `draft` until the ferrite catalog review; insulated wire
-diameters are populated and reviewed as part of Milestone 2, which consumes
-them.
+Milestone 1 is **accepted** as of 2026-07-14. Its historical round-trip,
+catalog-snapshot, and adoption behavior remains covered by persistence and
+catalog-revision tests; `tests/integration/test_project_round_trip.py` now owns
+the M6 exit criterion. The ten powder-core records are reviewed against the
+2025 Magnetics Powder Cores Catalog. The five ferrite records remain `draft`
+until the ferrite catalog review; insulated wire diameters are populated and
+reviewed as part of Milestone 2, which consumes them.
 
 Implemented Milestone 1 deliverables:
 
@@ -273,8 +274,8 @@ same day (2026-07-17). Evidence:
   bore-interior air region (`r < r_inner`) had no material label, causing
   FEMM analysis to fail; a second air block label at the origin fixed it
   (commit `f30e662`).
-- A live CLI solve, `python -m tools.generate_maxwell2d --backend femm
-  --force-2d` on the sample fixture, produced
+- A live CLI solve using the historical pre-M6 FEMM 2D override on the sample
+  fixture produced
   `artifacts/femm-check/M2_golden_sample_2d.fem` with all stages green and
   symmetric results: windings w1/w2 both R ≈ 0.00854 Ω, L ≈ 15.16 µH at
   100 kHz.
@@ -283,15 +284,13 @@ same day (2026-07-17). Evidence:
   summary, generate Maxwell 3D, generate 2D on the FEMM backend, read back
   the manifest) against the pure MCP tool functions with no error dicts.
 
-Implemented deliverables mirror the plan: pure FEMM problem translation
-(`adapters/femm/model.py`), the `FemmSolver` port with a recording fake and
-the pyfemm adapter (`adapters/femm/solver.py`), backend dispatch
-(`Backend2d`, `export_femm2d`) and FEMM manifests in
-`application/services/maxwell_export.py`, the `--backend`/`--no-analyze` CLI
-flags on `generate_maxwell2d`, nine pure MCP tool functions
-(`mcp_server/tools.py`) registered by a FastMCP stdio server
-(`mcp_server/server.py`, the `inductor-designer-mcp` console script), and a
-Guided Studio backend selector and Generate action.
+The original M4.5 deliverables included pure FEMM problem translation, the
+`FemmSolver` port and pyfemm adapter, 2D backend dispatch, FEMM-specific
+manifests, nine pure MCP tool functions registered by a FastMCP stdio server,
+and a Guided Studio backend selector. M6 retained those external capabilities
+while replacing the backend dispatch and separate manifests with shared Run
+Requests and Run Manifests. The current `generate_maxwell2d` CLI selects
+`--backend aedt|femm` and always submits Generate Only.
 
 Deferred/known limits: circuit phase is not yet applied to FEMM circuits
 (magnitude-only excitation; a message is emitted when a circuit's phase is
@@ -463,6 +462,40 @@ Commercial/FEMM material-consumption evidence are accepted.
 Exit criterion: one Project document round-trips deterministically and creates
 validated plans for all three backends with identical physical inputs and
 explicit RMS/peak and material-state evidence.
+
+### Current state
+
+Milestone 6 is **accepted as of 2026-07-28**. Project schema v5 is the only
+supported schema and is a deliberate clean break. One backend-independent
+Project document now owns Design, one shared-frequency Operating Point with
+separate winding/core temperatures, and one Simulation Recipe. A Run Request
+selects Maxwell 3D, Maxwell 2D, or FEMM without mutating the Project document.
+
+The accepted implementation:
+
+- pins one exact compatible imported/approved material revision and B-H series
+  and persists Manual-core compatibility acknowledgment;
+- converts AC RMS current to AC peak exactly once in solver-independent
+  planning and feeds identical effective inputs to all three backends;
+- records immutable backend-labeled Run Manifest and Normalized Result Set
+  contracts;
+- routes Generate Only through recording/live adapter ports and preserves
+  truthful failed-run evidence;
+- blocks Generate and Solve until M8; and
+- permits unresolved material only for a separately confirmed Maxwell 3D
+  Geometry-Only artifact with no solve-ready stages.
+
+Acceptance is proven by
+`tests/integration/test_project_round_trip.py`, the three M6 golden Run
+Manifests, and the complete non-live quality gate recorded in the
+[implementation-plan index](../superpowers/plans/README.md). No M6 catalog,
+material value, B-H/core-loss data, conductor-facet setting, or initial Maxwell
+mesh setting changed. The remaining test-suite ResourceWarnings are recorded
+as a non-blocking cleanup risk in that index.
+
+M7 consumes these contracts and the already-approved
+[Preliminary calculations and Guided flow design](../superpowers/specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md).
+Its detailed implementation plan is the next task; M6 does not write it.
 
 ## Milestone 7: Guided Studio
 

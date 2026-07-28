@@ -4,11 +4,13 @@ Milestone 4.5 exposes the designer over MCP for AI-driven sessions and adds
 FEMM as a user-selectable alternative to Ansys Maxwell for the 2D equivalent
 model, including an in-loop solve with R/L result extraction.
 
-> **Current planning status (2026-07-24):** The implemented nine-tool MCP
+> **Current planning status (2026-07-28):** The implemented nine-tool MCP
 > surface is retained, but no MCP expansion, parity, or external-client
 > validation belongs to M5a–M11. FEMM remains an active Windows-application
 > backend. Future MCP work requires a separately approved scope after the
-> Guided Studio and normalized result workflow are stable.
+> Guided Studio and normalized result workflow are stable. M6 moved the
+> existing generation tools to backend-independent Project schema v5, shared
+> Run Requests, and shared Run Manifests without adding tools.
 
 ## MCP server
 
@@ -60,15 +62,18 @@ docstrings are the source of truth for wording):
 | `save_project` | Validate an inductor project document and write it to the given file path. |
 | `validate_project` | Load a saved project from disk and report its domain validation issues. |
 | `geometry_summary` | Build the geometry model for a saved project and return its manifest summary. |
-| `generate_maxwell3d` | Export a saved project to Maxwell 3D and return the generation manifest. |
-| `generate_2d` | Export a saved project to a 2D AEDT or FEMM model and return its manifest. |
+| `generate_maxwell3d` | Submit a Maxwell 3D Generate Only Run Request and return its Run Manifest. |
+| `generate_2d` | Submit a Maxwell 2D or FEMM Run Request and return its Run Manifest. |
 | `read_manifest` | Read back a previously written manifest JSON file from the output root. |
 
-`generate_2d` takes `backend` (`"aedt"` or `"femm"`, default `"aedt"`) and
-`analyze` (default `True`; FEMM only — `False` writes the `.fem` file without
-running the analysis). All tools return JSON-able dicts; errors come back as
-`{"error": ..., "issues": [...]}` rather than raising, so an MCP client always
-gets a structured result.
+`generate_2d` takes `backend` (`"aedt"` or `"femm"`, default `"aedt"`) and the
+retained `analyze` compatibility argument. Maxwell 2D always maps to Generate
+Only. For FEMM, pass `analyze: false` for the implemented Generate Only request;
+`analyze: true` maps to Generate and Solve and returns the explicit M8
+not-implemented block before an adapter call. All tools return JSON-able dicts;
+errors come back as `{"error": ..., "issues": [...]}` rather than raising, so
+an MCP client always gets a structured result. Successful and failed adapter
+executions write `run-manifest.json`.
 
 ## FEMM 2D backend
 
@@ -90,10 +95,9 @@ gets a structured result.
 
 ### Backend selection
 
-The CLI and MCP choose the 2D backend per call. The current schema v4 still
-contains `dimensionMode`; callers therefore need a 2D project or the documented
-CLI force option. M6 removes that field and makes the Project document itself
-backend-independent.
+The CLI and MCP choose the backend per call from the same backend-independent
+schema-v5 Project document. Each entry point constructs a Run Request; no
+backend or dimensional representation is persisted in the Project document.
 
 CLI:
 
@@ -101,13 +105,13 @@ CLI:
 .venv\Scripts\python.exe -m tools.generate_maxwell2d --project my.inductor.json --output-directory artifacts\out --evidence artifacts\out\evidence.json --backend femm
 ```
 
-(`--backend` defaults to `aedt`; add `--no-analyze` to write the `.fem` file
-without solving.)
+`--backend` defaults to `aedt`. The M6 CLI always submits Generate Only; solver
+execution and result extraction belong to M8.
 
 MCP:
 
 ```json
-{"tool": "generate_2d", "arguments": {"path": "my.inductor.json", "backend": "femm", "analyze": true}}
+{"tool": "generate_2d", "arguments": {"path": "my.inductor.json", "backend": "femm", "analyze": false}}
 ```
 
 Guided Studio: the Simulation section's backend dropdown lists "Maxwell 3D",
@@ -132,8 +136,8 @@ backend off the UI thread and streams stage/result lines into the panel.
 
 ## Result sanity
 
-Live run on FEMM 4.2 (2026-07-17), CLI: `python -m tools.generate_maxwell2d
---backend femm --force-2d` on the sample fixture
+Live run on FEMM 4.2 (2026-07-17), using the historical pre-M6 FEMM 2D CLI path
+on the sample fixture
 (`tests/fixtures/sample_geometry_project.inductor.json`) —
 `artifacts/femm-check/M2_golden_sample_2d.fem`, all stages green:
 

@@ -5,18 +5,22 @@ The standalone Windows desktop application is the only product UI. Existing CLI
 and MCP entry points are thin optional automation surfaces over the same
 application services; new MCP work is outside the active MVP roadmap.
 
-This document distinguishes implemented architecture from approved target
-architecture:
+Milestone 6 was accepted on 2026-07-28. This document distinguishes its
+implemented contracts from later approved targets:
 
-- The implemented M0–M5b stack still uses project schema v4, including fixed
-  `dimensionMode`, per-winding frequency, and the legacy `acMagnitudeA` field.
-- M6 replaces that schema with the approved backend-independent Project and Run
-  contracts. This is a deliberate clean break, not a migration.
+- Project schema v5 is the only supported Project document schema. It is a
+  deliberate clean break with no legacy migration.
+- The implemented Project document is backend-independent and contains one
+  Design, one Operating Point, and one Simulation Recipe.
+- Run Requests, Run Manifests, effective winding inputs, and immutable
+  Normalized Result Set contracts are implemented. Generate Only execution is
+  routed through the shared application service; Generate and Solve execution
+  and result population remain M8 work.
 - The current Canvas First UI provides a real editable-winding and preview
   slice. M7 completes project authoring, the revised Guided flow, and
   solver-independent Preliminary estimates.
-- Solve orchestration, Normalized Result Sets, recovery, and result export are
-  M8–M9 target capabilities, not claims about the current implementation.
+- Solve orchestration and result export are M8 targets. Recovery is an M9
+  target.
 
 ## Dependency direction
 
@@ -38,23 +42,27 @@ code implement or adapt those interfaces.
 ## Implemented modules
 
 - `domain`: Units, core selections, conductors, winding definitions,
-  excitations, the current project model, and validation rules.
+  the v5 Project aggregate, Operating Point excitations, Simulation Recipe,
+  exact material selection, and validation rules.
 - `geometry`: Solver-independent toroid construction, winding packing,
   collision checks, deterministic geometry, tessellation inputs, and the 2D
   equivalent.
 - `materials`: Material identities, immutable records, provenance, curve data,
   fitting, replay, and physical validation.
-- `simulation`: Solver-independent capability decisions and Maxwell/FEMM plan
+- `simulation`: Solver-independent Run Request/Manifest/result contracts,
+  effective-input conversion, capability decisions, and Maxwell/FEMM plan
   models and builders.
 - `application`: Ports and use cases for validation, geometry composition,
-  project persistence, material workflows, and solver generation.
+  project persistence, material workflows, operation-specific run planning,
+  and Generate Only execution.
 - `adapters/catalog`: Canonical catalog and compiled SQLite index access.
 - `adapters/compatibility`: Observed AEDT 2025 R2 Commercial capabilities used
   to block unsupported operations.
 - `adapters/femm`: FEMM 2D translation, execution, and result extraction.
 - `adapters/materials`: CSV/XLSX import, workbook export, and filesystem
   material-overlay persistence.
-- `adapters/persistence`: Project JSON and schema access.
+- `adapters/persistence`: Deterministic v5 Project JSON and v5-only schema
+  access.
 - `adapters/pyaedt`: AEDT 2025 R2 Commercial Maxwell 2D/3D operations and
   staged exporters.
 - `ui`: PySide6/QML Guided Studio, Material Studio, controllers, and Qt Quick 3D
@@ -62,9 +70,9 @@ code implement or adapt those interfaces.
 - `mcp_server`: Existing optional automation over application services; not a
   separate domain model or active parity target.
 
-## Approved M6 and M7 target flow
+## Implemented M6 contracts and approved M7 flow
 
-M6 introduces one backend-independent Project document containing:
+The implemented v5 Project document contains:
 
 1. **Design** — core, dimensions, windings, conductors, materials, and geometry
    choices.
@@ -74,9 +82,19 @@ M6 introduces one backend-independent Project document containing:
    outputs.
 
 A separate Run Request selects Maxwell 3D, Maxwell 2D, or FEMM and chooses
-`Generate Only` or `Generate and Solve`. It produces a Run Manifest and,
-starting in M8, a Normalized Result Set. Generated solver files never become the
+`Generate Only` or `Generate and Solve`. Generate Only produces a Run Manifest
+with schema version, effective RMS and peak inputs, exact material state,
+recipe, versions, approximations, stages, diagnostics, and artifacts. Generate
+and Solve is validated but blocked until M8 populates the implemented
+Normalized Result Set contract. Generated solver files never become the
 editable source of truth.
+
+Normal generation requires one exact imported or approved material revision and
+the selected B-H series. The only unresolved-material operation is an explicitly
+confirmed Maxwell 3D Generate Only request. It uses a separate Geometry-Only
+plan and adapter method with only core/winding geometry and no material,
+excitation, region, mesh, setup, matrix, report, validation, result, or
+solve-ready claim.
 
 M7 uses the approved Guided flow:
 
@@ -97,11 +115,11 @@ estimate to QML-facing rows; QML contains no physical formulas.
 2. PyAEDT and FEMM objects never cross into the domain model.
 3. Preview meshes and solver exports originate from the same
    solver-independent geometry model.
-4. In the M6 model, a Project is backend-independent and a Run Request selects
-   Maxwell 3D, Maxwell 2D, or FEMM.
-5. In the M6 model, the UI and Project store AC RMS current. Solver-independent
-   planning converts it exactly once to the peak amplitudes consumed by Maxwell
-   and FEMM.
+4. A Project is backend-independent and a Run Request selects Maxwell 3D,
+   Maxwell 2D, or FEMM.
+5. The UI and Project store AC RMS current. Solver-independent planning
+   converts it exactly once to the peak amplitudes consumed by Maxwell and
+   FEMM.
 6. Projects pin the exact material revision and B-H series. Catalog or material
    updates never mutate saved project behavior silently.
 7. Generated AEDT and FEMM projects are independent outputs and are never

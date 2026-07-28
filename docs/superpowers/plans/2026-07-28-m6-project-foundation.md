@@ -114,7 +114,7 @@ mypy.
   `WindingDefinition.frequency_hz`, `WindingDefinition.dc_current_a`, and
   `WindingDefinition.current_direction`.
 
-- [ ] **Step 1: Write failing aggregate tests.**
+- [x] **Step 1: Write failing aggregate tests.**
 
 Replace the old constructor helpers with this exact shape:
 
@@ -183,7 +183,7 @@ frequency, negative AC RMS/DC currents, non-positive maximum passes, and
 non-positive percent error. Duplicate/cross-object winding checks remain
 path-addressed validation findings in Task 3.
 
-- [ ] **Step 2: Run the domain test and verify it fails.**
+- [x] **Step 2: Run the domain test and verify it fails.**
 
 Run:
 
@@ -194,7 +194,7 @@ Run:
 Expected: collection or constructor failures because the M6 contracts do not
 exist.
 
-- [ ] **Step 3: Implement the minimal aggregate.**
+- [x] **Step 3: Implement the minimal aggregate.**
 
 Use these exact enums and fields:
 
@@ -263,7 +263,7 @@ class InductorProject:
 Use `math.isfinite` for numeric invariants. Keep physical cross-object checks
 out of `__post_init__`; Task 3 reports them as path-addressed validation issues.
 
-- [ ] **Step 4: Run focused checks.**
+- [x] **Step 4: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/domain/test_project.py -q
@@ -276,7 +276,7 @@ out of `__post_init__`; Task 3 reports them as path-addressed validation issues.
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add src/inductor_designer/domain/project.py \
@@ -318,7 +318,7 @@ dimensional mode, per-winding frequency, or ambiguous AC magnitude.
 - `SchemaRepository.validate_project` accepts only `schemaVersion == 5`.
 - `ProjectRepository.load` rejects v1–v4 explicitly; it never migrates them.
 
-- [ ] **Step 1: Write failing v5 schema and round-trip tests.**
+- [x] **Step 1: Write failing v5 schema and round-trip tests.**
 
 The canonical document must have this top-level shape:
 
@@ -362,7 +362,7 @@ def test_legacy_project_versions_are_rejected(version: int) -> None:
         SchemaRepository(SCHEMAS).validate_project({"schemaVersion": version})
 ```
 
-- [ ] **Step 2: Run and verify failure.**
+- [x] **Step 2: Run and verify failure.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/adapters/persistence -q
@@ -370,7 +370,7 @@ def test_legacy_project_versions_are_rejected(version: int) -> None:
 
 Expected: failures on schema version, old serialization keys, and constructors.
 
-- [ ] **Step 3: Write `v5.schema.json`.**
+- [x] **Step 3: Write `v5.schema.json`.**
 
 Reuse the existing core/material snapshot definitions verbatim. Define:
 
@@ -386,7 +386,7 @@ Reuse the existing core/material snapshot definitions verbatim. Define:
 JSON Schema cannot reject IEEE non-finite values because valid JSON cannot
 encode them; domain constructors remain the second boundary.
 
-- [ ] **Step 4: Replace migration with v5-only validation.**
+- [x] **Step 4: Replace migration with v5-only validation.**
 
 Use:
 
@@ -409,7 +409,7 @@ Delete `_MIGRATIONS`, all migration functions, and `migrate_project`.
 `ProjectRepository.load` validates the loaded mapping, then calls
 `project_from_document`.
 
-- [ ] **Step 5: Implement v5 serialization and remove legacy fixtures.**
+- [x] **Step 5: Implement v5 serialization and remove legacy fixtures.**
 
 Serialize `Design`, Operating Point, and Simulation Recipe in their own helper
 functions. Preserve atomic save and `sort_keys=True`. The single material
@@ -417,7 +417,7 @@ selection is serialized under `design.coreMaterial`; no list remains.
 Convert `sample_geometry_project.inductor.json` to the canonical v5 shape in
 the same step so persistence tests never depend on an unsupported fixture.
 
-- [ ] **Step 6: Run focused checks.**
+- [x] **Step 6: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/adapters/persistence -q
@@ -429,7 +429,7 @@ the same step so persistence tests never depend on an unsupported fixture.
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add schemas/project src/inductor_designer/adapters/persistence \
@@ -469,7 +469,7 @@ version fails with one actionable clean-break error.
   manual_compatibility_acknowledged=False)` writes one exact
   `design.core_material`.
 
-- [ ] **Step 1: Add failing validation tests.**
+- [x] **Step 1: Add failing validation tests.**
 
 Test exact issue codes and paths:
 
@@ -486,7 +486,7 @@ Test exact issue codes and paths:
 `ERROR`. A Project may save with no core or no material; operation-specific
 blocking belongs to Task 4.
 
-- [ ] **Step 2: Run and verify failures.**
+- [x] **Step 2: Run and verify failures.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/domain/test_validation.py \
@@ -495,7 +495,7 @@ blocking belongs to Task 4.
   tests/unit/application/test_material_selection.py -q
 ```
 
-- [ ] **Step 3: Implement validation and nested replacements.**
+- [x] **Step 3: Implement validation and nested replacements.**
 
 Use `project.design.windings`, `project.design.core`, and
 `project.design.core_material` everywhere. `select_core` and
@@ -508,7 +508,7 @@ Use `project.design.windings`, `project.design.core`, and
 3. set the Manual compatibility boolean only from its explicit argument;
 4. replace the previous single selection rather than append to a tuple.
 
-- [ ] **Step 4: Split symmetry geometry/excitation inputs.**
+- [x] **Step 4: Split symmetry geometry/excitation inputs.**
 
 Use:
 
@@ -524,13 +524,13 @@ Excitation keys include AC RMS, phase, DC current, and `current_direction`.
 Shared frequency is already common by construction and does not need
 per-winding comparison.
 
-- [ ] **Step 5: Update M5a handoff preparation.**
+- [x] **Step 5: Update M5a handoff preparation.**
 
 The handoff selects the catalog core and exact material in `Design`; it sets
 the Operating Point but never writes AEDT target or dimension. Preserve all
 reproduction evidence behavior.
 
-- [ ] **Step 6: Run focused checks.**
+- [x] **Step 6: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/domain tests/unit/geometry \
@@ -550,7 +550,7 @@ reproduction evidence behavior.
 .venv/bin/python -m tools.check_architecture
 ```
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add src/inductor_designer/domain/validation.py \
@@ -587,7 +587,7 @@ Projects.
 - No filesystem path object, PyAEDT/FEMM/Qt type, or adapter object crosses
   these contracts.
 
-- [ ] **Step 1: Write failing contract tests.**
+- [x] **Step 1: Write failing contract tests.**
 
 Cover enum values, RMS/peak evidence, manifest construction, and result
 availability invariants. Include:
@@ -614,13 +614,13 @@ def test_available_result_requires_value_unit_and_provenance() -> None:
         )
 ```
 
-- [ ] **Step 2: Run and verify module-not-found failure.**
+- [x] **Step 2: Run and verify module-not-found failure.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/simulation/test_run_contracts.py -q
 ```
 
-- [ ] **Step 3: Implement exact run enums.**
+- [x] **Step 3: Implement exact run enums.**
 
 ```python
 class RunBackend(str, Enum):
@@ -679,7 +679,7 @@ def effective_winding_inputs(
     )
 ```
 
-- [ ] **Step 4: Implement immutable evidence contracts.**
+- [x] **Step 4: Implement immutable evidence contracts.**
 
 Define:
 
@@ -801,7 +801,7 @@ Use `None` only where evidence is genuinely unavailable. Enforce:
 - succeeded manifest: at least one artifact;
 - result backend equals manifest backend.
 
-- [ ] **Step 5: Run focused checks.**
+- [x] **Step 5: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/simulation/test_run_contracts.py -q
@@ -812,7 +812,7 @@ Use `None` only where evidence is genuinely unavailable. Enforce:
 .venv/bin/python -m tools.check_architecture
 ```
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add src/inductor_designer/simulation/run_contracts.py \
@@ -851,7 +851,7 @@ M8 result availability state without importing infrastructure.
 - Produces `GeometryOnlyMaxwell3dPlan` from the same finished geometry without
   material or solver configuration.
 
-- [ ] **Step 1: Rewrite builder tests first.**
+- [x] **Step 1: Rewrite builder tests first.**
 
 Construct Design windings and effective inputs separately. Add a regression:
 
@@ -879,7 +879,7 @@ Add tests that missing, duplicate, and unknown effective winding ids raise
 `PlanBuildError`. Delete multi-frequency builder tests; per-winding frequency
 no longer exists.
 
-- [ ] **Step 2: Run and verify failures.**
+- [x] **Step 2: Run and verify failures.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/simulation/test_plan_builder.py \
@@ -887,7 +887,7 @@ no longer exists.
   tests/unit/simulation/test_femm_problem.py -q
 ```
 
-- [ ] **Step 3: Change builder signatures.**
+- [x] **Step 3: Change builder signatures.**
 
 Use:
 
@@ -950,7 +950,7 @@ def build_geometry_only_maxwell3d_plan(
 Geometry-Only types above carry paths and diameters only. They must not gain
 current, phase, terminals, material, mesh, setup, or report fields.
 
-- [ ] **Step 4: Map recipe and effective inputs.**
+- [x] **Step 4: Map recipe and effective inputs.**
 
 - `SetupPlan.frequency_hz = frequency_hz`
 - `SetupPlan.maximum_passes = recipe.maximum_passes`
@@ -962,7 +962,7 @@ current, phase, terminals, material, mesh, setup, or report fields.
 - Preserve accepted mesh constants under `MeshIntent.STANDARD`; no second mesh
   mode is added.
 
-- [ ] **Step 5: Prove adapters contain no RMS conversion.**
+- [x] **Step 5: Prove adapters contain no RMS conversion.**
 
 Run:
 
@@ -975,7 +975,7 @@ Expected: the only RMS-to-peak match is
 `simulation/run_contracts.py`. Other unrelated square-root formulas may remain;
 inspect each match rather than weakening the assertion.
 
-- [ ] **Step 6: Run focused checks.**
+- [x] **Step 6: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/simulation -q
@@ -985,7 +985,7 @@ inspect each match rather than weakening the assertion.
 .venv/bin/python -m tools.check_architecture
 ```
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add src/inductor_designer/simulation tests/unit/simulation
@@ -1017,7 +1017,7 @@ inputs and exactly one `sqrt(2)` conversion is present.
   `GeometryOnlyRunPlan` for the confirmed exception.
 - Does not launch Qt, PyAEDT, or FEMM and does not write files.
 
-- [ ] **Step 1: Write the run-planning matrix as failing parametrized tests.**
+- [x] **Step 1: Write the run-planning matrix as failing parametrized tests.**
 
 Cover:
 
@@ -1044,13 +1044,13 @@ assert plan3d.effective_inputs[0].ac_peak_current_a == pytest.approx(2.0 * math.
 Add DC cases: nonzero DC blocks Maxwell 2D and FEMM; reviewed native capability
 permits Maxwell 3D; unreviewed/unavailable native capability blocks it.
 
-- [ ] **Step 2: Run and verify module-not-found failure.**
+- [x] **Step 2: Run and verify module-not-found failure.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/application/test_run_planning.py -q
 ```
 
-- [ ] **Step 3: Implement result types and errors.**
+- [x] **Step 3: Implement result types and errors.**
 
 ```python
 class RunPlanningError(ValueError):
@@ -1078,7 +1078,7 @@ class GeometryOnlyRunPlan:
 PlannedRun = SolveReadyRunPlan | GeometryOnlyRunPlan
 ```
 
-- [ ] **Step 4: Implement validation in this order.**
+- [x] **Step 4: Implement validation in this order.**
 
 1. Run backend-independent `validate_project`; collect `ERROR` findings.
 2. Require core and at least one winding.
@@ -1100,7 +1100,7 @@ creates geometry only; it has no material assignments, excitations, setup,
 mesh, reports, or solve-ready claim.
 ```
 
-- [ ] **Step 5: Run focused checks.**
+- [x] **Step 5: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/application/test_run_planning.py -q
@@ -1112,7 +1112,7 @@ mesh, reports, or solve-ready claim.
 .venv/bin/python -m tools.check_architecture
 ```
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add src/inductor_designer/application/services/run_planning.py \
@@ -1163,7 +1163,7 @@ blocked before adapter calls.
 - Generate and Solve returns an explicit M8-not-implemented block before any
   adapter call.
 
-- [ ] **Step 1: Write failing application and golden-manifest tests.**
+- [x] **Step 1: Write failing application and golden-manifest tests.**
 
 For the same Project, generate recording outcomes for all three backends and
 assert each manifest records:
@@ -1183,7 +1183,7 @@ Generate and Solve execution belongs to M8; M6 only validates its Run Request.
 
 and makes zero adapter calls.
 
-- [ ] **Step 2: Add failing Geometry-Only adapter contract tests.**
+- [x] **Step 2: Add failing Geometry-Only adapter contract tests.**
 
 The recording/fake Maxwell 3D adapter must produce these stages:
 
@@ -1194,7 +1194,7 @@ GEOMETRY_ONLY_STAGE_NAMES = ("launch", "units", "core", "windings", "save")
 Assert no calls to material creation/assignment, terminals, excitations, eddy,
 region, mesh, setup, matrix, reports, or design validation.
 
-- [ ] **Step 3: Run and verify failures.**
+- [x] **Step 3: Run and verify failures.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/application/test_maxwell_export.py \
@@ -1204,7 +1204,7 @@ region, mesh, setup, matrix, reports, or design validation.
   tests/unit/adapters/test_femm_solver.py -q
 ```
 
-- [ ] **Step 4: Add the minimal Geometry-Only adapter request.**
+- [x] **Step 4: Add the minimal Geometry-Only adapter request.**
 
 Define a separate port DTO:
 
@@ -1233,7 +1233,7 @@ The adapter reuses its existing core profile and winding path creation helpers,
 but omits every prohibited stage and creates winding solids without a material
 argument.
 
-- [ ] **Step 5: Implement `generate_run` and manifest serialization.**
+- [x] **Step 5: Implement `generate_run` and manifest serialization.**
 
 Use the fixed support constants from `application.services.aedt_support` when
 building Maxwell requests; Project no longer stores AEDT target. Capability
@@ -1289,13 +1289,13 @@ def run_manifest_json(manifest: RunManifest) -> str:
     ) + "\n"
 ```
 
-- [ ] **Step 6: Match golden manifests.**
+- [x] **Step 6: Match golden manifests.**
 
 Normalize only nondeterministic fields in test setup: inject fixed `run_id`,
 application version, adapter version, and artifact paths. Do not scrub physical
 inputs, warnings, stages, or status.
 
-- [ ] **Step 7: Run focused checks.**
+- [x] **Step 7: Run focused checks.**
 
 ```bash
 .venv/bin/python -m pytest tests/unit/application/test_maxwell_export.py \
@@ -1323,7 +1323,7 @@ inputs, warnings, stages, or status.
 .venv/bin/python -m tools.check_architecture
 ```
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add src/inductor_designer/application/services/maxwell_export.py \
@@ -1374,7 +1374,7 @@ Geometry-Only output cannot accidentally contain solve-ready configuration.
 - `tools/generate_maxwell2d.py --force-2d` is removed because dimensional mode
   no longer exists.
 
-- [ ] **Step 1: Find every stale contract reference.**
+- [x] **Step 1: Find every stale contract reference.**
 
 Run:
 
@@ -1390,14 +1390,14 @@ target_edition|frequency_hz" src tests tools schemas \
 Classify each `frequency_hz`: material curve conditions, solver setup, and FEMM
 problem fields remain valid; only per-winding Project usage is removed.
 
-- [ ] **Step 2: Update all test factories before production callers.**
+- [x] **Step 2: Update all test factories before production callers.**
 
 Replace root-level `dataclasses.replace(project, dimension_mode=...)` with
 different `RunRequest` values. Replace excitation mutations with nested
 Operating Point replacements. Update recording adapter assertions from `2.0`
 peak to `2.0 * sqrt(2.0)`.
 
-- [ ] **Step 3: Update CLI, UI plumbing, and MCP.**
+- [x] **Step 3: Update CLI, UI plumbing, and MCP.**
 
 - Maxwell 3D CLI creates `RunRequest(MAXWELL_3D, GENERATE_ONLY)`.
 - Maxwell 2D CLI maps `--backend aedt|femm` to
@@ -1412,7 +1412,7 @@ peak to `2.0 * sqrt(2.0)`.
   their separate schema-v2 payloads after the last caller moves to
   `run_manifest_json`.
 
-- [ ] **Step 4: Run all non-live tests.**
+- [x] **Step 4: Run all non-live tests.**
 
 ```bash
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
@@ -1421,7 +1421,7 @@ QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
 
 Expected: all unit, contract, integration, property, MCP, and UI tests pass.
 
-- [ ] **Step 5: Run stale-symbol guard.**
+- [x] **Step 5: Run stale-symbol guard.**
 
 ```bash
 rg -n "dimensionMode|dimension_mode|acMagnitudeA|ac_magnitude_a|\
@@ -1432,7 +1432,7 @@ Expected: no matches. Material curve `frequency_hz`, Operating Point
 `frequency_hz`, solver setup `frequency_hz`, and FEMM problem `frequency_hz`
 remain.
 
-- [ ] **Step 6: Run focused quality gates.**
+- [x] **Step 6: Run focused quality gates.**
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -1441,7 +1441,7 @@ remain.
 git diff --check
 ```
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add src tests tools schemas/project
@@ -1475,7 +1475,7 @@ semantics; current optional surfaces still work through shared M6 services.
   plan.
 - Does not write the M7 plan in this task.
 
-- [ ] **Step 1: Run the complete M6 gate from a clean process.**
+- [x] **Step 1: Run the complete M6 gate from a clean process.**
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -1489,7 +1489,7 @@ git diff --check
 
 Expected: every command exits 0 and branch coverage is at least 80%.
 
-- [ ] **Step 2: Run the M6 acceptance test explicitly.**
+- [x] **Step 2: Run the M6 acceptance test explicitly.**
 
 Add or update `tests/integration/test_project_round_trip.py` so one v5 Project:
 
@@ -1507,7 +1507,7 @@ Run:
 .venv/bin/python -m pytest tests/integration/test_project_round_trip.py -q
 ```
 
-- [ ] **Step 3: Review physical and compatibility assumptions.**
+- [x] **Step 3: Review physical and compatibility assumptions.**
 
 Confirm in the diff:
 
@@ -1519,21 +1519,21 @@ Confirm in the diff:
 - unresolved material never reaches normal generation;
 - Geometry-Only has no solve-ready stages.
 
-- [ ] **Step 4: Update documentation.**
+- [x] **Step 4: Update documentation.**
 
 Record M6 as accepted only after Steps 1–3 pass. Update architecture from
 “target” to implemented v5 contracts. Update CLI/MCP docs for Run Request and
 remove `dimensionMode`/`--force-2d` guidance. In the plan index, record exact
 commands, test counts, coverage, commit, and any unresolved risk.
 
-- [ ] **Step 5: Commit the acceptance record.**
+- [x] **Step 5: Commit the acceptance record.**
 
 ```bash
 git add docs tests/integration/test_project_round_trip.py
 git commit -m "docs: accept m6 project foundation"
 ```
 
-- [ ] **Step 6: Verify clean handoff.**
+- [x] **Step 6: Verify clean handoff.**
 
 ```bash
 git status --short --branch
@@ -1549,20 +1549,90 @@ documented contradiction.
 **Acceptance criteria:** M6 exit criterion is evidenced, documented, and
 committed; M7 can target stable Project/Run interfaces.
 
+### Task 9 acceptance evidence
+
+The clean-process gate ran from
+`/Users/fabiocposser/Documents/github/AnsysPyAEDT/.worktrees/m6-project-foundation`
+on `codex/m6-project-foundation`:
+
+```text
+.venv/bin/python -m ruff check .
+  All checks passed.
+.venv/bin/python -m mypy src tools
+  Success: no issues found in 102 source files
+.venv/bin/python -m tools.check_architecture
+  exit 0
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
+  .venv/bin/python -m pytest -m "not aedt and not femm" \
+  --cov=inductor_designer --cov-report=term-missing
+  800 passed, 7 deselected, 82 warnings in 9.99s
+  total coverage 86.55% (87% rounded)
+git diff --check
+  exit 0
+```
+
+The explicit acceptance test was strengthened from the historical M1 catalog
+test to one M6 v5 Project that saves/loads/saves byte-identically, preserves
+the shared Operating Point and exact material selection, builds all three
+recording plans, shares one effective-input tuple, and matches all three golden
+Run Manifests. A controlled mutation that set AC peak equal to AC RMS exited 1
+with the expected assertion failure. Restored production behavior passed:
+
+```text
+.venv/bin/python -m pytest tests/integration/test_project_round_trip.py -q
+1 passed in 0.20s
+```
+
+After the test and documentation changes, the full final gate passed again:
+
+```text
+800 passed, 7 deselected, 76 warnings in 9.84s
+total coverage 86.55% (87% rounded)
+```
+
+Diff/search audit:
+
+- baseline and current code both use 16 conductor facets, AnsoftTAU initial
+  mesh, slider level 6, 100% region padding, and unchanged conductor/core
+  length formulas;
+- `git diff --name-only c32d2b8..HEAD -- catalog
+  src/inductor_designer/materials` and the YAML/CSV/XLSX changed-file search
+  returned no paths;
+- the sole RMS-to-peak search match is
+  `simulation/run_contracts.py`; solver adapters consume `current_peak_a`;
+- the compatibility matrix contains only AEDT 2025.2 Commercial and generation
+  entry points use the fixed support constants;
+- the unchanged explicit 2D equivalent-model warning is present in both 2D
+  golden manifests;
+- unresolved material is blocked except confirmed Maxwell 3D Generate Only;
+  its separate adapter stages are exactly `launch`, `units`, `core`,
+  `windings`, and `save`.
+
+Implementation/review commits through Task 8 are `e26315c`, `0946fca`,
+`560732c`, `5194cab`, `3e0a682`, `b709909`, `c8c61c0`, `86a9f67`,
+`79e982f`, `24ca082`, `63b50d6`, `c5c158b`, and `ed62bda`. Task 9 uses
+commit message `docs: accept m6 project foundation`; the exact resulting hash
+is recorded in the out-of-commit handoff report.
+
+Remaining risks: the final passing gate reports 76 non-fatal ResourceWarnings,
+primarily for SQLite connections (the initial baseline reported 82); M6
+intentionally adds no new live-solver claim; Generate and Solve remains blocked
+until M8.
+
 ## Final Acceptance Checklist
 
-- [ ] One v5 Project round-trips byte-identically.
-- [ ] Project contains Design, one Operating Point, and Simulation Recipe.
-- [ ] Project stores no backend, dimension, AEDT target, or generated artifact.
-- [ ] Frequency and temperatures are shared Operating Point fields.
-- [ ] Each Design winding has exactly one Operating Point entry.
-- [ ] AC RMS and AC peak are explicit; conversion exists once.
-- [ ] One exact compatible material revision and B-H series are pinned.
-- [ ] Manual material compatibility acknowledgment persists and validates.
-- [ ] Confirmed Maxwell 3D Geometry-Only is the sole unresolved-material run.
-- [ ] Maxwell 3D, Maxwell 2D, and FEMM plans share identical effective inputs.
-- [ ] Run Manifest and Normalized Result Set contracts are immutable and
+- [x] One v5 Project round-trips byte-identically.
+- [x] Project contains Design, one Operating Point, and Simulation Recipe.
+- [x] Project stores no backend, dimension, AEDT target, or generated artifact.
+- [x] Frequency and temperatures are shared Operating Point fields.
+- [x] Each Design winding has exactly one Operating Point entry.
+- [x] AC RMS and AC peak are explicit; conversion exists once.
+- [x] One exact compatible material revision and B-H series are pinned.
+- [x] Manual material compatibility acknowledgment persists and validates.
+- [x] Confirmed Maxwell 3D Geometry-Only is the sole unresolved-material run.
+- [x] Maxwell 3D, Maxwell 2D, and FEMM plans share identical effective inputs.
+- [x] Run Manifest and Normalized Result Set contracts are immutable and
   backend-labeled.
-- [ ] All non-live tests, Ruff, strict mypy, architecture checks, coverage, and
+- [x] All non-live tests, Ruff, strict mypy, architecture checks, coverage, and
   diff hygiene pass.
-- [ ] M6 acceptance evidence and M7 handoff are recorded.
+- [x] M6 acceptance evidence and M7 handoff are recorded.

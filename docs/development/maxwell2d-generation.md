@@ -1,9 +1,10 @@
 # Maxwell 2D generation procedure
 
-Milestone 4 generates a documented approximate Maxwell 2D cross-sectional
-project from an inductor project file. Generation runs as named stages; the
-generation manifest (`generation-manifest.json`) records every stage, and a
-partial design is never reported as successful.
+The M6 application service generates a documented approximate Maxwell 2D
+cross-sectional AEDT project from a backend-independent schema-v5 Project
+document and a Maxwell 2D Generate Only Run Request. Generation runs as named
+stages; the Run Manifest records effective inputs, assumptions, every stage,
+and artifacts. A partial design is never reported as successful.
 
 ## Prerequisites
 
@@ -19,10 +20,14 @@ partial design is never reported as successful.
    .\tools\run_aedt_maxwell2d.ps1 -Release 2025.2 -Edition commercial -Graphical
    ```
 
-2. Review `artifacts\maxwell2d\2025.2-commercial\generation-manifest.json`:
-   every stage `succeeded: true`, `succeeded: true` at top level, `dimension`
-   is `2d`, and the `dcBias` block reports `blocked` (DC bias is not generated
-   in 2D — see `dc-bias-compatibility.md`).
+2. Review `artifacts\maxwell2d\2025.2-commercial\generation-manifest.json`.
+   The file contains the shared Run Manifest: `status` is `succeeded`, `backend`
+   is `maxwell-2d`, `mode` is `generate-only`,
+   `dimensionalRepresentation` is `equivalent-cross-section`, every stage has
+   status `succeeded`, and the approximation warning is present. Confirm the
+   shared frequency and temperatures, both RMS and peak winding currents, exact
+   material revision/B-H series, recipe, solver/adapter versions, and AEDT
+   artifact.
 3. Open the generated `.aedt` in AEDT. Confirm:
    - An annular core (outer circle minus bore) in the XY plane.
    - Two conductor circles per turn (go and return), sized from the bare
@@ -34,8 +39,8 @@ partial design is never reported as successful.
      the region edges (Maxwell 2D AC Magnetic requires an explicit outer
      boundary; the region alone does not satisfy validation), length-based
      mesh operations on conductors and core.
-   - `Setup1` (Eddy Current) at the project frequency, `Matrix1` over all
-     windings, resistance/inductance report definitions.
+   - `Setup1` (Eddy Current) at the shared Operating Point frequency, `Matrix1`
+     over all windings, and the requested report definitions.
    - Design validation (checkmark button) passes.
 4. Optionally run the marked integration test on the same machine:
 
@@ -45,19 +50,19 @@ partial design is never reported as successful.
    .venv\Scripts\python.exe -m pytest tests/integration/aedt/test_maxwell2d_export.py -v
    ```
 
-## Milestone 4 scope notes
+## Current scope notes
 
 - The 2D model is a documented approximate XY cross-section equivalent, not a
   reproduction of the 3D toroid: no angular bends, local wire spacing, lead
   routing, or three-dimensional leakage/proximity effects (design spec §6.4).
-  The generation manifest and Guided Studio summary label the result
-  approximate.
-- Without a pinned imported/approved material, numeric powder grades use the
-  historical linear-permeability fallback. A pinned imported/approved revision
-  exports its selected nonlinear B-H series and available Steinmetz fit and can
-  support ferrite cores when the record contains usable material data.
-- DC operating-point generation is blocked in 2D regardless of capability
-  matrix state; see `docs/development/dc-bias-compatibility.md`.
+  The Run Manifest and Guided Studio summary label the result approximate.
+- Normal generation requires one exact imported/approved material revision and
+  its selected B-H series. Unresolved material is blocked for Maxwell 2D; no
+  scalar-permeability or compatibility fallback is generated.
+- Nonzero DC operating current is blocked in Maxwell 2D regardless of
+  capability matrix state; see `docs/development/dc-bias-compatibility.md`.
+- Project/UI current is AC RMS. Solver-independent run planning records it and
+  converts it once to the AC peak amplitude consumed unchanged by the adapter.
 - Exact PyAEDT calls were corrected through live AEDT 2025 R2 Commercial
   verification. The adapter uses `create_region` for the 2D air region, assigns
   an explicit balloon boundary, sets `model_depth` after geometry exists, and
