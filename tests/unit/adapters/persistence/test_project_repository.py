@@ -63,6 +63,9 @@ def test_document_round_trip_preserves_project() -> None:
 
 def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None:
     document = project_to_document(make_project())
+    design = document["design"]
+    operating_point = document["operatingPoint"]
+    simulation_recipe = document["simulationRecipe"]
 
     assert document["schemaVersion"] == 5
     assert set(document) == {
@@ -73,9 +76,45 @@ def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None
         "operatingPoint",
         "simulationRecipe",
     }
-    assert "target" not in document
-    assert "materials" not in document
-    assert "frequencyHz" not in document["design"]["windings"][0]  # type: ignore[index]
+    assert set(document["metadata"]) == {"name", "description"}  # type: ignore[arg-type]
+    assert set(design) == {  # type: ignore[arg-type]
+        "core",
+        "windings",
+        "coreMaterial",
+        "manualMaterialCompatibilityAcknowledged",
+    }
+    assert set(design["windings"][0]) == {  # type: ignore[index]
+        "windingId",
+        "label",
+        "turns",
+        "conductor",
+        "mode",
+        "startAngleDeg",
+        "sectorDeg",
+        "minSpacingM",
+        "minClearanceM",
+        "windingDirection",
+        "terminalIntent",
+    }
+    assert set(operating_point) == {  # type: ignore[arg-type]
+        "frequencyHz",
+        "windingTemperatureC",
+        "coreTemperatureC",
+        "windings",
+    }
+    assert set(operating_point["windings"][0]) == {  # type: ignore[index]
+        "windingId",
+        "acRmsCurrentA",
+        "acPhaseDeg",
+        "dcCurrentA",
+        "currentDirection",
+    }
+    assert set(simulation_recipe) == {  # type: ignore[arg-type]
+        "meshIntent",
+        "maximumPasses",
+        "percentError",
+        "requestedOutputs",
+    }
 
 
 def test_pinned_material_snapshot_round_trips_byte_identically(tmp_path: Path) -> None:

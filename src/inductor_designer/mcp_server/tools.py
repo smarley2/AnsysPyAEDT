@@ -33,6 +33,7 @@ from inductor_designer.application.services.aedt_support import (
 )
 from inductor_designer.application.services.geometry_model import build_geometry_model
 from inductor_designer.application.services.maxwell_export import (
+    RunGenerationFailed,
     generate_run,
     run_manifest_json,
 )
@@ -63,6 +64,18 @@ class ToolContext:
 def _failure(error: Exception) -> dict[str, object]:
     issues = getattr(error, "issues", None)
     return {"error": str(error), "issues": list(issues) if issues else [str(error)]}
+
+
+def _failed_run_result(
+    output_dir: Path,
+    error: RunGenerationFailed,
+) -> dict[str, object]:
+    manifest_text = run_manifest_json(error.manifest)
+    (output_dir / "run-manifest.json").write_text(manifest_text, encoding="utf-8")
+    result: dict[str, object] = dict(json.loads(manifest_text))
+    result["error"] = str(error)
+    result["issues"] = list(error.manifest.diagnostics)
+    return result
 
 
 def _output_dir(context: ToolContext, project_name: str) -> Path:
@@ -176,6 +189,8 @@ def generate_maxwell3d(context: ToolContext, path: str) -> dict[str, object]:
             manifest_text,
             encoding="utf-8",
         )
+    except RunGenerationFailed as error:
+        return _failed_run_result(output_dir, error)
     except Exception as error:
         return _failure(error)
     return dict(json.loads(manifest_text))
@@ -203,7 +218,7 @@ def generate_2d(
                 run_backend,
                 (
                     RunMode.GENERATE_AND_SOLVE
-                    if analyze
+                    if run_backend is RunBackend.FEMM and analyze
                     else RunMode.GENERATE_ONLY
                 ),
             ),
@@ -221,6 +236,8 @@ def generate_2d(
             manifest_text,
             encoding="utf-8",
         )
+    except RunGenerationFailed as error:
+        return _failed_run_result(output_dir, error)
     except Exception as error:
         return _failure(error)
     return dict(json.loads(manifest_text))

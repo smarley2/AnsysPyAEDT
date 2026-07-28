@@ -93,7 +93,11 @@ def _build_generation_controller(
     )
     from inductor_designer.geometry.naming import sanitize_identifier
     from inductor_designer.ui.generation_controller import GenerationController
-    from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
+    from inductor_designer.ui.generation_lines import (
+        GenerationBackend,
+        GenerationResult,
+        run_generation,
+    )
 
     catalog = SqliteCatalogRepository(catalog_path)
     matrix = MatrixCapabilityRepository(matrix_path)
@@ -101,7 +105,7 @@ def _build_generation_controller(
     maxwell2d_exporter = PyaedtMaxwell2dExporter()
     femm_solver = PyfemmSolver()
 
-    def runner(backend_label: str) -> tuple[str, ...]:
+    def runner(backend_label: str) -> GenerationResult:
         project = project_provider.current()
         capabilities = matrix.snapshot_for(
             SUPPORTED_AEDT_RELEASE,

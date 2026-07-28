@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
+
+import pytest
 
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from inductor_designer.simulation.run_contracts import RunStatus
 from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
@@ -92,7 +96,7 @@ def test_exception_becomes_error_line(tmp_path: Path) -> None:
 
     exporters = _exporters()
     exporters["maxwell3d_exporter"] = ExplodingExporter()
-    lines = run_generation(
+    result = run_generation(
         GenerationBackend.MAXWELL_3D,
         project_for_runs(),
         CATALOG,
@@ -100,5 +104,12 @@ def test_exception_becomes_error_line(tmp_path: Path) -> None:
         tmp_path,
         **exporters,  # type: ignore[arg-type]
     )
-    assert len(lines) == 1
-    assert "boom" in lines[0]
+    assert len(result) == 1
+    assert "boom" in result[0]
+    manifest = result.failed_manifest
+    assert manifest is not None
+    assert manifest.status is RunStatus.FAILED
+    assert manifest.diagnostics == ("RuntimeError: boom",)
+    assert manifest.artifacts == ()
+    with pytest.raises(FrozenInstanceError):
+        manifest.status = RunStatus.SUCCEEDED  # type: ignore[misc]

@@ -27,6 +27,7 @@ from inductor_designer.application.services.aedt_support import (
 )
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    RunGenerationFailed,
     generate_run,
     run_manifest_json,
 )
@@ -93,6 +94,14 @@ def main(
             application_version=__version__,
             non_graphical=not args.graphical,
         )
+    except RunGenerationFailed as failed:
+        args.evidence.write_text(
+            run_manifest_json(failed.manifest),
+            encoding="utf-8",
+        )
+        for diagnostic in failed.manifest.diagnostics:
+            print(f"FAILED: {diagnostic}", file=sys.stderr)
+        return 1
     except (MaxwellExportBlocked, RunPlanningError) as blocked:
         for issue in blocked.issues:
             print(f"BLOCKED: {issue}", file=sys.stderr)

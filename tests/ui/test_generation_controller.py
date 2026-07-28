@@ -18,7 +18,16 @@ from inductor_designer.application.services.aedt_support import (  # noqa: E402
     SUPPORTED_AEDT_EDITION,
     SUPPORTED_AEDT_RELEASE,
 )
+from inductor_designer.application.services.maxwell_export import (  # noqa: E402
+    RunGenerationFailed,
+    generate_run,
+)
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease  # noqa: E402
+from inductor_designer.simulation.run_contracts import (  # noqa: E402
+    RunBackend,
+    RunMode,
+    RunRequest,
+)
 from inductor_designer.ui.generation_controller import (  # noqa: E402
     CurrentProjectProvider,
     GenerationController,
@@ -26,6 +35,14 @@ from inductor_designer.ui.generation_controller import (  # noqa: E402
 from inductor_designer.ui.main import (  # noqa: E402
     _build_generation_controller,
     _persist_and_publish_project,
+)
+from tests.fakes.femm_solver import RecordingFemmSolver  # noqa: E402
+from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter  # noqa: E402
+from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter  # noqa: E402
+from tests.unit.application.test_maxwell_export import (  # noqa: E402
+    CAPABILITIES,
+    CATALOG,
+    project_for_runs,
 )
 from tests.unit.domain.test_project import make_project  # noqa: E402
 
@@ -94,6 +111,44 @@ def test_generate_handles_runner_exception() -> None:
     assert len(controller.lines) == 1
     assert "Generation failed:" in controller.lines[0]
     assert "test error from runner" in controller.lines[0]
+
+
+def test_generate_retains_failed_manifest_from_runner_result(tmp_path: Path) -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+
+    class _RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+        def export(self, request: object) -> object:  # type: ignore[override]
+            raise RuntimeError("UI adapter failed")
+
+    with pytest.raises(RunGenerationFailed) as raised:
+        generate_run(
+            project_for_runs(),
+            RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            tmp_path,
+            maxwell3d_exporter=_RaisingMaxwell3dExporter(),
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            run_id="ui-failed-run",
+            application_version="ui-test",
+        )
+    failed_manifest = raised.value.manifest
+
+    class _FailedResult:
+        def __init__(self) -> None:
+            self.lines = ("Generation failed: UI adapter failed",)
+            self.failed_manifest = failed_manifest
+
+        def __iter__(self) -> object:
+            return iter(self.lines)
+
+    controller = GenerationController(lambda _backend: _FailedResult())  # type: ignore[arg-type]
+    controller.generate("Maxwell 3D")
+    _wait_until_idle(app, controller)
+
+    assert controller.lines == ["Generation failed: UI adapter failed"]
+    assert controller.failed_manifest is failed_manifest
 
 
 def test_project_provider_publishes_only_after_persistence_succeeds() -> None:

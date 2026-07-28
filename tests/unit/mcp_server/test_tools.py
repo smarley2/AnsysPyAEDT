@@ -150,6 +150,32 @@ def test_generate_maxwell3d_returns_manifest_and_writes_evidence(
     assert json.loads(evidence.read_text(encoding="utf-8")) == result
 
 
+def test_generate_maxwell3d_failure_returns_and_writes_failed_manifest(
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
+) -> None:
+    class _RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+        def export(self, request: object) -> object:  # type: ignore[override]
+            raise RuntimeError("MCP Maxwell 3D adapter failed")
+
+    broken_context = replace(
+        context,
+        maxwell3d_exporter=_RaisingMaxwell3dExporter(),
+    )
+    target = tmp_path / "saved.inductor.json"
+    _save(broken_context, document, target)
+
+    result = tools.generate_maxwell3d(broken_context, str(target))
+
+    assert result["backend"] == "maxwell-3d"
+    assert result["status"] == "failed"
+    assert result["diagnostics"] == ["RuntimeError: MCP Maxwell 3D adapter failed"]
+    assert result["issues"] == result["diagnostics"]
+    assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
+    assert result["artifacts"] == []
+    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
+    assert json.loads(evidence.read_text(encoding="utf-8"))["status"] == "failed"
+
+
 def test_generate_2d_femm_backend_has_results(
     context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
@@ -164,7 +190,7 @@ def test_generate_2d_femm_backend_has_results(
     assert json.loads(evidence.read_text(encoding="utf-8")) == result
 
 
-def test_generate_2d_femm_solver_raising_returns_error_dict(
+def test_generate_2d_femm_failure_returns_and_writes_failed_manifest(
     context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
     class _RaisingFemmSolver:
@@ -188,7 +214,33 @@ def test_generate_2d_femm_solver_raising_returns_error_dict(
         backend="femm",
         analyze=False,
     )
-    assert "error" in result
+    assert result["backend"] == "femm"
+    assert result["mode"] == "generate-only"
+    assert result["status"] == "failed"
+    assert result["diagnostics"] == [
+        "RuntimeError: Circuit 'primary' returned zero current"
+    ]
+    assert result["issues"] == result["diagnostics"]
+    assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
+    assert result["artifacts"] == []
+    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
+    assert json.loads(evidence.read_text(encoding="utf-8"))["status"] == "failed"
+
+
+def test_generate_2d_default_aedt_stays_generate_only_when_analyze_defaults_true(
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
+) -> None:
+    target = tmp_path / "saved.inductor.json"
+    _save(context, document, target)
+
+    result = tools.generate_2d(context, str(target))
+
+    assert result["backend"] == "maxwell-2d"
+    assert result["mode"] == "generate-only"
+    assert result["status"] == "succeeded"
+    exporter = context.maxwell2d_exporter
+    assert isinstance(exporter, RecordingMaxwell2dExporter)
+    assert len(exporter.requests) == 1
 
 
 def test_generate_2d_bogus_backend_returns_error(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 
@@ -157,6 +157,27 @@ def material_record_with_series(*series: PointSeries) -> MaterialRecord:
 
 def test_project_aggregate_holds_design_operating_point_and_recipe() -> None:
     project = make_project()
+    assert {field.name for field in fields(InductorProject)} == {
+        "project_id",
+        "name",
+        "description",
+        "design",
+        "operating_point",
+        "simulation_recipe",
+    }
+    assert {field.name for field in fields(WindingDefinition)} == {
+        "winding_id",
+        "label",
+        "turns",
+        "conductor_name",
+        "mode",
+        "start_angle_deg",
+        "sector_deg",
+        "min_spacing_m",
+        "min_clearance_m",
+        "winding_direction",
+        "terminal_intent",
+    }
     assert isinstance(project.design.core, CatalogCoreSelection)
     assert project.design.windings[0].turns == 20
     assert project.operating_point.frequency_hz == 100_000.0

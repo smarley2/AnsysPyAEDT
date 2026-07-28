@@ -44,3 +44,32 @@ def test_main_exports_sample_project_and_writes_evidence(tmp_path: Path) -> None
     assert payload["windings"][0]["acPeakCurrentA"] == pytest.approx(
         2.0 * math.sqrt(2.0)
     )
+
+
+def test_main_writes_failed_run_manifest_when_exporter_raises(
+    tmp_path: Path,
+) -> None:
+    class _RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+        def export(self, request: object) -> object:  # type: ignore[override]
+            raise RuntimeError("CLI Maxwell 3D adapter failed")
+
+    evidence = tmp_path / "run-manifest.json"
+
+    exit_code = main(
+        [
+            "--project",
+            str(_fixture(tmp_path)),
+            "--output-directory",
+            str(tmp_path / "out"),
+            "--evidence",
+            str(evidence),
+        ],
+        exporter=_RaisingMaxwell3dExporter(),
+    )
+
+    assert exit_code == 1
+    payload = json.loads(evidence.read_text(encoding="utf-8"))
+    assert payload["backend"] == "maxwell-3d"
+    assert payload["status"] == "failed"
+    assert payload["diagnostics"] == ["RuntimeError: CLI Maxwell 3D adapter failed"]
+    assert payload["artifacts"] == []

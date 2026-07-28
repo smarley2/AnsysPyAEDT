@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 from uuid import uuid4
 
 from inductor_designer import __version__
@@ -14,10 +15,16 @@ from inductor_designer.application.ports.maxwell_exporter import (
 )
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
+    RunGenerationFailed,
     generate_run,
 )
 from inductor_designer.application.services.run_planning import RunPlanningError
-from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
+from inductor_designer.simulation.run_contracts import (
+    RunBackend,
+    RunManifest,
+    RunMode,
+    RunRequest,
+)
 
 if TYPE_CHECKING:
     from inductor_designer.application.ports.catalog import CatalogRepository
@@ -41,6 +48,26 @@ _RUN_BACKENDS = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class GenerationResult(Sequence[str]):
+    """UI display lines with optional immutable failed-run evidence."""
+
+    lines: tuple[str, ...]
+    failed_manifest: RunManifest | None = None
+
+    @overload
+    def __getitem__(self, index: int) -> str: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[str, ...]: ...
+
+    def __getitem__(self, index: int | slice) -> str | tuple[str, ...]:
+        return self.lines[index]
+
+    def __len__(self) -> int:
+        return len(self.lines)
+
+
 def _stage_lines(stages: Sequence[StageRecord]) -> tuple[str, ...]:
     return tuple(
         f"{stage.name}: {'ok' if stage.succeeded else 'FAILED'} - {stage.message}"
@@ -58,8 +85,8 @@ def run_generation(
     maxwell3d_exporter: Maxwell3dExporter,
     maxwell2d_exporter: Maxwell2dExporter,
     femm_solver: FemmSolver,
-) -> tuple[str, ...]:
-    """Run one generation backend and return display lines. Never raises."""
+) -> GenerationResult:
+    """Run one generation backend and retain failed-run evidence. Never raises."""
     try:
         outcome = generate_run(
             project,
@@ -75,7 +102,7 @@ def run_generation(
         )
         result = outcome.adapter_result
         if isinstance(result, MaxwellExportResult):
-            return _stage_lines(result.stages)
+            return GenerationResult(_stage_lines(result.stages))
         if not isinstance(result, FemmSolveResult):
             raise TypeError("Run generation returned an unknown adapter result.")
         lines = [f"fem: {result.fem_path}"]
@@ -92,8 +119,18 @@ def run_generation(
                     f"{winding.winding_id}: R={winding_result.resistance_ohm:g} ohm  "
                     f"L={winding_result.inductance_h:g} H"
                 )
-        return tuple(lines)
+        return GenerationResult(tuple(lines))
+    except RunGenerationFailed as error:
+        return GenerationResult(
+            tuple(
+                f"Generation failed: {diagnostic}"
+                for diagnostic in error.manifest.diagnostics
+            ),
+            failed_manifest=error.manifest,
+        )
     except (MaxwellExportBlocked, RunPlanningError) as error:
-        return tuple(f"BLOCKED: {issue}" for issue in error.issues)
+        return GenerationResult(
+            tuple(f"BLOCKED: {issue}" for issue in error.issues)
+        )
     except Exception as error:  # noqa: BLE001 - the UI must never crash from generation
-        return (f"Generation failed: {error}",)
+        return GenerationResult((f"Generation failed: {error}",))
