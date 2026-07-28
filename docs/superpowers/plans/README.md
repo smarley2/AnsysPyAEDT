@@ -23,9 +23,9 @@ before the next plan freezes assumptions that depend on it.
   [dc-bias-solve-limitation.md](../../development/dc-bias-solve-limitation.md).
 - Milestone 5b is accepted and closed as of 2026-07-23 for the spreadsheet-only
   Material Studio workflow.
-- **Milestone 6, Project Foundation, is next.** It has no detailed plan yet; the
-  next worker must write one from the approved roadmap realignment before
-  changing any schema or runtime contract.
+- **Milestone 6, Project Foundation, is next.** Its
+  [detailed implementation plan](2026-07-28-m6-project-foundation.md) is active;
+  no schema or runtime contract changes start outside that plan.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
@@ -54,7 +54,7 @@ executed. They do not override the current support and product scope.
 | Order | Milestone | Entry condition | Exit evidence |
 | --- | --- | --- | --- |
 | 5a closeout | [Live material validation and support cleanup](2026-07-24-m5a-live-validation-closeout.md) | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
-| 6 | Project Foundation | M5a accepted | One backend-independent Project document round-trips shared frequency, winding/core temperatures, RMS currents, and exact core-material state, then creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans |
+| 6 | Project Foundation | M5a accepted; [detailed plan active](2026-07-28-m6-project-foundation.md) | One backend-independent Project document round-trips shared frequency, winding/core temperatures, RMS currents, and exact core-material state, then creates validated Maxwell 3D, Maxwell 2D, and FEMM run plans |
 | 7 | Guided Studio and Preliminary Estimates | M6 contracts accepted | A user authors, saves, reopens, inspects analytical B/J/wire/core-loss estimates or explicit unavailable reasons, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
 | 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
 | 9 | Reliability | M8 run/result contracts accepted | Autosave, recovery, undo/redo, cancellation recovery, and redacted diagnostics survive forced failures |
