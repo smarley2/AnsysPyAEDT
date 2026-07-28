@@ -33,12 +33,7 @@ class WindingDefinition:
     min_spacing_m: float
     min_clearance_m: float
     winding_direction: WindingDirection
-    current_direction: CurrentDirection
     terminal_intent: str
-    ac_magnitude_a: float
-    ac_phase_deg: float
-    frequency_hz: float
-    dc_current_a: float
 
     def __post_init__(self) -> None:
         if not self.winding_id.strip():
