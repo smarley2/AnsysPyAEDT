@@ -131,10 +131,29 @@ class FileOverlayMaterialRepository:
             raise ValueError("persisted material identity does not match its repository path")
         return record
 
+    def _parse_or_skip(self, path: Path) -> MaterialRecord | None:
+        """Parse a stored record, or warn and return None if this build cannot.
+
+        Every operation that *enumerates* the overlay goes through here. A record
+        written by an older schema must not break listing, and must not block
+        saving the very import that replaces it. Fetching a specific revision
+        still raises, because there the caller asked for that exact record.
+        """
+        try:
+            return material_record_from_json(self._document(path))
+        except ValueError as error:
+            warnings.warn(
+                f"skipping unreadable material record {path}: {error}",
+                stacklevel=3,
+            )
+            return None
+
     def _reject_material_path_alias(self, ref: MaterialRef) -> None:
         requested_key = self._material_path_key(ref)
         for path in self._root.glob("*/*/*/*/record.json"):
-            stored = material_record_from_json(self._document(path))
+            stored = self._parse_or_skip(path)
+            if stored is None:
+                continue
             if stored.ref != ref and self._material_path_key(stored.ref) == requested_key:
                 raise ValueError("material identity paths collide after sanitizing")
 
@@ -206,18 +225,8 @@ class FileOverlayMaterialRepository:
         for path in self._root.glob("*/*/*/*/record.json"):
             if any(part.startswith(".") for part in path.relative_to(self._root).parts[:-1]):
                 continue
-            # Listing must survive a record this build cannot parse — one written
-            # by an older schema, for instance. Aborting the whole listing took the
-            # application down at startup, which also blocked the very import that
-            # would have replaced the offending record. Integrity problems in a
-            # record that *does* parse still raise below.
-            try:
-                record = material_record_from_json(self._document(path))
-            except ValueError as error:
-                warnings.warn(
-                    f"skipping unreadable material record {path}: {error}",
-                    stacklevel=2,
-                )
+            record = self._parse_or_skip(path)
+            if record is None:
                 continue
             revision_directory = path.parent
             if revision_directory != self._revision_directory(
@@ -243,7 +252,9 @@ class FileOverlayMaterialRepository:
         for path in material_directory.iterdir():
             if not path.is_dir() or path.name.startswith("."):
                 continue
-            record = material_record_from_json(self._document(path / "record.json"))
+            record = self._parse_or_skip(path / "record.json")
+            if record is None:
+                continue
             if record.ref != ref:
                 return ()
             revisions.append(record.revision_id)

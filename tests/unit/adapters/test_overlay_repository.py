@@ -320,3 +320,22 @@ def test_listing_skips_an_unreadable_record_instead_of_failing(tmp_path: Path) -
         materials = repository.list_materials()
 
     assert materials == (good.ref,)
+
+
+def test_saving_alongside_an_unreadable_record_succeeds(tmp_path: Path) -> None:
+    """Saving scans every record for path aliases. A record this build cannot
+    parse must not block the import that replaces it — that deadlock is exactly
+    what a mandatory new field creates."""
+    source = b"h,b\n0,0\n100,0.2\n"
+    stale = tmp_path / "Magnetics" / "Kool_Mu" / "W60" / "W999999999999"
+    stale.mkdir(parents=True)
+    (stale / "record.json").write_text('{"revisionId": "999999999999"}', encoding="utf-8")
+
+    repository = FileOverlayMaterialRepository(tmp_path)
+    fresh = _record(source, revision_id="333333333333")
+
+    with pytest.warns(UserWarning, match="skipping unreadable material record"):
+        repository.save(fresh, {"bh-source.csv": source})
+        assert repository.list_revisions(fresh.ref) == ("333333333333",)
+
+    assert repository.get(fresh.ref, "333333333333").revision_id == "333333333333"
