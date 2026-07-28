@@ -129,6 +129,30 @@ against the pinned record.
 | Exact point comparison | Pass — first row `0 0`, last row `1.4167755950000001 39788.735772974003`, matching the canonical points |
 | Saving and reopening retains the material | Pass — checked earlier in a FEMM session by Fabio Posser |
 
+## Maxwell 2D handoff — gap found and closed
+
+The evidence above originally covered Maxwell 3D and FEMM only. Maxwell 2D was
+never exercised with this material: the handoff test used `export_maxwell3d`, the
+pinned project is `dimensionMode: "3d"`, and the existing live 2D test uses the
+generic sample fixture whose core material is a **linear** catalog permeability.
+The plan's requirement table claims "Nonlinear B-H and core-loss model reach
+AEDT" without qualifying the dimension, so that requirement was only half met.
+
+`tests/integration/aedt/test_material_handoff_2d.py` now closes it and runs with
+the other two from `tools/run_m5a_material_validation.ps1`:
+
+```
+test_material_handoff.py       PASSED
+test_material_handoff_2d.py    PASSED
+femm/test_material_handoff.py  PASSED
+3 passed, 1 warning in 79.62s
+```
+
+Verified in the saved 2D project `M2_golden_sample_2d.aedt`: the material
+`Magnetics_High_Flux_60_r2271f4f7644f` is present, its permeability block carries
+`property_type='nonlinear'`, the B-H table holds `Points[1002: ...]` = 501 pairs,
+the core-loss coefficients are present, and the initial-mesh slider is at 6.
+
 ## Confirmation re-run
 
 The controlled validation was run a second time after the overlay-save retry fix

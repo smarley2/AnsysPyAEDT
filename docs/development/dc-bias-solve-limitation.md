@@ -139,10 +139,60 @@ that needs it.
 - A link must point at a solution that already exists; wire links after the
   source design has solved.
 
-## Status
+## Resolution: initial mesh settings
 
-Unresolved for production-sized models. `1 adaptive pass on both steps` is the
-only configuration observed to solve, and it reports
-`Adaptive Passes did not converge based on specified criteria`, so its accuracy
-is not established. It is a diagnostic workaround, not a shipping default, and
-the exporter has deliberately **not** been changed to adopt it.
+Fabio Posser found it. The trigger is the **initial mesh configuration**, not the
+setup, the material, or the geometry. Curvilinear meshing produces curved
+elements on curved surfaces, and the DC-to-AC mapping fails on precisely those —
+which is what the error message said all along.
+
+The working configuration, read back out of his saved project rather than
+transcribed from the dialog:
+
+```
+GlobalSurfApproximation: CurvedSurfaceApproxChoice='UseSlider', SliderMeshSettings=6
+GlobalCurvilinear:       Apply=false
+GlobalModelRes:          UseAutoLength=true
+MeshMethod='AnsoftTAU'
+UseLegacyFaceterForTauVolumeMesh=false
+DynamicSurfaceResolution=false
+UseFlexMeshingForTAUvolumeMesh=false
+```
+
+The 3D adapter's mesh stage now applies exactly this through
+`Mesh.assign_initial_mesh_from_slider(level=6, method="AnsoftTAU",
+curvilinear=False, dynamic_surface=False, flex_mesh=False)`, and two unit tests
+pin the values so curvilinear meshing cannot be switched back on unnoticed.
+
+Adaptive refinement is left at the shipped defaults, so the earlier workaround of
+forcing one pass is no longer needed, and neither is faceting the conductor.
+
+**Not yet confirmed by a solve.** The configuration is implemented and the
+generated project validates; the run that proves it is
+`artifacts/mesh-fix-round-wire/` with the original round conductor and default
+adaptivity.
+
+### Maxwell 2D
+
+PyAEDT restricts Maxwell 2D to mesh methods `["Auto", "AnsoftClassic"]` and emits
+no curvilinear or dynamic-surface arguments for it, so this configuration cannot
+be applied there. Only the surface-approximation slider carries over, and the 2D
+adapter sets it to the same level. 2D never links a DC solution into an AC one,
+so it does not hit this failure mode at all.
+
+## Superseded workarounds
+
+Kept for the record, since each one cost a solve to establish:
+
+- **One adaptive pass on both steps** solves (14m24s) but reports
+  `Adaptive Passes did not converge`, so its accuracy was never established. The
+  exporter was deliberately not changed to adopt it.
+- **Faceting the conductor cross-section** into an N-gon removes the curved
+  surfaces and validates, but an inscribed polygon carries less copper — 90.0% at
+  8 sides, 97.4% at 16 — which raises DC resistance. `CONDUCTOR_FACETS` in the 3D
+  adapter still exposes it, defaulting to `0` (true circle).
+  Faceting the conductor alone fails validation with
+  `Find conduction path: '..._Coil (Face_N)' is not on any conduction path`,
+  because the coil terminal sheets are built separately and a round terminal
+  overhangs a faceted conductor. Conductor and terminal must use the same side
+  count — a coupling in the exporter that nothing had exercised before.

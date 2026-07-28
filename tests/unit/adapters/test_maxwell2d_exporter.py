@@ -146,3 +146,15 @@ def test_falsy_balloon_return_fails_stage_and_still_saves(tmp_path: Path) -> Non
     saves = [k for n, k in app.calls if n == "save_project"]
     assert len(saves) == 1
     assert app.released == [(True, True)]
+
+
+def test_initial_mesh_uses_the_slider_only(tmp_path: Path) -> None:
+    """Maxwell 2D offers neither the TAU mesher nor the curvilinear switch, so the
+    3D workaround for the DC-bias mapping failure cannot be applied here."""
+    app = FakeMaxwell2dApp()
+    result = run(tmp_path, app)
+    assert result.succeeded()  # type: ignore[attr-defined]
+
+    initial_mesh = [k for n, k in app.calls if n == "mesh.assign_initial_mesh_from_slider"]
+    assert len(initial_mesh) == 1
+    assert initial_mesh[0] == {"level": 6}

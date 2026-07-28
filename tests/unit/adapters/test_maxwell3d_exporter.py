@@ -166,6 +166,15 @@ def test_eddy_region_mesh_setup_matrix_reports(tmp_path: Path) -> None:
     assert "modeler.create_air_region" in names
     mesh_calls = [k for n, k in app.calls if n == "mesh.assign_length_mesh"]
     assert len(mesh_calls) == 2
+    initial_mesh = [k for n, k in app.calls if n == "mesh.assign_initial_mesh_from_slider"]
+    assert len(initial_mesh) == 1
+    # These exact settings are what makes an AC Magnetic with DC solve complete;
+    # curvilinear meshing in particular must stay off. See
+    # docs/development/dc-bias-solve-limitation.md.
+    assert initial_mesh[0]["method"] == "AnsoftTAU"
+    assert initial_mesh[0]["level"] == 6
+    assert initial_mesh[0]["curvilinear"] is False
+    assert initial_mesh[0]["dynamic_surface"] is False
     setup_updates = [k for n, k in app.calls if n == "setup.update"]
     assert setup_updates[0]["props"]["Frequency"] == "100000Hz"
     assert setup_updates[0]["props"]["MaximumPasses"] == 10

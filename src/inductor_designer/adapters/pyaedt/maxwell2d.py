@@ -9,7 +9,10 @@ from inductor_designer.application.ports.maxwell_exporter import (
     StageRecord,
 )
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
-from inductor_designer.simulation.maxwell_plan import COPPER_MATERIAL
+from inductor_designer.simulation.maxwell_plan import (
+    COPPER_MATERIAL,
+    INITIAL_MESH_SLIDER_LEVEL,
+)
 
 
 class Maxwell2dApp(Protocol):
@@ -158,6 +161,11 @@ def _stage_region(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
 
 
 def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
+    # Maxwell 2D exposes neither the TAU mesher nor the curvilinear switch that
+    # the 3D adapter relies on, so only the surface-approximation slider carries
+    # over. 2D never links a DC solution into an AC one, so it does not hit the
+    # mapping failure those 3D settings work around.
+    app.mesh.assign_initial_mesh_from_slider(level=INITIAL_MESH_SLIDER_LEVEL)
     conductors = [c.name for g in plan.windings for c in g.conductors]
     app.mesh.assign_length_mesh(
         conductors, maximum_length=plan.mesh.conductor_max_length_m, name="ConductorLength"

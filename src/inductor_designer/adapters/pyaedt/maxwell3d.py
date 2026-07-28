@@ -11,7 +11,11 @@ from inductor_designer.application.ports.maxwell_exporter import (
     StageRecord,
 )
 from inductor_designer.simulation.capabilities import DcBiasStrategy
-from inductor_designer.simulation.maxwell_plan import COPPER_MATERIAL, Maxwell3dDesignPlan
+from inductor_designer.simulation.maxwell_plan import (
+    COPPER_MATERIAL,
+    INITIAL_MESH_SLIDER_LEVEL,
+    Maxwell3dDesignPlan,
+)
 
 
 class Maxwell3dApp(Protocol):
@@ -101,6 +105,26 @@ def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
 
 
+# Number of flat facets per conductor cross-section. 0 keeps a true circle.
+#
+# A round conductor gives Maxwell nothing but curved surfaces, and the DC-bias
+# solve fails while mapping its DC field onto the AC mesh precisely there (see
+# docs/development/dc-bias-solve-limitation.md). Faceting the wire removes those
+# surfaces. Note that an inscribed N-gon carries less copper than the circle it
+# replaces — about 10% less at N=8, 2.5% at N=16 — which raises DC resistance,
+# so this is not a free change.
+#
+# ponytail: provisional module-level knob while the effect on the solve is being
+# verified on real hardware; promote to the project schema, with the conductor
+# area decision made explicitly, once it is confirmed.
+CONDUCTOR_FACETS = 0
+
+# Initial mesh settings. TAU with curvilinear meshing disabled is what makes the
+# DC-bias solve complete; Maxwell 2D offers neither TAU nor the curvilinear
+# switch, so the 2D adapter applies only the slider level.
+INITIAL_MESH_METHOD = "AnsoftTAU"
+
+
 def _stage_windings(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     count = 0
     for group in plan.windings:
@@ -113,7 +137,7 @@ def _stage_windings(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
                 material=COPPER_MATERIAL,
                 xsection_type="Circle",
                 xsection_width=turn.bare_diameter_m,
-                xsection_num_seg=0,
+                xsection_num_seg=CONDUCTOR_FACETS,
             )
             count += 1
     return f"{count} turn conductors created."
@@ -129,6 +153,9 @@ def _stage_terminals(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
                 orientation="YZ",
                 origin=[round(radial, 9), 0.0, disk.center.z],
                 radius=disk.radius_m,
+                # The terminal must lie on the conductor's end face, so it has to
+                # be faceted exactly like the conductor cross-section.
+                num_sides=CONDUCTOR_FACETS,
                 name=turn.terminal.name,
             )
             app.modeler.rotate(turn.terminal.name, axis="Z", angle=disk.station_deg)
@@ -195,6 +222,19 @@ def _stage_region(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
 
 
 def _stage_mesh(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+    # Initial mesh settings that make an 'AC Magnetic with DC' solve succeed on
+    # this geometry, verified live by Fabio Posser and read back from his saved
+    # project. Curvilinear meshing is the decisive one: it produces curved
+    # elements on curved surfaces, and the DC-to-AC field mapping fails on
+    # exactly those. See docs/development/dc-bias-solve-limitation.md.
+    app.mesh.assign_initial_mesh_from_slider(
+        level=INITIAL_MESH_SLIDER_LEVEL,
+        method=INITIAL_MESH_METHOD,
+        curvilinear=False,
+        dynamic_surface=False,
+        flex_mesh=False,
+        auto_model_resolution=True,
+    )
     conductors = [t.name for g in plan.windings for t in g.turns]
     app.mesh.assign_length_mesh(
         conductors, maximum_length=plan.mesh.conductor_max_length_m, name="ConductorLength"
@@ -202,7 +242,10 @@ def _stage_mesh(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     app.mesh.assign_length_mesh(
         [plan.core.name], maximum_length=plan.mesh.core_max_length_m, name="CoreLength"
     )
-    return "Length-based mesh restrictions assigned."
+    return (
+        f"Initial mesh {INITIAL_MESH_METHOD} slider {INITIAL_MESH_SLIDER_LEVEL}, "
+        "curvilinear off; length-based mesh restrictions assigned."
+    )
 
 
 def _stage_setup(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:

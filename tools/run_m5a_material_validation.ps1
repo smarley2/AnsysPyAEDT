@@ -75,6 +75,7 @@ $env:INDUCTOR_FEMM_LIVE = '1'
 
 & $python -m pytest `
     tests\integration\aedt\test_material_handoff.py `
+    tests\integration\aedt\test_material_handoff_2d.py `
     tests\integration\femm\test_material_handoff.py `
     -vv
 if ($LASTEXITCODE -ne 0) {

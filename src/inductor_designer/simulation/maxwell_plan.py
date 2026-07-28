@@ -23,6 +23,10 @@ DESIGN_NAME = "Inductor3D"
 SETUP_NAME = "Setup1"
 MATRIX_NAME = "Matrix1"
 COPPER_MATERIAL = "copper"
+
+# AEDT surface-approximation slider position for the initial mesh, shared by the
+# 2D and 3D adapters. 6 is the value verified live on AEDT 2025 R2.
+INITIAL_MESH_SLIDER_LEVEL = 6
 REGION_PADDING_PERCENT = 100.0
 
 
