@@ -33,6 +33,7 @@ def _approve_template(
         sources=imported.sources,
         created_at="2026-07-18T12:00:00+00:00",
         notes="Synthetic template end-to-end proof.",
+        mass_density_kg_per_m3=4800.0,
     )
     approved = approve_material(
         review_material(draft, "reviewer@example.com"),

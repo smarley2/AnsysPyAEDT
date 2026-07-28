@@ -78,6 +78,7 @@ def make_reproducible_material(
             source_page=1,
             captured_at="2026-07-24T00:00:00+00:00",
             source_description="Synthetic handoff fixture",
+            mass_density_kg_per_m3=4800.0,
         ),
         tuple(rows),
         upload_filename="synthetic-material.xlsx",
@@ -90,6 +91,7 @@ def make_reproducible_material(
         sources=imported.sources,
         created_at="2026-07-24T00:00:00+00:00",
         notes="Synthetic handoff fixture only.",
+        mass_density_kg_per_m3=4800.0,
     )
     sources = dict(imported.source_files)
     assert reproduce_record(record, sources).matches

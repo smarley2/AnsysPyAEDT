@@ -80,6 +80,8 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
         else spec.relative_permeability
     )
     material.conductivity = spec.conductivity_s_per_m
+    if spec.mass_density_kg_per_m3 is not None:
+        material.mass_density = spec.mass_density_kg_per_m3
     if spec.steinmetz is not None:
         accepted = material.set_power_ferrite_coreloss(
             cm=spec.steinmetz.k,

@@ -75,6 +75,7 @@ def _record() -> MaterialRecord:
         sources=(source,),
         series=series,
         relative_permeability=60.0,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02),
         notes="Imported from a material table.",
     )
@@ -234,6 +235,7 @@ def test_material_serialization_canonicalizes_every_nested_float() -> None:
     noncanonical = replace(
         record,
         relative_permeability=60.0000000004,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=SteinmetzFit(
             2.5000000004,
             1.4000000004,

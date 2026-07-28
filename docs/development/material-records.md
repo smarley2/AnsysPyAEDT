@@ -443,9 +443,40 @@ settings with curvilinear meshing disabled; see
 [dc-bias-solve-limitation.md](dc-bias-solve-limitation.md). Faceting costs 2.6%
 of the conductor copper area, so reported DC resistance runs about 2.7% high.
 
-Still open, and not blocking M5a: material records carry no mass density, so the
-exporter cannot write it. The measured value for this material is 8176 kg/m³
-(130 g in 15 900 mm³) and the agreed direction is to add density to the record
-and make it a mandatory Material Studio template column. That change invalidates
-revision `2271f4f7644f`, which has none, so it forces a re-import and a new
-revision id.
+## Mass density is a mandatory field
+
+Every material record carries `massDensityKgPerM3`, and it is **required** — the
+spreadsheet template has a `mass_density_kg_per_m3` column, the importer rejects a
+workbook without it, and the record type rejects a value outside 1000–25000 kg/m³.
+Both Maxwell adapters write it to the AEDT material, so a material no longer
+arrives at the solver massless.
+
+The range check exists because datasheets quote density in g/cm³, so the natural
+mistake is entering `8.176` where `8176` is meant. A silent 1000× error there
+would corrupt any density-derived quantity, so it fails instead:
+
+```
+mass_density_kg_per_m3 must be between 1000 and 25000 kg/m^3; got 8.176.
+Datasheet values in g/cm^3 must be multiplied by 1000.
+```
+
+Catalog cores selected without a material record still have no density available.
+Those export with no density rather than an invented one.
+
+### Migration: records made before this field
+
+Revision ids are content-derived, so density cannot be added to an existing
+record without changing its identity. Loading a record that predates the field
+fails deliberately:
+
+```
+ERROR: record.massDensityKgPerM3 is required
+```
+
+Such a material must be re-imported through Material Studio with the density
+column populated, which produces a **new revision id**. Any pinned project,
+evidence document, or validation runner that referenced the old revision has to be
+repointed at the new one.
+
+Known affected: `Magnetics / High Flux / 60` revision `2271f4f7644f`, the M5a
+validation material. Its measured density is **8176 kg/m³** (130 g in 15 900 mm³).

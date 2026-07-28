@@ -67,6 +67,7 @@ def _record(
             ),
         ),
         relative_permeability=1600.0,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=None,
         notes="Contract fixture",
     )
@@ -156,6 +157,7 @@ def test_save_get_canonicalization_matches_between_file_and_memory(tmp_path: Pat
         record,
         series=(noncanonical,),
         relative_permeability=1600.0000000004,
+        mass_density_kg_per_m3=4800.0,
     )
     repositories: tuple[MaterialRepository, ...] = (
         FileOverlayMaterialRepository(tmp_path / "overlay"),

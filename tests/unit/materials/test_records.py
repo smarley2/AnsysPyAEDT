@@ -58,6 +58,7 @@ def _record(
     approved_by: str | None = None,
     sources: tuple[SourceProvenance, ...] | None = None,
     series: tuple[PointSeries, ...] | None = None,
+    mass_density_kg_per_m3: float = 4800.0,
 ) -> MaterialRecord:
     return MaterialRecord(
         ref=MaterialRef("Magnetics", "Kool Mu", "60"),
@@ -69,6 +70,7 @@ def _record(
         sources=(_source(),) if sources is None else sources,
         series=(_series(),) if series is None else series,
         relative_permeability=60.0,
+        mass_density_kg_per_m3=mass_density_kg_per_m3,
         steinmetz=None,
         notes="",
     )
@@ -152,6 +154,7 @@ def test_material_record_canonicalizes_all_nested_floats_in_memory() -> None:
         sources=record.sources,
         series=record.series,
         relative_permeability=60.0000000004,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=SteinmetzFit(
             2.5000000004,
             1.4000000004,
@@ -225,3 +228,16 @@ def test_record_allows_empty_revision_only_for_transient_draft_or_imported() -> 
 def test_record_requires_twelve_lowercase_hex_revision(revision_id: str) -> None:
     with pytest.raises(ValueError, match="revision_id"):
         _record(revision_id=revision_id)
+
+
+@pytest.mark.parametrize("density", [8.176, 0.0, -1.0, 30000.0])
+def test_implausible_mass_density_is_rejected(density: float) -> None:
+    """Datasheets quote g/cm^3, so 8.176 for 8176 is the expected mistake."""
+    with pytest.raises(ValueError, match="mass_density_kg_per_m3"):
+        _record(mass_density_kg_per_m3=density)
+
+
+def test_mass_density_is_canonicalised_like_other_scalars() -> None:
+    record = _record(mass_density_kg_per_m3=8176.1234567891234)
+
+    assert record.mass_density_kg_per_m3 == 8176.123456789

@@ -28,26 +28,27 @@ from inductor_designer.application.services.material_table_import import (
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import MaterialRecord, SeriesKind, SourceKind
 
-_CSV_COLUMNS = (
+_METADATA_COLUMNS = (
     "manufacturer",
     "material_name",
     "grade",
+    "mass_density_kg_per_m3",
     "source_url",
     "source_page",
     "captured_at",
     "source_description",
-    "series_id",
+)
+_SERIES_METADATA_COLUMNS = (
     "curve_kind",
     "frequency_hz",
     "temperature_c",
     "dc_bias_a_per_m",
     "x_unit",
     "y_unit",
-    "x",
-    "y",
 )
-_METADATA_COLUMNS = _CSV_COLUMNS[:7]
-_SERIES_METADATA_COLUMNS = _CSV_COLUMNS[8:14]
+# Composed from the two blocks rather than sliced back out of a flat list, which
+# is what the old positional slices did — those shift silently on any insertion.
+_CSV_COLUMNS = (*_METADATA_COLUMNS, "series_id", *_SERIES_METADATA_COLUMNS, "x", "y")
 _BH_UNITS = (frozenset({"A/m", "kA/m", "Oe"}), frozenset({"T", "mT", "G", "kG"}))
 _LOSS_UNITS = (
     frozenset({"T", "mT", "G", "kG"}),
@@ -228,8 +229,13 @@ def _metadata(values: dict[str, object], filename: str, location: str) -> Materi
     source_url = values["source_url"]
     if not isinstance(source_url, str):
         raise _fail(filename, location, "source_url must be text")
+    mass_density = _number(
+        values["mass_density_kg_per_m3"], filename, location, "mass_density_kg_per_m3"
+    )
+    assert mass_density is not None  # not optional, so _number cannot return None
     return MaterialTableMetadata(
         ref=MaterialRef(manufacturer, material_name, grade),
+        mass_density_kg_per_m3=mass_density,
         source_url=source_url,
         source_page=_optional_page(values["source_page"], filename, location),
         captured_at=captured_at,
@@ -390,8 +396,16 @@ def _material_metadata(filename: str, sheet: Worksheet) -> MaterialTableMetadata
         source_url = ""
     if not isinstance(source_url, str):
         raise _fail(filename, locations["source_url"], "source_url must be text")
+    mass_density = _number(
+        values["mass_density_kg_per_m3"],
+        filename,
+        locations["mass_density_kg_per_m3"],
+        "mass_density_kg_per_m3",
+    )
+    assert mass_density is not None  # not optional, so _number cannot return None
     return MaterialTableMetadata(
         ref=MaterialRef(manufacturer, material_name, grade),
+        mass_density_kg_per_m3=mass_density,
         source_url=source_url,
         source_page=_optional_page(values["source_page"], filename, locations["source_page"]),
         captured_at=_captured_at(
@@ -539,6 +553,7 @@ def import_material_file_as_draft(
             series=imported.series,
             sources=imported.sources,
             created_at=created_at,
+            mass_density_kg_per_m3=imported.mass_density_kg_per_m3,
             notes=notes,
         ),
         source_files=imported.source_files,
@@ -567,6 +582,7 @@ def import_material_file_as_imported(
             series=imported.series,
             sources=imported.sources,
             created_at=created_at,
+            mass_density_kg_per_m3=imported.mass_density_kg_per_m3,
             notes=notes,
         ),
         source_files=imported.source_files,

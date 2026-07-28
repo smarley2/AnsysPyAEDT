@@ -89,6 +89,7 @@ def _record(
         sources=(_source(),) if sources is None else sources,
         series=(_bh_series(),) if series is None else series,
         relative_permeability=relative_permeability,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=steinmetz,
         notes="",
     )

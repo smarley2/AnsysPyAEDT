@@ -6,6 +6,11 @@ from enum import Enum
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.numerics import canonical_float
 
+# Plausible mass density for a magnetic core material, in kg/m^3. Soft ferrites
+# sit near 4800, powder cores between 5000 and 8200, solid iron near 7870.
+MIN_MASS_DENSITY_KG_PER_M3 = 1000.0
+MAX_MASS_DENSITY_KG_PER_M3 = 25000.0
+
 
 class MaterialStatus(str, Enum):
     DRAFT = "draft"
@@ -103,6 +108,7 @@ class MaterialRecord:
     sources: tuple[SourceProvenance, ...]
     series: tuple[PointSeries, ...]
     relative_permeability: float | None
+    mass_density_kg_per_m3: float
     steinmetz: SteinmetzFit | None
     notes: str
 
@@ -112,6 +118,23 @@ class MaterialRecord:
                 self,
                 "relative_permeability",
                 canonical_float(self.relative_permeability),
+            )
+        object.__setattr__(
+            self,
+            "mass_density_kg_per_m3",
+            canonical_float(self.mass_density_kg_per_m3),
+        )
+        # Datasheets quote density in g/cm3, so the common mistake is entering
+        # 8.176 where 8176 is meant. Nothing magnetic is that light, so reject it
+        # rather than let a 1000x error reach a loss or thermal calculation.
+        if not MIN_MASS_DENSITY_KG_PER_M3 <= self.mass_density_kg_per_m3 <= (
+            MAX_MASS_DENSITY_KG_PER_M3
+        ):
+            raise ValueError(
+                "mass_density_kg_per_m3 must be between "
+                f"{MIN_MASS_DENSITY_KG_PER_M3:g} and {MAX_MASS_DENSITY_KG_PER_M3:g} "
+                f"kg/m^3; got {self.mass_density_kg_per_m3:g}. "
+                "Datasheet values in g/cm^3 must be multiplied by 1000."
             )
         valid_revision = len(self.revision_id) == 12 and all(
             char in "0123456789abcdef" for char in self.revision_id

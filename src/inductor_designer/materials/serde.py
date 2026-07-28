@@ -107,6 +107,7 @@ def material_record_to_json(
             for series in record.series
         ],
         "relativePermeability": _canonical_float(record.relative_permeability),
+        "massDensityKgPerM3": _canonical_float(record.mass_density_kg_per_m3),
         "steinmetz": (
             {
                 "k": _canonical_float(record.steinmetz.k),
@@ -258,6 +259,9 @@ def material_record_from_json(document: Mapping[str, Any]) -> MaterialRecord:
         sources=tuple(sources),
         series=tuple(series_items),
         relative_permeability=_optional_number(document, "relativePermeability", "record"),
+        # Required: a record without density predates the field and must be
+        # re-imported rather than silently defaulted to something invented.
+        mass_density_kg_per_m3=_number(document, "massDensityKgPerM3", "record"),
         steinmetz=(
             SteinmetzFit(
                 k=_number(fit, "k", "record.steinmetz"),

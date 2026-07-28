@@ -27,6 +27,7 @@ def _metadata() -> MaterialTableMetadata:
         source_page=7,
         captured_at="2026-07-18T12:00:00+00:00",
         source_description="Example multi-series table",
+        mass_density_kg_per_m3=4800.0,
     )
 
 

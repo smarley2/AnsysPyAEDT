@@ -114,6 +114,7 @@ def test_new_draft_record_fits_loss_csvs_at_multiple_frequencies() -> None:
         series=series,
         sources=sources,
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
 
     assert record.status is MaterialStatus.DRAFT
@@ -150,6 +151,7 @@ def test_new_imported_record_fit_ignores_loss_origin() -> None:
         series=series,
         sources=sources,
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
 
     assert record.steinmetz is not None
@@ -176,6 +178,7 @@ def test_new_imported_record_rejects_zero_b_with_nonzero_loss() -> None:
             series=(series,),
             sources=(source,),
             created_at="2026-07-17T12:00:00+00:00",
+            mass_density_kg_per_m3=4800.0,
         )
 
 
@@ -200,6 +203,7 @@ def test_new_draft_record_keeps_optional_fit_empty_for_log_collinear_losses() ->
         series=series,
         sources=sources,
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
 
     assert record.status is MaterialStatus.DRAFT
@@ -216,6 +220,7 @@ def test_review_and_approve_reject_record_with_error_issues() -> None:
         series=(replace(series, points=(CurvePoint(0.0, 0.0), CurvePoint(1.0, 0.0))),),
         sources=(source,),
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
 
     with pytest.raises(MaterialImportError) as review_error:
@@ -236,6 +241,7 @@ def test_clean_lifecycle_preserves_revision_id() -> None:
         series=(series,),
         sources=(source,),
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
 
     reviewed = review_material(draft, "reviewer@example.com")
@@ -254,13 +260,18 @@ def test_new_draft_revision_id_changes_when_series_content_changes() -> None:
     created_at = "2026-07-17T12:00:00+00:00"
 
     original = new_draft_record(
-        ref, series=(series,), sources=(source,), created_at=created_at
+        ref,
+        series=(series,),
+        sources=(source,),
+        created_at=created_at,
+        mass_density_kg_per_m3=4800.0,
     )
     changed = new_draft_record(
         ref,
         series=(replace(series, points=series.points[:-1] + (CurvePoint(2.0, 0.003),)),),
         sources=(source,),
         created_at=created_at,
+        mass_density_kg_per_m3=4800.0,
     )
 
     assert changed.revision_id != original.revision_id

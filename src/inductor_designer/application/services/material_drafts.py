@@ -70,6 +70,7 @@ def _rebuild_session(
         sources=sources,
         created_at=session.record.created_at,
         relative_permeability=session.record.relative_permeability,
+        mass_density_kg_per_m3=session.record.mass_density_kg_per_m3,
         notes=session.record.notes,
     )
     return MaterialDraftSession(draft, source_files, session.base_revision_id)
@@ -276,6 +277,7 @@ def derive_workbook_draft(
         sources=(*base.record.sources, *supplemental_sources),
         created_at=imported.record.created_at,
         relative_permeability=base.record.relative_permeability,
+        mass_density_kg_per_m3=base.record.mass_density_kg_per_m3,
         notes=base.record.notes,
     )
     return MaterialDraftSession(
@@ -433,6 +435,7 @@ def replace_table_series(
         sources=sources,
         created_at=session.record.created_at,
         relative_permeability=session.record.relative_permeability,
+        mass_density_kg_per_m3=session.record.mass_density_kg_per_m3,
         notes=session.record.notes,
     )
     return MaterialDraftSession(draft, files, session.base_revision_id)

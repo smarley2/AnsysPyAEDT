@@ -81,6 +81,7 @@ def make_material_record() -> MaterialRecord:
         sources=(),
         series=(),
         relative_permeability=60.0,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=None,
         notes="Approved scalar material.",
     )
@@ -270,6 +271,7 @@ def test_material_revision_selection_rejects_blank_revision() -> None:
         sources=snapshot.sources,
         series=snapshot.series,
         relative_permeability=snapshot.relative_permeability,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=snapshot.steinmetz,
         notes=snapshot.notes,
     )

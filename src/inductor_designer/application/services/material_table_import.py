@@ -23,6 +23,7 @@ from inductor_designer.materials.serde import sha256_hex
 @dataclass(frozen=True, slots=True)
 class MaterialTableMetadata:
     ref: MaterialRef
+    mass_density_kg_per_m3: float
     source_url: str
     source_page: int | None
     captured_at: str
@@ -45,6 +46,7 @@ class MaterialTableRow:
 @dataclass(frozen=True, slots=True)
 class ImportedMaterialTable:
     ref: MaterialRef
+    mass_density_kg_per_m3: float
     series: tuple[PointSeries, ...]
     sources: tuple[SourceProvenance, ...]
     source_files: tuple[tuple[str, bytes], ...]
@@ -196,6 +198,7 @@ def import_material_rows(
 
     return ImportedMaterialTable(
         ref=metadata.ref,
+        mass_density_kg_per_m3=metadata.mass_density_kg_per_m3,
         series=tuple(series),
         sources=tuple(sources),
         source_files=tuple(source_files),

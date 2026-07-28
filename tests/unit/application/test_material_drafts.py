@@ -117,6 +117,7 @@ def _external_source_session(*, shared: bool) -> MaterialDraftSession:
         series=series,
         sources=(source,),
         created_at=_CREATED_AT,
+        mass_density_kg_per_m3=4800.0,
     )
     return MaterialDraftSession(record, ((filename, data),), None)
 

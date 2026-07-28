@@ -267,3 +267,34 @@ def test_native_dc_only_applies_to_nonzero_windings(tmp_path: Path) -> None:
     assert len(winding_updates) == 1
     winding_assigns = [k for n, k in app.calls if n == "assign_winding"]
     assert len(winding_assigns) == 2
+
+
+def test_mass_density_reaches_the_aedt_material(tmp_path: Path) -> None:
+    """Without density AEDT shows the material as massless, which silently breaks
+    any density-derived quantity. The catalog path has no density to offer, so
+    only a real material record carries one."""
+    from dataclasses import replace
+
+    app = FakeMaxwell3dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+
+    result = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app)).export(request)
+
+    assert result.succeeded()
+    densities = [k["value"] for n, k in app.calls if n == "material.set.mass_density"]
+    assert densities == [4800.0]
+
+
+def test_catalog_material_without_density_sets_no_mass_density(tmp_path: Path) -> None:
+    """Catalog powder cores carry no density, and inventing one would be worse
+    than leaving it unset."""
+    app = FakeMaxwell3dApp()
+    result = run(tmp_path, app)
+    assert result.succeeded()  # type: ignore[attr-defined]
+
+    assert [n for n, _ in app.calls if n == "material.set.mass_density"] == []

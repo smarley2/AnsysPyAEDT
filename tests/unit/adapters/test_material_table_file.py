@@ -34,6 +34,7 @@ CSV_COLUMNS = (
     "manufacturer",
     "material_name",
     "grade",
+    "mass_density_kg_per_m3",
     "source_url",
     "source_page",
     "captured_at",
@@ -63,6 +64,7 @@ def _row(**changes: object) -> dict[str, object]:
         "manufacturer": "Example",
         "material_name": "Ferrite",
         "grade": "F1",
+        "mass_density_kg_per_m3": 4800,
         "source_url": "https://example.com/f1",
         "source_page": 7,
         "captured_at": "2026-07-18T12:00:00+00:00",
@@ -101,6 +103,7 @@ def _workbook_bytes(
         ("manufacturer", "Example"),
         ("material_name", "Ferrite"),
         ("grade", "F1"),
+        ("mass_density_kg_per_m3", 4800),
         ("source_url", "https://example.com/f1"),
         ("source_page", 7),
         ("captured_at", "2026-07-18T12:00:00+00:00"),
@@ -264,7 +267,7 @@ def test_xlsx_accepts_documented_sheets_in_any_tab_order() -> None:
 def test_xlsx_normalizes_excel_date_for_captured_at() -> None:
     result = import_material_file(
         "excel-date.xlsx",
-        _workbook_bytes(cell_value=("Material", "B7", datetime(2026, 7, 23))),
+        _workbook_bytes(cell_value=("Material", "B8", datetime(2026, 7, 23))),
     )
 
     assert result.sources[0].captured_at == "2026-07-23T00:00:00"
@@ -342,7 +345,7 @@ def test_csv_rejects_malformed_quoting() -> None:
 def test_csv_rejects_rows_wider_than_the_header() -> None:
     data = _csv_bytes([_row()]).rstrip(b"\n") + b",unexpected\n"
 
-    _assert_import_error("wide.csv", data, "CSV row 2", "16")
+    _assert_import_error("wide.csv", data, "CSV row 2", str(len(CSV_COLUMNS)))
 
 
 @pytest.mark.parametrize("columns", [CSV_COLUMNS[:-1], CSV_COLUMNS + ("extra",)])
@@ -446,6 +449,7 @@ def test_import_exported_workbook_as_draft_recomputes_fit_and_preserves_base() -
         (source,),
         loss_series,
         None,
+        4800.0,
         None,
         "Approved base",
     )

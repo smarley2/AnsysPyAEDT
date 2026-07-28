@@ -86,6 +86,7 @@ def _approved_record() -> MaterialRecord:
         sources=(source,),
         series=series,
         relative_permeability=2000.0,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=None,
         notes="Approved base",
     )
@@ -231,6 +232,7 @@ def test_export_material_record_xlsx_preserves_template_and_retained_units() -> 
         "manufacturer": "Example Magnetics",
         "material_name": "Ferrite",
         "grade": "F1",
+        "mass_density_kg_per_m3": 4800.0,
         "source_url": None,
         "source_page": None,
         "captured_at": "2026-07-18T12:00:00+00:00",
@@ -339,7 +341,10 @@ def test_export_preserves_formula_like_text_as_literal_strings_on_round_trip() -
     )
     workbook = load_workbook(io.BytesIO(download.data), data_only=False)
 
-    for coordinate in ("B2", "B3", "B4", "B7", "B8"):
+    # Material rows: 2 manufacturer, 3 material_name, 4 grade, 5 mass density,
+    # 6 source_url, 7 source_page, 8 captured_at, 9 source_description. Only the
+    # text-valued ones are checked here.
+    for coordinate in ("B2", "B3", "B4", "B8", "B9"):
         assert workbook["Material"][coordinate].data_type == "s"
     for coordinate in ("A2", "E2", "G2"):
         assert workbook["B-H Curves"][coordinate].data_type == "s"

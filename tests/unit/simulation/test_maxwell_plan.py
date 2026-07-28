@@ -102,6 +102,7 @@ def make_approved_material_record(
             ),
         ),
         relative_permeability=relative_permeability,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=SteinmetzFit(2.5, 1.4, 2.3, 0.01, 0.02),
         notes="Approved nonlinear material.",
     )

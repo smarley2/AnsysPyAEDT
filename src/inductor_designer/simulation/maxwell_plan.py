@@ -49,6 +49,7 @@ class MaterialSpec:
     relative_permeability: float
     conductivity_s_per_m: float
     draft: bool
+    mass_density_kg_per_m3: float | None = None
     bh_curve: tuple[tuple[float, float], ...] = ()
     steinmetz: SteinmetzFit | None = None
     material_revision: str | None = None
@@ -225,6 +226,7 @@ def material_spec_from_material_record(
         relative_permeability=relative_permeability,
         conductivity_s_per_m=0.0,
         draft=False,
+        mass_density_kg_per_m3=material.mass_density_kg_per_m3,
         bh_curve=tuple(
             (flux_density, field_strength) for field_strength, flux_density in bh_points
         ),

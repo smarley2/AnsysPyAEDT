@@ -93,6 +93,7 @@ def new_draft_record(
     series: tuple[PointSeries, ...],
     sources: tuple[SourceProvenance, ...],
     created_at: str,
+    mass_density_kg_per_m3: float,
     relative_permeability: float | None = None,
     fit_steinmetz_from_losses: bool = True,
     notes: str = "",
@@ -107,6 +108,7 @@ def new_draft_record(
         sources=sources,
         series=series,
         relative_permeability=relative_permeability,
+        mass_density_kg_per_m3=mass_density_kg_per_m3,
         steinmetz=_fit_loss_series(series) if fit_steinmetz_from_losses else None,
         notes=notes,
     )
@@ -119,6 +121,7 @@ def new_imported_record(
     series: tuple[PointSeries, ...],
     sources: tuple[SourceProvenance, ...],
     created_at: str,
+    mass_density_kg_per_m3: float,
     relative_permeability: float | None = None,
     fit_steinmetz_from_losses: bool = True,
     notes: str = "",
@@ -134,6 +137,7 @@ def new_imported_record(
         sources=sources,
         series=series,
         relative_permeability=relative_permeability,
+        mass_density_kg_per_m3=mass_density_kg_per_m3,
         steinmetz=_fit_loss_series(series) if fit_steinmetz_from_losses else None,
         notes=notes,
     )

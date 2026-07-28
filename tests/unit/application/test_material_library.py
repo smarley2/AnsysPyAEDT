@@ -62,6 +62,7 @@ def _record(
             ),
         ),
         relative_permeability=1600.0,
+        mass_density_kg_per_m3=4800.0,
         steinmetz=None,
         notes="Library fixture",
     )

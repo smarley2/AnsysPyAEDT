@@ -76,6 +76,7 @@ def _record_fixture() -> tuple[MaterialRecord, dict[str, bytes]]:
         series=(*loss_series, bh_series),
         sources=(*loss_sources, bh_source),
         created_at="2026-07-17T12:00:00+00:00",
+        mass_density_kg_per_m3=4800.0,
     )
     return record, source_bytes
 

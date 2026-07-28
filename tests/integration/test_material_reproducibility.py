@@ -117,6 +117,7 @@ def _record() -> tuple[MaterialRecord, dict[str, bytes]]:
         sources=tuple(provenance.values()),
         created_at="2026-07-18T09:00:00+00:00",
         notes="Synthetic evidence only; no live solver claim.",
+        mass_density_kg_per_m3=4800.0,
     )
     assert not any(issue.severity is IssueSeverity.ERROR for issue in validate_record(draft))
     approved = approve_material(

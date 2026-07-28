@@ -153,6 +153,7 @@ def export_material_record_xlsx(
         "manufacturer": record.ref.manufacturer,
         "material_name": record.ref.name,
         "grade": record.ref.grade,
+        "mass_density_kg_per_m3": record.mass_density_kg_per_m3,
         "source_url": "",
         "source_page": None,
         "captured_at": exported_at or record.created_at,
