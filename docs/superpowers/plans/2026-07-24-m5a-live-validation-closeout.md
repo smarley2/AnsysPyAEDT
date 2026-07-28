@@ -1652,7 +1652,7 @@ Open the generated `.fem` file and verify:
 The automated `.fem` parser is the exact point-by-point evidence. The manual
 inspection confirms FEMM presents the persisted material correctly.
 
-- [ ] **Step 6: Write the sanitized evidence document**
+- [x] **Step 6: Write the sanitized evidence document**
 
 Create `docs/development/m5a-live-material-validation.md` only after all checks
 above pass. Record concrete observed values for:
@@ -1672,7 +1672,7 @@ Do not leave unresolved or blank fields and do not copy raw material points.
 If any observed value is unavailable, leave M5a open and do not create an
 acceptance commit.
 
-- [ ] **Step 7: Review the evidence document before acceptance**
+- [x] **Step 7: Review the evidence document before acceptance**
 
 Confirm every required field contains a concrete observation, every live and
 manual check says pass, the recorded commit is the code revision that was
@@ -1680,7 +1680,7 @@ tested, and no source points, absolute paths, credentials, or license details
 appear. Check completed boxes in this plan through Task 6, but do not mark M5a
 accepted yet; Task 7 owns the final quality gate.
 
-- [ ] **Step 8: Verify that only sanitized documentation is staged**
+- [x] **Step 8: Verify that only sanitized documentation is staged**
 
 ```bash
 git status --short
@@ -1696,7 +1696,7 @@ Expected: source workbook, overlay, and solver artifacts are untracked or
 ignored; the staged-name list contains only the evidence document and this
 plan.
 
-- [ ] **Step 9: Commit and publish the live evidence**
+- [x] **Step 9: Commit and publish the live evidence**
 
 ```bash
 git commit -m "docs: record M5a live material evidence"
@@ -1730,7 +1730,7 @@ implementation has not begun.
 - Produces a verified `main` state ready for the separately planned M6 Project
   Foundation.
 
-- [ ] **Step 1: Run all non-solver tests**
+- [x] **Step 1: Run all non-solver tests**
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest tests -q -m "not aedt and not femm"
@@ -1738,7 +1738,7 @@ PYTHONPATH=. .venv/bin/python -m pytest tests -q -m "not aedt and not femm"
 
 Expected: exit 0 with no failures.
 
-- [ ] **Step 2: Run the complete UI suite**
+- [x] **Step 2: Run the complete UI suite**
 
 ```bash
 QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software PYTHONPATH=. \
@@ -1747,7 +1747,7 @@ QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software PYTHONPATH=. \
 
 Expected: exit 0 with no failures or QML warnings.
 
-- [ ] **Step 3: Run static and architecture gates**
+- [x] **Step 3: Run static and architecture gates**
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -1758,7 +1758,7 @@ git diff --check
 
 Expected: all four commands exit 0.
 
-- [ ] **Step 4: Re-run the controlled material validation**
+- [x] **Step 4: Re-run the controlled material validation**
 
 On the Windows solver machine:
 
@@ -1776,7 +1776,7 @@ if ($revision -notmatch '^[0-9a-f]{12}$') {
 Expected: both live material handoff tests pass against AEDT 2025 R2 Commercial
 and FEMM 4.2.
 
-- [ ] **Step 5: Audit removed support paths**
+- [x] **Step 5: Audit removed support paths**
 
 ```bash
 rg -n \

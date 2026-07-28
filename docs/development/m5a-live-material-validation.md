@@ -129,6 +129,18 @@ against the pinned record.
 | Exact point comparison | Pass — first row `0 0`, last row `1.4167755950000001 39788.735772974003`, matching the canonical points |
 | Saving and reopening retains the material | Pass — checked earlier in a FEMM session by Fabio Posser |
 
+## Confirmation re-run
+
+The controlled validation was run a second time after the overlay-save retry fix
+(Task 7 Step 4), and reproduced this evidence exactly: reproduction and handoff
+preparation both printed `MATCH`, and both tagged live tests passed —
+`2 passed, 1 warning in 56.26s`, followed by `M5a live validation completed.`
+
+Repository gates at that point: 713 non-solver tests passed, 36 UI tests passed,
+`ruff`, `mypy src tools`, `tools/check_architecture.py` and `git diff --check`
+all exited 0, and the removed-support-path audits returned no matches outside
+historical plan documents.
+
 ## Artifacts
 
 Written beneath the ignored `artifacts/material-validation/` tree, never

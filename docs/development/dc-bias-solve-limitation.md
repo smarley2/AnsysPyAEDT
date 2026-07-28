@@ -50,6 +50,7 @@ Small models survive because the two meshes stay close enough to interpolate.
 | 10 turns, every DC knob matched to its AC counterpart | map failed |
 | 10 turns, 2 adaptive passes both steps | map failed |
 | **10 turns, 1 adaptive pass both steps** | **solves, 14m24s, no errors** |
+| 10 turns, 1 pass, after a solved magnetostatic design in the same project | solves, 2m30s, no errors (mesh import itself failed; see below) |
 
 Excluded as causes:
 
@@ -107,6 +108,25 @@ To finish this route, record the property name from a GUI session: configure
 Mu Link once in the Eddy Current setup's advanced options, save, and read the
 `Setup1` block out of the `.aedt` file. That is a five-minute manual step and
 it unblocks the whole approach.
+
+## Importing a converged mesh instead: also blocked
+
+If the mu-link cannot be enabled, the next idea is to keep the native
+`AC Magnetic with DC` setup but feed it the adaptively converged mesh from a
+solved magnetostatic design, and disable in-design refinement. That would take
+mesh quality from AEDT's own adaptivity rather than from our sizing rules.
+
+Tried, and it does not work: `Setup.add_mesh_link()` returns `False` on an
+`AC Magnetic with DC` setup, while succeeding on a plain `AC Magnetic` setup in
+the same project on the same geometry. Mesh import is not available on the
+native DC-bias solution type, even though the setup does carry a `MeshLink`
+block. The run therefore degenerated to the plain one-pass case: the target
+solved with no solver errors, but on its own unrefined mesh, with no accuracy
+gained.
+
+So both routes out of this defect are closed for now — mu-link needs an
+undocumented property name, and mesh import is unsupported on the solution type
+that needs it.
 
 ## Ordering constraints discovered
 
