@@ -5,11 +5,15 @@ import math
 import pytest
 
 from inductor_designer.domain.project import MeshIntent, RequestedOutput
+from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.simulation import NormalizedValue
 from inductor_designer.simulation.run_contracts import (
+    ComplexValue,
     CurrentConvention,
     DimensionalRepresentation,
     ManifestArtifact,
     ManifestMaterialState,
+    MatrixValue,
     NormalizedQuantity,
     NormalizedResultSet,
     ResultAvailability,
@@ -19,6 +23,7 @@ from inductor_designer.simulation.run_contracts import (
     RunMode,
     RunRequest,
     RunStatus,
+    StageStatus,
     effective_winding_inputs,
 )
 from tests.unit.domain.test_project import make_project
@@ -39,8 +44,8 @@ def make_manifest(**overrides: object) -> RunManifest:
         "windings": effective_winding_inputs(project.operating_point),
         "material": ManifestMaterialState(
             resolved=True,
-            ref=None,
-            revision_id=None,
+            ref=MaterialRef("Magnetics", "Kool Mu", "60"),
+            revision_id="0123456789ab",
             bh_series_id=None,
             manual_compatibility_acknowledged=False,
         ),
@@ -64,15 +69,43 @@ def make_manifest(**overrides: object) -> RunManifest:
 
 
 def test_run_contract_enum_values_are_stable() -> None:
-    assert RunBackend.MAXWELL_3D.value == "maxwell-3d"
-    assert RunBackend.MAXWELL_2D.value == "maxwell-2d"
-    assert RunBackend.FEMM.value == "femm"
-    assert RunMode.GENERATE_ONLY.value == "generate-only"
-    assert RunMode.GENERATE_AND_SOLVE.value == "generate-and-solve"
-    assert DimensionalRepresentation.EQUIVALENT_CROSS_SECTION.value == "equivalent-cross-section"
-    assert ResultAvailability.AVAILABLE.value == "available"
-    assert CurrentConvention.AC_RMS.value == "ac-rms"
+    assert {item.name: item.value for item in RunBackend} == {
+        "MAXWELL_3D": "maxwell-3d",
+        "MAXWELL_2D": "maxwell-2d",
+        "FEMM": "femm",
+    }
+    assert {item.name: item.value for item in RunMode} == {
+        "GENERATE_ONLY": "generate-only",
+        "GENERATE_AND_SOLVE": "generate-and-solve",
+    }
+    assert {item.name: item.value for item in RunStatus} == {
+        "PLANNED": "planned",
+        "SUCCEEDED": "succeeded",
+        "FAILED": "failed",
+        "CANCELLED": "cancelled",
+    }
+    assert {item.name: item.value for item in StageStatus} == {
+        "SUCCEEDED": "succeeded",
+        "FAILED": "failed",
+        "SKIPPED": "skipped",
+    }
+    assert {item.name: item.value for item in DimensionalRepresentation} == {
+        "THREE_DIMENSIONAL": "three-dimensional",
+        "EQUIVALENT_CROSS_SECTION": "equivalent-cross-section",
+    }
+    assert {item.name: item.value for item in ResultAvailability} == {
+        "AVAILABLE": "available",
+        "UNAVAILABLE": "unavailable",
+    }
+    assert {item.name: item.value for item in CurrentConvention} == {
+        "NOT_APPLICABLE": "not-applicable",
+        "AC_RMS": "ac-rms",
+        "AC_PEAK": "ac-peak",
+        "DC": "dc",
+        "COMBINED": "combined",
+    }
     assert ResultQuantity is RequestedOutput
+    assert NormalizedValue == float | ComplexValue | MatrixValue
 
 
 def test_run_request_defaults_to_unconfirmed_geometry_only() -> None:
@@ -118,9 +151,32 @@ def test_unavailable_result_requires_reason_without_value() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("ref", "revision_id"),
+    [
+        (None, "0123456789ab"),
+        (MaterialRef("Magnetics", "Kool Mu", "60"), " "),
+    ],
+)
+def test_resolved_material_requires_ref_and_nonblank_revision_id(
+    ref: MaterialRef | None,
+    revision_id: str,
+) -> None:
+    with pytest.raises(ValueError, match="resolved material"):
+        ManifestMaterialState(True, ref, revision_id, None, False)
+
+
 def test_geometry_only_manifest_requires_unresolved_maxwell_3d_generate_only() -> None:
     with pytest.raises(ValueError, match="Geometry-Only manifest"):
         make_manifest(geometry_only=True)
+
+
+def test_geometry_only_manifest_records_unresolved_maxwell_3d_generate_only() -> None:
+    material = ManifestMaterialState(False, None, None, None, False)
+
+    manifest = make_manifest(geometry_only=True, material=material)
+
+    assert manifest.geometry_only is True
 
 
 def test_succeeded_manifest_requires_artifact() -> None:

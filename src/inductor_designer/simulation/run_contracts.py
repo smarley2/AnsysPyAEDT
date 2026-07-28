@@ -83,6 +83,14 @@ class ManifestMaterialState:
     bh_series_id: str | None
     manual_compatibility_acknowledged: bool
 
+    def __post_init__(self) -> None:
+        if self.resolved and (
+            self.ref is None
+            or self.revision_id is None
+            or not self.revision_id.strip()
+        ):
+            raise ValueError("resolved material requires ref and nonblank revision_id")
+
 
 @dataclass(frozen=True, slots=True)
 class ManifestStage:
