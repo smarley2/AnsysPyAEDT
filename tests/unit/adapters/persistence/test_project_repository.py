@@ -12,10 +12,15 @@ from inductor_designer.adapters.persistence.project_repository import (
     project_to_document,
 )
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
-from inductor_designer.domain.project import ManualCoreSelection, MaterialRevisionSelection
+from inductor_designer.domain.project import (
+    Design,
+    ManualCoreSelection,
+    MaterialRevisionSelection,
+    WindingOperatingPoint,
+)
 from tests.unit.domain.test_project import (
-    make_material_record,
     make_material_series,
+    make_operating_point,
     make_project,
     make_winding,
     material_record_with_series,
@@ -30,62 +35,114 @@ def repository() -> ProjectRepository:
 
 
 def test_document_round_trip_preserves_project() -> None:
-    project = make_project(
+    design = Design(
+        core=make_project().design.core,
         windings=(
             make_winding(winding_id="w1"),
             make_winding(winding_id="w2", start_angle_deg=180.0),
-        )
+        ),
+        core_material=None,
+        manual_material_compatibility_acknowledged=False,
     )
+    project = make_project(
+        design=design,
+        operating_point=make_operating_point(
+            make_operating_point().windings[0],
+            WindingOperatingPoint(
+                winding_id="w2",
+                ac_rms_current_a=2.0,
+                ac_phase_deg=0.0,
+                dc_current_a=5.0,
+                current_direction=make_operating_point().windings[0].current_direction,
+            ),
+        ),
+    )
+
     assert project_from_document(project_to_document(project)) == project
 
 
-def test_approved_material_snapshot_round_trips_byte_identically(tmp_path: Path) -> None:
+def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None:
+    document = project_to_document(make_project())
+
+    assert document["schemaVersion"] == 5
+    assert set(document) == {
+        "schemaVersion",
+        "projectId",
+        "metadata",
+        "design",
+        "operatingPoint",
+        "simulationRecipe",
+    }
+    assert "target" not in document
+    assert "dimensionMode" not in document
+    assert "materials" not in document
+    assert "acMagnitudeA" not in document["design"]["windings"][0]  # type: ignore[index]
+    assert "frequencyHz" not in document["design"]["windings"][0]  # type: ignore[index]
+
+
+def test_pinned_material_snapshot_round_trips_byte_identically(tmp_path: Path) -> None:
     snapshot = material_record_with_series(make_material_series())
-    project = make_project(
-        materials=(
-            MaterialRevisionSelection(
-                snapshot.ref,
-                snapshot.revision_id,
-                snapshot,
-                bh_series_id="bh-25c",
-            ),
+    material = MaterialRevisionSelection(
+        snapshot.ref,
+        snapshot.revision_id,
+        snapshot,
+        bh_series_id="bh-25c",
+    )
+    original = make_project(
+        design=Design(
+            core=make_project().design.core,
+            windings=make_project().design.windings,
+            core_material=material,
+            manual_material_compatibility_acknowledged=False,
         )
     )
     repo = repository()
     first = tmp_path / "first.inductor.json"
     second = tmp_path / "second.inductor.json"
 
-    repo.save(project, first)
-    restored_project = repo.load(first)
-    repo.save(restored_project, second)
+    repo.save(original, first)
+    restored = repo.load(first)
+    repo.save(restored, second)
     document = json.loads(first.read_text(encoding="utf-8"))
 
-    assert restored_project == project
+    assert restored == original
     assert first.read_bytes() == second.read_bytes()
-    assert document["schemaVersion"] == 4
-    assert document["materials"][0]["bhSeriesId"] == "bh-25c"
-    assert document["materials"][0]["snapshot"]["status"] == "approved"
+    assert document["design"]["coreMaterial"]["bhSeriesId"] == "bh-25c"  # type: ignore[index]
+    assert document["design"]["coreMaterial"]["snapshot"]["status"] == "approved"  # type: ignore[index]
 
 
 def test_fixture_maps_to_domain() -> None:
-    document = json.loads((FIXTURES / "project.v2.json").read_text(encoding="utf-8"))
+    document = json.loads((FIXTURES / "sample_geometry_project.inductor.json").read_text())
     project = project_from_document(document)
-    assert project.windings[0].conductor_name == "AWG 18"
+
+    assert project.design.windings[0].conductor_name == "AWG 18"
+    assert project.operating_point.windings[0].ac_rms_current_a == 2.0
 
 
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
     repo = repository()
     project = make_project()
     path = tmp_path / "boost.inductor.json"
+
     repo.save(project, path)
+
     assert repo.load(path) == project
 
 
 def test_save_and_load_round_trip_manual_core(tmp_path: Path) -> None:
     repo = repository()
-    project = make_project(core=ManualCoreSelection(0.0269, 0.0147, 0.0112, 0.0))
+    project = make_project(
+        design=Design(
+            core=ManualCoreSelection(0.0269, 0.0147, 0.0112, 0.0),
+            windings=make_project().design.windings,
+            core_material=None,
+            manual_material_compatibility_acknowledged=False,
+        )
+    )
     path = tmp_path / "manual-core.inductor.json"
+
     repo.save(project, path)
+
     assert repo.load(path) == project
 
 
@@ -93,8 +150,10 @@ def test_save_is_deterministic(tmp_path: Path) -> None:
     repo = repository()
     project = make_project()
     first, second = tmp_path / "a.inductor.json", tmp_path / "b.inductor.json"
+
     repo.save(project, first)
     repo.save(project, second)
+
     assert first.read_bytes() == second.read_bytes()
 
 
@@ -119,58 +178,13 @@ def test_save_replace_failure_preserves_existing_file_and_cleans_temp(
     assert list(tmp_path.iterdir()) == [path]
 
 
-def test_sample_v3_fixture_saves_as_migrated_v4(tmp_path: Path) -> None:
-    source = FIXTURES / "sample_geometry_project.inductor.json"
-    saved = tmp_path / source.name
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
+def test_load_rejects_legacy_project_versions(tmp_path: Path, version: int) -> None:
+    path = tmp_path / f"legacy-v{version}.inductor.json"
+    path.write_text(json.dumps({"schemaVersion": version}), encoding="utf-8")
 
-    repository().save(repository().load(source), saved)
-
-    source_document = json.loads(source.read_text(encoding="utf-8"))
-    assert json.loads(saved.read_text(encoding="utf-8")) == SchemaRepository(
-        SCHEMAS
-    ).migrate_project(source_document)
-
-
-def test_load_migrates_v1_documents(tmp_path: Path) -> None:
-    v1 = {
-        "schemaVersion": 1,
-        "projectId": "3f0e8f5e-8f4e-4a5e-9d5b-6c4f2b1a0d9c",
-        "metadata": {"name": "Legacy"},
-        "target": {"aedtRelease": "2025.2", "edition": "commercial"},
-    }
-    path = tmp_path / "legacy.inductor.json"
-    path.write_text(json.dumps(v1), encoding="utf-8")
-    project = repository().load(path)
-    assert project.core is None
-    assert project.windings == ()
-    assert project.materials == ()
-
-
-def test_load_migrates_v2_documents_with_empty_materials(tmp_path: Path) -> None:
-    source = FIXTURES / "project.v2.json"
-    path = tmp_path / source.name
-    path.write_bytes(source.read_bytes())
-
-    project = repository().load(path)
-
-    assert project.materials == ()
-
-
-def test_load_migrates_v3_material_with_null_bh_series_id(tmp_path: Path) -> None:
-    snapshot = make_material_record()
-    document = project_to_document(
-        make_project(
-            materials=(
-                MaterialRevisionSelection(snapshot.ref, snapshot.revision_id, snapshot),
-            )
-        )
-    )
-    document["schemaVersion"] = 3
-    for material in document["materials"]:
-        material.pop("bhSeriesId", None)
-    path = tmp_path / "project-v3.inductor.json"
-    path.write_text(json.dumps(document), encoding="utf-8")
-
-    restored = repository().load(path)
-
-    assert restored.materials[0].bh_series_id is None
+    with pytest.raises(
+        ValueError,
+        match=rf"Unsupported project schema version: {version}; expected 5",
+    ):
+        repository().load(path)

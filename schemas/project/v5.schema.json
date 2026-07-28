@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/smarley2/AnsysPyAEDT/schemas/project/v5.schema.json",
+  "title": "PyAEDT Inductor Designer project document v5",
+  "description": "Canonical units: meters (M), degrees (Deg), amperes (A), hertz (Hz), and degrees Celsius (C).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "metadata",
+    "design",
+    "operatingPoint",
+    "simulationRecipe"
+  ],
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nominalM", "minM", "maxM"],
+      "properties": {
+        "nominalM": {"type": "number", "exclusiveMinimum": 0},
+        "minM": {"type": ["number", "null"]},
+        "maxM": {"type": ["number", "null"]}
+      }
+    },
+    "materialRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manufacturer", "name", "grade"],
+      "properties": {
+        "manufacturer": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "grade": {"type": "string", "minLength": 1}
+      }
+    },
+    "coreSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manufacturer", "family", "partNumber", "material", "coating",
+        "catalogRevision", "sourceUrl", "sourcePage",
+        "outerDiameter", "innerDiameter", "height",
+        "effectiveAreaM2", "pathLengthM", "volumeM3", "alValueNh",
+        "reviewStatus", "reviewedBy"
+      ],
+      "properties": {
+        "manufacturer": {"type": "string", "minLength": 1},
+        "family": {"enum": ["powder-toroid", "ferrite-toroid"]},
+        "partNumber": {"type": "string", "minLength": 1},
+        "material": {"$ref": "#/$defs/materialRef"},
+        "coating": {"type": "string"},
+        "catalogRevision": {"type": "string", "minLength": 1},
+        "sourceUrl": {"type": "string", "minLength": 1},
+        "sourcePage": {"type": "integer", "minimum": 1},
+        "outerDiameter": {"$ref": "#/$defs/dimension"},
+        "innerDiameter": {"$ref": "#/$defs/dimension"},
+        "height": {"$ref": "#/$defs/dimension"},
+        "effectiveAreaM2": {"type": "number", "exclusiveMinimum": 0},
+        "pathLengthM": {"type": "number", "exclusiveMinimum": 0},
+        "volumeM3": {"type": "number", "exclusiveMinimum": 0},
+        "alValueNh": {"type": "number", "exclusiveMinimum": 0},
+        "reviewStatus": {"enum": ["draft", "reviewed"]},
+        "reviewedBy": {"type": ["string", "null"]}
+      }
+    },
+    "core": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "partNumber", "snapshot", "overrides"],
+          "properties": {
+            "kind": {"const": "catalog"},
+            "partNumber": {"type": "string", "minLength": 1},
+            "snapshot": {"$ref": "#/$defs/coreSnapshot"},
+            "overrides": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["field", "value", "reason"],
+                "properties": {
+                  "field": {"enum": ["outer_diameter_m", "inner_diameter_m", "height_m"]},
+                  "value": {"type": "number", "exclusiveMinimum": 0},
+                  "reason": {"type": "string", "minLength": 1}
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "outerDiameterM", "innerDiameterM", "heightM", "cornerRadiusM"],
+          "properties": {
+            "kind": {"const": "manual"},
+            "outerDiameterM": {"type": "number", "exclusiveMinimum": 0},
+            "innerDiameterM": {"type": "number", "exclusiveMinimum": 0},
+            "heightM": {"type": "number", "exclusiveMinimum": 0},
+            "cornerRadiusM": {"type": "number", "minimum": 0}
+          }
+        }
+      ]
+    },
+    "winding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windingId", "label", "turns", "conductor", "mode",
+        "startAngleDeg", "sectorDeg", "minSpacingM", "minClearanceM",
+        "windingDirection", "terminalIntent"
+      ],
+      "properties": {
+        "windingId": {"type": "string", "minLength": 1},
+        "label": {"type": "string"},
+        "turns": {"type": "integer", "minimum": 1},
+        "conductor": {"type": "string", "minLength": 1},
+        "mode": {"enum": ["solid", "stranded"]},
+        "startAngleDeg": {"type": "number", "minimum": 0, "exclusiveMaximum": 360},
+        "sectorDeg": {"type": "number", "exclusiveMinimum": 0, "maximum": 360},
+        "minSpacingM": {"type": "number", "minimum": 0},
+        "minClearanceM": {"type": "number", "minimum": 0},
+        "windingDirection": {"enum": ["cw", "ccw"]},
+        "terminalIntent": {"type": "string"}
+      }
+    },
+    "materialSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "revisionId", "bhSeriesId", "snapshot"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/materialRef"},
+        "revisionId": {"type": "string", "pattern": "^[0-9a-f]{12}$"},
+        "bhSeriesId": {"type": ["string", "null"]},
+        "snapshot": {"type": "object"}
+      }
+    },
+    "windingOperatingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windingId", "acRmsCurrentA", "acPhaseDeg", "dcCurrentA", "currentDirection"
+      ],
+      "properties": {
+        "windingId": {"type": "string", "minLength": 1},
+        "acRmsCurrentA": {"type": "number", "minimum": 0},
+        "acPhaseDeg": {"type": "number"},
+        "dcCurrentA": {"type": "number", "minimum": 0},
+        "currentDirection": {"enum": ["forward", "reverse"]}
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": {"const": 5},
+    "projectId": {"type": "string", "format": "uuid"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string"}
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core", "windings", "coreMaterial", "manualMaterialCompatibilityAcknowledged"
+      ],
+      "properties": {
+        "core": {"$ref": "#/$defs/core"},
+        "windings": {"type": "array", "items": {"$ref": "#/$defs/winding"}},
+        "coreMaterial": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/materialSelection"}]},
+        "manualMaterialCompatibilityAcknowledged": {"type": "boolean"}
+      }
+    },
+    "operatingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frequencyHz", "windingTemperatureC", "coreTemperatureC", "windings"
+      ],
+      "properties": {
+        "frequencyHz": {"type": "number", "exclusiveMinimum": 0},
+        "windingTemperatureC": {"type": "number"},
+        "coreTemperatureC": {"type": "number"},
+        "windings": {"type": "array", "items": {"$ref": "#/$defs/windingOperatingPoint"}}
+      }
+    },
+    "simulationRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meshIntent", "maximumPasses", "percentError", "requestedOutputs"],
+      "properties": {
+        "meshIntent": {"const": "standard"},
+        "maximumPasses": {"type": "integer", "exclusiveMinimum": 0},
+        "percentError": {"type": "number", "exclusiveMinimum": 0},
+        "requestedOutputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "resistance", "inductance", "impedance", "matrices", "copper-loss",
+              "core-loss", "total-loss", "magnetic-energy", "convergence", "flux-density",
+              "current-density"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -12,14 +12,19 @@ from inductor_designer.adapters.persistence.record_serde import (
     core_record_to_json,
 )
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
 from inductor_designer.domain.project import (
     CatalogCoreSelection,
     CoreOverride,
     CoreSelection,
+    Design,
     InductorProject,
     ManualCoreSelection,
     MaterialRevisionSelection,
+    MeshIntent,
+    OperatingPoint,
+    RequestedOutput,
+    SimulationRecipe,
+    WindingOperatingPoint,
 )
 from inductor_designer.domain.winding import (
     ConductorMode,
@@ -46,12 +51,7 @@ def _winding_to_json(winding: WindingDefinition) -> dict[str, object]:
         "minSpacingM": winding.min_spacing_m,
         "minClearanceM": winding.min_clearance_m,
         "windingDirection": winding.winding_direction.value,
-        "currentDirection": winding.current_direction.value,
         "terminalIntent": winding.terminal_intent,
-        "acMagnitudeA": winding.ac_magnitude_a,
-        "acPhaseDeg": winding.ac_phase_deg,
-        "frequencyHz": winding.frequency_hz,
-        "dcCurrentA": winding.dc_current_a,
     }
 
 
@@ -67,12 +67,7 @@ def _winding_from_json(data: Mapping[str, Any]) -> WindingDefinition:
         min_spacing_m=data["minSpacingM"],
         min_clearance_m=data["minClearanceM"],
         winding_direction=WindingDirection(data["windingDirection"]),
-        current_direction=CurrentDirection(data["currentDirection"]),
         terminal_intent=data["terminalIntent"],
-        ac_magnitude_a=data["acMagnitudeA"],
-        ac_phase_deg=data["acPhaseDeg"],
-        frequency_hz=data["frequencyHz"],
-        dc_current_a=data["dcCurrentA"],
     )
 
 
@@ -116,59 +111,133 @@ def _core_from_json(data: Mapping[str, Any] | None) -> CoreSelection | None:
     )
 
 
+def _material_to_json(
+    material: MaterialRevisionSelection | None,
+) -> dict[str, object] | None:
+    if material is None:
+        return None
+    return {
+        "ref": {
+            "manufacturer": material.ref.manufacturer,
+            "name": material.ref.name,
+            "grade": material.ref.grade,
+        },
+        "revisionId": material.revision_id,
+        "bhSeriesId": material.bh_series_id,
+        "snapshot": material_record_to_json(material.snapshot),
+    }
+
+
+def _material_from_json(
+    data: Mapping[str, Any] | None,
+) -> MaterialRevisionSelection | None:
+    if data is None:
+        return None
+    ref = data["ref"]
+    return MaterialRevisionSelection(
+        ref=MaterialRef(ref["manufacturer"], ref["name"], ref["grade"]),
+        revision_id=data["revisionId"],
+        snapshot=material_record_from_json(data["snapshot"]),
+        bh_series_id=data["bhSeriesId"],
+    )
+
+
+def _design_to_json(design: Design) -> dict[str, object]:
+    return {
+        "core": _core_to_json(design.core),
+        "windings": [_winding_to_json(winding) for winding in design.windings],
+        "coreMaterial": _material_to_json(design.core_material),
+        "manualMaterialCompatibilityAcknowledged": (
+            design.manual_material_compatibility_acknowledged
+        ),
+    }
+
+
+def _design_from_json(data: Mapping[str, Any]) -> Design:
+    return Design(
+        core=_core_from_json(data["core"]),
+        windings=tuple(_winding_from_json(winding) for winding in data["windings"]),
+        core_material=_material_from_json(data["coreMaterial"]),
+        manual_material_compatibility_acknowledged=data[
+            "manualMaterialCompatibilityAcknowledged"
+        ],
+    )
+
+
+def _operating_point_to_json(operating_point: OperatingPoint) -> dict[str, object]:
+    return {
+        "frequencyHz": operating_point.frequency_hz,
+        "windingTemperatureC": operating_point.winding_temperature_c,
+        "coreTemperatureC": operating_point.core_temperature_c,
+        "windings": [
+            {
+                "windingId": winding.winding_id,
+                "acRmsCurrentA": winding.ac_rms_current_a,
+                "acPhaseDeg": winding.ac_phase_deg,
+                "dcCurrentA": winding.dc_current_a,
+                "currentDirection": winding.current_direction.value,
+            }
+            for winding in operating_point.windings
+        ],
+    }
+
+
+def _operating_point_from_json(data: Mapping[str, Any]) -> OperatingPoint:
+    return OperatingPoint(
+        frequency_hz=data["frequencyHz"],
+        winding_temperature_c=data["windingTemperatureC"],
+        core_temperature_c=data["coreTemperatureC"],
+        windings=tuple(
+            WindingOperatingPoint(
+                winding_id=winding["windingId"],
+                ac_rms_current_a=winding["acRmsCurrentA"],
+                ac_phase_deg=winding["acPhaseDeg"],
+                dc_current_a=winding["dcCurrentA"],
+                current_direction=CurrentDirection(winding["currentDirection"]),
+            )
+            for winding in data["windings"]
+        ),
+    )
+
+
+def _simulation_recipe_to_json(recipe: SimulationRecipe) -> dict[str, object]:
+    return {
+        "meshIntent": recipe.mesh_intent.value,
+        "maximumPasses": recipe.maximum_passes,
+        "percentError": recipe.percent_error,
+        "requestedOutputs": [output.value for output in recipe.requested_outputs],
+    }
+
+
+def _simulation_recipe_from_json(data: Mapping[str, Any]) -> SimulationRecipe:
+    return SimulationRecipe(
+        mesh_intent=MeshIntent(data["meshIntent"]),
+        maximum_passes=data["maximumPasses"],
+        percent_error=data["percentError"],
+        requested_outputs=tuple(RequestedOutput(output) for output in data["requestedOutputs"]),
+    )
+
+
 def project_to_document(project: InductorProject) -> dict[str, object]:
     return {
-        "schemaVersion": 4,
+        "schemaVersion": 5,
         "projectId": project.project_id,
         "metadata": {"name": project.name, "description": project.description},
-        "target": {
-            "aedtRelease": str(project.target_release),
-            "edition": project.target_edition.value,
-            "dimensionMode": project.dimension_mode.value,
-        },
-        "core": _core_to_json(project.core),
-        "windings": [_winding_to_json(w) for w in project.windings],
-        "materials": [
-            {
-                "ref": {
-                    "manufacturer": material.ref.manufacturer,
-                    "name": material.ref.name,
-                    "grade": material.ref.grade,
-                },
-                "revisionId": material.revision_id,
-                "bhSeriesId": material.bh_series_id,
-                "snapshot": material_record_to_json(material.snapshot),
-            }
-            for material in project.materials
-        ],
+        "design": _design_to_json(project.design),
+        "operatingPoint": _operating_point_to_json(project.operating_point),
+        "simulationRecipe": _simulation_recipe_to_json(project.simulation_recipe),
     }
 
 
 def project_from_document(document: Mapping[str, Any]) -> InductorProject:
     metadata = document["metadata"]
-    target = document["target"]
     return InductorProject(
         project_id=document["projectId"],
         name=metadata["name"],
-        description=metadata.get("description", ""),
-        target_release=AedtRelease.parse(target["aedtRelease"]),
-        target_edition=AedtEdition(target["edition"]),
-        dimension_mode=ModelDimension(target["dimensionMode"]),
-        core=_core_from_json(document["core"]),
-        windings=tuple(_winding_from_json(w) for w in document["windings"]),
-        materials=tuple(
-            MaterialRevisionSelection(
-                ref=MaterialRef(
-                    item["ref"]["manufacturer"],
-                    item["ref"]["name"],
-                    item["ref"]["grade"],
-                ),
-                revision_id=item["revisionId"],
-                snapshot=material_record_from_json(item["snapshot"]),
-                bh_series_id=item.get("bhSeriesId"),
-            )
-            for item in document.get("materials", [])
-        ),
+        description=metadata["description"],
+        design=_design_from_json(document["design"]),
+        operating_point=_operating_point_from_json(document["operatingPoint"]),
+        simulation_recipe=_simulation_recipe_from_json(document["simulationRecipe"]),
     )
 
 
@@ -180,8 +249,8 @@ class ProjectRepository:
         loaded: Any = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(loaded, dict):
             raise ValueError(f"Project document is not a JSON object: {path}")
-        migrated = self._schemas.migrate_project(loaded)
-        return project_from_document(migrated)
+        self._schemas.validate_project(loaded)
+        return project_from_document(loaded)
 
     def save(self, project: InductorProject, path: Path) -> None:
         document = project_to_document(project)
