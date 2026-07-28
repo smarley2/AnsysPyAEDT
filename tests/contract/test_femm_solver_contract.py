@@ -30,6 +30,8 @@ def test_fake_records_request_with_analyze_true(tmp_path: Path) -> None:
     assert result.fem_path == tmp_path / "test_inductor.fem"
     assert result.analyzed is True
     assert result.messages == ("recorded",)
+    assert result.adapter_version == "recording-fake"
+    assert result.solver_version is None
 
 
 def test_fake_returns_one_result_per_circuit_when_analyzed(tmp_path: Path) -> None:

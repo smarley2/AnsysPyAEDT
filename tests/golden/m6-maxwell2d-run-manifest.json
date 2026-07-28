@@ -1,0 +1,127 @@
+{
+  "adapterVersion": "recording-fake",
+  "applicationVersion": "0.6.0-test",
+  "artifacts": [
+    {
+      "kind": "aedt-project",
+      "path": "outputs/m6/Boost_inductor_2d.aedt"
+    }
+  ],
+  "backend": "maxwell-2d",
+  "coreTemperatureC": 80.0,
+  "diagnostics": [],
+  "dimensionalRepresentation": "equivalent-cross-section",
+  "frequencyHz": 125000.0,
+  "geometryOnly": false,
+  "material": {
+    "bhSeriesId": "bh-100c",
+    "manualCompatibilityAcknowledged": false,
+    "ref": {
+      "grade": "60",
+      "manufacturer": "Magnetics",
+      "name": "Kool Mu"
+    },
+    "resolved": true,
+    "revisionId": "0123456789ab"
+  },
+  "maximumPasses": 10,
+  "meshIntent": "standard",
+  "mode": "generate-only",
+  "percentError": 1.0,
+  "projectId": "3f0e8f5e-8f4e-4a5e-9d5b-6c4f2b1a0d9c",
+  "projectSchemaVersion": 5,
+  "requestedOutputs": [
+    "resistance",
+    "inductance"
+  ],
+  "results": null,
+  "runId": "m6-maxwell-2d",
+  "solverVersion": "2025.2",
+  "stages": [
+    {
+      "diagnostic": "recorded",
+      "name": "launch",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "units",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "materials",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "core",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "conductors",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "excitations",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "eddy",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "region",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "mesh",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "setup",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "matrix",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "reports",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "validate",
+      "status": "succeeded"
+    },
+    {
+      "diagnostic": "recorded",
+      "name": "save",
+      "status": "succeeded"
+    }
+  ],
+  "status": "succeeded",
+  "warnings": [
+    "The 2D model is a documented approximate XY cross-section equivalent; turns and polarity are represented through coil and winding assignments, and model depth derives from the core height."
+  ],
+  "windingTemperatureC": 45.0,
+  "windings": [
+    {
+      "acPeakCurrentA": 2.8284271247461903,
+      "acRmsCurrentA": 2.0,
+      "currentDirection": "forward",
+      "dcCurrentA": 0.0,
+      "phaseDeg": 30.0,
+      "windingId": "w1"
+    }
+  ]
+}

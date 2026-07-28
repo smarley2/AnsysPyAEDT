@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Protocol
 
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
-from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.maxwell_plan import (
+    GeometryOnlyMaxwell3dPlan,
+    Maxwell3dDesignPlan,
+)
 
 STAGE_NAMES: tuple[str, ...] = (
     "launch",
@@ -25,6 +28,14 @@ STAGE_NAMES: tuple[str, ...] = (
     "save",
 )
 
+GEOMETRY_ONLY_STAGE_NAMES: tuple[str, ...] = (
+    "launch",
+    "units",
+    "core",
+    "windings",
+    "save",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Maxwell3dExportRequest:
@@ -34,6 +45,17 @@ class Maxwell3dExportRequest:
     non_graphical: bool
     output_directory: Path
     project_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class Maxwell3dGeometryOnlyRequest:
+    plan: GeometryOnlyMaxwell3dPlan
+    release: AedtRelease
+    edition: AedtEdition
+    non_graphical: bool
+    output_directory: Path
+    project_name: str
+    design_name: str = "Inductor3D_GeometryOnly"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,3 +90,7 @@ MaxwellExportResult = Maxwell3dExportResult
 
 class Maxwell3dExporter(Protocol):
     def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult: ...
+
+    def export_geometry_only(
+        self, request: Maxwell3dGeometryOnlyRequest
+    ) -> Maxwell3dExportResult: ...

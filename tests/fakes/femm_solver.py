@@ -36,4 +36,6 @@ class RecordingFemmSolver:
             analyzed=request.analyze,
             results=results,
             messages=("recorded",),
+            adapter_version="recording-fake",
+            solver_version=None,
         )

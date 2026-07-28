@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
 from inductor_designer.application.ports.femm_solver import (
@@ -59,6 +60,13 @@ class FemmModuleFactory(Protocol):
 
 
 class DefaultFemmModuleFactory:
+    @property
+    def adapter_version(self) -> str | None:
+        try:
+            return version("pyfemm")
+        except PackageNotFoundError:
+            return None
+
     def create(self) -> FemmModule:
         import femm
 
@@ -86,6 +94,10 @@ class PyfemmSolver:
 
     def __init__(self, module_factory: FemmModuleFactory | None = None) -> None:
         self._factory = DefaultFemmModuleFactory() if module_factory is None else module_factory
+
+    def _observed_version(self, name: str) -> str | None:
+        value = getattr(self._factory, name, None)
+        return value if isinstance(value, str) and value.strip() else None
 
     def solve(self, request: FemmSolveRequest) -> FemmSolveResult:
         request.output_directory.mkdir(parents=True, exist_ok=True)
@@ -204,4 +216,6 @@ class PyfemmSolver:
             analyzed=request.analyze,
             results=results,
             messages=tuple(messages),
+            adapter_version=self._observed_version("adapter_version"),
+            solver_version=self._observed_version("solver_version"),
         )

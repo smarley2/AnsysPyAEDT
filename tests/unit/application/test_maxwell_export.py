@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -8,338 +8,220 @@ import pytest
 
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
-    _selected_material_selection,
-    export_femm2d,
-    export_maxwell2d,
-    export_maxwell3d,
-    femm_manifest_json,
-    generation_manifest_json,
+    RunOutcome,
+    generate_run,
+    run_manifest_json,
 )
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
-from inductor_designer.domain.project import (
-    CatalogCoreSelection,
-    ManualCoreSelection,
-    MaterialRevisionSelection,
-)
-from inductor_designer.materials.records import MaterialStatus
+from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
+from inductor_designer.domain.project import InductorProject, MaterialRevisionSelection
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
+)
+from inductor_designer.simulation.run_contracts import (
+    DimensionalRepresentation,
+    RunBackend,
+    RunMode,
+    RunRequest,
+    RunStatus,
 )
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
 from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.domain.test_project import make_project, make_winding
-from tests.unit.simulation.test_maxwell_plan import (
-    make_approved_material_record,
-    make_multi_bh_material_record,
-)
+from tests.unit.domain.test_project import make_project
+from tests.unit.simulation.test_maxwell_plan import make_multi_bh_material_record
 
-SNAPSHOT = CapabilitySnapshot(
-    release=AedtRelease(2025, 2),
-    edition=AedtEdition.COMMERCIAL,
-    include_dc_fields_3d=None,
-    discovered_limits=(),
-    evidence_source="test",
-    review_status=CapabilityReviewStatus.REVIEWED,
-)
-
-NATIVE_SNAPSHOT = CapabilitySnapshot(
+OUTPUT_DIRECTORY = Path("outputs/m6")
+GOLDEN_DIRECTORY = Path(__file__).parents[2] / "golden"
+GOLDEN_FILES = {
+    RunBackend.MAXWELL_3D: "m6-maxwell3d-run-manifest.json",
+    RunBackend.MAXWELL_2D: "m6-maxwell2d-run-manifest.json",
+    RunBackend.FEMM: "m6-femm-run-manifest.json",
+}
+CAPABILITIES = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
     edition=AedtEdition.COMMERCIAL,
     include_dc_fields_3d=True,
     discovered_limits=(),
-    evidence_source="test",
+    evidence_source="Task 7 golden test",
     review_status=CapabilityReviewStatus.REVIEWED,
 )
 
 
-def three_d_project() -> object:
+def project_for_runs() -> InductorProject:
+    project = make_project()
+    material = make_multi_bh_material_record()
     return replace(
-        make_project(
+        project,
+        design=replace(
+            project.design,
+            core_material=MaterialRevisionSelection(
+                ref=material.ref,
+                revision_id=material.revision_id,
+                snapshot=material,
+                bh_series_id="bh-100c",
+            ),
+        ),
+        operating_point=replace(
+            project.operating_point,
+            frequency_hz=125_000.0,
+            winding_temperature_c=45.0,
+            core_temperature_c=80.0,
             windings=(
-                make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
-                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
-            )
+                replace(
+                    project.operating_point.windings[0],
+                    ac_phase_deg=30.0,
+                    dc_current_a=0.0,
+                ),
+            ),
         ),
-        dimension_mode=ModelDimension.THREE_D,
     )
 
 
-def test_export_builds_plan_and_calls_exporter(tmp_path: Path) -> None:
-    exporter = RecordingMaxwell3dExporter()
-    outcome = export_maxwell3d(
-        three_d_project(), CATALOG, exporter, tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
-    )
-    assert outcome.result.succeeded()
-    request = exporter.requests[0]
-    assert request.project_name == "Boost_inductor"
-    assert [g.name for g in request.plan.windings] == ["w1", "w2"]
-    assert request.non_graphical is True
-
-
-def test_maxwell_export_rejects_unsupported_aedt_target_before_adapter_call(
-    tmp_path: Path,
-) -> None:
-    exporter = RecordingMaxwell3dExporter()
-    project = replace(
-        three_d_project(),
-        target_release=AedtRelease(2024, 2),
-    )
-
-    with pytest.raises(MaxwellExportBlocked, match="Only AEDT 2025 R2 Commercial"):
-        export_maxwell3d(
+def generate_all_backends() -> dict[RunBackend, RunOutcome]:
+    project = project_for_runs()
+    maxwell3d = RecordingMaxwell3dExporter()
+    maxwell2d = RecordingMaxwell2dExporter()
+    femm = RecordingFemmSolver()
+    outcomes: dict[RunBackend, RunOutcome] = {}
+    for backend in RunBackend:
+        outcomes[backend] = generate_run(
             project,
+            RunRequest(backend, RunMode.GENERATE_ONLY),
             CATALOG,
-            exporter,
-            tmp_path,
-            capabilities=SNAPSHOT,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=maxwell3d,
+            maxwell2d_exporter=maxwell2d,
+            femm_solver=femm,
+            run_id=f"m6-{backend.value}",
+            application_version="0.6.0-test",
         )
+    assert len(maxwell3d.requests) == 1
+    assert len(maxwell3d.geometry_only_requests) == 0
+    assert len(maxwell2d.requests) == 1
+    assert len(femm.requests) == 1
+    assert str(maxwell3d.requests[0].release) == "2025.2"
+    assert str(maxwell2d.requests[0].release) == "2025.2"
+    assert femm.requests[0].analyze is False
+    return outcomes
 
-    assert exporter.requests == []
+
+def test_generate_only_manifests_match_golden_and_share_physical_inputs() -> None:
+    outcomes = generate_all_backends()
+    manifests = [outcome.manifest for outcome in outcomes.values()]
+
+    for manifest in manifests:
+        assert manifest.project_id == "3f0e8f5e-8f4e-4a5e-9d5b-6c4f2b1a0d9c"
+        assert manifest.frequency_hz == 125_000.0
+        assert manifest.winding_temperature_c == 45.0
+        assert manifest.core_temperature_c == 80.0
+        assert len(manifest.windings) == 1
+        winding = manifest.windings[0]
+        assert winding.winding_id == "w1"
+        assert winding.ac_rms_current_a == 2.0
+        assert winding.ac_peak_current_a == pytest.approx(2.0 * math.sqrt(2.0))
+        assert winding.phase_deg == 30.0
+        assert winding.dc_current_a == 0.0
+        assert manifest.material.revision_id == "0123456789ab"
+        assert manifest.material.bh_series_id == "bh-100c"
+        assert [output.value for output in manifest.requested_outputs] == [
+            "resistance",
+            "inductance",
+        ]
+        assert manifest.maximum_passes == 10
+        assert manifest.percent_error == 1.0
+        assert manifest.stages
+        assert manifest.artifacts
+        assert manifest.status is RunStatus.SUCCEEDED
+        assert manifest.results is None
+
+    assert outcomes[RunBackend.MAXWELL_3D].manifest.dimensional_representation is (
+        DimensionalRepresentation.THREE_DIMENSIONAL
+    )
+    for backend in (RunBackend.MAXWELL_2D, RunBackend.FEMM):
+        manifest = outcomes[backend].manifest
+        assert manifest.dimensional_representation is (
+            DimensionalRepresentation.EQUIVALENT_CROSS_SECTION
+        )
+        assert any("approximate" in warning for warning in manifest.warnings)
+
+    for backend, outcome in outcomes.items():
+        expected = (GOLDEN_DIRECTORY / GOLDEN_FILES[backend]).read_text(
+            encoding="utf-8"
+        )
+        assert run_manifest_json(outcome.manifest) == expected
 
 
-def test_maxwell_export_rejects_mismatched_capability_evidence(
-    tmp_path: Path,
+@pytest.mark.parametrize("backend", tuple(RunBackend))
+def test_generate_and_solve_blocks_before_every_adapter_call(
+    backend: RunBackend,
 ) -> None:
-    mismatched = replace(NATIVE_SNAPSHOT, release=AedtRelease(2026, 1))
+    maxwell3d = RecordingMaxwell3dExporter()
+    maxwell2d = RecordingMaxwell2dExporter()
+    femm = RecordingFemmSolver()
 
-    with pytest.raises(MaxwellExportBlocked, match="does not match"):
-        export_maxwell3d(
-            three_d_project(),
+    with pytest.raises(
+        MaxwellExportBlocked,
+        match=(
+            r"^Generate and Solve execution belongs to M8; "
+            r"M6 only validates its Run Request\.$"
+        ),
+    ):
+        generate_run(
+            project_for_runs(),
+            RunRequest(backend, RunMode.GENERATE_AND_SOLVE),
             CATALOG,
-            RecordingMaxwell3dExporter(),
-            tmp_path,
-            capabilities=mismatched,
+            CAPABILITIES,
+            OUTPUT_DIRECTORY,
+            maxwell3d_exporter=maxwell3d,
+            maxwell2d_exporter=maxwell2d,
+            femm_solver=femm,
+            run_id="blocked",
+            application_version="0.6.0-test",
         )
 
+    assert maxwell3d.requests == []
+    assert maxwell3d.geometry_only_requests == []
+    assert maxwell2d.requests == []
+    assert femm.requests == []
 
-def test_export_resolves_matching_approved_material_snapshot(tmp_path: Path) -> None:
-    material = make_multi_bh_material_record()
-    selection = MaterialRevisionSelection(
-        material.ref, material.revision_id, material, "bh-100c"
-    )
+
+def test_confirmed_unresolved_run_uses_geometry_only_adapter_boundary() -> None:
+    project = project_for_runs()
     project = replace(
-        three_d_project(),
-        materials=(selection,),
+        project,
+        design=replace(project.design, core_material=None),
     )
-    assert isinstance(project.core, CatalogCoreSelection)
+    maxwell3d = RecordingMaxwell3dExporter()
 
-    assert _selected_material_selection(project, project.core) is selection  # type: ignore[arg-type]
-
-    outcome = export_maxwell3d(
-        project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT
-    )
-
-    assert outcome.plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
-    assert outcome.plan.core.material.bh_series_id == "bh-100c"
-    payload = json.loads(generation_manifest_json(outcome))
-    assert payload["coreMaterial"]["bhPointCount"] == 2
-    assert payload["coreMaterial"]["massDensityKgPerM3"] == 4800.0
-    assert payload["coreMaterial"]["steinmetz"] == {"k": 2.5, "alpha": 1.4, "beta": 2.3}
-    assert payload["coreMaterial"]["materialRevision"] == "0123456789ab"
-    assert payload["coreMaterial"]["bhSeriesId"] == "bh-100c"
-
-
-def test_export_refuses_matching_non_approved_material_snapshot(tmp_path: Path) -> None:
-    material = make_approved_material_record(status=MaterialStatus.REVIEWED)
-    project = replace(
-        three_d_project(),
-        materials=(MaterialRevisionSelection(material.ref, material.revision_id, material),),
-    )
-
-    with pytest.raises(MaxwellExportBlocked, match="approved"):
-        export_maxwell3d(
-            project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT
-        )
-
-
-def test_export_refuses_multiple_material_revisions_for_selected_core(tmp_path: Path) -> None:
-    first = make_approved_material_record()
-    second = replace(first, revision_id="abcdef012345")
-    project = replace(
-        three_d_project(),
-        materials=(
-            MaterialRevisionSelection(first.ref, first.revision_id, first),
-            MaterialRevisionSelection(second.ref, second.revision_id, second),
+    outcome = generate_run(
+        project,
+        RunRequest(
+            RunBackend.MAXWELL_3D,
+            RunMode.GENERATE_ONLY,
+            confirm_geometry_only=True,
         ),
+        CATALOG,
+        CAPABILITIES,
+        OUTPUT_DIRECTORY,
+        maxwell3d_exporter=maxwell3d,
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id="m6-geometry-only",
+        application_version="0.6.0-test",
     )
 
-    with pytest.raises(MaxwellExportBlocked, match="multiple"):
-        export_maxwell3d(
-            project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT
-        )
-
-
-def test_two_d_project_is_blocked(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-    with pytest.raises(MaxwellExportBlocked, match="3d"):
-        export_maxwell3d(
-            project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
-        )
-
-
-def test_manual_core_is_blocked(tmp_path: Path) -> None:
-    project = replace(
-        three_d_project(),  # type: ignore[type-var]
-        core=ManualCoreSelection(0.0269, 0.0147, 0.0112, 0.0),
+    assert maxwell3d.requests == []
+    assert len(maxwell3d.geometry_only_requests) == 1
+    assert tuple(stage.name for stage in outcome.adapter_result.stages) == (
+        "launch",
+        "units",
+        "core",
+        "windings",
+        "save",
     )
-    with pytest.raises(MaxwellExportBlocked, match="catalog cores"):
-        export_maxwell3d(
-            project, CATALOG, RecordingMaxwell3dExporter(), tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
-        )
-
-
-def test_manifest_is_deterministic_and_carries_stages(tmp_path: Path) -> None:
-    exporter = RecordingMaxwell3dExporter()
-    outcome = export_maxwell3d(
-        three_d_project(), CATALOG, exporter, tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
-    )
-    manifest = generation_manifest_json(outcome)
-    assert manifest == generation_manifest_json(outcome)
-    payload = json.loads(manifest)
-    assert payload["schemaVersion"] == 2
-    assert payload["succeeded"] is True
-    assert [stage["name"] for stage in payload["stages"]][0] == "launch"
-    assert payload["windings"][0]["turnCount"] == 10
-    assert any(
-        "The 3D Include DC Fields capability has not been reviewed for this environment."
-        in note
-        for note in payload["notes"]
-    )
-    assert payload["backend"] == "aedt"
-    assert payload["coreMaterial"]["bhPointCount"] == 0
-    assert payload["coreMaterial"]["steinmetz"] is None
-    assert payload["coreMaterial"]["materialRevision"] is None
-    assert payload["coreMaterial"]["bhSeriesId"] is None
-
-
-def test_3d_manifest_v2_identifies_blocked_dc(tmp_path: Path) -> None:
-    outcome = export_maxwell3d(
-        three_d_project(), CATALOG, RecordingMaxwell3dExporter(), tmp_path,  # type: ignore[arg-type]
-        capabilities=SNAPSHOT,
-    )
-    payload = json.loads(generation_manifest_json(outcome))
-    assert payload["schemaVersion"] == 2
-    assert payload["dimension"] == "3d"
-    assert payload["dcBias"]["strategy"] == "blocked"
-    assert payload["dcBias"]["appliedCurrentsA"] is None
-    assert payload["capabilities"]["includeDcFields3d"] is None
-    assert payload["capabilities"]["reviewStatus"] == "reviewed"
-
-
-def test_3d_native_dc_applied_currents_in_manifest(tmp_path: Path) -> None:
-    outcome = export_maxwell3d(
-        three_d_project(), CATALOG, RecordingMaxwell3dExporter(), tmp_path,  # type: ignore[arg-type]
-        capabilities=NATIVE_SNAPSHOT,
-    )
-    payload = json.loads(generation_manifest_json(outcome))
-    assert payload["dcBias"]["strategy"] == "native-include-dc-fields"
-    assert payload["dcBias"]["appliedCurrentsA"] == {"w1": 5.0, "w2": 5.0}
-    assert outcome.plan.dc_bias is outcome.decision
-
-
-def test_2d_export_blocked_dc_and_conductor_count(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-    outcome = export_maxwell2d(
-        project, CATALOG, RecordingMaxwell2dExporter(), tmp_path,  # type: ignore[arg-type]
-        capabilities=NATIVE_SNAPSHOT,
-    )
-    payload = json.loads(generation_manifest_json(outcome))
-    assert payload["dimension"] == "2d"
-    assert payload["dcBias"]["strategy"] == "blocked"
-    assert "Maxwell 2D" in payload["dcBias"]["reason"]
-    assert payload["windings"][0]["conductorCount"] == 20
-    assert any("approximate" in note for note in payload["notes"])
-
-
-def test_2d_export_resolves_matching_material_snapshot(tmp_path: Path) -> None:
-    material = make_multi_bh_material_record()
-    project = replace(
-        three_d_project(),
-        dimension_mode=ModelDimension.TWO_D,
-        materials=(
-            MaterialRevisionSelection(material.ref, material.revision_id, material, "bh-100c"),
-        ),
-    )
-
-    outcome = export_maxwell2d(
-        project, CATALOG, RecordingMaxwell2dExporter(), tmp_path, capabilities=SNAPSHOT
-    )
-
-    assert outcome.plan.core.material.material_revision == material.revision_id
-    assert outcome.plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
-    assert outcome.plan.core.material.bh_series_id == "bh-100c"
-    assert json.loads(generation_manifest_json(outcome))["coreMaterial"]["bhSeriesId"] == (
-        "bh-100c"
-    )
-
-
-def test_2d_refuses_3d_project(tmp_path: Path) -> None:
-    with pytest.raises(MaxwellExportBlocked, match="2d"):
-        export_maxwell2d(
-            three_d_project(), CATALOG, RecordingMaxwell2dExporter(), tmp_path,  # type: ignore[arg-type]
-            capabilities=SNAPSHOT,
-        )
-
-
-def test_femm_export_happy_path(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-    solver = RecordingFemmSolver()
-    outcome = export_femm2d(
-        project, CATALOG, solver, tmp_path, capabilities=SNAPSHOT  # type: ignore[arg-type]
-    )
-    assert outcome.result.analyzed is True
-    request = solver.requests[0]
-    assert request.project_name == "Boost_inductor_2d"
-
-    manifest = femm_manifest_json(outcome)
-    assert manifest == femm_manifest_json(outcome)
-    payload = json.loads(manifest)
-    assert payload["schemaVersion"] == 2
-    assert payload["backend"] == "femm"
-    assert payload["dimension"] == "2d"
-    assert payload["designName"] == outcome.plan.design_name
-    assert payload["femPath"] == str(outcome.result.fem_path)
-    assert payload["analyzed"] is True
-    assert payload["dcBias"]["strategy"] == "blocked"
-    assert set(payload["femmResults"]) == {"w1", "w2"}
-    assert payload["femmResults"]["w1"]["resistanceOhm"] == 0.1
-    assert payload["windings"][0]["conductorCount"] == 20
-
-
-def test_femm_export_resolves_bh_points_from_matching_snapshot(tmp_path: Path) -> None:
-    material = make_multi_bh_material_record()
-    project = replace(
-        three_d_project(),
-        dimension_mode=ModelDimension.TWO_D,
-        materials=(
-            MaterialRevisionSelection(material.ref, material.revision_id, material, "bh-100c"),
-        ),
-    )
-
-    outcome = export_femm2d(
-        project, CATALOG, RecordingFemmSolver(), tmp_path, capabilities=SNAPSHOT
-    )
-
-    core_material = next(
-        item for item in outcome.problem.materials if item.name == outcome.plan.core.material.name
-    )
-    assert core_material.bh_points == outcome.plan.core.material.bh_curve
-    assert core_material.bh_points == ((0.0, 0.0), (0.03, 120.0))
-    manifest_material = json.loads(femm_manifest_json(outcome))["coreMaterial"]
-    assert manifest_material["materialRevision"] == material.revision_id
-    assert manifest_material["bhSeriesId"] == "bh-100c"
-
-
-def test_femm_export_not_analyzed_has_no_results(tmp_path: Path) -> None:
-    project = replace(three_d_project(), dimension_mode=ModelDimension.TWO_D)  # type: ignore[type-var]
-    solver = RecordingFemmSolver()
-    outcome = export_femm2d(
-        project, CATALOG, solver, tmp_path,  # type: ignore[arg-type]
-        capabilities=SNAPSHOT, analyze=False,
-    )
-    payload = json.loads(femm_manifest_json(outcome))
-    assert payload["analyzed"] is False
-    assert payload["femmResults"] is None
+    assert outcome.manifest.geometry_only is True
+    assert outcome.manifest.material.resolved is False
+    assert outcome.manifest.results is None

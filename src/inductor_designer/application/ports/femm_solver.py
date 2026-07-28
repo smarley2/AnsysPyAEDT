@@ -31,6 +31,8 @@ class FemmSolveResult:
     analyzed: bool
     results: Mapping[str, FemmWindingResult] | None
     messages: tuple[str, ...]
+    adapter_version: str | None = None
+    solver_version: str | None = None
 
 
 class FemmSolver(Protocol):

@@ -4,17 +4,45 @@ from dataclasses import replace
 from pathlib import Path
 
 from inductor_designer.application.ports.maxwell_exporter import (
+    GEOMETRY_ONLY_STAGE_NAMES,
     STAGE_NAMES,
     Maxwell3dExportRequest,
+    Maxwell3dGeometryOnlyRequest,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
+from inductor_designer.simulation.plan_builder import (
+    build_geometry_only_maxwell3d_plan,
+)
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
-from tests.unit.simulation.test_plan_builder import build, make_definition
+from tests.unit.simulation.test_plan_builder import (
+    BARE,
+    CORE,
+    build,
+    make_definition,
+    pack,
+)
 
 
 def make_request(tmp_path: Path) -> Maxwell3dExportRequest:
     return Maxwell3dExportRequest(
         plan=build((make_definition(),)),  # type: ignore[arg-type]
+        release=AedtRelease(2025, 2),
+        edition=AedtEdition.COMMERCIAL,
+        non_graphical=True,
+        output_directory=tmp_path,
+        project_name="Boost_inductor",
+    )
+
+
+def make_geometry_only_request(tmp_path: Path) -> Maxwell3dGeometryOnlyRequest:
+    definition = make_definition()
+    return Maxwell3dGeometryOnlyRequest(
+        plan=build_geometry_only_maxwell3d_plan(
+            CORE,
+            (pack(definition),),
+            (definition,),
+            {"w1": BARE},
+        ),
         release=AedtRelease(2025, 2),
         edition=AedtEdition.COMMERCIAL,
         non_graphical=True,
@@ -32,6 +60,21 @@ def test_fake_records_request_and_reports_full_stage_sequence(tmp_path: Path) ->
     assert result.succeeded()
     assert result.project_path == tmp_path / "Boost_inductor.aedt"
     assert result.design_name == "Inductor3D"
+
+
+def test_fake_records_geometry_only_request_and_restricted_stages(
+    tmp_path: Path,
+) -> None:
+    exporter = RecordingMaxwell3dExporter()
+    request = make_geometry_only_request(tmp_path)
+
+    result = exporter.export_geometry_only(request)
+
+    assert exporter.requests == []
+    assert exporter.geometry_only_requests == [request]
+    assert tuple(stage.name for stage in result.stages) == GEOMETRY_ONLY_STAGE_NAMES
+    assert result.succeeded()
+    assert result.design_name == "Inductor3D_GeometryOnly"
 
 
 def test_result_not_succeeded_when_stages_incomplete(tmp_path: Path) -> None:

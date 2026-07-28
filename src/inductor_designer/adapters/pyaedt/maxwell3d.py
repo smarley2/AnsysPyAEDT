@@ -11,13 +11,18 @@ from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
 from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dExportRequest,
     Maxwell3dExportResult,
+    Maxwell3dGeometryOnlyRequest,
     StageRecord,
 )
+from inductor_designer.geometry.primitives import PathSegment
 from inductor_designer.simulation.capabilities import DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (
     COPPER_MATERIAL,
     INITIAL_MESH_SLIDER_LEVEL,
+    GeometryOnlyMaxwell3dPlan,
+    GeometryOnlyWindingPlan,
     Maxwell3dDesignPlan,
+    WindingGroupPlan,
 )
 
 
@@ -69,7 +74,10 @@ class DefaultMaxwell3dAppFactory:
         return cast(Maxwell3dApp, Maxwell3d(**kwargs))
 
 
-def _stage_units(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _stage_units(
+    app: Maxwell3dApp,
+    plan: Maxwell3dDesignPlan | GeometryOnlyMaxwell3dPlan,
+) -> str:
     app.modeler.model_units = "meter"
     return "Model units set to meter."
 
@@ -97,18 +105,34 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return f"Material {spec.name} created (draft={spec.draft})."
 
 
-def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    data = polyline_data(plan.core.profile, closed=True)
+def _create_core_geometry(
+    app: Maxwell3dApp,
+    name: str,
+    profile: tuple[PathSegment, ...],
+) -> None:
+    data = polyline_data(profile, closed=True)
     app.modeler.create_polyline(
         points=[list(point) for point in data.points],
         segment_type=list(data.kinds),
-        name=plan.core.name,
+        name=name,
         cover_surface=True,
         close_surface=False,
     )
-    app.modeler.sweep_around_axis(plan.core.name, axis="Z", sweep_angle=360)
+    app.modeler.sweep_around_axis(name, axis="Z", sweep_angle=360)
+
+
+def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+    _create_core_geometry(app, plan.core.name, plan.core.profile)
     app.assign_material(plan.core.name, plan.core.material.name)
     return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+
+
+def _stage_geometry_only_core(
+    app: Maxwell3dApp,
+    plan: GeometryOnlyMaxwell3dPlan,
+) -> str:
+    _create_core_geometry(app, plan.core_name, plan.core_profile)
+    return f"Core {plan.core_name} revolved without a material assignment."
 
 
 # Number of flat facets per conductor cross-section. 0 would keep a true circle.
@@ -131,22 +155,46 @@ CONDUCTOR_FACETS = 16
 INITIAL_MESH_METHOD = "AnsoftTAU"
 
 
-def _stage_windings(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+def _create_winding_geometry(
+    app: Maxwell3dApp,
+    windings: tuple[WindingGroupPlan, ...] | tuple[GeometryOnlyWindingPlan, ...],
+    *,
+    material: str | None,
+) -> int:
     count = 0
-    for group in plan.windings:
+    for group in windings:
         for turn in group.turns:
             data = polyline_data(turn.segments, closed=True)
-            app.modeler.create_polyline(
-                points=[list(point) for point in data.points],
-                segment_type=list(data.kinds),
-                name=turn.name,
-                material=COPPER_MATERIAL,
-                xsection_type="Circle",
-                xsection_width=turn.bare_diameter_m,
-                xsection_num_seg=CONDUCTOR_FACETS,
-            )
+            kwargs: dict[str, Any] = {
+                "points": [list(point) for point in data.points],
+                "segment_type": list(data.kinds),
+                "name": turn.name,
+                "xsection_type": "Circle",
+                "xsection_width": turn.bare_diameter_m,
+                "xsection_num_seg": CONDUCTOR_FACETS,
+            }
+            if material is not None:
+                kwargs["material"] = material
+            app.modeler.create_polyline(**kwargs)
             count += 1
+    return count
+
+
+def _stage_windings(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+    count = _create_winding_geometry(
+        app,
+        plan.windings,
+        material=COPPER_MATERIAL,
+    )
     return f"{count} turn conductors created."
+
+
+def _stage_geometry_only_windings(
+    app: Maxwell3dApp,
+    plan: GeometryOnlyMaxwell3dPlan,
+) -> str:
+    count = _create_winding_geometry(app, plan.windings, material=None)
+    return f"{count} winding solids created without material arguments."
 
 
 def _stage_terminals(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
@@ -359,6 +407,85 @@ class PyaedtMaxwell3dExporter:
                                 name="save",
                                 succeeded=True,
                                 message="Diagnostic save after failed stage.",
+                            )
+                        )
+                    except Exception as save_error:  # noqa: BLE001 - stage boundary
+                        stages.append(
+                            StageRecord(name="save", succeeded=False, message=str(save_error))
+                        )
+                    return result()
+                stages.append(StageRecord(name=name, succeeded=True, message=message))
+            try:
+                saved = bool(app.save_project(str(project_path)))
+                stages.append(
+                    StageRecord(
+                        name="save",
+                        succeeded=saved,
+                        message="Project saved." if saved else "save_project returned False.",
+                    )
+                )
+            except Exception as error:  # noqa: BLE001 - stage boundary
+                stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
+        finally:
+            app.release_desktop(close_projects=True, close_desktop=True)
+        return result()
+
+    def export_geometry_only(
+        self,
+        request: Maxwell3dGeometryOnlyRequest,
+    ) -> Maxwell3dExportResult:
+        request.output_directory.mkdir(parents=True, exist_ok=True)
+        project_path = request.output_directory / f"{request.project_name}.aedt"
+        project_path.unlink(missing_ok=True)
+        plan = request.plan
+        stages: list[StageRecord] = []
+
+        def result() -> Maxwell3dExportResult:
+            return Maxwell3dExportResult(
+                project_path=project_path,
+                design_name=request.design_name,
+                pyaedt_version=self._factory.pyaedt_version,
+                stages=tuple(stages),
+            )
+
+        try:
+            app = self._factory.create(
+                project=str(project_path),
+                design=request.design_name,
+                version=str(request.release),
+                non_graphical=request.non_graphical,
+                new_desktop=True,
+                close_on_exit=False,
+                student_version=request.edition.value == "student",
+            )
+        except Exception as error:  # noqa: BLE001 - stage boundary converts to record
+            stages.append(StageRecord(name="launch", succeeded=False, message=str(error)))
+            return result()
+        stages.append(
+            StageRecord(
+                name="launch",
+                succeeded=True,
+                message=f"Maxwell 3D geometry-only design {request.design_name!r} opened.",
+            )
+        )
+        geometry_stages = (
+            ("units", _stage_units),
+            ("core", _stage_geometry_only_core),
+            ("windings", _stage_geometry_only_windings),
+        )
+        try:
+            for name, stage in geometry_stages:
+                try:
+                    message = stage(app, plan)
+                except Exception as error:  # noqa: BLE001 - stage boundary
+                    stages.append(StageRecord(name=name, succeeded=False, message=str(error)))
+                    try:
+                        app.save_project(str(project_path))
+                        stages.append(
+                            StageRecord(
+                                name="save",
+                                succeeded=True,
+                                message="Diagnostic save after failed geometry stage.",
                             )
                         )
                     except Exception as save_error:  # noqa: BLE001 - stage boundary

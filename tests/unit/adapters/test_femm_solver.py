@@ -126,6 +126,20 @@ def test_factory_creation_recorded(tmp_path: Path) -> None:
     assert factory.created == 1
 
 
+def test_observed_adapter_and_solver_versions_are_returned(tmp_path: Path) -> None:
+    module = FakeFemmModule()
+    factory = FakeFemmModuleFactory(module)
+    factory.adapter_version = "observed-adapter"
+    factory.solver_version = "observed-solver"
+
+    result = PyfemmSolver(module_factory=factory).solve(
+        make_request(tmp_path, analyze=False)
+    )
+
+    assert result.adapter_version == "observed-adapter"
+    assert result.solver_version == "observed-solver"
+
+
 def test_mo_getcircuitproperties_bad_return_raises(tmp_path: Path) -> None:
     module = FakeFemmModule()
 

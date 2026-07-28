@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 
 from inductor_designer.application.ports.catalog import CatalogRepository
@@ -18,369 +17,461 @@ from inductor_designer.application.ports.maxwell2d_exporter import (
 from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dExporter,
     Maxwell3dExportRequest,
+    Maxwell3dGeometryOnlyRequest,
     MaxwellExportResult,
 )
-from inductor_designer.application.services.aedt_support import aedt_support_issues
-from inductor_designer.application.services.geometry_model import (
-    GeometryModel,
-    build_geometry_model,
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+    aedt_support_issues,
 )
-from inductor_designer.domain.aedt_target import ModelDimension
-from inductor_designer.domain.project import (
-    CatalogCoreSelection,
-    InductorProject,
-    MaterialRevisionSelection,
+from inductor_designer.application.services.run_planning import (
+    GeometryOnlyRunPlan,
+    PlannedRun,
+    SolveReadyRunPlan,
+    plan_run,
 )
+from inductor_designer.domain.project import InductorProject
 from inductor_designer.geometry.naming import sanitize_identifier
-from inductor_designer.simulation.capabilities import (
-    CapabilitySnapshot,
-    DcBiasDecision,
-    DcBiasStrategy,
-    select_dc_bias_strategy,
-)
-from inductor_designer.simulation.femm_problem import FemmProblem, femm_problem_from_plan
+from inductor_designer.simulation.capabilities import CapabilitySnapshot
+from inductor_designer.simulation.femm_problem import FemmProblem
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
-from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan, PlanBuildError
-from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
-from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan
+from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.run_contracts import (
+    ComplexValue,
+    DimensionalRepresentation,
+    ManifestArtifact,
+    ManifestMaterialState,
+    ManifestStage,
+    MatrixValue,
+    NormalizedQuantity,
+    NormalizedResultSet,
+    NormalizedValue,
+    RunBackend,
+    RunManifest,
+    RunMode,
+    RunRequest,
+    RunStatus,
+    StageStatus,
+)
 
-
-class Backend2d(str, Enum):
-    AEDT = "aedt"
-    FEMM = "femm"
+_PROJECT_SCHEMA_VERSION = 5
+_GENERATE_AND_SOLVE_BLOCK = (
+    "Generate and Solve execution belongs to M8; M6 only validates its Run Request."
+)
 
 
 class MaxwellExportBlocked(ValueError):
     def __init__(self, issues: tuple[str, ...]) -> None:
-        super().__init__("; ".join(issues))
         self.issues = issues
+        super().__init__("; ".join(issues))
+
+
+AdapterResult = MaxwellExportResult | FemmSolveResult
 
 
 @dataclass(frozen=True, slots=True)
-class MaxwellExportOutcome:
-    plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan
-    result: MaxwellExportResult
-    capabilities: CapabilitySnapshot
-    decision: DcBiasDecision
-    dimension: ModelDimension
+class RunOutcome:
+    planned_run: PlannedRun
+    adapter_result: AdapterResult
+    manifest: RunManifest
 
 
-def _require_supported_aedt(
+def _project_name(project: InductorProject) -> str:
+    return sanitize_identifier(project.name)
+
+
+def _export_maxwell3d_plan(
     project: InductorProject,
-    capabilities: CapabilitySnapshot,
-) -> None:
-    issues = aedt_support_issues(
-        project.target_release,
-        project.target_edition,
-        capabilities,
-    )
-    if issues:
-        raise MaxwellExportBlocked(issues)
-
-
-def _validated_model(
-    project: InductorProject,
-    catalog: CatalogRepository,
-    expected: ModelDimension,
-) -> tuple[CatalogCoreSelection, GeometryModel]:
-    if project.dimension_mode is not expected:
-        raise MaxwellExportBlocked(
-            (f"Project dimension mode must be {expected.value} for this export.",)
-        )
-    core_selection = project.core
-    if not isinstance(core_selection, CatalogCoreSelection):
-        raise MaxwellExportBlocked(
-            ("Only catalog cores are supported; manual cores carry no material identity.",)
-        )
-    model = build_geometry_model(project, catalog)
-    if model.collisions:
-        raise MaxwellExportBlocked(tuple(issue.message for issue in model.collisions))
-    return core_selection, model
-
-
-def _selected_material_selection(
-    project: InductorProject, core_selection: CatalogCoreSelection
-) -> MaterialRevisionSelection | None:
-    matches = tuple(
-        selection
-        for selection in project.materials
-        if selection.ref == core_selection.snapshot.material
-    )
-    if len(matches) > 1:
-        raise MaxwellExportBlocked(
-            (
-                "Project contains multiple material revisions for the selected core; "
-                "pin exactly one revision before export.",
-            )
-        )
-    return matches[0] if matches else None
-
-
-def export_maxwell3d(
-    project: InductorProject,
-    catalog: CatalogRepository,
+    planned_run: SolveReadyRunPlan | GeometryOnlyRunPlan,
     exporter: Maxwell3dExporter,
     output_directory: Path,
     *,
-    capabilities: CapabilitySnapshot,
-    non_graphical: bool = True,
-) -> MaxwellExportOutcome:
-    _require_supported_aedt(project, capabilities)
-    core_selection, model = _validated_model(project, catalog, ModelDimension.THREE_D)
-    decision = select_dc_bias_strategy(capabilities, ModelDimension.THREE_D)
-    selection = _selected_material_selection(project, core_selection)
-    record = selection.snapshot if selection is not None else None
-    series_id = selection.bh_series_id if selection is not None else None
-    try:
-        plan = build_maxwell3d_plan(
-            model.core,
-            core_selection.snapshot,
-            model.packings,
-            project.windings,
-            model.bare_diameter_m,
-            dc_bias_decision=decision,
-            material_record=record,
-            material_bh_series_id=series_id,
+    non_graphical: bool,
+) -> MaxwellExportResult:
+    if isinstance(planned_run, GeometryOnlyRunPlan):
+        return exporter.export_geometry_only(
+            Maxwell3dGeometryOnlyRequest(
+                plan=planned_run.solver_plan,
+                release=SUPPORTED_AEDT_RELEASE,
+                edition=SUPPORTED_AEDT_EDITION,
+                non_graphical=non_graphical,
+                output_directory=output_directory,
+                project_name=_project_name(project),
+            )
         )
-    except PlanBuildError as error:
-        raise MaxwellExportBlocked(error.issues) from error
-    request = Maxwell3dExportRequest(
-        plan=plan,
-        release=project.target_release,
-        edition=project.target_edition,
-        non_graphical=non_graphical,
-        output_directory=output_directory,
-        project_name=sanitize_identifier(project.name),
-    )
-    return MaxwellExportOutcome(
-        plan=plan,
-        result=exporter.export(request),
-        capabilities=capabilities,
-        decision=decision,
-        dimension=ModelDimension.THREE_D,
+    plan = planned_run.solver_plan
+    if not isinstance(plan, Maxwell3dDesignPlan):
+        raise TypeError("Maxwell 3D run planning returned a non-Maxwell 3D plan.")
+    return exporter.export(
+        Maxwell3dExportRequest(
+            plan=plan,
+            release=SUPPORTED_AEDT_RELEASE,
+            edition=SUPPORTED_AEDT_EDITION,
+            non_graphical=non_graphical,
+            output_directory=output_directory,
+            project_name=_project_name(project),
+        )
     )
 
 
-def export_maxwell2d(
+def _export_maxwell2d_plan(
     project: InductorProject,
-    catalog: CatalogRepository,
+    planned_run: SolveReadyRunPlan,
     exporter: Maxwell2dExporter,
     output_directory: Path,
     *,
-    capabilities: CapabilitySnapshot,
-    non_graphical: bool = True,
-) -> MaxwellExportOutcome:
-    _require_supported_aedt(project, capabilities)
-    core_selection, model = _validated_model(project, catalog, ModelDimension.TWO_D)
-    decision = select_dc_bias_strategy(capabilities, ModelDimension.TWO_D)
-    selection = _selected_material_selection(project, core_selection)
-    record = selection.snapshot if selection is not None else None
-    series_id = selection.bh_series_id if selection is not None else None
-    try:
-        plan = build_maxwell2d_plan(
-            model.planar,
-            core_selection.snapshot,
-            project.windings,
-            model.bare_diameter_m,
-            dc_bias_decision=decision,
-            material_record=record,
-            material_bh_series_id=series_id,
+    non_graphical: bool,
+) -> MaxwellExportResult:
+    plan = planned_run.solver_plan
+    if not isinstance(plan, Maxwell2dDesignPlan):
+        raise TypeError("Maxwell 2D run planning returned a non-Maxwell 2D plan.")
+    return exporter.export(
+        Maxwell2dExportRequest(
+            plan=plan,
+            release=SUPPORTED_AEDT_RELEASE,
+            edition=SUPPORTED_AEDT_EDITION,
+            non_graphical=non_graphical,
+            output_directory=output_directory,
+            project_name=f"{_project_name(project)}_2d",
         )
-    except PlanBuildError as error:
-        raise MaxwellExportBlocked(error.issues) from error
-    request = Maxwell2dExportRequest(
-        plan=plan,
-        release=project.target_release,
-        edition=project.target_edition,
-        non_graphical=non_graphical,
-        output_directory=output_directory,
-        project_name=f"{sanitize_identifier(project.name)}_2d",
-    )
-    return MaxwellExportOutcome(
-        plan=plan,
-        result=exporter.export(request),
-        capabilities=capabilities,
-        decision=decision,
-        dimension=ModelDimension.TWO_D,
     )
 
 
-@dataclass(frozen=True, slots=True)
-class FemmExportOutcome:
-    plan: Maxwell2dDesignPlan
-    problem: FemmProblem
-    result: FemmSolveResult
-    capabilities: CapabilitySnapshot
-    decision: DcBiasDecision
-
-
-def export_femm2d(
+def _export_femm_plan(
     project: InductorProject,
-    catalog: CatalogRepository,
+    planned_run: SolveReadyRunPlan,
     solver: FemmSolver,
     output_directory: Path,
-    *,
-    capabilities: CapabilitySnapshot,
-    analyze: bool = True,
-) -> FemmExportOutcome:
-    core_selection, model = _validated_model(project, catalog, ModelDimension.TWO_D)
-    decision = select_dc_bias_strategy(capabilities, ModelDimension.TWO_D)
-    selection = _selected_material_selection(project, core_selection)
-    record = selection.snapshot if selection is not None else None
-    series_id = selection.bh_series_id if selection is not None else None
-    try:
-        plan = build_maxwell2d_plan(
-            model.planar,
-            core_selection.snapshot,
-            project.windings,
-            model.bare_diameter_m,
-            dc_bias_decision=decision,
-            material_record=record,
-            material_bh_series_id=series_id,
+) -> FemmSolveResult:
+    problem = planned_run.solver_plan
+    if not isinstance(problem, FemmProblem):
+        raise TypeError("FEMM run planning returned a non-FEMM problem.")
+    return solver.solve(
+        FemmSolveRequest(
+            problem=problem,
+            output_directory=output_directory,
+            project_name=f"{_project_name(project)}_2d",
+            analyze=False,
         )
-    except PlanBuildError as error:
-        raise MaxwellExportBlocked(error.issues) from error
-    problem = femm_problem_from_plan(plan)
-    request = FemmSolveRequest(
-        problem=problem,
-        output_directory=output_directory,
-        project_name=f"{sanitize_identifier(project.name)}_2d",
-        analyze=analyze,
-    )
-    return FemmExportOutcome(
-        plan=plan,
-        problem=problem,
-        result=solver.solve(request),
-        capabilities=capabilities,
-        decision=decision,
     )
 
 
-def _winding_entries(plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan) -> list[dict[str, object]]:
-    entries: list[dict[str, object]] = []
-    for group in plan.windings:
-        entry: dict[str, object] = {
-            "name": group.name,
-            "windingId": group.winding_id,
-            "isSolid": group.is_solid,
-            "currentPeakA": group.current_peak_a,
-            "phaseDeg": group.phase_deg,
-            "dcCurrentA": group.dc_current_a,
-        }
-        if isinstance(plan, Maxwell3dDesignPlan):
-            entry["turnCount"] = len(group.turns)  # type: ignore[union-attr]
-        else:
-            entry["conductorCount"] = len(group.conductors)  # type: ignore[union-attr]
-        entries.append(entry)
-    return entries
-
-
-def _dc_bias_block(
-    plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan, decision: DcBiasDecision
-) -> dict[str, object]:
-    dc_requested = any(group.dc_current_a != 0.0 for group in plan.windings)
-    applied = (
-        {group.name: group.dc_current_a for group in plan.windings if group.dc_current_a != 0.0}
-        if dc_requested and decision.strategy is DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS
-        else None
-    )
-    return {
-        "strategy": decision.strategy.value,
-        "approximate": decision.approximate,
-        "reason": decision.reason,
-        # Read from the plan, so this is what the export intended to apply, not
-        # proof AEDT accepted it. Pair it with "succeeded" and the per-stage
-        # records in the same manifest before treating it as an observation.
-        "appliedCurrentsA": applied,
-    }
-
-
-def _capabilities_block(capabilities: CapabilitySnapshot) -> dict[str, object]:
-    return {
-        "release": str(capabilities.release),
-        "edition": capabilities.edition.value,
-        "includeDcFields3d": capabilities.include_dc_fields_3d,
-        "reviewStatus": capabilities.review_status.value,
-        "evidenceSource": capabilities.evidence_source,
-    }
-
-
-def _core_material_block(plan: Maxwell3dDesignPlan | Maxwell2dDesignPlan) -> dict[str, object]:
-    steinmetz = plan.core.material.steinmetz
-    return {
-        "name": plan.core.material.name,
-        "relativePermeability": plan.core.material.relative_permeability,
-        "massDensityKgPerM3": plan.core.material.mass_density_kg_per_m3,
-        "conductivitySPerM": plan.core.material.conductivity_s_per_m,
-        "draft": plan.core.material.draft,
-        "bhPointCount": len(plan.core.material.bh_curve),
-        "steinmetz": (
-            None
-            if steinmetz is None
-            else {"k": steinmetz.k, "alpha": steinmetz.alpha, "beta": steinmetz.beta}
+def _material_state(project: InductorProject) -> ManifestMaterialState:
+    selection = project.design.core_material
+    return ManifestMaterialState(
+        resolved=selection is not None,
+        ref=None if selection is None else selection.ref,
+        revision_id=None if selection is None else selection.revision_id,
+        bh_series_id=None if selection is None else selection.bh_series_id,
+        manual_compatibility_acknowledged=(
+            project.design.manual_material_compatibility_acknowledged
         ),
-        "materialRevision": plan.core.material.material_revision,
-        "bhSeriesId": plan.core.material.bh_series_id,
+    )
+
+
+def _maxwell_evidence(
+    result: MaxwellExportResult,
+) -> tuple[
+    tuple[ManifestStage, ...],
+    RunStatus,
+    tuple[str, ...],
+    tuple[ManifestArtifact, ...],
+]:
+    stages = tuple(
+        ManifestStage(
+            name=stage.name,
+            status=(
+                StageStatus.SUCCEEDED if stage.succeeded else StageStatus.FAILED
+            ),
+            diagnostic=stage.message,
+        )
+        for stage in result.stages
+    )
+    status = RunStatus.SUCCEEDED if result.succeeded() else RunStatus.FAILED
+    diagnostics = tuple(stage.message for stage in result.stages if not stage.succeeded)
+    saved = any(stage.name == "save" and stage.succeeded for stage in result.stages)
+    artifacts = (
+        (
+            ManifestArtifact(
+                kind="aedt-project",
+                path=result.project_path.as_posix(),
+            ),
+        )
+        if saved
+        else ()
+    )
+    return stages, status, diagnostics, artifacts
+
+
+def _femm_evidence(
+    result: FemmSolveResult,
+) -> tuple[
+    tuple[ManifestStage, ...],
+    RunStatus,
+    tuple[str, ...],
+    tuple[ManifestArtifact, ...],
+]:
+    return (
+        (
+            ManifestStage(
+                name="generate",
+                status=StageStatus.SUCCEEDED,
+                diagnostic="; ".join(result.messages),
+            ),
+        ),
+        RunStatus.SUCCEEDED,
+        (),
+        (
+            ManifestArtifact(
+                kind="femm-project",
+                path=result.fem_path.as_posix(),
+            ),
+        ),
+    )
+
+
+def _manifest_for_result(
+    project: InductorProject,
+    planned_run: PlannedRun,
+    result: AdapterResult,
+    *,
+    run_id: str,
+    application_version: str,
+) -> RunManifest:
+    backend = planned_run.request.backend
+    if backend is RunBackend.FEMM:
+        if not isinstance(result, FemmSolveResult):
+            raise TypeError("FEMM run returned a non-FEMM adapter result.")
+        stages, status, diagnostics, artifacts = _femm_evidence(result)
+        solver_version = result.solver_version
+        adapter_version = result.adapter_version
+    else:
+        if not isinstance(result, MaxwellExportResult):
+            raise TypeError("Maxwell run returned a non-Maxwell adapter result.")
+        stages, status, diagnostics, artifacts = _maxwell_evidence(result)
+        solver_version = str(SUPPORTED_AEDT_RELEASE)
+        adapter_version = result.pyaedt_version
+    return RunManifest(
+        run_id=run_id,
+        project_id=project.project_id,
+        project_schema_version=_PROJECT_SCHEMA_VERSION,
+        backend=backend,
+        mode=planned_run.request.mode,
+        dimensional_representation=(
+            DimensionalRepresentation.THREE_DIMENSIONAL
+            if backend is RunBackend.MAXWELL_3D
+            else DimensionalRepresentation.EQUIVALENT_CROSS_SECTION
+        ),
+        frequency_hz=project.operating_point.frequency_hz,
+        winding_temperature_c=project.operating_point.winding_temperature_c,
+        core_temperature_c=project.operating_point.core_temperature_c,
+        windings=planned_run.effective_inputs,
+        material=_material_state(project),
+        mesh_intent=project.simulation_recipe.mesh_intent,
+        maximum_passes=project.simulation_recipe.maximum_passes,
+        percent_error=project.simulation_recipe.percent_error,
+        requested_outputs=project.simulation_recipe.requested_outputs,
+        geometry_only=isinstance(planned_run, GeometryOnlyRunPlan),
+        application_version=application_version,
+        solver_version=solver_version,
+        adapter_version=adapter_version,
+        warnings=planned_run.warnings,
+        stages=stages,
+        status=status,
+        diagnostics=diagnostics,
+        artifacts=artifacts,
+        results=None,
+    )
+
+
+def generate_run(
+    project: InductorProject,
+    request: RunRequest,
+    catalog: CatalogRepository,
+    capabilities: CapabilitySnapshot,
+    output_directory: Path,
+    *,
+    maxwell3d_exporter: Maxwell3dExporter,
+    maxwell2d_exporter: Maxwell2dExporter,
+    femm_solver: FemmSolver,
+    run_id: str,
+    application_version: str,
+    non_graphical: bool = True,
+) -> RunOutcome:
+    if request.mode is RunMode.GENERATE_AND_SOLVE:
+        raise MaxwellExportBlocked((_GENERATE_AND_SOLVE_BLOCK,))
+    support_issues = aedt_support_issues(
+        SUPPORTED_AEDT_RELEASE,
+        SUPPORTED_AEDT_EDITION,
+        capabilities,
+    )
+    if support_issues:
+        raise MaxwellExportBlocked(support_issues)
+
+    planned_run = plan_run(project, request, catalog, capabilities)
+    adapter_result: AdapterResult
+    if request.backend is RunBackend.MAXWELL_3D:
+        adapter_result = _export_maxwell3d_plan(
+            project,
+            planned_run,
+            maxwell3d_exporter,
+            output_directory,
+            non_graphical=non_graphical,
+        )
+    elif request.backend is RunBackend.MAXWELL_2D:
+        if not isinstance(planned_run, SolveReadyRunPlan):
+            raise TypeError("Maxwell 2D unexpectedly produced a Geometry-Only plan.")
+        adapter_result = _export_maxwell2d_plan(
+            project,
+            planned_run,
+            maxwell2d_exporter,
+            output_directory,
+            non_graphical=non_graphical,
+        )
+    else:
+        if not isinstance(planned_run, SolveReadyRunPlan):
+            raise TypeError("FEMM unexpectedly produced a Geometry-Only plan.")
+        adapter_result = _export_femm_plan(
+            project,
+            planned_run,
+            femm_solver,
+            output_directory,
+        )
+
+    manifest = _manifest_for_result(
+        project,
+        planned_run,
+        adapter_result,
+        run_id=run_id,
+        application_version=application_version,
+    )
+    return RunOutcome(
+        planned_run=planned_run,
+        adapter_result=adapter_result,
+        manifest=manifest,
+    )
+
+
+def _normalized_value_to_document(value: NormalizedValue) -> object:
+    if isinstance(value, ComplexValue):
+        return {"real": value.real, "imaginary": value.imaginary}
+    if isinstance(value, MatrixValue):
+        return {
+            "rowLabels": list(value.row_labels),
+            "columnLabels": list(value.column_labels),
+            "values": [
+                [_normalized_value_to_document(item) for item in row]
+                for row in value.values
+            ],
+        }
+    return value
+
+
+def _quantity_to_document(quantity: NormalizedQuantity) -> dict[str, object]:
+    return {
+        "quantity": quantity.quantity.value,
+        "scope": quantity.scope,
+        "availability": quantity.availability.value,
+        "value": (
+            None
+            if quantity.value is None
+            else _normalized_value_to_document(quantity.value)
+        ),
+        "unit": quantity.unit,
+        "currentConvention": quantity.current_convention.value,
+        "approximation": quantity.approximation,
+        "reason": quantity.reason,
+        "provenance": quantity.provenance,
     }
 
 
-def generation_manifest_json(outcome: MaxwellExportOutcome) -> str:
-    plan = outcome.plan
-    result = outcome.result
-    decision = outcome.decision
-    capabilities = outcome.capabilities
-    payload: dict[str, object] = {
-        "schemaVersion": 2,
-        "backend": Backend2d.AEDT.value,
-        "dimension": outcome.dimension.value,
-        "designName": result.design_name,
-        "projectPath": str(result.project_path),
-        "pyaedtVersion": result.pyaedt_version,
-        "succeeded": result.succeeded(),
-        "solutionType": plan.solution_type,
-        "frequencyHz": plan.setup.frequency_hz,
-        "dcBias": _dc_bias_block(plan, decision),
-        "capabilities": _capabilities_block(capabilities),
-        "coreMaterial": _core_material_block(plan),
-        "windings": _winding_entries(plan),
-        "notes": list(plan.notes),
-        "stages": [
-            {"name": stage.name, "succeeded": stage.succeeded, "message": stage.message}
-            for stage in result.stages
+def _results_to_document(results: NormalizedResultSet) -> dict[str, object]:
+    return {
+        "runId": results.run_id,
+        "backend": results.backend.value,
+        "quantities": [
+            _quantity_to_document(quantity) for quantity in results.quantities
         ],
     }
-    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
 
-def femm_manifest_json(outcome: FemmExportOutcome) -> str:
-    plan = outcome.plan
-    result = outcome.result
-    femm_results: dict[str, object] | None
-    if result.results is None:
-        femm_results = None
-    else:
-        femm_results = {
-            name: {
-                "resistanceOhm": winding.resistance_ohm,
-                "inductanceH": winding.inductance_h,
-                "currentA": list(winding.current_a),
-                "voltageV": list(winding.voltage_v),
-                "fluxLinkageWb": list(winding.flux_linkage_wb),
+def run_manifest_to_document(manifest: RunManifest) -> dict[str, object]:
+    ref = manifest.material.ref
+    return {
+        "runId": manifest.run_id,
+        "projectId": manifest.project_id,
+        "projectSchemaVersion": manifest.project_schema_version,
+        "backend": manifest.backend.value,
+        "mode": manifest.mode.value,
+        "dimensionalRepresentation": manifest.dimensional_representation.value,
+        "frequencyHz": manifest.frequency_hz,
+        "windingTemperatureC": manifest.winding_temperature_c,
+        "coreTemperatureC": manifest.core_temperature_c,
+        "windings": [
+            {
+                "windingId": winding.winding_id,
+                "acRmsCurrentA": winding.ac_rms_current_a,
+                "acPeakCurrentA": winding.ac_peak_current_a,
+                "phaseDeg": winding.phase_deg,
+                "dcCurrentA": winding.dc_current_a,
+                "currentDirection": winding.current_direction.value,
             }
-            for name, winding in result.results.items()
-        }
-    payload: dict[str, object] = {
-        "schemaVersion": 2,
-        "backend": Backend2d.FEMM.value,
-        "dimension": "2d",
-        "designName": plan.design_name,
-        "femPath": str(result.fem_path),
-        "analyzed": result.analyzed,
-        "dcBias": _dc_bias_block(plan, outcome.decision),
-        "capabilities": _capabilities_block(outcome.capabilities),
-        "coreMaterial": _core_material_block(plan),
-        "windings": _winding_entries(plan),
-        "notes": list(plan.notes),
-        "femmResults": femm_results,
+            for winding in manifest.windings
+        ],
+        "material": {
+            "resolved": manifest.material.resolved,
+            "ref": (
+                None
+                if ref is None
+                else {
+                    "manufacturer": ref.manufacturer,
+                    "name": ref.name,
+                    "grade": ref.grade,
+                }
+            ),
+            "revisionId": manifest.material.revision_id,
+            "bhSeriesId": manifest.material.bh_series_id,
+            "manualCompatibilityAcknowledged": (
+                manifest.material.manual_compatibility_acknowledged
+            ),
+        },
+        "meshIntent": manifest.mesh_intent.value,
+        "maximumPasses": manifest.maximum_passes,
+        "percentError": manifest.percent_error,
+        "requestedOutputs": [
+            output.value for output in manifest.requested_outputs
+        ],
+        "geometryOnly": manifest.geometry_only,
+        "applicationVersion": manifest.application_version,
+        "solverVersion": manifest.solver_version,
+        "adapterVersion": manifest.adapter_version,
+        "warnings": list(manifest.warnings),
+        "stages": [
+            {
+                "name": stage.name,
+                "status": stage.status.value,
+                "diagnostic": stage.diagnostic,
+            }
+            for stage in manifest.stages
+        ],
+        "status": manifest.status.value,
+        "diagnostics": list(manifest.diagnostics),
+        "artifacts": [
+            {"kind": artifact.kind, "path": artifact.path}
+            for artifact in manifest.artifacts
+        ],
+        "results": (
+            None
+            if manifest.results is None
+            else _results_to_document(manifest.results)
+        ),
     }
-    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+
+def run_manifest_json(manifest: RunManifest) -> str:
+    return json.dumps(
+        run_manifest_to_document(manifest),
+        indent=2,
+        sort_keys=True,
+    ) + "\n"

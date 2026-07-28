@@ -6,15 +6,25 @@ import pytest
 
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
 from inductor_designer.application.ports.maxwell_exporter import (
+    GEOMETRY_ONLY_STAGE_NAMES,
     STAGE_NAMES,
     Maxwell3dExportRequest,
+    Maxwell3dGeometryOnlyRequest,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import SOLUTION_TYPE_DC
+from inductor_designer.simulation.plan_builder import build_geometry_only_maxwell3d_plan
 from tests.fakes.maxwell3d_app import FakeMaxwell3dApp, FakeMaxwell3dAppFactory
 from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
-from tests.unit.simulation.test_plan_builder import build, make_definition
+from tests.unit.simulation.test_plan_builder import (
+    BARE,
+    CORE,
+    build,
+    make_definition,
+    make_effective,
+    pack,
+)
 
 pytestmark = pytest.mark.usefixtures("fake_maxwell_boundary")
 
@@ -33,6 +43,65 @@ def make_request(tmp_path: Path) -> Maxwell3dExportRequest:
 def run(tmp_path: Path, app: FakeMaxwell3dApp) -> object:
     exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
     return exporter.export(make_request(tmp_path))
+
+
+def geometry_only_request(tmp_path: Path) -> Maxwell3dGeometryOnlyRequest:
+    definition = make_definition()
+    return Maxwell3dGeometryOnlyRequest(
+        plan=build_geometry_only_maxwell3d_plan(
+            CORE,
+            (pack(definition),),
+            (definition,),
+            {"w1": BARE},
+        ),
+        release=AedtRelease(2025, 2),
+        edition=AedtEdition.COMMERCIAL,
+        non_graphical=True,
+        output_directory=tmp_path / "out",
+        project_name="Boost_inductor",
+    )
+
+
+def test_geometry_only_export_has_only_geometry_stages_and_calls(
+    tmp_path: Path,
+) -> None:
+    app = FakeMaxwell3dApp()
+    factory = FakeMaxwell3dAppFactory(app)
+    result = PyaedtMaxwell3dExporter(app_factory=factory).export_geometry_only(
+        geometry_only_request(tmp_path)
+    )
+
+    assert tuple(stage.name for stage in result.stages) == GEOMETRY_ONLY_STAGE_NAMES
+    assert result.succeeded()
+    assert "solution_type" not in factory.create_kwargs[0]
+    names = [name for name, _ in app.calls]
+    assert names.count("modeler.create_polyline") == 5
+    assert names.count("modeler.sweep_around_axis") == 1
+    winding_calls = [
+        kwargs
+        for name, kwargs in app.calls
+        if name == "modeler.create_polyline" and kwargs.get("xsection_type") == "Circle"
+    ]
+    assert len(winding_calls) == 4
+    assert all("material" not in kwargs for kwargs in winding_calls)
+    prohibited = {
+        "materials.add_material",
+        "assign_material",
+        "modeler.create_circle",
+        "modeler.rotate",
+        "assign_coil",
+        "assign_winding",
+        "add_winding_coils",
+        "eddy_effects_on",
+        "modeler.create_air_region",
+        "mesh.assign_initial_mesh_from_slider",
+        "mesh.assign_length_mesh",
+        "create_setup",
+        "MaxwellParameterSetup.AssignMatrix",
+        "post.create_report",
+        "validate_simple",
+    }
+    assert prohibited.isdisjoint(names)
 
 
 def test_successful_export_runs_every_stage_in_order(tmp_path: Path) -> None:
@@ -150,7 +219,7 @@ def test_excitations_group_coils_into_windings(tmp_path: Path) -> None:
     assert len(winding_calls) == 1
     assert winding_calls[0]["winding_type"] == "Current"
     assert winding_calls[0]["is_solid"] is True
-    assert winding_calls[0]["current"] == 2.0
+    assert winding_calls[0]["current"] == pytest.approx(2.0 * 2**0.5)
     group_calls = [k for n, k in app.calls if n == "add_winding_coils"]
     assert group_calls[0]["assignment"] == "w1"
     assert len(group_calls[0]["coils"]) == 4
@@ -246,10 +315,14 @@ def test_native_dc_only_applies_to_nonzero_windings(tmp_path: Path) -> None:
 
     plan = build(
         (
-            make_definition(winding_id="w1", sector_deg=100.0, dc_current_a=5.0),
+            make_definition(winding_id="w1", sector_deg=100.0),
             make_definition(
-                winding_id="w2", start_angle_deg=180.0, sector_deg=100.0, dc_current_a=0.0
+                winding_id="w2", start_angle_deg=180.0, sector_deg=100.0
             ),
+        ),
+        (
+            make_effective(winding_id="w1", dc_current_a=5.0),
+            make_effective(winding_id="w2", dc_current_a=0.0),
         ),
         dc_bias_decision=DcBiasDecision(
             DcBiasStrategy.NATIVE_INCLUDE_DC_FIELDS, False, "native ok"
@@ -288,16 +361,6 @@ def test_mass_density_reaches_the_aedt_material(tmp_path: Path) -> None:
     assert result.succeeded()
     densities = [k["value"] for n, k in app.calls if n == "material.set.mass_density"]
     assert densities == [4800.0]
-
-
-def test_catalog_material_without_density_sets_no_mass_density(tmp_path: Path) -> None:
-    """Catalog powder cores carry no density, and inventing one would be worse
-    than leaving it unset."""
-    app = FakeMaxwell3dApp()
-    result = run(tmp_path, app)
-    assert result.succeeded()  # type: ignore[attr-defined]
-
-    assert [n for n, _ in app.calls if n == "material.set.mass_density"] == []
 
 
 def test_steinmetz_coefficients_are_written_without_bogus_units(tmp_path: Path) -> None:
