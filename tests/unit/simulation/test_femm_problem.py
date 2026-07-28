@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import math
+
+import pytest
+
+from inductor_designer.domain.winding import CurrentDirection
 from inductor_designer.simulation.femm_problem import (
     COPPER_CONDUCTIVITY_MS_PER_M,
     femm_problem_from_plan,
 )
 from inductor_designer.simulation.maxwell_plan import Polarity
+from inductor_designer.simulation.run_contracts import EffectiveWindingInput
 from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
-from tests.unit.simulation.test_plan_builder import make_definition
+from tests.unit.simulation.test_plan_builder import build, make_definition
 from tests.unit.simulation.test_plan_builder2d import build2d
 
 
@@ -18,8 +24,28 @@ def test_problem_maps_plan_essentials() -> None:
     assert problem.core.r_inner_m == plan.core.r_inner_m
     assert problem.core.material == plan.core.material.name
     assert [c.name for c in problem.circuits] == ["w1"]
-    assert problem.circuits[0].current_peak_a == 2.0
+    assert problem.circuits[0].current_peak_a == pytest.approx(2.8284271247461903)
     assert len(problem.conductors) == 8
+
+
+def test_all_plans_receive_one_converted_peak_amplitude() -> None:
+    effective = (
+        EffectiveWindingInput(
+            winding_id="w1",
+            ac_rms_current_a=2.0,
+            ac_peak_current_a=2.0 * math.sqrt(2.0),
+            phase_deg=30.0,
+            dc_current_a=0.0,
+            current_direction=CurrentDirection.FORWARD,
+        ),
+    )
+    plan3d = build((make_definition(),), effective)
+    plan2d = build2d((make_definition(),), effective)
+    femm = femm_problem_from_plan(plan2d)
+
+    assert plan3d.windings[0].current_peak_a == pytest.approx(2.0 * math.sqrt(2.0))
+    assert plan2d.windings[0].current_peak_a == pytest.approx(2.0 * math.sqrt(2.0))
+    assert femm.circuits[0].current_peak_a == pytest.approx(2.0 * math.sqrt(2.0))
 
 
 def test_polarity_becomes_signed_turns() -> None:
@@ -46,9 +72,7 @@ def test_solid_winding_gets_conductive_copper() -> None:
 
 
 def test_core_bh_curve_is_forwarded_as_femm_material_points() -> None:
-    plan = build2d(
-        (make_definition(),), material_record=make_approved_material_record()
-    )
+    plan = build2d((make_definition(),), material_record=make_approved_material_record())
 
     problem = femm_problem_from_plan(plan)  # type: ignore[arg-type]
 

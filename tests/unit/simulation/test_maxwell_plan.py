@@ -24,7 +24,6 @@ from inductor_designer.materials.records import (
 )
 from inductor_designer.simulation.maxwell_plan import (
     PlanBuildError,
-    core_material_spec,
     material_spec_from_material_record,
 )
 
@@ -120,35 +119,10 @@ def make_multi_bh_material_record() -> MaterialRecord:
     return replace(record, series=(bh_25c, bh_100c, record.series[1]))
 
 
-def test_powder_grade_becomes_linear_material() -> None:
-    spec = core_material_spec(make_core_record())
-    assert spec.name == "Magnetics_Kool_Mu_60"
-    assert spec.relative_permeability == 60.0
-    assert spec.conductivity_s_per_m == 0.0
-    assert spec.draft is False
-
-
-def test_draft_record_marks_material_draft() -> None:
-    spec = core_material_spec(make_core_record(review_status=ReviewStatus.DRAFT))
-    assert spec.draft is True
-
-
-def test_ferrite_family_is_refused() -> None:
-    with pytest.raises(PlanBuildError, match="powder"):
-        core_material_spec(make_core_record(family=CoreFamily.FERRITE_TOROID))
-
-
-def test_non_numeric_grade_is_refused() -> None:
-    with pytest.raises(PlanBuildError, match="numeric"):
-        core_material_spec(make_core_record(grade="N87"))
-
-
 def test_approved_record_becomes_nonlinear_material_with_scalar_fallback() -> None:
     record = make_approved_material_record()
 
-    spec = material_spec_from_material_record(
-        make_core_record(family=CoreFamily.FERRITE_TOROID), record
-    )
+    spec = material_spec_from_material_record(make_core_record().material, record)
 
     assert spec.name == "Magnetics_Kool_Mu_60_r0123456789ab"
     assert spec.relative_permeability == pytest.approx(200.0, rel=1e-7)
@@ -163,9 +137,7 @@ def test_approved_record_becomes_nonlinear_material_with_scalar_fallback() -> No
 def test_imported_record_becomes_nonlinear_material_with_scalar_fallback() -> None:
     record = make_approved_material_record(status=MaterialStatus.IMPORTED)
 
-    spec = material_spec_from_material_record(
-        make_core_record(family=CoreFamily.FERRITE_TOROID), record
-    )
+    spec = material_spec_from_material_record(make_core_record().material, record)
 
     assert spec.draft is False
     assert spec.material_revision == record.revision_id
@@ -175,7 +147,7 @@ def test_selected_bh_series_is_exported_without_changing_record() -> None:
     record = make_multi_bh_material_record()
 
     spec = material_spec_from_material_record(
-        make_core_record(), record, bh_series_id="bh-100c"
+        make_core_record().material, record, bh_series_id="bh-100c"
     )
 
     assert spec.bh_curve == ((0.0, 0.0), (0.03, 120.0))
@@ -185,7 +157,8 @@ def test_selected_bh_series_is_exported_without_changing_record() -> None:
 
 def test_approved_record_prefers_explicit_scalar_permeability() -> None:
     spec = material_spec_from_material_record(
-        make_core_record(), make_approved_material_record(relative_permeability=75.0)
+        make_core_record().material,
+        make_approved_material_record(relative_permeability=75.0),
     )
 
     assert spec.relative_permeability == 75.0
@@ -194,13 +167,16 @@ def test_approved_record_prefers_explicit_scalar_permeability() -> None:
 def test_non_approved_material_record_is_refused() -> None:
     with pytest.raises(PlanBuildError, match="approved"):
         material_spec_from_material_record(
-            make_core_record(), make_approved_material_record(status=MaterialStatus.REVIEWED)
+            make_core_record().material,
+            make_approved_material_record(status=MaterialStatus.REVIEWED),
         )
 
 
 def test_multiple_bh_series_are_refused_as_ambiguous() -> None:
     with pytest.raises(PlanBuildError, match="multiple B-H.*bh_series_id"):
-        material_spec_from_material_record(make_core_record(), make_multi_bh_material_record())
+        material_spec_from_material_record(
+            make_core_record().material, make_multi_bh_material_record()
+        )
 
 
 @pytest.mark.parametrize(
@@ -210,13 +186,17 @@ def test_multiple_bh_series_are_refused_as_ambiguous() -> None:
 def test_invalid_selected_bh_series_is_refused(series_id: str, message: str) -> None:
     with pytest.raises(PlanBuildError, match=message):
         material_spec_from_material_record(
-            make_core_record(), make_multi_bh_material_record(), bh_series_id=series_id
+            make_core_record().material,
+            make_multi_bh_material_record(),
+            bh_series_id=series_id,
         )
 
 
 def test_explicit_single_bh_series_is_recorded() -> None:
     spec = material_spec_from_material_record(
-        make_core_record(), make_approved_material_record(), bh_series_id="bh"
+        make_core_record().material,
+        make_approved_material_record(),
+        bh_series_id="bh",
     )
 
     assert spec.bh_series_id == "bh"
@@ -226,4 +206,18 @@ def test_approved_physically_invalid_material_record_is_refused() -> None:
     invalid = make_approved_material_record(relative_permeability=0.5)
 
     with pytest.raises(PlanBuildError, match="relative permeability"):
-        material_spec_from_material_record(make_core_record(), invalid)
+        material_spec_from_material_record(make_core_record().material, invalid)
+
+
+def test_material_identity_must_match_expected_catalog_reference() -> None:
+    with pytest.raises(PlanBuildError, match="identity"):
+        material_spec_from_material_record(
+            MaterialRef("Other", "Material", "1"),
+            make_approved_material_record(),
+        )
+
+
+def test_manual_core_material_does_not_require_catalog_identity() -> None:
+    spec = material_spec_from_material_record(None, make_approved_material_record())
+
+    assert spec.material_revision == "0123456789ab"

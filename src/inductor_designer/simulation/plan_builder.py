@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 
-from inductor_designer.domain.catalog_records import CoreRecord
+from inductor_designer.domain.project import RequestedOutput, SimulationRecipe
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
@@ -25,6 +26,9 @@ from inductor_designer.simulation.maxwell_plan import (
     SOLUTION_TYPE,
     SOLUTION_TYPE_DC,
     CorePlan,
+    GeometryOnlyMaxwell3dPlan,
+    GeometryOnlyTurnPlan,
+    GeometryOnlyWindingPlan,
     Maxwell3dDesignPlan,
     MeshPlan,
     PlanBuildError,
@@ -35,48 +39,73 @@ from inductor_designer.simulation.maxwell_plan import (
     TerminalPlan,
     TurnPlan,
     WindingGroupPlan,
-    core_material_spec,
     dc_bias_notes,
     material_spec_from_material_record,
 )
+from inductor_designer.simulation.run_contracts import EffectiveWindingInput
 
 
-def _polarity(definition: WindingDefinition) -> Polarity:
-    positive = (definition.current_direction is CurrentDirection.FORWARD) == (
+def _polarity(
+    definition: WindingDefinition,
+    current_direction: CurrentDirection,
+) -> Polarity:
+    positive = (current_direction is CurrentDirection.FORWARD) == (
         definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
     )
     return Polarity.POSITIVE if positive else Polarity.NEGATIVE
 
 
+def _effective_inputs_by_id(
+    windings: Sequence[WindingDefinition],
+    effective_inputs: Sequence[EffectiveWindingInput],
+) -> tuple[dict[str, EffectiveWindingInput], tuple[str, ...]]:
+    winding_ids = {definition.winding_id for definition in windings}
+    effective_ids = [item.winding_id for item in effective_inputs]
+    counts = Counter(effective_ids)
+    duplicate = sorted(winding_id for winding_id, count in counts.items() if count > 1)
+    by_id = {item.winding_id: item for item in effective_inputs}
+    missing = sorted(winding_ids - set(by_id))
+    unknown = sorted(set(by_id) - winding_ids)
+    issues: list[str] = []
+    if missing:
+        issues.append(f"Missing effective winding inputs: {missing}.")
+    if duplicate:
+        issues.append(f"Duplicate effective winding ids: {duplicate}.")
+    if unknown:
+        issues.append(f"Unknown effective winding ids: {unknown}.")
+    return by_id, tuple(issues)
+
+
 def build_maxwell3d_plan(
     core: FinishedCore,
-    core_record: CoreRecord,
     packings: Sequence[PackedWinding],
     windings: Sequence[WindingDefinition],
+    effective_inputs: Sequence[EffectiveWindingInput],
     bare_diameter_m: Mapping[str, float],
-    dc_bias_decision: DcBiasDecision | None = None,
-    material_record: MaterialRecord | None = None,
     *,
-    material_bh_series_id: str | None = None,
+    frequency_hz: float,
+    recipe: SimulationRecipe,
+    dc_bias_decision: DcBiasDecision | None = None,
+    material_record: MaterialRecord,
+    material_bh_series_id: str | None,
 ) -> Maxwell3dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
+    effective_by_id, effective_issues = _effective_inputs_by_id(
+        windings, effective_inputs
+    )
+    issues.extend(effective_issues)
     if not packings:
         issues.append("No packed windings; nothing to export.")
     missing = [p.winding_id for p in packings if p.winding_id not in by_id]
     if missing:
         issues.append(f"Packings without winding definitions: {missing}.")
-    frequencies = sorted({definition.frequency_hz for definition in windings})
-    if len(frequencies) > 1:
-        issues.append(f"All windings must share one frequency; got {frequencies}.")
     if issues:
         raise PlanBuildError(tuple(issues))
-    material = (
-        core_material_spec(core_record)
-        if material_record is None
-        else material_spec_from_material_record(
-            core_record, material_record, bh_series_id=material_bh_series_id
-        )
+    material = material_spec_from_material_record(
+        None,
+        material_record,
+        bh_series_id=material_bh_series_id,
     )
 
     identifiers = unique_identifiers([packing.winding_id for packing in packings])
@@ -84,10 +113,11 @@ def build_maxwell3d_plan(
     max_bare = 0.0
     for packing in packings:
         definition = by_id[packing.winding_id]
+        effective = effective_by_id[packing.winding_id]
         base = identifiers[packing.winding_id]
         bare = bare_diameter_m[packing.winding_id]
         max_bare = max(max_bare, bare)
-        polarity = _polarity(definition)
+        polarity = _polarity(definition, effective.current_direction)
         turns: list[TurnPlan] = []
         counter = 1
         for layer in packing.layers:
@@ -119,27 +149,29 @@ def build_maxwell3d_plan(
                 name=base,
                 winding_id=packing.winding_id,
                 is_solid=definition.mode is ConductorMode.SOLID,
-                current_peak_a=definition.ac_magnitude_a,
-                phase_deg=definition.ac_phase_deg,
-                dc_current_a=definition.dc_current_a,
+                current_peak_a=effective.ac_peak_current_a,
+                phase_deg=effective.phase_deg,
+                dc_current_a=effective.dc_current_a,
                 turns=tuple(turns),
             )
         )
 
     reports: list[ReportPlan] = []
     for group in groups:
-        reports.append(
-            ReportPlan(
-                name=f"{group.name}_Resistance",
-                expression=f"{MATRIX_NAME}.R({group.name},{group.name})",
+        if RequestedOutput.RESISTANCE in recipe.requested_outputs:
+            reports.append(
+                ReportPlan(
+                    name=f"{group.name}_Resistance",
+                    expression=f"{MATRIX_NAME}.R({group.name},{group.name})",
+                )
             )
-        )
-        reports.append(
-            ReportPlan(
-                name=f"{group.name}_Inductance",
-                expression=f"{MATRIX_NAME}.L({group.name},{group.name})",
+        if RequestedOutput.INDUCTANCE in recipe.requested_outputs:
+            reports.append(
+                ReportPlan(
+                    name=f"{group.name}_Inductance",
+                    expression=f"{MATRIX_NAME}.L({group.name},{group.name})",
+                )
             )
-        )
 
     notes: list[str] = []
     if material.draft:
@@ -175,12 +207,65 @@ def build_maxwell3d_plan(
         ),
         setup=SetupPlan(
             name=SETUP_NAME,
-            frequency_hz=frequencies[0],
-            maximum_passes=10,
-            percent_error=1.0,
+            frequency_hz=frequency_hz,
+            maximum_passes=recipe.maximum_passes,
+            percent_error=recipe.percent_error,
         ),
         matrix_name=MATRIX_NAME,
         reports=tuple(reports),
         notes=tuple(notes),
         dc_bias=dc_bias_decision,
+    )
+
+
+def build_geometry_only_maxwell3d_plan(
+    core: FinishedCore,
+    packings: Sequence[PackedWinding],
+    windings: Sequence[WindingDefinition],
+    bare_diameter_m: Mapping[str, float],
+) -> GeometryOnlyMaxwell3dPlan:
+    issues: list[str] = []
+    by_id = {definition.winding_id: definition for definition in windings}
+    if not packings:
+        issues.append("No packed windings; nothing to export.")
+    missing = [packing.winding_id for packing in packings if packing.winding_id not in by_id]
+    if missing:
+        issues.append(f"Packings without winding definitions: {missing}.")
+    if issues:
+        raise PlanBuildError(tuple(issues))
+
+    identifiers = unique_identifiers([packing.winding_id for packing in packings])
+    groups: list[GeometryOnlyWindingPlan] = []
+    for packing in packings:
+        base = identifiers[packing.winding_id]
+        turns: list[GeometryOnlyTurnPlan] = []
+        counter = 1
+        for layer in packing.layers:
+            for station in layer.station_deg:
+                turns.append(
+                    GeometryOnlyTurnPlan(
+                        name=f"{base}_L{layer.index:02d}_T{counter:03d}",
+                        segments=build_turn_loop(
+                            core,
+                            layer.index,
+                            packing.insulated_diameter_m,
+                            station,
+                        ),
+                        bare_diameter_m=bare_diameter_m[packing.winding_id],
+                    )
+                )
+                counter += 1
+        groups.append(
+            GeometryOnlyWindingPlan(
+                name=base,
+                winding_id=packing.winding_id,
+                turns=tuple(turns),
+            )
+        )
+    return GeometryOnlyMaxwell3dPlan(
+        design_name=DESIGN_NAME,
+        core_name=core_name(),
+        core_profile=build_core_profile(core),
+        windings=tuple(groups),
+        notes=(),
     )

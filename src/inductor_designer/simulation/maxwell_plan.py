@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from inductor_designer.domain.catalog_records import CoreFamily, CoreRecord, ReviewStatus
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
 from inductor_designer.geometry.terminals import TerminalDisk
 from inductor_designer.materials.fitting import MaterialFitError, mean_relative_permeability
+from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     MaterialRecord,
     MaterialStatus,
@@ -129,40 +129,31 @@ class Maxwell3dDesignPlan:
     dc_bias: DcBiasDecision | None = None
 
 
-def core_material_spec(record: CoreRecord) -> MaterialSpec:
-    """Milestone 3 material model: powder grade = linear relative permeability.
+@dataclass(frozen=True, slots=True)
+class GeometryOnlyTurnPlan:
+    name: str
+    segments: tuple[PathSegment, ...]
+    bare_diameter_m: float
 
-    Real property data (B-H curves, core loss) arrives with Material Studio in
-    Milestone 5; ferrites stay unsupported until then.
-    """
-    if record.family is not CoreFamily.POWDER_TOROID:
-        raise PlanBuildError(
-            (
-                f"Core family {record.family.value!r} has no Milestone 3 material model; "
-                "only powder toroids export.",
-            )
-        )
-    try:
-        mu = float(record.material.grade)
-    except ValueError as error:
-        raise PlanBuildError(
-            (f"Powder grade {record.material.grade!r} is not a numeric permeability.",)
-        ) from error
-    if mu <= 0.0:
-        raise PlanBuildError((f"Powder grade {record.material.grade!r} must be positive.",))
-    name = sanitize_identifier(
-        f"{record.material.manufacturer}_{record.material.name}_{record.material.grade}"
-    )
-    return MaterialSpec(
-        name=name,
-        relative_permeability=mu,
-        conductivity_s_per_m=0.0,
-        draft=record.review_status is not ReviewStatus.REVIEWED,
-    )
+
+@dataclass(frozen=True, slots=True)
+class GeometryOnlyWindingPlan:
+    name: str
+    winding_id: str
+    turns: tuple[GeometryOnlyTurnPlan, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryOnlyMaxwell3dPlan:
+    design_name: str
+    core_name: str
+    core_profile: tuple[PathSegment, ...]
+    windings: tuple[GeometryOnlyWindingPlan, ...]
+    notes: tuple[str, ...]
 
 
 def material_spec_from_material_record(
-    core_record: CoreRecord,
+    expected_ref: MaterialRef | None,
     material: MaterialRecord,
     *,
     bh_series_id: str | None = None,
@@ -170,7 +161,7 @@ def material_spec_from_material_record(
     """Build solver material data from an imported or approved project snapshot."""
     if material.status not in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED):
         raise PlanBuildError(("Only imported or approved material records can be exported.",))
-    if material.ref != core_record.material:
+    if expected_ref is not None and material.ref != expected_ref:
         raise PlanBuildError(("Material record identity does not match the selected core.",))
     errors = tuple(
         issue.message
