@@ -1590,6 +1590,43 @@ After the test and documentation changes, the full final gate passed again:
 total coverage 86.55% (87% rounded)
 ```
 
+Review round 1 strengthened the same acceptance file without changing
+production code. It now asserts the native Maxwell 3D, Maxwell 2D, and FEMM
+encodings of frequency, peak current, phase, zero-DC policy, direction through
+polarity/sign, and the exact selected material revision and `bh-100c` curve.
+It also exercises a Manual core/material pair with
+`manualMaterialCompatibilityAcknowledged: true`, proves byte-identical
+save/load/save persistence, and validates that pair without errors. The
+catalog-core project's persisted false default remains a separate assertion
+and is not used as Manual-pair evidence.
+
+Controlled failure runs altered only the post-planning evidence:
+
+- setting the native Maxwell 3D winding peak current to `99.0` exited 1 at the
+  native-plan current assertion;
+- replacing the loaded Manual-pair acknowledgment with false exited 1 at the
+  round-trip equality assertion.
+
+Normal focused and full gates then passed:
+
+```text
+.venv/bin/python -m pytest tests/integration/test_project_round_trip.py -q
+2 passed in 0.23s
+.venv/bin/python -m ruff check .
+  All checks passed.
+.venv/bin/python -m mypy src tools
+  Success: no issues found in 102 source files
+.venv/bin/python -m tools.check_architecture
+  exit 0
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
+  .venv/bin/python -m pytest -m "not aedt and not femm" \
+  --cov=inductor_designer --cov-report=term-missing
+  801 passed, 7 deselected, 76 warnings in 9.96s
+  total coverage 86.55% (87% rounded)
+git diff --check
+  exit 0
+```
+
 Diff/search audit:
 
 - baseline and current code both use 16 conductor facets, AnsoftTAU initial
@@ -1611,8 +1648,9 @@ Diff/search audit:
 Implementation/review commits through Task 8 are `e26315c`, `0946fca`,
 `560732c`, `5194cab`, `3e0a682`, `b709909`, `c8c61c0`, `86a9f67`,
 `79e982f`, `24ca082`, `63b50d6`, `c5c158b`, and `ed62bda`. Task 9 uses
-commit message `docs: accept m6 project foundation`; the exact resulting hash
-is recorded in the out-of-commit handoff report.
+commit `6891dfb` (`docs: accept m6 project foundation`). Its review-round-1
+follow-up uses message `test: strengthen m6 acceptance evidence`; the exact
+resulting hash is recorded in the out-of-commit handoff report.
 
 Remaining risks: the final passing gate reports 76 non-fatal ResourceWarnings,
 primarily for SQLite connections (the initial baseline reported 82); M6
@@ -1628,9 +1666,12 @@ until M8.
 - [x] Each Design winding has exactly one Operating Point entry.
 - [x] AC RMS and AC peak are explicit; conversion exists once.
 - [x] One exact compatible material revision and B-H series are pinned.
-- [x] Manual material compatibility acknowledgment persists and validates.
+- [x] A Manual core/material pair with acknowledgment true persists
+  byte-identically and validates without errors.
 - [x] Confirmed Maxwell 3D Geometry-Only is the sole unresolved-material run.
-- [x] Maxwell 3D, Maxwell 2D, and FEMM plans share identical effective inputs.
+- [x] Maxwell 3D, Maxwell 2D, and FEMM plans share identical effective inputs
+  and consume the same frequency, peak current, phase, zero-DC policy,
+  direction/sign, material revision identity, and selected B-H data.
 - [x] Run Manifest and Normalized Result Set contracts are immutable and
   backend-labeled.
 - [x] All non-live tests, Ruff, strict mypy, architecture checks, coverage, and

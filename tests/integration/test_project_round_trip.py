@@ -13,20 +13,25 @@ from inductor_designer.application.services.maxwell_export import (
     generate_run,
     run_manifest_json,
 )
+from inductor_designer.application.services.run_planning import (
+    RunPlanningError,
+    plan_run,
+)
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.domain.project import (
     InductorProject,
+    ManualCoreSelection,
     MaterialRevisionSelection,
 )
 from inductor_designer.domain.validation import ValidationCategory, validate_project
-from inductor_designer.domain.winding import CurrentDirection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
 from inductor_designer.simulation.femm_problem import FemmProblem
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
-from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan, Polarity
 from inductor_designer.simulation.run_contracts import (
     RunBackend,
     RunMode,
@@ -115,6 +120,57 @@ def _generate_all_backends(project: InductorProject) -> dict[RunBackend, RunOutc
     return outcomes
 
 
+def _assert_native_plans_consume_operating_point_and_material(
+    outcomes: dict[RunBackend, RunOutcome],
+) -> None:
+    maxwell3d = outcomes[RunBackend.MAXWELL_3D].planned_run.solver_plan
+    maxwell2d = outcomes[RunBackend.MAXWELL_2D].planned_run.solver_plan
+    femm = outcomes[RunBackend.FEMM].planned_run.solver_plan
+    assert isinstance(maxwell3d, Maxwell3dDesignPlan)
+    assert isinstance(maxwell2d, Maxwell2dDesignPlan)
+    assert isinstance(femm, FemmProblem)
+
+    maxwell3d_winding = maxwell3d.windings[0]
+    assert maxwell3d.setup.frequency_hz == 125_000.0
+    assert maxwell3d_winding.winding_id == "w1"
+    assert maxwell3d_winding.current_peak_a == pytest.approx(2.8284271247461903)
+    assert maxwell3d_winding.phase_deg == 30.0
+    assert maxwell3d_winding.dc_current_a == 0.0
+    assert tuple(
+        turn.terminal.polarity for turn in maxwell3d_winding.turns
+    ) == (Polarity.NEGATIVE,) * 20
+    assert maxwell3d.core.material.name == "Magnetics_Kool_Mu_60_r0123456789ab"
+    assert maxwell3d.core.material.material_revision == "0123456789ab"
+    assert maxwell3d.core.material.bh_series_id == "bh-100c"
+    assert maxwell3d.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+
+    maxwell2d_winding = maxwell2d.windings[0]
+    assert maxwell2d.setup.frequency_hz == 125_000.0
+    assert maxwell2d_winding.winding_id == "w1"
+    assert maxwell2d_winding.current_peak_a == pytest.approx(2.8284271247461903)
+    assert maxwell2d_winding.phase_deg == 30.0
+    assert maxwell2d_winding.dc_current_a == 0.0
+    assert tuple(
+        conductor.polarity for conductor in maxwell2d_winding.conductors
+    ) == (Polarity.NEGATIVE, Polarity.POSITIVE) * 20
+    assert maxwell2d.core.material.name == "Magnetics_Kool_Mu_60_r0123456789ab"
+    assert maxwell2d.core.material.material_revision == "0123456789ab"
+    assert maxwell2d.core.material.bh_series_id == "bh-100c"
+    assert maxwell2d.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))
+
+    assert femm.frequency_hz == 125_000.0
+    assert len(femm.circuits) == 1
+    assert femm.circuits[0].name == "w1"
+    assert femm.circuits[0].current_peak_a == pytest.approx(2.8284271247461903)
+    assert femm.circuits[0].phase_deg == 30.0
+    assert tuple(conductor.turns for conductor in femm.conductors) == (-1, 1) * 20
+    assert femm.core.material == "Magnetics_Kool_Mu_60_r0123456789ab"
+    femm_core_material = next(
+        material for material in femm.materials if material.name == femm.core.material
+    )
+    assert femm_core_material.bh_points == ((0.0, 0.0), (0.03, 120.0))
+
+
 def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None:
     repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     first_path = tmp_path / "first.inductor.json"
@@ -142,10 +198,12 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
     assert loaded.operating_point.winding_temperature_c == 45.0
     assert loaded.operating_point.core_temperature_c == 80.0
     operating_winding = loaded.operating_point.windings[0]
+    design_winding = loaded.design.windings[0]
     assert operating_winding.ac_rms_current_a == 2.0
     assert operating_winding.ac_phase_deg == 30.0
     assert operating_winding.dc_current_a == 0.0
     assert operating_winding.current_direction is CurrentDirection.FORWARD
+    assert design_winding.winding_direction is WindingDirection.CLOCKWISE
 
     material = loaded.design.core_material
     assert material is not None
@@ -163,13 +221,24 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
     ]
 
     outcomes = _generate_all_backends(loaded)
-    plans = {
-        backend: outcome.planned_run.solver_plan
-        for backend, outcome in outcomes.items()
-    }
-    assert isinstance(plans[RunBackend.MAXWELL_3D], Maxwell3dDesignPlan)
-    assert isinstance(plans[RunBackend.MAXWELL_2D], Maxwell2dDesignPlan)
-    assert isinstance(plans[RunBackend.FEMM], FemmProblem)
+    _assert_native_plans_consume_operating_point_and_material(outcomes)
+
+    project_with_femm_dc = replace(
+        loaded,
+        operating_point=replace(
+            loaded.operating_point,
+            windings=(replace(operating_winding, dc_current_a=1.0),),
+        ),
+    )
+    # FEMM uses the 2D capability policy and has no native DC source field:
+    # exact zero reaches FemmProblem above, while nonzero DC is rejected here.
+    with pytest.raises(RunPlanningError, match="Maxwell 2D DC-bias generation is blocked"):
+        plan_run(
+            project_with_femm_dc,
+            RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+        )
 
     effective_inputs = {
         outcome.planned_run.effective_inputs for outcome in outcomes.values()
@@ -191,3 +260,58 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
             encoding="utf-8"
         )
         assert run_manifest_json(outcome.manifest) == expected
+
+
+def test_manual_core_material_acknowledgment_round_trips_and_validates(
+    tmp_path: Path,
+) -> None:
+    repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
+    first_path = tmp_path / "manual-first.inductor.json"
+    second_path = tmp_path / "manual-second.inductor.json"
+    project = _acceptance_project()
+    manual_core = ManualCoreSelection(
+        outer_diameter_m=0.0274,
+        inner_diameter_m=0.0144,
+        height_m=0.0112,
+        corner_radius_m=0.0005,
+    )
+    project = replace(
+        project,
+        design=replace(
+            project.design,
+            core=manual_core,
+            manual_material_compatibility_acknowledged=True,
+        ),
+    )
+
+    repository.save(project, first_path)
+    loaded = repository.load(first_path)
+    repository.save(loaded, second_path)
+
+    assert loaded == project
+    assert loaded.design.core == manual_core
+    assert loaded.design.core_material == project.design.core_material
+    assert loaded.design.manual_material_compatibility_acknowledged is True
+    assert second_path.read_bytes() == first_path.read_bytes()
+    document = json.loads(first_path.read_text(encoding="utf-8"))
+    assert document["design"]["core"] == {
+        "kind": "manual",
+        "outerDiameterM": 0.0274,
+        "innerDiameterM": 0.0144,
+        "heightM": 0.0112,
+        "cornerRadiusM": 0.0005,
+    }
+    assert document["design"]["manualMaterialCompatibilityAcknowledged"] is True
+
+    issues = validate_project(
+        loaded,
+        known_conductors=CATALOG.list_conductor_names(),
+    )
+    assert not [issue for issue in issues if issue.category is ValidationCategory.ERROR]
+    issue_codes = {issue.code for issue in issues}
+    assert issue_codes.isdisjoint(
+        {
+            "core-material.manual-unacknowledged",
+            "core-material.acknowledgment-unused",
+        }
+    )

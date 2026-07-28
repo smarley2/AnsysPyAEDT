@@ -56,7 +56,6 @@ executed. They do not override the current support and product scope.
 
 | Order | Milestone | Entry condition | Exit evidence |
 | --- | --- | --- | --- |
-| 5a closeout | [Live material validation and support cleanup](2026-07-24-m5a-live-validation-closeout.md) | Approved roadmap realignment | Real-material `MATCH`; live AEDT 2025 R2 Commercial and FEMM handoff; 2024/Student/fallback product policies removed |
 | 7 | Guided Studio and Preliminary Estimates | M6 contracts accepted | A user authors, saves, reopens, inspects analytical B/J/wire/core-loss estimates or explicit unavailable reasons, reviews, and generates a non-hardcoded toroidal Design from the Windows UI |
 | 8 | Simulation and Results | M7 generation workflow accepted | All three backends run one Operating Point and return traceable normalized results or explicit unavailable reasons |
 | 9 | Reliability | M8 run/result contracts accepted | Autosave, recovery, undo/redo, cancellation recovery, and redacted diagnostics survive forced failures |
@@ -81,9 +80,11 @@ Implementation and review commits are:
 
 `e26315c`, `0946fca`, `560732c`, `5194cab`, `3e0a682`, `b709909`,
 `c8c61c0`, `86a9f67`, `79e982f`, `24ca082`, `63b50d6`, `c5c158b`, and
-`ed62bda`. The Task 9 acceptance record is the commit containing this index
-with message `docs: accept m6 project foundation`; its exact hash is recorded
-in the Task 9 handoff report because a commit cannot contain its own hash.
+`ed62bda`. The Task 9 acceptance record is `6891dfb`
+(`docs: accept m6 project foundation`). Its review-round-1 follow-up uses
+message `test: strengthen m6 acceptance evidence`; that commit's exact hash is
+recorded in the Task 9 handoff report because a commit cannot contain its own
+hash.
 
 The clean-process gate ran these exact commands:
 
@@ -98,13 +99,17 @@ git diff --check
 .venv/bin/python -m pytest tests/integration/test_project_round_trip.py -q
 ```
 
-The final gate reported Ruff clean, strict mypy clean across 102 source files,
-architecture and diff checks clean, 800 passed and 7 deselected in 9.84
-seconds, and 86.55% total coverage (87% in the rounded table). The strengthened
-explicit M6 integration test passed 1 test in 0.20 seconds and matches the
+The review-round-1 final gate reported Ruff clean, strict mypy clean across 102
+source files, architecture and diff checks clean, 801 passed and 7 deselected
+in 9.96 seconds, and 86.55% total coverage (87% in the rounded table). The
+explicit M6 integration file passed 2 tests in 0.23 seconds. It matches the
 three golden Run Manifests byte-for-byte after a byte-identical v5
-save/load/save. A controlled mutation that removed the RMS-to-peak conversion
-made that test fail before the normal green run.
+save/load/save, verifies that every native plan consumes the shared operating
+point and selected material data, and proves a Manual core/material pair
+persists and validates with its acknowledgment set to true. Controlled
+mutations of the Maxwell 3D native current to 99 A and of the persisted Manual
+acknowledgment to false both made the relevant acceptance test fail before the
+normal green run.
 
 The physical/compatibility audit found no changes to catalog or material source
 data, B-H/core-loss series, the accepted 16-facet conductor, AnsoftTAU initial

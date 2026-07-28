@@ -3,7 +3,7 @@
 > **Current authority:** The
 > [2026-07-24 MVP roadmap realignment](../superpowers/specs/2026-07-24-mvp-roadmap-realignment-design.md)
 > replaces the remaining delivery sequence and narrows the product to the
-> standalone Windows application and AEDT 2025 R2 Commercial. Milestones 0–5
+> standalone Windows application and AEDT 2025 R2 Commercial. Milestones 0–6
 > below retain their historical implementation and acceptance evidence; the
 > active sequence now begins with M7 and continues through M11.
 
