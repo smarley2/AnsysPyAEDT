@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
@@ -9,7 +10,7 @@ from inductor_designer.adapters.persistence.schema_repository import SchemaRepos
 from inductor_designer.application.services.geometry_model import build_geometry_model
 from inductor_designer.geometry.manifest import build_manifest, manifest_json
 from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.domain.test_project import make_project, make_winding
+from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
 from tools.build_catalog import build
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -17,11 +18,19 @@ GOLDEN = ROOT / "tests" / "golden" / "sample_geometry_manifest.json"
 
 
 def two_winding_project() -> object:
+    operating_point = make_operating_point()
     return make_project(
-        windings=(
-            make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
-            make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
-        )
+        design=replace(
+            make_project().design,
+            windings=(
+                make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
+                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
+            ),
+        ),
+        operating_point=make_operating_point(
+            operating_point.windings[0],
+            replace(operating_point.windings[0], winding_id="w2"),
+        ),
     )
 
 

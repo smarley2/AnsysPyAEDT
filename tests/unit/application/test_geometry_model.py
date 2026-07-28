@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from inductor_designer.application.services.geometry_model import (
@@ -16,7 +18,7 @@ from inductor_designer.domain.catalog_records import (
 )
 from inductor_designer.geometry.symmetry import SymmetryRefusal
 from tests.unit.domain.test_catalog_records import make_core
-from tests.unit.domain.test_project import make_project, make_winding
+from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
 
 
 def make_conductor(**overrides: object) -> ConductorRecord:
@@ -64,10 +66,17 @@ def test_insulated_diameter_prefers_grade2() -> None:
 
 def test_build_model_end_to_end() -> None:
     project = make_project(
-        windings=(
-            make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
-            make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
-        )
+        design=replace(
+            make_project().design,
+            windings=(
+                make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
+                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
+            ),
+        ),
+        operating_point=make_operating_point(
+            make_operating_point().windings[0],
+            replace(make_operating_point().windings[0], winding_id="w2"),
+        ),
     )
     model = build_geometry_model(project, CATALOG)
     assert isinstance(model, GeometryModel)
@@ -79,20 +88,22 @@ def test_build_model_end_to_end() -> None:
 
 
 def test_validation_errors_block() -> None:
-    project = make_project(windings=(make_winding(turns=0),))
+    project = make_project(design=replace(make_project().design, windings=(make_winding(turns=0),)))
     with pytest.raises(GeometryModelError) as excinfo:
         build_geometry_model(project, CATALOG)
     assert any("winding.turns" in issue for issue in excinfo.value.issues)
 
 
 def test_missing_core_blocks() -> None:
-    project = make_project(core=None)
+    project = make_project(design=replace(make_project().design, core=None))
     with pytest.raises(GeometryModelError, match="core"):
         build_geometry_model(project, CATALOG)
 
 
 def test_packing_overflow_blocks_with_max_turns() -> None:
-    project = make_project(windings=(make_winding(turns=5000),))
+    project = make_project(
+        design=replace(make_project().design, windings=(make_winding(turns=5000),))
+    )
     with pytest.raises(GeometryModelError) as excinfo:
         build_geometry_model(project, CATALOG)
     assert any("5000" in issue for issue in excinfo.value.issues)
@@ -100,10 +111,17 @@ def test_packing_overflow_blocks_with_max_turns() -> None:
 
 def test_asymmetric_project_gets_refusal_not_error() -> None:
     project = make_project(
-        windings=(
-            make_winding(winding_id="w1", sector_deg=150.0, turns=10),
-            make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=100.0, turns=10),
-        )
+        design=replace(
+            make_project().design,
+            windings=(
+                make_winding(winding_id="w1", sector_deg=150.0, turns=10),
+                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=100.0, turns=10),
+            ),
+        ),
+        operating_point=make_operating_point(
+            make_operating_point().windings[0],
+            replace(make_operating_point().windings[0], winding_id="w2"),
+        ),
     )
     model = build_geometry_model(project, CATALOG)
     assert isinstance(model.symmetry, SymmetryRefusal)
@@ -113,12 +131,12 @@ def test_conductor_without_insulation_blocks() -> None:
     catalog = FakeCatalog(
         {"AWG 18": make_conductor(grade1_diameter_m=None, grade2_diameter_m=None)}
     )
-    project = make_project(windings=(make_winding(turns=5),))
+    project = make_project(design=replace(make_project().design, windings=(make_winding(turns=5),)))
     with pytest.raises(GeometryModelError, match="insulated"):
         build_geometry_model(project, catalog)
 
 
 def test_bare_diameter_recorded() -> None:
-    project = make_project(windings=(make_winding(turns=5),))
+    project = make_project(design=replace(make_project().design, windings=(make_winding(turns=5),)))
     model = build_geometry_model(project, CATALOG)
     assert model.bare_diameter_m["w1"] == pytest.approx(0.00102362)

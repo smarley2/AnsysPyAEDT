@@ -52,11 +52,15 @@ def _sector_fields_valid(winding: WindingDefinition) -> bool:
 
 def _validate_core(project: InductorProject) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    core = project.core
+    design = project.design
+    core = design.core
     if core is None:
         issues.append(
             ValidationIssue(
-                ValidationCategory.INFO, "core.missing", "No core is selected yet.", "core"
+                ValidationCategory.INFO,
+                "core.missing",
+                "No core is selected yet.",
+                "design.core",
             )
         )
     elif isinstance(core, ManualCoreSelection):
@@ -72,7 +76,7 @@ def _validate_core(project: InductorProject) -> list[ValidationIssue]:
                     ValidationCategory.ERROR,
                     "core.manual.dimensions",
                     "Manual core dimensions must be positive with inner < outer diameter.",
-                    "core",
+                    "design.core",
                 )
             )
     elif isinstance(core, CatalogCoreSelection):
@@ -82,7 +86,7 @@ def _validate_core(project: InductorProject) -> list[ValidationIssue]:
                     ValidationCategory.WARNING,
                     "core.snapshot.draft",
                     f"Catalog record {core.part_number} is a draft pending review.",
-                    "core.snapshot",
+                    "design.core.snapshot",
                 )
             )
         for index, override in enumerate(core.overrides):
@@ -92,7 +96,7 @@ def _validate_core(project: InductorProject) -> list[ValidationIssue]:
                         ValidationCategory.ERROR,
                         "core.override.reason",
                         "Every manual override requires a non-empty reason.",
-                        f"core.overrides[{index}]",
+                        f"design.core.overrides[{index}]",
                     )
                 )
             if override.field not in _OVERRIDE_FIELDS:
@@ -101,9 +105,45 @@ def _validate_core(project: InductorProject) -> list[ValidationIssue]:
                         ValidationCategory.ERROR,
                         "core.override.field",
                         f"Unknown override field: {override.field!r}.",
-                        f"core.overrides[{index}]",
+                        f"design.core.overrides[{index}]",
                     )
                 )
+    material = design.core_material
+    if (
+        isinstance(core, CatalogCoreSelection)
+        and material is not None
+        and core.snapshot.material != material.ref
+    ):
+        issues.append(
+            ValidationIssue(
+                ValidationCategory.ERROR,
+                "core-material.incompatible",
+                "The selected material does not match the catalog core material.",
+                "design.coreMaterial",
+            )
+        )
+    manual_pair = isinstance(core, ManualCoreSelection) and material is not None
+    if manual_pair and not design.manual_material_compatibility_acknowledged:
+        issues.append(
+            ValidationIssue(
+                ValidationCategory.ERROR,
+                "core-material.manual-unacknowledged",
+                "Manual core and material selections require compatibility acknowledgment.",
+                "design.manualMaterialCompatibilityAcknowledged",
+            )
+        )
+    elif (
+        design.manual_material_compatibility_acknowledged
+        and not manual_pair
+    ):
+        issues.append(
+            ValidationIssue(
+                ValidationCategory.INFO,
+                "core-material.acknowledgment-unused",
+                "Manual material compatibility acknowledgment is not needed for this design.",
+                "design.manualMaterialCompatibilityAcknowledged",
+            )
+        )
     return issues
 
 
@@ -121,11 +161,6 @@ def _validate_winding(winding: WindingDefinition, path: str) -> list[ValidationI
         error("winding.sector", "Sector must satisfy 0 < sector <= 360 degrees.")
     if winding.min_spacing_m < 0 or winding.min_clearance_m < 0:
         error("winding.spacing", "Spacing and clearance must be non-negative.")
-    if winding.ac_magnitude_a < 0 or winding.frequency_hz <= 0 or winding.dc_current_a < 0:
-        error(
-            "winding.excitation",
-            "AC magnitude and DC current must be non-negative and frequency positive.",
-        )
     return issues
 
 
@@ -136,9 +171,43 @@ def validate_project(
 ) -> tuple[ValidationIssue, ...]:
     issues = _validate_core(project)
 
+    windings = project.design.windings
+    winding_ids = {winding.winding_id for winding in windings}
+    seen_operating_ids: set[str] = set()
+    for index, operating_point in enumerate(project.operating_point.windings):
+        path = f"operatingPoint.windings[{index}]"
+        if operating_point.winding_id not in winding_ids:
+            issues.append(
+                ValidationIssue(
+                    ValidationCategory.ERROR,
+                    "operating-point.winding.unknown",
+                    f"Operating point references unknown winding {operating_point.winding_id!r}.",
+                    path,
+                )
+            )
+        if operating_point.winding_id in seen_operating_ids:
+            issues.append(
+                ValidationIssue(
+                    ValidationCategory.ERROR,
+                    "operating-point.winding.duplicate",
+                    f"Duplicate operating point for winding {operating_point.winding_id!r}.",
+                    path,
+                )
+            )
+        seen_operating_ids.add(operating_point.winding_id)
+    for winding_id in winding_ids - seen_operating_ids:
+        issues.append(
+            ValidationIssue(
+                ValidationCategory.ERROR,
+                "operating-point.winding.missing",
+                f"Winding {winding_id!r} has no operating point.",
+                "operatingPoint.windings",
+            )
+        )
+
     seen_ids: set[str] = set()
-    for index, winding in enumerate(project.windings):
-        path = f"windings[{index}]"
+    for index, winding in enumerate(windings):
+        path = f"design.windings[{index}]"
         issues.extend(_validate_winding(winding, path))
         if winding.winding_id in seen_ids:
             issues.append(
@@ -160,17 +229,17 @@ def validate_project(
                 )
             )
 
-    if known_conductors is None and project.windings:
+    if known_conductors is None and windings:
         issues.append(
             ValidationIssue(
                 ValidationCategory.INFO,
                 "winding.conductor.unchecked",
                 "Conductor references were not checked against a catalog.",
-                "windings",
+                "design.windings",
             )
         )
 
-    checkable = [w for w in project.windings if _sector_fields_valid(w)]
+    checkable = [w for w in windings if _sector_fields_valid(w)]
     for i, first in enumerate(checkable):
         for second in checkable[i + 1 :]:
             if _sectors_overlap(first, second):
@@ -180,7 +249,7 @@ def validate_project(
                         "winding.sector.overlap",
                         f"Windings {first.winding_id!r} and {second.winding_id!r} "
                         "declare overlapping angular sectors.",
-                        "windings",
+                        "design.windings",
                     )
                 )
     return tuple(issues)

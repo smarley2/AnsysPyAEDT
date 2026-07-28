@@ -14,7 +14,6 @@ from inductor_designer.application.services.material_table_import import (
     MaterialTableRow,
     import_material_rows,
 )
-from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease, ModelDimension
 from inductor_designer.domain.catalog_records import ConductorRecord, CoreRecord, ReviewStatus
 from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.materials.identity import MaterialRef
@@ -160,7 +159,7 @@ def test_handoff_rejects_record_without_reproducible_core_loss_fit() -> None:
         )
 
 
-def test_handoff_pins_exact_reproduced_revision_and_supported_target() -> None:
+def test_handoff_pins_exact_reproduced_revision_in_design() -> None:
     record, sources = make_reproducible_material(
         ref=HIGH_FLUX_REF,
         include_multi_frequency_loss=True,
@@ -175,12 +174,10 @@ def test_handoff_pins_exact_reproduced_revision_and_supported_target() -> None:
         bh_series_id="bh-25c",
     )
 
-    assert prepared.project.target_release == AedtRelease(2025, 2)
-    assert prepared.project.target_edition is AedtEdition.COMMERCIAL
-    assert prepared.project.dimension_mode is ModelDimension.THREE_D
-    assert len(prepared.project.materials) == 1
-    assert prepared.project.materials[0].revision_id == record.revision_id
-    assert prepared.project.materials[0].bh_series_id == "bh-25c"
+    assert prepared.project.design.core_material is not None
+    assert prepared.project.design.core_material.revision_id == record.revision_id
+    assert prepared.project.design.core_material.bh_series_id == "bh-25c"
+    assert prepared.project.operating_point == make_project().operating_point
     assert prepared.bh_point_count > 0
     assert len(prepared.loss_frequencies_hz) >= 2
     assert prepared.source_hashes == tuple(
@@ -195,8 +192,9 @@ def test_handoff_rejects_base_project_with_existing_material_selection() -> None
     )
     base = replace(
         make_project(),
-        materials=(
-            MaterialRevisionSelection(
+        design=replace(
+            make_project().design,
+            core_material=MaterialRevisionSelection(
                 record.ref,
                 record.revision_id,
                 record,

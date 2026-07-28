@@ -47,9 +47,8 @@ def test_pin_material_revision_accepts_imported_record() -> None:
 
     updated = pin_material_revision(make_project(), record, bh_series_id=None)
 
-    assert updated.materials == (
-        MaterialRevisionSelection(record.ref, record.revision_id, record, None),
-    )
+    assert updated.design.core_material is not None
+    assert updated.design.core_material.snapshot is record
 
 
 @pytest.mark.parametrize(
@@ -63,9 +62,8 @@ def test_pin_material_revision_allows_null_for_zero_or_one_bh_series(
 
     updated = pin_material_revision(make_project(), record, bh_series_id=None)
 
-    assert updated.materials == (
-        MaterialRevisionSelection(record.ref, record.revision_id, record, None),
-    )
+    assert updated.design.core_material is not None
+    assert updated.design.core_material.snapshot is record
 
 
 def test_pin_material_revision_requires_explicit_id_for_multiple_bh_series() -> None:
@@ -134,42 +132,46 @@ def test_pin_material_revision_preserves_explicit_id_and_exact_snapshot() -> Non
     )
 
     assert newer_but_unselected.revision_id != selected.revision_id
-    assert updated.materials == (
-        MaterialRevisionSelection(
-            selected.ref,
-            selected.revision_id,
-            selected,
-            "bh-100c",
-        ),
-    )
-    assert updated.materials[0].snapshot is selected
+    assert updated.design.core_material is not None
+    assert updated.design.core_material.snapshot is selected
+    assert updated.design.core_material.bh_series_id == "bh-100c"
 
 
-def test_pin_material_revision_replaces_same_ref_and_preserves_unrelated() -> None:
+def test_pin_material_revision_replaces_the_previous_single_selection() -> None:
     selected = material_record_with_series(make_material_series())
     previous = replace(selected, revision_id="aaaaaaaaaaaa")
-    unrelated = replace(
-        make_material_record(),
-        ref=MaterialRef("ACME", "Ferrite", "N87"),
-        revision_id="bbbbbbbbbbbb",
-    )
-    unrelated_selection = MaterialRevisionSelection(
-        unrelated.ref,
-        unrelated.revision_id,
-        unrelated,
-    )
     project = make_project(
-        materials=(
-            MaterialRevisionSelection(previous.ref, previous.revision_id, previous),
-            unrelated_selection,
+        design=replace(
+            make_project().design,
+            core_material=MaterialRevisionSelection(previous.ref, previous.revision_id, previous),
         )
     )
 
     updated = pin_material_revision(project, selected, bh_series_id=None)
 
-    assert updated.materials == (
-        unrelated_selection,
-        MaterialRevisionSelection(selected.ref, selected.revision_id, selected),
-    )
+    assert updated.design.core_material is not None
+    assert updated.design.core_material.snapshot is selected
     assert updated is not project
-    assert project.materials[0].snapshot is previous
+    assert project.design.core_material is not None
+    assert project.design.core_material.snapshot is previous
+
+
+def test_pin_material_revision_rejects_catalog_identity_mismatch() -> None:
+    record = replace(
+        make_material_record(),
+        ref=MaterialRef("Magnetics", "Kool Mu", "75"),
+    )
+
+    with pytest.raises(MaterialSelectionError, match="does not match"):
+        pin_material_revision(make_project(), record, bh_series_id=None)
+
+
+def test_pin_material_revision_sets_manual_acknowledgment_only_from_argument() -> None:
+    updated = pin_material_revision(
+        make_project(),
+        make_material_record(),
+        bh_series_id=None,
+        manual_compatibility_acknowledged=True,
+    )
+
+    assert updated.design.manual_material_compatibility_acknowledged is True

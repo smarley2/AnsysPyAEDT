@@ -36,7 +36,7 @@ def select_core(
     if record is None:
         raise LookupError(f"Core not found in catalog: {part_number}")
     selection = CatalogCoreSelection(part_number=part_number, snapshot=record, overrides=())
-    return dataclasses.replace(project, core=selection)
+    return dataclasses.replace(project, design=dataclasses.replace(project.design, core=selection))
 
 
 def _diff(snapshot: CoreRecord, current: CoreRecord) -> tuple[FieldChange, ...]:
@@ -52,7 +52,7 @@ def _diff(snapshot: CoreRecord, current: CoreRecord) -> tuple[FieldChange, ...]:
 def compare_core_snapshot(
     project: InductorProject, repository: CatalogRepository
 ) -> CatalogComparison | None:
-    core = project.core
+    core = project.design.core
     if not isinstance(core, CatalogCoreSelection):
         return None
     current = repository.get_core(core.part_number)
@@ -66,11 +66,11 @@ def compare_core_snapshot(
 def adopt_core_revision(
     project: InductorProject, repository: CatalogRepository
 ) -> InductorProject:
-    core = project.core
+    core = project.design.core
     if not isinstance(core, CatalogCoreSelection):
         raise LookupError("Project has no catalog core selection to update")
     current = repository.get_core(core.part_number)
     if current is None:
         raise LookupError(f"Core no longer exists in catalog: {core.part_number}")
     updated = dataclasses.replace(core, snapshot=current)
-    return dataclasses.replace(project, core=updated)
+    return dataclasses.replace(project, design=dataclasses.replace(project.design, core=updated))

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from inductor_designer.domain.project import (
+    CatalogCoreSelection,
     InductorProject,
     MaterialRevisionSelection,
 )
@@ -25,8 +26,14 @@ def pin_material_revision(
     record: MaterialRecord,
     *,
     bh_series_id: str | None,
+    manual_compatibility_acknowledged: bool = False,
 ) -> InductorProject:
     issues: list[str] = []
+    core = project.design.core
+    if isinstance(core, CatalogCoreSelection) and core.snapshot.material != record.ref:
+        raise MaterialSelectionError(
+            ("Selected material does not match the catalog core material.",)
+        )
     if record.status not in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED):
         issues.append("Material revision must be imported or approved before project selection.")
     issues.extend(
@@ -64,5 +71,9 @@ def pin_material_revision(
         record,
         bh_series_id,
     )
-    kept = tuple(item for item in project.materials if item.ref != record.ref)
-    return replace(project, materials=(*kept, selection))
+    design = replace(
+        project.design,
+        core_material=selection,
+        manual_material_compatibility_acknowledged=manual_compatibility_acknowledged,
+    )
+    return replace(project, design=design)

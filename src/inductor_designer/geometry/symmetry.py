@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from inductor_designer.domain.project import WindingOperatingPoint
 from inductor_designer.domain.winding import WindingDefinition
 
 _ANGLE_TOL_DEG = 1e-6
@@ -30,16 +31,16 @@ def _geometry_key(w: WindingDefinition) -> tuple[object, ...]:
         w.min_spacing_m,
         w.min_clearance_m,
         w.winding_direction,
-        w.current_direction,
     )
 
 
-def _excitation_key(w: WindingDefinition) -> tuple[float, float, float, float]:
-    return (w.ac_magnitude_a, w.ac_phase_deg, w.frequency_hz, w.dc_current_a)
+def _excitation_key(w: WindingOperatingPoint) -> tuple[object, ...]:
+    return (w.ac_rms_current_a, w.ac_phase_deg, w.dc_current_a, w.current_direction)
 
 
 def propose_symmetry_plan(
     windings: Sequence[WindingDefinition],
+    operating_points: Sequence[WindingOperatingPoint],
 ) -> SymmetryPlan | SymmetryRefusal:
     m = len(windings)
     if m < 2:
@@ -52,7 +53,19 @@ def propose_symmetry_plan(
             "unequal-windings",
             "Windings differ in turns, conductor, mode, sector, spacing, or direction.",
         )
-    if any(_excitation_key(w) != _excitation_key(first) for w in windings[1:]):
+    operating_by_id = {item.winding_id: item for item in operating_points}
+    excitation = [operating_by_id.get(winding.winding_id) for winding in windings]
+    if any(item is None for item in excitation):
+        return SymmetryRefusal(
+            "unequal-excitation", "Each winding needs an operating point for symmetry."
+        )
+    first_excitation = excitation[0]
+    assert first_excitation is not None
+    if any(
+        _excitation_key(item) != _excitation_key(first_excitation)
+        for item in excitation[1:]
+        if item is not None
+    ):
         return SymmetryRefusal(
             "unequal-excitation", "Windings differ in AC/DC excitation values."
         )

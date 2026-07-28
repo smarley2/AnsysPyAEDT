@@ -61,10 +61,10 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
     )
     if errors:
         raise GeometryModelError(errors)
-    if project.core is None:
+    if project.design.core is None:
         raise GeometryModelError(("Project has no core selection; geometry needs one.",))
     try:
-        core = resolve_finished_core(project.core)
+        core = resolve_finished_core(project.design.core)
     except CoreGeometryError as error:
         raise GeometryModelError((str(error),)) from error
 
@@ -72,7 +72,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
     clearances: dict[str, float] = {}
     insulated: dict[str, float] = {}
     bare: dict[str, float] = {}
-    for winding in project.windings:
+    for winding in project.design.windings:
         record = catalog.get_conductor(winding.conductor_name)
         assert record is not None  # validation already checked membership
         d_ins = insulated_diameter(record)
@@ -94,7 +94,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
             raise GeometryModelError((str(error),)) from error
 
     collisions = check_clearances(core, packings, clearances)
-    symmetry = propose_symmetry_plan(project.windings)
+    symmetry = propose_symmetry_plan(project.design.windings, project.operating_point.windings)
     planar = build_planar_model(core, packings, {w: b / 2.0 for w, b in bare.items()})
     return GeometryModel(
         core=core,

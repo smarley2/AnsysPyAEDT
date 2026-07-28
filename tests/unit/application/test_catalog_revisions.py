@@ -35,15 +35,20 @@ class FakeCatalog:
 
 def test_select_core_snapshots_current_record() -> None:
     catalog = FakeCatalog({"0077071A7": make_core()})
-    project = select_core(make_project(core=None), catalog, "0077071A7")
-    assert isinstance(project.core, CatalogCoreSelection)
-    assert project.core.snapshot == make_core()
-    assert project.core.overrides == ()
+    project = select_core(
+        make_project(design=dataclasses.replace(make_project().design, core=None)),
+        catalog,
+        "0077071A7",
+    )
+    assert isinstance(project.design.core, CatalogCoreSelection)
+    assert project.design.core.snapshot == make_core()
+    assert project.design.core.overrides == ()
 
 
 def test_select_core_unknown_part_raises() -> None:
+    project = make_project(design=dataclasses.replace(make_project().design, core=None))
     with pytest.raises(LookupError, match="0099999A9"):
-        select_core(make_project(core=None), FakeCatalog({}), "0099999A9")
+        select_core(project, FakeCatalog({}), "0099999A9")
 
 
 def test_compare_unchanged() -> None:
@@ -70,14 +75,15 @@ def test_compare_missing_part() -> None:
 
 def test_compare_returns_none_without_catalog_selection() -> None:
     catalog = FakeCatalog({"0077071A7": make_core()})
-    assert compare_core_snapshot(make_project(core=None), catalog) is None
+    project = make_project(design=dataclasses.replace(make_project().design, core=None))
+    assert compare_core_snapshot(project, catalog) is None
 
 
 def test_adopt_rewrites_snapshot_and_keeps_overrides() -> None:
     changed = dataclasses.replace(make_core(), al_value_nh=56.0)
     adopted = adopt_core_revision(make_project(), FakeCatalog({"0077071A7": changed}))
-    assert isinstance(adopted.core, CatalogCoreSelection)
-    assert adopted.core.snapshot.al_value_nh == 56.0
+    assert isinstance(adopted.design.core, CatalogCoreSelection)
+    assert adopted.design.core.snapshot.al_value_nh == 56.0
 
 
 def test_adopt_missing_part_raises() -> None:

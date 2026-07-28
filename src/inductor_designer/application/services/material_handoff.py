@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from inductor_designer.application.ports.catalog import CatalogRepository
-from inductor_designer.application.services.aedt_support import (
-    SUPPORTED_AEDT_EDITION,
-    SUPPORTED_AEDT_RELEASE,
-)
 from inductor_designer.application.services.catalog_revisions import select_core
 from inductor_designer.application.services.material_selection import pin_material_revision
-from inductor_designer.domain.aedt_target import ModelDimension
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.materials.records import MaterialRecord, SeriesKind
 from inductor_designer.materials.replay import reproduce_record
@@ -42,7 +37,7 @@ def prepare_material_handoff(
     bh_series_id: str,
 ) -> MaterialHandoffPreparation:
     issues = list(reproduce_record(record, sources).mismatches)
-    if project.materials:
+    if project.design.core_material is not None:
         issues.append(
             "Base validation project must not already contain material revisions."
         )
@@ -90,12 +85,6 @@ def prepare_material_handoff(
         selected,
         record,
         bh_series_id=bh_series_id,
-    )
-    selected = replace(
-        selected,
-        target_release=SUPPORTED_AEDT_RELEASE,
-        target_edition=SUPPORTED_AEDT_EDITION,
-        dimension_mode=ModelDimension.THREE_D,
     )
     return MaterialHandoffPreparation(
         project=selected,
