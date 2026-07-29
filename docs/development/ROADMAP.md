@@ -499,7 +499,8 @@ as a non-blocking cleanup risk in that index.
 
 M7 consumes these contracts and the already-approved
 [Preliminary calculations and Guided flow design](../superpowers/specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md).
-Its detailed implementation plan is the next task; M6 does not write it.
+Its detailed implementation plan will be written separately before M7
+implementation.
 
 ## Milestone 7: Guided Studio
 
@@ -515,6 +516,11 @@ Its detailed implementation plan is the next task; M6 does not write it.
   wire loss, and supported core loss.
 - Make the preview reactive to valid geometry edits.
 - Select a backend and execute Generate Only through the existing adapters.
+- Save every run in a new normalized `runs/<run-id>-<backend>/` directory next
+  to the Project document, using project-relative manifest artifact paths.
+- Run solvers in background/non-graphical mode by default, allow a visible
+  solver window where supported, and expose actions to open the generated
+  native file or run folder.
 - Display validation, approximations, and informational Symmetry Suggestions.
 - Remove the hardcoded startup Design.
 
@@ -526,11 +532,15 @@ Maxwell 3D artifact.
 
 Detailed requirements and physical assumptions:
 [2026-07-26 preliminary calculations and Guided flow](../superpowers/specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md).
+Run artifact and solver visibility decision:
+[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md).
 
 ## Milestone 8: Simulation and Results
 
 - Execute one Operating Point in Maxwell 3D, Maxwell 2D, and FEMM.
 - Activate Generate and Solve in the Guided Studio.
+- Reuse the M7 project-local run layout and populate normalized result
+  artifacts without overwriting prior runs.
 - Provide progress, cancellation, durable status, and failed-stage diagnostics.
 - Honor AC RMS current and phase; enable DC bias only where live-validated.
 - Extract R/L/Z, supported matrices, copper/core/total loss, magnetic energy,

@@ -45,6 +45,13 @@ step.
 - Numeric fields reject invalid characters while editing and remain subject to
   domain validation when committed.
 - Preliminary calculations never start Maxwell or FEMM.
+- A run requires a saved Project document and writes to a new normalized
+  project-local run directory without overwriting an earlier run.
+- Solver operation is background/non-graphical by default, with a per-run
+  visible-window option when the selected adapter and installed solver support
+  it.
+- Generated `.aedt` and `.fem` files remain available for manual use but never
+  synchronize changes back into the Project document.
 
 ## 3. Project and operating-point model
 
@@ -139,6 +146,36 @@ temperature inputs.
 Review shows the paired core and material, shared operating point, winding
 excitations, preliminary estimates and limitations, run request, validation
 findings, and solver approximation notices.
+
+Before its first run, a new Project must be saved so it has a stable Project
+directory. Each Run Request creates:
+
+```text
+<project-directory>/
+  <project-name>.inductor.json
+  runs/
+    <run-id>-<backend>/
+      run-manifest.json
+      <generated solver project>
+      results/
+```
+
+Backend labels distinguish Maxwell 3D, Maxwell 2D, and FEMM. The native solver
+project uses `.aedt` or `.fem`. `results/` is reserved for M8 and may be absent
+or empty after Generate Only. Run Manifest artifact references are relative to
+the Project directory. A new run never implicitly overwrites a prior directory
+or solver project.
+
+Generation uses background/non-graphical solver operation by default.
+Simulation exposes `Show solver window` for a run when the selected adapter and
+installed solver support it. An unsupported visible mode is disabled with an
+explanation rather than silently changing behavior. Application stage progress
+remains authoritative whether the solver window is shown or hidden.
+
+After successful generation, Review offers `Open generated file` and `Open run
+folder`. The generated solver file can be edited and simulated manually, but it
+is an independent output: the application does not import, synchronize,
+compare, or back-propagate solver-side edits into `*.inductor.json`.
 
 ## 5. Solver-independent estimator
 
@@ -371,10 +408,20 @@ M7 owns:
 - the complete solver-independent estimator defined in sections 5–8;
 - partial result availability and diagnostics;
 - reactive Preliminary presentation; and
-- the existing Generate Only Guided Studio exit criterion.
+- the existing Generate Only Guided Studio exit criterion;
+- normalized, non-overwriting project-local run directories;
+- background generation by default, optional supported solver-window
+  visibility, and visible status inside the application; and
+- post-generation actions to open the native solver project or its run folder.
 
-The detailed M7 implementation plan is written after M6 acceptance, when its
-actual contract names and replacement schema are stable. That plan must cite
-this specification, copy its physical constants and exclusions verbatim, and
-must not reopen approved product or physics decisions unless M6 proves a direct
-contradiction.
+M8 reuses the same run-directory and visibility rules for Generate and Solve
+and owns population of normalized result artifacts. M9 remains responsible for
+interrupted-run recovery.
+
+The detailed M7 implementation plan will be written separately before M7
+implementation. It must target the stable M6 contracts, cite this
+specification, copy its physical constants and exclusions verbatim, and
+implement
+[ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
+without reopening approved product or physics decisions unless the existing
+contracts prove a direct contradiction.

@@ -178,8 +178,10 @@ non-round conductors require a separately approved future specification.
 The approved
 [preliminary calculations and Guided flow design](../specs/2026-07-26-preliminary-calculations-and-guided-flow-design.md)
 fully records M7 product behavior, analytical formulas, physical constants,
-exclusions, validation, and acceptance criteria. Write the detailed M7
-implementation plan as the next task so it targets the now-stable M6
-contracts. This M6 task intentionally does not write that plan. Do not repeat
-discovery or redesign unless implementation exposes a documented
-contradiction.
+exclusions, validation, and acceptance criteria.
+[ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
+additionally fixes project-local run storage and solver-window behavior. The
+detailed M7 implementation plan will be written separately before M7
+implementation so it targets the stable M6 contracts and both approved
+decisions. Do not repeat discovery or redesign unless implementation exposes a
+documented contradiction.

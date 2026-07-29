@@ -21,6 +21,8 @@ implemented contracts from later approved targets:
   solver-independent Preliminary estimates.
 - Solve orchestration and result export are M8 targets. Recovery is an M9
   target.
+- M7 stores every Generate Only run in a new normalized `runs/` directory next
+  to the saved Project document. M8 reuses that layout for solve results.
 
 ## Dependency direction
 
@@ -139,6 +141,10 @@ estimate to QML-facing rows; QML contains no physical formulas.
     explicit reason and approximation label.
 12. Failed edits preserve the last valid Project and preview. Partial or failed
     solver artifacts are never reported as successful.
+13. Every run uses a new project-local directory. Solver work is
+    background/non-graphical by default, with optional visible operation where
+    supported. Native solver files remain manually editable independent
+    outputs.
 
 ## Authoritative decisions
 
@@ -148,3 +154,4 @@ estimate to QML-facing rows; QML contains no physical formulas.
 - [ADR 0004: standalone Windows and single AEDT target](../adr/0004-standalone-windows-and-single-aedt-target.md)
 - [ADR 0005: backend-independent projects](../adr/0005-backend-independent-projects.md)
 - [ADR 0006: RMS project current and peak solver excitation](../adr/0006-rms-project-current-and-peak-solver-excitation.md)
+- [ADR 0007: project-local run artifacts and solver visibility](../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
