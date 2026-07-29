@@ -26,8 +26,29 @@ before the next plan freezes assumptions that depend on it.
 - Milestone 6, Project Foundation, is **accepted as of 2026-07-28**. Its
   [detailed implementation plan](2026-07-28-m6-project-foundation.md) records
   the implemented schema-v5 Project/Run contracts and exact acceptance
-  evidence. M7 planning is the next task; this acceptance record does not write
-  that plan.
+  evidence.
+- **Milestone 7 is split into three plans**, because its approved specification
+  covers three independently testable subsystems and one combined plan would
+  gate a whole milestone behind a single review. Requirements are unchanged; only
+  the delivery order is:
+  - **M7a**, active:
+    [solver-independent preliminary estimator](2026-07-29-m7a-preliminary-estimator.md)
+    — specification sections 5–8, no Qt and no solver.
+  - **M7b**, not yet written: project-local run artifacts implementing
+    [ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
+    — `runs/<run-id>-<backend>/`, background generation by default, optional
+    solver-window visibility, post-generation open actions.
+  - **M7c**, not yet written: the Guided Studio flow — `Core & Material`,
+    `Windings`, `Preliminary`, `Simulation`, `Review`, bidirectional
+    core/material filtering, numeric validators, and the separate Material
+    Studio window.
+
+  Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
+  UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`
+  sorts chronologically; diagnostic codes are lowercase dotted
+  `<quantity>.<reason>` strings; a B-H or loss series supports a requested
+  temperature only on exact equality, and a mismatch names the recorded
+  temperatures so the user can pick one that exists.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
