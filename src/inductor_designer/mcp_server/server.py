@@ -47,7 +47,6 @@ def build_context(root: Path, catalog_index: Path | None = None) -> ToolContext:
         catalog=SqliteCatalogRepository(index),
         schemas=SchemaRepository(root / "schemas"),
         matrix_path=root / "compatibility" / "aedt-matrix.yml",
-        output_root=root / "artifacts" / "mcp",
         maxwell3d_exporter=PyaedtMaxwell3dExporter(),
         maxwell2d_exporter=PyaedtMaxwell2dExporter(),
         femm_solver=PyfemmSolver(),
@@ -93,7 +92,7 @@ def create_server(context: ToolContext) -> FastMCP:
         return tools.generate_2d(context, path, backend=backend, analyze=analyze)
 
     def read_manifest(path: str) -> dict[str, object]:
-        """Read back a previously written manifest JSON file from the output root."""
+        """Read back a previously written run-manifest.json from its run directory."""
         return tools.read_manifest(context, path)
 
     for tool_fn in (

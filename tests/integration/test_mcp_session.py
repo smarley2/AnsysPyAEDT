@@ -44,7 +44,6 @@ def context(catalog_index: Path, tmp_path: Path) -> tools.ToolContext:
         catalog=SqliteCatalogRepository(catalog_index),
         schemas=SchemaRepository(ROOT / "schemas"),
         matrix_path=ROOT / "compatibility" / "aedt-matrix.yml",
-        output_root=tmp_path / "out",
         maxwell3d_exporter=RecordingMaxwell3dExporter(),
         maxwell2d_exporter=RecordingMaxwell2dExporter(),
         femm_solver=RecordingFemmSolver(),
@@ -137,8 +136,10 @@ def test_mcp_session_end_to_end(
     assert maxwell2d_result["status"] == "succeeded"
     assert maxwell2d_result["results"] is None
 
-    # Step 7: read_manifest on the shared run evidence path
-    evidence_path = "M2_golden_sample/run-manifest.json"
-    manifest_result = tools.read_manifest(context, evidence_path)
+    # Step 7: read_manifest on the FEMM run's evidence path
+    evidence_path = Path(str(maxwell2d_result["runDirectory"])) / "run-manifest.json"
+    manifest_result = tools.read_manifest(context, str(evidence_path))
     assert "error" not in manifest_result
-    assert manifest_result == maxwell2d_result
+    assert manifest_result == {
+        key: value for key, value in maxwell2d_result.items() if key != "runDirectory"
+    }

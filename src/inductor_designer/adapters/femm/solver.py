@@ -109,7 +109,8 @@ class PyfemmSolver:
 
         femm = self._factory.create()
         try:
-            femm.openfemm(1)
+            # pyfemm takes the *hide* flag: 1 hides the window, 0 shows it.
+            femm.openfemm(0 if request.show_window else 1)
             femm.newdocument(0)
             femm.mi_probdef(problem.frequency_hz, "meters", "planar", 1e-8, problem.depth_m, 30)
             messages.append(f"Problem defined at {problem.frequency_hz:g} Hz.")

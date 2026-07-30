@@ -38,7 +38,6 @@ def context(catalog_index: Path, tmp_path: Path) -> tools.ToolContext:
         catalog=SqliteCatalogRepository(catalog_index),
         schemas=SchemaRepository(ROOT / "schemas"),
         matrix_path=ROOT / "compatibility" / "aedt-matrix.yml",
-        output_root=tmp_path / "out",
         maxwell3d_exporter=RecordingMaxwell3dExporter(),
         maxwell2d_exporter=RecordingMaxwell2dExporter(),
         femm_solver=RecordingFemmSolver(),
@@ -145,9 +144,12 @@ def test_generate_maxwell3d_returns_manifest_and_writes_evidence(
     assert result["backend"] == "maxwell-3d"
     assert result["status"] == "succeeded"
     assert result["mode"] == "generate-only"
-    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
+    run_directory = Path(str(result["runDirectory"]))
+    evidence = run_directory / "run-manifest.json"
     assert evidence.is_file()
-    assert json.loads(evidence.read_text(encoding="utf-8")) == result
+    assert json.loads(evidence.read_text(encoding="utf-8")) == {
+        key: value for key, value in result.items() if key != "runDirectory"
+    }
 
 
 def test_generate_maxwell3d_failure_returns_and_writes_failed_manifest(
@@ -172,8 +174,13 @@ def test_generate_maxwell3d_failure_returns_and_writes_failed_manifest(
     assert result["issues"] == result["diagnostics"]
     assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
     assert result["artifacts"] == []
-    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
-    assert json.loads(evidence.read_text(encoding="utf-8"))["status"] == "failed"
+    run_directory = Path(str(result["runDirectory"]))
+    evidence = run_directory / "run-manifest.json"
+    assert json.loads(evidence.read_text(encoding="utf-8")) == {
+        key: value
+        for key, value in result.items()
+        if key not in {"runDirectory", "error", "issues"}
+    }
 
 
 def test_generate_2d_femm_backend_has_results(
@@ -185,9 +192,12 @@ def test_generate_2d_femm_backend_has_results(
     assert result["backend"] == "femm"
     assert result["status"] == "succeeded"
     assert result["results"] is None
-    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
+    run_directory = Path(str(result["runDirectory"]))
+    evidence = run_directory / "run-manifest.json"
     assert evidence.is_file()
-    assert json.loads(evidence.read_text(encoding="utf-8")) == result
+    assert json.loads(evidence.read_text(encoding="utf-8")) == {
+        key: value for key, value in result.items() if key != "runDirectory"
+    }
 
 
 def test_generate_2d_femm_failure_returns_and_writes_failed_manifest(
@@ -201,7 +211,6 @@ def test_generate_2d_femm_failure_returns_and_writes_failed_manifest(
         catalog=context.catalog,
         schemas=context.schemas,
         matrix_path=context.matrix_path,
-        output_root=context.output_root,
         maxwell3d_exporter=context.maxwell3d_exporter,
         maxwell2d_exporter=context.maxwell2d_exporter,
         femm_solver=_RaisingFemmSolver(),  # type: ignore[arg-type]
@@ -223,8 +232,13 @@ def test_generate_2d_femm_failure_returns_and_writes_failed_manifest(
     assert result["issues"] == result["diagnostics"]
     assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
     assert result["artifacts"] == []
-    evidence = context.output_root / "M2_golden_sample" / "run-manifest.json"
-    assert json.loads(evidence.read_text(encoding="utf-8"))["status"] == "failed"
+    run_directory = Path(str(result["runDirectory"]))
+    evidence = run_directory / "run-manifest.json"
+    assert json.loads(evidence.read_text(encoding="utf-8")) == {
+        key: value
+        for key, value in result.items()
+        if key not in {"runDirectory", "error", "issues"}
+    }
 
 
 def test_generate_2d_default_aedt_stays_generate_only_when_analyze_defaults_true(
@@ -266,16 +280,80 @@ def test_generate_2d_analyze_true_reports_m8_block(
     ]
 
 
+def test_generate_maxwell3d_writes_into_the_project_run_directory(
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
+) -> None:
+    target = tmp_path / "saved.inductor.json"
+    _save(context, document, target)
+
+    result = tools.generate_maxwell3d(context, str(target))
+
+    run_directory = Path(str(result["runDirectory"]))
+    assert run_directory.parent == tmp_path.resolve() / "runs"
+    assert run_directory.name.endswith("-maxwell-3d")
+    assert run_directory.name == f"{result['runId']}-maxwell-3d"
+    assert result["status"] == "succeeded"
+    assert json.loads(
+        (run_directory / "run-manifest.json").read_text(encoding="utf-8")
+    )["runId"] == result["runId"]
+    assert result["artifacts"][0]["path"].startswith("runs/")  # type: ignore[index]
+
+
+def test_a_failed_generation_returns_the_manifest_and_its_run_directory(
+    context: tools.ToolContext, document: dict[str, object], tmp_path: Path
+) -> None:
+    class _RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+        def export(self, request: object) -> object:  # type: ignore[override]
+            raise RuntimeError("MCP Maxwell 3D adapter failed")
+
+    broken_context = replace(context, maxwell3d_exporter=_RaisingMaxwell3dExporter())
+    target = tmp_path / "saved.inductor.json"
+    _save(broken_context, document, target)
+
+    result = tools.generate_maxwell3d(broken_context, str(target))
+
+    run_directory = Path(str(result["runDirectory"]))
+    assert result["status"] == "failed"
+    assert result["diagnostics"] == ["RuntimeError: MCP Maxwell 3D adapter failed"]
+    assert result["issues"] == result["diagnostics"]
+    assert json.loads(
+        (run_directory / "run-manifest.json").read_text(encoding="utf-8")
+    )["status"] == "failed"
+
+
 def test_read_manifest_roundtrip(
     context: tools.ToolContext, document: dict[str, object], tmp_path: Path
 ) -> None:
     target = tmp_path / "saved.inductor.json"
     _save(context, document, target)
     generated = tools.generate_maxwell3d(context, str(target))
-    result = tools.read_manifest(context, "M2_golden_sample/run-manifest.json")
-    assert result == generated
+    manifest_path = Path(str(generated["runDirectory"])) / "run-manifest.json"
+
+    result = tools.read_manifest(context, str(manifest_path))
+
+    assert result["runId"] == generated["runId"]
 
 
-def test_read_manifest_traversal_attack_returns_error(context: tools.ToolContext) -> None:
-    result = tools.read_manifest(context, "../../etc/passwd")
+def test_read_manifest_refuses_a_path_outside_a_run_directory(
+    context: tools.ToolContext, tmp_path: Path
+) -> None:
+    stray = tmp_path / "run-manifest.json"
+    stray.write_text("{}", encoding="utf-8")
+
+    assert "error" in tools.read_manifest(context, str(stray))
+    assert "error" in tools.read_manifest(context, "../../etc/passwd")
+
+
+@pytest.mark.parametrize("scalar_json", ["[]", "42"])
+def test_read_manifest_non_object_json_returns_error(
+    context: tools.ToolContext, tmp_path: Path, scalar_json: str
+) -> None:
+    run_dir = tmp_path / "runs" / "20260101-000000-maxwell-3d"
+    run_dir.mkdir(parents=True)
+    manifest_path = run_dir / "run-manifest.json"
+    manifest_path.write_text(scalar_json, encoding="utf-8")
+
+    result = tools.read_manifest(context, str(manifest_path))
+
     assert "error" in result
+    assert result["issues"]

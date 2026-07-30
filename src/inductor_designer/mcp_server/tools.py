@@ -11,7 +11,6 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from inductor_designer import __version__
 from inductor_designer.adapters.compatibility.matrix_repository import (
@@ -32,14 +31,17 @@ from inductor_designer.application.services.aedt_support import (
     SUPPORTED_AEDT_RELEASE,
 )
 from inductor_designer.application.services.geometry_model import build_geometry_model
-from inductor_designer.application.services.maxwell_export import (
-    RunGenerationFailed,
-    generate_run,
-    run_manifest_json,
+from inductor_designer.application.services.maxwell_export import run_manifest_json
+from inductor_designer.application.services.project_run import (
+    ProjectRunFailed,
+    start_project_run,
+)
+from inductor_designer.application.services.run_directory import (
+    MANIFEST_FILENAME,
+    RUNS_DIRECTORY_NAME,
 )
 from inductor_designer.domain.validation import validate_project as domain_validate_project
 from inductor_designer.geometry.manifest import build_manifest
-from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
 
 # Every tool below catches plain Exception rather than raising: besides the
@@ -55,7 +57,6 @@ class ToolContext:
     catalog: CatalogRepository
     schemas: SchemaRepository
     matrix_path: Path
-    output_root: Path
     maxwell3d_exporter: Maxwell3dExporter
     maxwell2d_exporter: Maxwell2dExporter
     femm_solver: FemmSolver
@@ -66,22 +67,13 @@ def _failure(error: Exception) -> dict[str, object]:
     return {"error": str(error), "issues": list(issues) if issues else [str(error)]}
 
 
-def _failed_run_result(
-    output_dir: Path,
-    error: RunGenerationFailed,
-) -> dict[str, object]:
-    manifest_text = run_manifest_json(error.manifest)
-    (output_dir / "run-manifest.json").write_text(manifest_text, encoding="utf-8")
-    result: dict[str, object] = dict(json.loads(manifest_text))
+def _failed_run_result(error: ProjectRunFailed) -> dict[str, object]:
+    """The caller already holds the manifest; report it verbatim."""
+    result: dict[str, object] = dict(json.loads(run_manifest_json(error.manifest)))
+    result["runDirectory"] = str(error.location.directory)
     result["error"] = str(error)
     result["issues"] = list(error.manifest.diagnostics)
     return result
-
-
-def _output_dir(context: ToolContext, project_name: str) -> Path:
-    directory = context.output_root / sanitize_identifier(project_name)
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
 
 
 def list_cores(context: ToolContext) -> dict[str, object]:
@@ -166,34 +158,32 @@ def geometry_summary(context: ToolContext, path: str) -> dict[str, object]:
 
 def generate_maxwell3d(context: ToolContext, path: str) -> dict[str, object]:
     try:
-        project = ProjectRepository(context.schemas).load(Path(path))
+        document_path = Path(path)
+        project = ProjectRepository(context.schemas).load(document_path)
         capabilities = MatrixCapabilityRepository(context.matrix_path).snapshot_for(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
         )
-        output_dir = _output_dir(context, project.name)
-        outcome = generate_run(
+        result = start_project_run(
             project,
+            document_path,
             RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
             context.catalog,
             capabilities,
-            output_dir,
             maxwell3d_exporter=context.maxwell3d_exporter,
             maxwell2d_exporter=context.maxwell2d_exporter,
             femm_solver=context.femm_solver,
-            run_id=str(uuid4()),
             application_version=__version__,
         )
-        manifest_text = run_manifest_json(outcome.manifest)
-        (output_dir / "run-manifest.json").write_text(
-            manifest_text,
-            encoding="utf-8",
+        document: dict[str, object] = dict(
+            json.loads(run_manifest_json(result.outcome.manifest))
         )
-    except RunGenerationFailed as error:
-        return _failed_run_result(output_dir, error)
+    except ProjectRunFailed as error:
+        return _failed_run_result(error)
     except Exception as error:
         return _failure(error)
-    return dict(json.loads(manifest_text))
+    document["runDirectory"] = str(result.location.directory)
+    return document
 
 
 def generate_2d(
@@ -206,14 +196,15 @@ def generate_2d(
     if run_backend is None:
         return _failure(ValueError(f"Unknown 2D backend: {backend!r}"))
     try:
-        project = ProjectRepository(context.schemas).load(Path(path))
+        document_path = Path(path)
+        project = ProjectRepository(context.schemas).load(document_path)
         capabilities = MatrixCapabilityRepository(context.matrix_path).snapshot_for(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
         )
-        output_dir = _output_dir(context, project.name)
-        outcome = generate_run(
+        result = start_project_run(
             project,
+            document_path,
             RunRequest(
                 run_backend,
                 (
@@ -224,33 +215,36 @@ def generate_2d(
             ),
             context.catalog,
             capabilities,
-            output_dir,
             maxwell3d_exporter=context.maxwell3d_exporter,
             maxwell2d_exporter=context.maxwell2d_exporter,
             femm_solver=context.femm_solver,
-            run_id=str(uuid4()),
             application_version=__version__,
         )
-        manifest_text = run_manifest_json(outcome.manifest)
-        (output_dir / "run-manifest.json").write_text(
-            manifest_text,
-            encoding="utf-8",
+        document: dict[str, object] = dict(
+            json.loads(run_manifest_json(result.outcome.manifest))
         )
-    except RunGenerationFailed as error:
-        return _failed_run_result(output_dir, error)
+    except ProjectRunFailed as error:
+        return _failed_run_result(error)
     except Exception as error:
         return _failure(error)
-    return dict(json.loads(manifest_text))
+    document["runDirectory"] = str(result.location.directory)
+    return document
 
 
 def read_manifest(context: ToolContext, path: str) -> dict[str, object]:
-    resolved = (context.output_root / path).resolve()
-    if not resolved.is_relative_to(context.output_root.resolve()):
-        return _failure(ValueError(f"Path escapes output root: {path!r}"))
+    """Read one run manifest. Only a manifest inside a run directory qualifies."""
+    resolved = Path(path).resolve()
+    if (
+        resolved.name != MANIFEST_FILENAME
+        or resolved.parent.parent.name != RUNS_DIRECTORY_NAME
+    ):
+        return _failure(
+            ValueError(f"Not a run manifest inside a run directory: {path!r}")
+        )
     try:
-        loaded = json.loads(resolved.read_text(encoding="utf-8"))
+        document = json.loads(resolved.read_text(encoding="utf-8"))
+        if not isinstance(document, dict):
+            raise ValueError(f"Run manifest is not a JSON object: {path!r}")
     except Exception as error:
         return _failure(error)
-    if not isinstance(loaded, dict):
-        return _failure(ValueError(f"Manifest is not a JSON object: {resolved}"))
-    return dict(loaded)
+    return dict(document)

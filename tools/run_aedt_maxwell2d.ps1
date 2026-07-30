@@ -17,13 +17,18 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$outputDirectory = Join-Path $repoRoot "artifacts\maxwell2d\$Release-$Edition"
-$evidence = Join-Path $outputDirectory 'generation-manifest.json'
+$workDirectory = Join-Path $repoRoot "artifacts\maxwell2d\$Release-$Edition"
+New-Item -ItemType Directory -Force -Path $workDirectory | Out-Null
+# Run beside a copy of -Project, not the original, so runs/ stays out of the
+# git-tracked tests/fixtures/ tree for the default fixture.
+$projectCopy = Join-Path $workDirectory (Split-Path -Leaf $Project)
+Copy-Item -Path $Project -Destination $projectCopy -Force
+$evidence = Join-Path $workDirectory 'generation-manifest.json'
 
 $arguments = @(
     '-m', 'tools.generate_maxwell2d',
-    '--project', $Project,
-    '--output-directory', $outputDirectory,
+    '--project', $projectCopy,
+    '--work-directory', $workDirectory,
     '--evidence', $evidence
 )
 if ($Graphical) { $arguments += '--graphical' }

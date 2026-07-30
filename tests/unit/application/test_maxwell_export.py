@@ -721,3 +721,71 @@ def test_nonconforming_femm_generate_only_result_is_failed_evidence(
     assert manifest.adapter_version == "recording-fake"
     assert manifest.solver_version is None
     assert len(solver.requests) == 1
+
+
+def generate_one(
+    backend: RunBackend,
+    *,
+    show_solver_window: bool = False,
+    artifact_base_directory: Path | None = None,
+    output_directory: Path = OUTPUT_DIRECTORY,
+) -> tuple[RunOutcome, RecordingMaxwell3dExporter, RecordingMaxwell2dExporter, RecordingFemmSolver]:
+    maxwell3d = RecordingMaxwell3dExporter()
+    maxwell2d = RecordingMaxwell2dExporter()
+    femm = RecordingFemmSolver()
+    outcome = generate_run(
+        project_for_runs(),
+        RunRequest(backend, RunMode.GENERATE_ONLY),
+        CATALOG,
+        CAPABILITIES,
+        output_directory,
+        maxwell3d_exporter=maxwell3d,
+        maxwell2d_exporter=maxwell2d,
+        femm_solver=femm,
+        run_id=f"m7b-{backend.value}",
+        application_version="0.7.0-test",
+        show_solver_window=show_solver_window,
+        artifact_base_directory=artifact_base_directory,
+    )
+    return outcome, maxwell3d, maxwell2d, femm
+
+
+def test_generation_is_non_graphical_by_default() -> None:
+    _, maxwell3d, _, _ = generate_one(RunBackend.MAXWELL_3D)
+    _, _, maxwell2d, _ = generate_one(RunBackend.MAXWELL_2D)
+    _, _, _, femm = generate_one(RunBackend.FEMM)
+
+    assert maxwell3d.requests[0].non_graphical is True
+    assert maxwell2d.requests[0].non_graphical is True
+    assert femm.requests[0].show_window is False
+
+
+def test_a_visible_run_reaches_every_adapter() -> None:
+    _, maxwell3d, _, _ = generate_one(RunBackend.MAXWELL_3D, show_solver_window=True)
+    _, _, maxwell2d, _ = generate_one(RunBackend.MAXWELL_2D, show_solver_window=True)
+    _, _, _, femm = generate_one(RunBackend.FEMM, show_solver_window=True)
+
+    assert maxwell3d.requests[0].non_graphical is False
+    assert maxwell2d.requests[0].non_graphical is False
+    assert femm.requests[0].show_window is True
+
+
+def test_artifact_paths_are_relative_to_the_given_base(tmp_path: Path) -> None:
+    run_directory = tmp_path / "runs" / "20260730-101500-femm"
+    run_directory.mkdir(parents=True)
+
+    outcome, _, _, _ = generate_one(
+        RunBackend.FEMM,
+        artifact_base_directory=tmp_path,
+        output_directory=run_directory,
+    )
+
+    assert [artifact.path for artifact in outcome.manifest.artifacts] == [
+        "runs/20260730-101500-femm/Boost_inductor_2d.fem"
+    ]
+
+
+def test_without_a_base_the_artifact_path_is_unchanged() -> None:
+    outcome, _, _, _ = generate_one(RunBackend.FEMM)
+
+    assert outcome.manifest.artifacts[0].path.endswith("outputs/m6/Boost_inductor_2d.fem")

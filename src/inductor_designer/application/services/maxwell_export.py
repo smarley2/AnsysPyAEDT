@@ -28,6 +28,9 @@ from inductor_designer.application.services.aedt_support import (
     SUPPORTED_AEDT_RELEASE,
     aedt_support_issues,
 )
+from inductor_designer.application.services.run_directory import (
+    artifact_path_for_manifest,
+)
 from inductor_designer.application.services.run_planning import (
     GeometryOnlyRunPlan,
     PlannedRun,
@@ -169,6 +172,8 @@ def _export_femm_plan(
     planned_run: SolveReadyRunPlan,
     solver: FemmSolver,
     output_directory: Path,
+    *,
+    show_solver_window: bool,
 ) -> FemmSolveResult:
     problem = planned_run.solver_plan
     if not isinstance(problem, FemmProblem):
@@ -178,6 +183,7 @@ def _export_femm_plan(
         output_directory=output_directory,
         project_name=f"{_project_name(project)}_2d",
         analyze=False,
+        show_window=show_solver_window,
     )
     try:
         return solver.solve(request)
@@ -201,6 +207,8 @@ def _material_state(project: InductorProject) -> ManifestMaterialState:
 def _maxwell_evidence(
     result: MaxwellExportResult,
     expected_stage_names: tuple[str, ...],
+    *,
+    artifact_base_directory: Path | None,
 ) -> tuple[
     tuple[ManifestStage, ...],
     RunStatus,
@@ -247,7 +255,7 @@ def _maxwell_evidence(
         (
             ManifestArtifact(
                 kind="aedt-project",
-                path=result.project_path.as_posix(),
+                path=_artifact_path(result.project_path, artifact_base_directory),
             ),
         )
         if saved
@@ -256,8 +264,17 @@ def _maxwell_evidence(
     return stages, status, diagnostics, artifacts
 
 
+def _artifact_path(path: Path, artifact_base_directory: Path | None) -> str:
+    """Project-relative when a base is given (ADR 0007), absolute otherwise."""
+    if artifact_base_directory is None:
+        return path.as_posix()
+    return artifact_path_for_manifest(path, artifact_base_directory)
+
+
 def _femm_evidence(
     result: FemmSolveResult,
+    *,
+    artifact_base_directory: Path | None,
 ) -> tuple[
     tuple[ManifestStage, ...],
     RunStatus,
@@ -277,7 +294,7 @@ def _femm_evidence(
         (
             ManifestArtifact(
                 kind="femm-project",
-                path=result.fem_path.as_posix(),
+                path=_artifact_path(result.fem_path, artifact_base_directory),
             ),
         ),
     )
@@ -290,12 +307,16 @@ def _manifest_for_result(
     *,
     run_id: str,
     application_version: str,
+    artifact_base_directory: Path | None,
 ) -> RunManifest:
     backend = planned_run.request.backend
     if backend is RunBackend.FEMM:
         if not isinstance(result, FemmSolveResult):
             raise TypeError("FEMM run returned a non-FEMM adapter result.")
-        stages, status, diagnostics, artifacts = _femm_evidence(result)
+        stages, status, diagnostics, artifacts = _femm_evidence(
+            result,
+            artifact_base_directory=artifact_base_directory,
+        )
         solver_version = result.solver_version
         adapter_version = result.adapter_version
     else:
@@ -311,6 +332,7 @@ def _manifest_for_result(
         stages, status, diagnostics, artifacts = _maxwell_evidence(
             result,
             expected_stage_names,
+            artifact_base_directory=artifact_base_directory,
         )
         solver_version = str(SUPPORTED_AEDT_RELEASE)
         adapter_version = result.pyaedt_version
@@ -440,7 +462,8 @@ def generate_run(
     femm_solver: FemmSolver,
     run_id: str,
     application_version: str,
-    non_graphical: bool = True,
+    show_solver_window: bool = False,
+    artifact_base_directory: Path | None = None,
 ) -> RunOutcome:
     if request.mode is RunMode.GENERATE_AND_SOLVE:
         raise MaxwellExportBlocked((_GENERATE_AND_SOLVE_BLOCK,))
@@ -453,6 +476,7 @@ def generate_run(
         if support_issues:
             raise MaxwellExportBlocked(support_issues)
 
+    non_graphical = not show_solver_window
     planned_run = plan_run(project, request, catalog, capabilities)
     adapter_result: AdapterResult
     try:
@@ -482,6 +506,7 @@ def generate_run(
                 planned_run,
                 femm_solver,
                 output_directory,
+                show_solver_window=show_solver_window,
             )
     except _AdapterDispatchError as dispatch_failure:
         raise _generation_failure(
@@ -522,6 +547,7 @@ def generate_run(
             adapter_result,
             run_id=run_id,
             application_version=application_version,
+            artifact_base_directory=artifact_base_directory,
         )
     except Exception as error:
         raise _generation_failure(

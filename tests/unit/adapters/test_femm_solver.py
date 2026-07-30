@@ -17,7 +17,9 @@ from tests.unit.simulation.test_plan_builder import (
 from tests.unit.simulation.test_plan_builder2d import build2d
 
 
-def make_request(tmp_path: Path, analyze: bool = True) -> FemmSolveRequest:
+def make_request(
+    tmp_path: Path, analyze: bool = True, show_window: bool = False
+) -> FemmSolveRequest:
     plan = build2d((make_definition(),))  # type: ignore[arg-type]
     problem = femm_problem_from_plan(plan)
     return FemmSolveRequest(
@@ -25,6 +27,7 @@ def make_request(tmp_path: Path, analyze: bool = True) -> FemmSolveRequest:
         output_directory=tmp_path,
         project_name="test_inductor",
         analyze=analyze,
+        show_window=show_window,
     )
 
 
@@ -210,3 +213,25 @@ def test_air_background_labels_at_origin_and_outside_core(tmp_path: Path) -> Non
     positions = sorted((label[0], label[1]) for label, _ in air_pairs)
     expected = sorted([(0.0, 0.0), (0.0, problem.core.r_outer_m * 1.5)])
     assert positions == expected
+
+
+def _openfemm_args(module: FakeFemmModule) -> tuple[object, ...]:
+    return next(args for name, args in module.calls if name == "openfemm")
+
+
+def test_a_hidden_run_hides_the_femm_window(tmp_path: Path) -> None:
+    module = FakeFemmModule()
+    solver = PyfemmSolver(module_factory=FakeFemmModuleFactory(module))
+
+    solver.solve(make_request(tmp_path, show_window=False))
+
+    assert _openfemm_args(module) == (1,)
+
+
+def test_a_visible_run_shows_the_femm_window(tmp_path: Path) -> None:
+    module = FakeFemmModule()
+    solver = PyfemmSolver(module_factory=FakeFemmModuleFactory(module))
+
+    solver.solve(make_request(tmp_path, show_window=True))
+
+    assert _openfemm_args(module) == (0,)

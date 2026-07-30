@@ -586,14 +586,59 @@ any loss series on the record mismatches the request
 (`core_loss.fit_sources_mismatch_condition`). Recording condition provenance on
 `SteinmetzFit` would be a material-schema change and was deliberately not taken.
 
-The remaining M7 work is unstarted: M7b covers project-local run artifacts under
-[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md) and
-M7c the Guided Studio flow. Neither has a detailed plan yet.
+## Milestone 7b: Project-local run artifacts
 
-M7b (project-local run artifacts implementing
-[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md))
-is the next plan to write. M7 as a whole is not yet accepted; only this M7a
-slice is.
+M7b implements
+[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md):
+every generation run now writes into its own, non-overwriting
+`<project-directory>/runs/<run-id>-<backend>/` directory next to the saved
+Project document instead of a shared application-level output path.
+
+- Run ids are UTC `YYYYMMDD-HHMMSS` timestamps, with a `-2`, `-3` ... suffix
+  when an earlier run already owns the same second, so `runs/` sorts
+  chronologically and an existing run directory is never overwritten.
+- `run-manifest.json` is written by the application for both successful and
+  failed runs; a run blocked before any adapter wrote discards its
+  still-empty run directory instead of leaving debris behind.
+- Manifest artifact paths are POSIX strings relative to the project
+  directory.
+- Generation runs background/non-graphical by default. A `visible_window_support`
+  service reports, per backend (Maxwell 3D, Maxwell 2D, FEMM), whether a
+  visible `Show solver window` choice is supported, with a reason when it is
+  not, but it is not yet bound to any control; M7c still owns wiring it to
+  the `Show solver window` choice.
+- A new `PathOpener` port and its Windows `DesktopPathOpener` adapter hand a
+  generated file or its run folder to the desktop shell.
+- The Qt UI, the MCP server, and both CLI tools (`generate_maxwell3d`,
+  `generate_maxwell2d`) all route through the single `start_project_run`
+  entry point. The UI's old `artifacts/studio/<project-name>` output path and
+  the MCP server's `output_root` containment check are gone; MCP
+  `read_manifest` now requires the path of a `run-manifest.json` inside a run
+  directory, and both MCP generate tools return a `runDirectory` key.
+
+Exit criterion: a Generate Only run for each backend writes its own
+`runs/<run-id>-<backend>/run-manifest.json` beside the saved project with
+project-relative artifact paths, a second run never disturbs the first, and
+an opt-in visible solver window works for each backend where the installed
+solver supports it.
+
+Detailed task-by-task plan and evidence:
+[2026-07-30 M7b project-local run artifacts](../superpowers/plans/2026-07-30-m7b-project-local-run-artifacts.md).
+
+### Current state
+
+M7b implementation is complete on branch `m7b/project-local-run-artifacts`
+and is awaiting Fabio Posser's review and acceptance; it is **not yet
+accepted**.
+
+Every Guided Studio screen remains M7c work, including the `Show solver
+window` control and the `Open generated file` / `Open run folder` buttons
+that bind to the `PathOpener` port and run-directory contracts this milestone
+delivered. M7c has no detailed plan yet. `results/` population and Generate
+and Solve remain M8 work; M7b reserves an empty `results/` directory but never
+writes into it.
+
+M7 as a whole is not yet accepted; only the M7a slice is.
 
 ## Milestone 8: Simulation and Results
 

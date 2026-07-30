@@ -45,7 +45,6 @@ def context(catalog_index: Path, tmp_path: Path) -> tools.ToolContext:
         catalog=SqliteCatalogRepository(catalog_index),
         schemas=SchemaRepository(ROOT / "schemas"),
         matrix_path=ROOT / "compatibility" / "aedt-matrix.yml",
-        output_root=tmp_path / "out",
         maxwell3d_exporter=RecordingMaxwell3dExporter(),
         maxwell2d_exporter=RecordingMaxwell2dExporter(),
         femm_solver=RecordingFemmSolver(),

@@ -215,14 +215,15 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     lines = run_generation(
         GenerationBackend.MAXWELL_3D,
         provider.current(),
+        project_path,
         CATALOG,
         CAPABILITIES,
-        tmp_path / "same-session-maxwell",
         maxwell3d_exporter=same_session_exporter,
         maxwell2d_exporter=RecordingMaxwell2dExporter(),
         femm_solver=RecordingFemmSolver(),
     )
-    assert lines[-1].startswith("save: ok")
+    assert lines[-2].startswith("save: ok")
+    assert lines[-1].startswith("run folder: ")
     same_session_material = same_session_exporter.requests[0].plan.core.material
     assert same_session_material.material_revision == edited_revision
     assert same_session_material.bh_series_id == "bh-100c"

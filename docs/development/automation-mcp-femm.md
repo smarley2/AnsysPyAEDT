@@ -64,7 +64,7 @@ docstrings are the source of truth for wording):
 | `geometry_summary` | Build the geometry model for a saved project and return its manifest summary. |
 | `generate_maxwell3d` | Submit a Maxwell 3D Generate Only Run Request and return its Run Manifest. |
 | `generate_2d` | Submit a Maxwell 2D or FEMM Run Request and return its Run Manifest. |
-| `read_manifest` | Read back a previously written manifest JSON file from the output root. |
+| `read_manifest` | Read back a previously written `run-manifest.json` from its run directory. |
 
 `generate_2d` takes `backend` (`"aedt"` or `"femm"`, default `"aedt"`) and the
 retained `analyze` compatibility argument. Maxwell 2D always maps to Generate
@@ -73,7 +73,10 @@ Only. For FEMM, pass `analyze: false` for the implemented Generate Only request;
 not-implemented block before an adapter call. All tools return JSON-able dicts;
 errors come back as `{"error": ..., "issues": [...]}` rather than raising, so
 an MCP client always gets a structured result. Successful and failed adapter
-executions write `run-manifest.json`.
+executions write into their own `<project-directory>/runs/<run-id>-<backend>/`
+directory (ADR 0007) and both generate tools return a `runDirectory` key
+naming it; `read_manifest` only accepts a `run-manifest.json` path inside a
+run directory.
 
 ## FEMM 2D backend
 
@@ -102,11 +105,14 @@ backend or dimensional representation is persisted in the Project document.
 CLI:
 
 ```powershell
-.venv\Scripts\python.exe -m tools.generate_maxwell2d --project my.inductor.json --output-directory artifacts\out --evidence artifacts\out\evidence.json --backend femm
+.venv\Scripts\python.exe -m tools.generate_maxwell2d --project my.inductor.json --work-directory artifacts\out --evidence artifacts\out\evidence.json --backend femm
 ```
 
-`--backend` defaults to `aedt`. The M6 CLI always submits Generate Only; solver
-execution and result extraction belong to M8.
+`--work-directory` is only the workspace for the built catalog index; the run
+itself is written beside `--project` in `<project-directory>/runs/` (ADR
+0007), never into `--work-directory`. `--backend` defaults to `aedt`. The CLI
+always submits Generate Only; solver execution and result extraction belong to
+M8.
 
 MCP:
 

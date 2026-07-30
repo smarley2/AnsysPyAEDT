@@ -39,10 +39,22 @@ before the next plan freezes assumptions that depend on it.
     `C058071A2`, with 889 non-solver and 37 UI tests passing on the merged
     result, import isolation verified in a clean interpreter, and no live solver
     required.
-  - **M7b**, next plan to write: project-local run artifacts implementing
+  - **M7b implementation is complete** on branch
+    `m7b/project-local-run-artifacts`, awaiting Fabio Posser's review and
+    acceptance; it is **not yet accepted**:
+    [2026-07-30 M7b project-local run artifacts](2026-07-30-m7b-project-local-run-artifacts.md)
+    implementing
     [ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
-    — `runs/<run-id>-<backend>/`, background generation by default, optional
-    solver-window visibility, post-generation open actions.
+    — project-local `runs/<run-id>-<backend>/` directories with non-overwriting
+    UTC run ids, `run-manifest.json` written for every successful and failed
+    run, project-relative artifact paths, and background-by-default generation
+    with an opt-in visible solver window for all three backends. The Qt UI, the
+    MCP server, and both CLI tools now run through one `start_project_run`
+    service. The new `PathOpener` port ships with its Windows adapter but is
+    not yet bound to any control. No Guided Studio screen is in scope; M7c
+    still owns every screen, including the `Show solver window` choice and the
+    `Open generated file` / `Open run folder` buttons, and M8 still owns
+    `results/` population.
   - **M7c**, not yet written: the Guided Studio flow — `Core & Material`,
     `Windings`, `Preliminary`, `Simulation`, `Review`, bidirectional
     core/material filtering, numeric validators, and the separate Material

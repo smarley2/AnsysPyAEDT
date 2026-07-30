@@ -6,7 +6,6 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from uuid import uuid4
 
 from inductor_designer import __version__
 from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
@@ -29,10 +28,13 @@ from inductor_designer.application.services.aedt_support import (
 )
 from inductor_designer.application.services.maxwell_export import (
     MaxwellExportBlocked,
-    RunGenerationFailed,
-    generate_run,
     run_manifest_json,
 )
+from inductor_designer.application.services.project_run import (
+    ProjectRunFailed,
+    start_project_run,
+)
+from inductor_designer.application.services.run_directory import RunDirectoryError
 from inductor_designer.application.services.run_planning import RunPlanningError
 from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
 from tools.build_catalog import build
@@ -45,14 +47,20 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, required=True)
-    parser.add_argument("--output-directory", type=Path, required=True)
+    parser.add_argument(
+        "--work-directory",
+        type=Path,
+        required=True,
+        help="Workspace for the built catalog index; the run itself is written "
+        "beside --project in <project-directory>/runs/.",
+    )
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--graphical", action="store_true")
     parser.add_argument("--matrix", type=Path, default=ROOT / "compatibility" / "aedt-matrix.yml")
     args = parser.parse_args(argv)
 
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    index = args.output_directory / "catalog.sqlite"
+    args.work_directory.mkdir(parents=True, exist_ok=True)
+    index = args.work_directory / "catalog.sqlite"
     build(ROOT / "catalog", ROOT / "schemas" / "catalog", index)
     catalog = SqliteCatalogRepository(index)
     repository = ProjectRepository(SchemaRepository(ROOT / "schemas"))
@@ -63,27 +71,27 @@ def main(
     )
 
     try:
-        outcome = generate_run(
+        result = start_project_run(
             project,
+            args.project,
             RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
             catalog,
             capabilities,
-            args.output_directory,
             maxwell3d_exporter=(
                 exporter if exporter is not None else PyaedtMaxwell3dExporter()
             ),
             maxwell2d_exporter=PyaedtMaxwell2dExporter(),
             femm_solver=PyfemmSolver(),
-            run_id=str(uuid4()),
             application_version=__version__,
-            non_graphical=not args.graphical,
+            show_solver_window=args.graphical,
         )
-    except RunGenerationFailed as failed:
+    except ProjectRunFailed as failed:
         args.evidence.parent.mkdir(parents=True, exist_ok=True)
         args.evidence.write_text(
             run_manifest_json(failed.manifest),
             encoding="utf-8",
         )
+        print(f"Run folder: {failed.location.directory}", file=sys.stderr)
         for diagnostic in failed.manifest.diagnostics:
             print(f"FAILED: {diagnostic}", file=sys.stderr)
         return 1
@@ -91,19 +99,23 @@ def main(
         for issue in blocked.issues:
             print(f"BLOCKED: {issue}", file=sys.stderr)
         return 1
+    except RunDirectoryError as blocked:
+        print(f"BLOCKED: {blocked}", file=sys.stderr)
+        return 1
 
     args.evidence.parent.mkdir(parents=True, exist_ok=True)
     args.evidence.write_text(
-        run_manifest_json(outcome.manifest),
+        run_manifest_json(result.outcome.manifest),
         encoding="utf-8",
     )
-    result = outcome.adapter_result
-    if not isinstance(result, Maxwell3dExportResult):
+    print(f"Run folder: {result.location.directory}")
+    adapter_result = result.outcome.adapter_result
+    if not isinstance(adapter_result, Maxwell3dExportResult):
         raise TypeError("Maxwell 3D generation returned a non-Maxwell result.")
-    for stage in result.stages:
+    for stage in adapter_result.stages:
         status = "ok" if stage.succeeded else "FAILED"
         print(f"{stage.name}: {status} - {stage.message}")
-    return 0 if result.succeeded(STAGE_NAMES) else 1
+    return 0 if adapter_result.succeeded(STAGE_NAMES) else 1
 
 
 if __name__ == "__main__":

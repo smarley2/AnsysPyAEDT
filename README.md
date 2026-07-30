@@ -25,7 +25,7 @@ release.
 | Spreadsheet-only Material Studio (M5b) | Accepted. CSV/XLSX import, immutable local revisions, plotting, download, replacement/deletion guards, and exact project pinning are implemented. |
 | Live material closeout (M5a) | **Accepted 2026-07-28.** High Flux 60 revision `94e880a99b98` reproduces `MATCH` and reaches Maxwell 3D, Maxwell 2D and FEMM with its 501-point nonlinear B-H curve and Steinmetz fit. The 3D design also solves, which needed 16-sided conductors plus TAU mesh settings with curvilinear meshing off. |
 | Guided Studio UI | A Canvas First shell and a tested editable-winding slice are integrated. Valid edits rebuild the real solver-independent preview and can be saved. Core selection, complete project authoring, preliminary estimates, review, and non-hardcoded New/Open/Save are still M7 work. |
-| Project and run contracts (M6) | Approved but not implemented. The current schema is replaced in M6 by the backend-independent Project/Run model described below. |
+| Project and run contracts (M6) | Shipped; M7a/M7b build on it. The current schema is the backend-independent Project/Run model described below. |
 | Simulation results, reliability, and packaging (M8–M10) | Planned. Normalized results, run recovery, autosave/undo, installer creation, and clean-machine release validation are not complete. |
 
 Exact acceptance dates, evidence, and open gates are maintained in the

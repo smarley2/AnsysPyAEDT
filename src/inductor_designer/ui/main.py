@@ -78,7 +78,10 @@ def _load_simulation_summary(project: InductorProject) -> list[str]:
 
 
 def _build_generation_controller(
-    project_provider: CurrentProjectProvider, catalog_path: Path, matrix_path: Path
+    project_provider: CurrentProjectProvider,
+    catalog_path: Path,
+    matrix_path: Path,
+    project_document_path: Path,
 ) -> GenerationController:
     from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
     from inductor_designer.adapters.compatibility.matrix_repository import (
@@ -91,7 +94,6 @@ def _build_generation_controller(
         SUPPORTED_AEDT_EDITION,
         SUPPORTED_AEDT_RELEASE,
     )
-    from inductor_designer.geometry.naming import sanitize_identifier
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.generation_lines import (
         GenerationBackend,
@@ -111,14 +113,13 @@ def _build_generation_controller(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
         )
-        output_directory = Path("artifacts") / "studio" / sanitize_identifier(project.name)
         backend = GenerationBackend(backend_label)
         return run_generation(
             backend,
             project,
+            project_document_path,
             catalog,
             capabilities,
-            output_directory,
             maxwell3d_exporter=maxwell3d_exporter,
             maxwell2d_exporter=maxwell2d_exporter,
             femm_solver=femm_solver,
@@ -192,7 +193,7 @@ def main() -> int:
 
         project_provider = CurrentProjectProvider(project)
         generation_controller = _build_generation_controller(
-            project_provider, args.catalog, args.matrix
+            project_provider, args.catalog, args.matrix, args.project
         )
         backend_choices = [backend.value for backend in GenerationBackend]
         print(

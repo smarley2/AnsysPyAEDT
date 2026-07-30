@@ -29,7 +29,7 @@ def test_main_exports_sample_project_to_maxwell_2d(tmp_path: Path) -> None:
     exit_code = main(
         [
             "--project", str(_fixture(tmp_path)),
-            "--output-directory", str(tmp_path / "out"),
+            "--work-directory", str(tmp_path / "out"),
             "--evidence", str(evidence),
         ],
         exporter=RecordingMaxwell2dExporter(),
@@ -55,7 +55,7 @@ def test_main_writes_failed_run_manifest_when_exporter_raises(
         [
             "--project",
             str(_fixture(tmp_path)),
-            "--output-directory",
+            "--work-directory",
             str(tmp_path / "out"),
             "--evidence",
             str(evidence),
@@ -69,6 +69,10 @@ def test_main_writes_failed_run_manifest_when_exporter_raises(
     assert payload["status"] == "failed"
     assert payload["diagnostics"] == ["RuntimeError: CLI Maxwell 2D adapter failed"]
     assert payload["artifacts"] == []
+    run_directory = next((tmp_path / "runs").iterdir())
+    assert payload == json.loads(
+        (run_directory / "run-manifest.json").read_text(encoding="utf-8")
+    )
 
 
 def test_force_2d_option_is_removed(tmp_path: Path) -> None:
@@ -77,7 +81,7 @@ def test_force_2d_option_is_removed(tmp_path: Path) -> None:
             [
                 "--project",
                 str(_fixture(tmp_path)),
-                "--output-directory",
+                "--work-directory",
                 str(tmp_path / "out"),
                 "--evidence",
                 str(tmp_path / "evidence.json"),
@@ -92,7 +96,7 @@ def test_main_exports_femm_backend(tmp_path: Path) -> None:
     exit_code = main(
         [
             "--project", str(_fixture(tmp_path)),
-            "--output-directory", str(tmp_path / "out"),
+            "--work-directory", str(tmp_path / "out"),
             "--evidence", str(evidence),
             "--backend", "femm",
         ],
@@ -112,7 +116,7 @@ def test_no_analyze_option_is_removed(tmp_path: Path) -> None:
             [
                 "--project",
                 str(_fixture(tmp_path)),
-                "--output-directory",
+                "--work-directory",
                 str(tmp_path / "out"),
                 "--evidence",
                 str(tmp_path / "evidence.json"),
@@ -122,3 +126,39 @@ def test_no_analyze_option_is_removed(tmp_path: Path) -> None:
             ],
             femm_solver=RecordingFemmSolver(),
         )
+
+
+def test_the_run_lands_beside_the_project_document(tmp_path: Path) -> None:
+    project_directory = tmp_path / "project"
+    project_directory.mkdir()
+    project_path = project_directory / "sample.inductor.json"
+    ProjectRepository(SchemaRepository(ROOT / "schemas")).save(
+        project_for_runs(),
+        project_path,
+    )
+    work_directory = tmp_path / "work"
+    evidence = work_directory / "generation-manifest.json"
+
+    exit_code = main(
+        [
+            "--project",
+            str(project_path),
+            "--work-directory",
+            str(work_directory),
+            "--evidence",
+            str(evidence),
+        ],
+        exporter=RecordingMaxwell2dExporter(),
+    )
+
+    assert exit_code == 0
+    runs = sorted((project_directory / "runs").iterdir())
+    assert len(runs) == 1
+    assert runs[0].name.endswith("-maxwell-2d")
+    manifest_path = runs[0] / "run-manifest.json"
+    assert manifest_path.is_file()
+    assert evidence.is_file()
+    assert json.loads(evidence.read_text(encoding="utf-8")) == json.loads(
+        manifest_path.read_text(encoding="utf-8")
+    )
+    assert not (work_directory / "runs").exists()

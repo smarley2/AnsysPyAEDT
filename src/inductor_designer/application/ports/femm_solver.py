@@ -16,6 +16,7 @@ class FemmSolveRequest:
     output_directory: Path
     project_name: str
     analyze: bool
+    show_window: bool = False
 
 
 @dataclass(frozen=True, slots=True)

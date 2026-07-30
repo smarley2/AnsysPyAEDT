@@ -22,11 +22,15 @@ from inductor_designer.application.services.maxwell_export import (  # noqa: E40
     RunGenerationFailed,
     generate_run,
 )
+from inductor_designer.application.services.project_run import (  # noqa: E402
+    start_project_run,
+)
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease  # noqa: E402
 from inductor_designer.simulation.run_contracts import (  # noqa: E402
     RunBackend,
     RunMode,
     RunRequest,
+    RunStatus,
 )
 from inductor_designer.ui.generation_controller import (  # noqa: E402
     CurrentProjectProvider,
@@ -151,6 +155,90 @@ def test_generate_retains_failed_manifest_from_runner_result(tmp_path: Path) -> 
     assert controller.failed_manifest is failed_manifest
 
 
+def test_generate_captures_project_run_failed_raised_by_runner(tmp_path: Path) -> None:
+    """A runner that raises ProjectRunFailed directly (not just returns it via
+
+    GenerationResult) must still surface failed_manifest and run_directory
+    instead of falling through to the generic exception handler and losing
+    them.
+    """
+    app = QGuiApplication.instance() or QGuiApplication([])
+
+    class _RaisingMaxwell3dExporter(RecordingMaxwell3dExporter):
+        def export(self, request: object) -> object:  # type: ignore[override]
+            raise RuntimeError("UI adapter failed")
+
+    project_document = tmp_path / "boost.inductor.json"
+    project_document.write_text("{}", encoding="utf-8")
+
+    def failing_runner(_backend_label: str) -> tuple[str, ...]:
+        start_project_run(
+            project_for_runs(),
+            project_document,
+            RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_ONLY),
+            CATALOG,
+            CAPABILITIES,
+            maxwell3d_exporter=_RaisingMaxwell3dExporter(),
+            maxwell2d_exporter=RecordingMaxwell2dExporter(),
+            femm_solver=RecordingFemmSolver(),
+            application_version="ui-test",
+        )
+        raise AssertionError("start_project_run must have raised ProjectRunFailed")
+
+    controller = GenerationController(failing_runner)
+    controller.generate("Maxwell 3D")
+    _wait_until_idle(app, controller)
+
+    assert controller.busy is False
+    assert controller.failed_manifest is not None
+    assert controller.failed_manifest.status is RunStatus.FAILED
+    assert controller.last_run_directory is not None
+    assert controller.last_run_directory.name.endswith("-maxwell-3d")
+    assert any("UI adapter failed" in line for line in controller.lines)
+
+
+def test_generate_captures_run_directory_and_generated_file(tmp_path: Path) -> None:
+    from inductor_designer.ui.generation_lines import GenerationResult
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    run_dir = tmp_path / "run_output"
+    generated_file = tmp_path / "output.aedt"
+
+    results = [
+        GenerationResult(
+            lines=("step 1: ok", "step 2: ok"),
+            run_directory=run_dir,
+            generated_file=generated_file,
+        ),
+        GenerationResult(
+            lines=("completed",),
+        ),
+    ]
+    call_count: list[int] = [0]
+
+    def runner(backend_label: str) -> GenerationResult:
+        result = results[call_count[0]]
+        call_count[0] += 1
+        return result
+
+    controller = GenerationController(runner)
+    assert controller.last_run_directory is None
+    assert controller.last_generated_file is None
+
+    controller.generate("Maxwell 3D")
+    _wait_until_idle(app, controller)
+
+    assert controller.last_run_directory == run_dir
+    assert controller.last_generated_file == generated_file
+
+    # Subsequent generate() call must reset them (no leakage of stale values)
+    controller.generate("FEMM 2D")
+    _wait_until_idle(app, controller)
+
+    assert controller.last_run_directory is None
+    assert controller.last_generated_file is None
+
+
 def test_project_provider_publishes_only_after_persistence_succeeds() -> None:
     original = make_project()
     updated = replace(original, name="updated")
@@ -183,6 +271,7 @@ def test_generation_uses_current_project_and_fixed_supported_environment(
     provider = CurrentProjectProvider(original)
     capability_calls: list[tuple[AedtRelease, AedtEdition]] = []
     generation_calls: list[tuple[object, object]] = []
+    project_document_path = Path("project.inductor.json")
 
     class Matrix:
         def snapshot_for(
@@ -202,16 +291,18 @@ def test_generation_uses_current_project_and_fixed_supported_environment(
     def record_generation(
         _backend: object,
         project: object,
+        document_path: object,
         _catalog: object,
         _capabilities: object,
-        output_directory: object,
         **_adapters: object,
     ) -> tuple[str, ...]:
-        generation_calls.append((project, output_directory))
+        generation_calls.append((project, document_path))
         return ("done",)
 
     monkeypatch.setattr(generation_lines, "run_generation", record_generation)
-    controller = _build_generation_controller(provider, object(), object())  # type: ignore[arg-type]
+    controller = _build_generation_controller(
+        provider, object(), object(), project_document_path  # type: ignore[arg-type]
+    )
     provider.replace(updated)
     app = QGuiApplication.instance() or QGuiApplication([])
 
@@ -220,6 +311,4 @@ def test_generation_uses_current_project_and_fixed_supported_environment(
 
     assert capability_calls == [(SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION)]
     assert generation_calls[0][0] is updated
-    assert generation_calls[0][1] == (
-        Path("artifacts") / "studio" / "provider_changed_project"
-    )
+    assert generation_calls[0][1] is project_document_path
