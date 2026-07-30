@@ -355,11 +355,11 @@ from inductor_designer.simulation.preliminary_contracts import (
 )
 
 
-def _operating_point(*windings: WindingOperatingPoint) -> OperatingPoint:
+def make_operating_point(*windings: WindingOperatingPoint) -> OperatingPoint:
     return OperatingPoint(frequency_hz=100_000.0, windings=windings)
 
 
-def _winding(
+def make_winding(
     winding_id: str,
     *,
     ac_rms: float = 0.0,
@@ -378,7 +378,7 @@ def _winding(
 
 def test_single_winding_ac_peak_uses_sqrt_two_times_rms() -> None:
     result = field_strengths(
-        _operating_point(_winding("w1", ac_rms=2.0)),
+        make_operating_point(make_winding("w1", ac_rms=2.0)),
         {"w1": 10},
         path_length_m=0.1,
     )
@@ -393,14 +393,14 @@ def test_single_winding_ac_peak_uses_sqrt_two_times_rms() -> None:
 
 def test_in_phase_windings_add_and_reverse_direction_subtracts() -> None:
     same = field_strengths(
-        _operating_point(_winding("w1", ac_rms=1.0), _winding("w2", ac_rms=1.0)),
+        make_operating_point(make_winding("w1", ac_rms=1.0), make_winding("w2", ac_rms=1.0)),
         {"w1": 10, "w2": 10},
         path_length_m=0.1,
     )
     opposed = field_strengths(
-        _operating_point(
-            _winding("w1", ac_rms=1.0),
-            _winding("w2", ac_rms=1.0, direction=CurrentDirection.REVERSE),
+        make_operating_point(
+            make_winding("w1", ac_rms=1.0),
+            make_winding("w2", ac_rms=1.0, direction=CurrentDirection.REVERSE),
         ),
         {"w1": 10, "w2": 10},
         path_length_m=0.1,
@@ -414,9 +414,9 @@ def test_in_phase_windings_add_and_reverse_direction_subtracts() -> None:
 
 def test_quadrature_phases_combine_as_phasors_not_magnitudes() -> None:
     result = field_strengths(
-        _operating_point(
-            _winding("w1", ac_rms=1.0, phase_deg=0.0),
-            _winding("w2", ac_rms=1.0, phase_deg=90.0),
+        make_operating_point(
+            make_winding("w1", ac_rms=1.0, phase_deg=0.0),
+            make_winding("w2", ac_rms=1.0, phase_deg=90.0),
         ),
         {"w1": 10, "w2": 10},
         path_length_m=0.1,
@@ -429,7 +429,7 @@ def test_quadrature_phases_combine_as_phasors_not_magnitudes() -> None:
 
 def test_dc_ampere_turns_are_summed_separately_and_shift_the_window() -> None:
     result = field_strengths(
-        _operating_point(_winding("w1", ac_rms=1.0, dc=5.0)),
+        make_operating_point(make_winding("w1", ac_rms=1.0, dc=5.0)),
         {"w1": 10},
         path_length_m=0.1,
     )
@@ -446,8 +446,8 @@ def test_dc_ampere_turns_are_summed_separately_and_shift_the_window() -> None:
 
 def test_reverse_direction_flips_the_dc_contribution() -> None:
     result = field_strengths(
-        _operating_point(
-            _winding("w1", dc=5.0, direction=CurrentDirection.REVERSE)
+        make_operating_point(
+            make_winding("w1", dc=5.0, direction=CurrentDirection.REVERSE)
         ),
         {"w1": 10},
         path_length_m=0.1,
@@ -459,7 +459,7 @@ def test_reverse_direction_flips_the_dc_contribution() -> None:
 
 def test_non_positive_path_length_is_a_diagnostic_not_a_crash() -> None:
     result = field_strengths(
-        _operating_point(_winding("w1", ac_rms=1.0)),
+        make_operating_point(make_winding("w1", ac_rms=1.0)),
         {"w1": 10},
         path_length_m=0.0,
     )
@@ -470,7 +470,7 @@ def test_non_positive_path_length_is_a_diagnostic_not_a_crash() -> None:
 
 def test_a_winding_without_a_turn_count_contributes_nothing() -> None:
     result = field_strengths(
-        _operating_point(_winding("w1", ac_rms=1.0), _winding("w2", ac_rms=1.0)),
+        make_operating_point(make_winding("w1", ac_rms=1.0), make_winding("w2", ac_rms=1.0)),
         {"w1": 10},
         path_length_m=0.1,
     )
@@ -634,7 +634,7 @@ from inductor_designer.simulation.magnetic_estimate import (
 MU_0 = 4e-7 * math.pi
 
 
-def _bh_series(
+def make_bh_series(
     series_id: str = "bh-25c",
     temperature_c: float | None = 25.0,
     points: tuple[tuple[float, float], ...] = ((0.0, 0.0), (100.0, 0.5), (200.0, 0.8)),
@@ -652,7 +652,7 @@ def _bh_series(
     )
 
 
-def _selection(
+def make_material_selection(
     *,
     series: tuple[PointSeries, ...] = (),
     relative_permeability: float | None = None,
@@ -691,7 +691,7 @@ def _selection(
     )
 
 
-def _fields(h_dc: float, h_ac_peak: float) -> FieldStrengths:
+def make_field_strengths(h_dc: float, h_ac_peak: float) -> FieldStrengths:
     return FieldStrengths(
         h_ac_peak_a_per_m=h_ac_peak,
         h_dc_a_per_m=h_dc,
@@ -702,8 +702,8 @@ def _fields(h_dc: float, h_ac_peak: float) -> FieldStrengths:
 
 def test_bh_series_interpolates_linearly_inside_the_recorded_range() -> None:
     result = flux_densities(
-        _selection(series=(_bh_series(),), bh_series_id="bh-25c"),
-        _fields(h_dc=50.0, h_ac_peak=0.0),
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        make_field_strengths(h_dc=50.0, h_ac_peak=0.0),
         core_temperature_c=25.0,
     )
 
@@ -713,8 +713,8 @@ def test_bh_series_interpolates_linearly_inside_the_recorded_range() -> None:
 
 def test_negative_field_uses_reported_odd_symmetry() -> None:
     result = flux_densities(
-        _selection(series=(_bh_series(),), bh_series_id="bh-25c"),
-        _fields(h_dc=0.0, h_ac_peak=100.0),
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        make_field_strengths(h_dc=0.0, h_ac_peak=100.0),
         core_temperature_c=25.0,
     )
 
@@ -728,8 +728,8 @@ def test_negative_field_uses_reported_odd_symmetry() -> None:
 
 def test_field_beyond_the_recorded_range_is_not_extrapolated() -> None:
     result = flux_densities(
-        _selection(series=(_bh_series(),), bh_series_id="bh-25c"),
-        _fields(h_dc=0.0, h_ac_peak=250.0),
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        make_field_strengths(h_dc=0.0, h_ac_peak=250.0),
         core_temperature_c=25.0,
     )
 
@@ -740,8 +740,8 @@ def test_field_beyond_the_recorded_range_is_not_extrapolated() -> None:
 
 def test_temperature_mismatch_names_the_available_temperatures() -> None:
     result = flux_densities(
-        _selection(series=(_bh_series(temperature_c=25.0),), bh_series_id="bh-25c"),
-        _fields(h_dc=50.0, h_ac_peak=0.0),
+        make_material_selection(series=(make_bh_series(temperature_c=25.0),), bh_series_id="bh-25c"),
+        make_field_strengths(h_dc=50.0, h_ac_peak=0.0),
         core_temperature_c=80.0,
     )
 
@@ -753,8 +753,8 @@ def test_temperature_mismatch_names_the_available_temperatures() -> None:
 
 def test_linear_permeability_fallback_is_labelled() -> None:
     result = flux_densities(
-        _selection(relative_permeability=60.0),
-        _fields(h_dc=1000.0, h_ac_peak=0.0),
+        make_material_selection(relative_permeability=60.0),
+        make_field_strengths(h_dc=1000.0, h_ac_peak=0.0),
         core_temperature_c=25.0,
     )
 
@@ -765,8 +765,8 @@ def test_linear_permeability_fallback_is_labelled() -> None:
 
 def test_no_model_at_all_is_unavailable() -> None:
     result = flux_densities(
-        _selection(),
-        _fields(h_dc=1000.0, h_ac_peak=0.0),
+        make_material_selection(),
+        make_field_strengths(h_dc=1000.0, h_ac_peak=0.0),
         core_temperature_c=25.0,
     )
 
@@ -826,7 +826,7 @@ def _interpolate(series: PointSeries, h: float) -> float | None:
     return sign * points[-1].y
 
 
-def _selected_bh_series(
+def _select_bh_series(
     selection: MaterialRevisionSelection, core_temperature_c: float
 ) -> PointSeries | None:
     candidates = [
@@ -847,7 +847,7 @@ def flux_densities(
     core_temperature_c: float,
 ) -> FluxDensities | PreliminaryValue:
     """Map H to B using recorded B-H data, else a labelled linear approximation."""
-    bh_series = _selected_bh_series(selection, core_temperature_c)
+    bh_series = _select_bh_series(selection, core_temperature_c)
     if bh_series is not None:
         mapped: list[float] = []
         for h in (fields.h_min_a_per_m, fields.h_dc_a_per_m, fields.h_max_a_per_m):
@@ -1321,7 +1321,7 @@ from inductor_designer.simulation.preliminary_contracts import (
     DiagnosticCode,
     ResultState,
 )
-from tests.unit.simulation.test_magnetic_estimate import _selection
+from tests.unit.simulation.test_magnetic_estimate import make_material_selection
 from inductor_designer.materials.records import (
     CurveConditions,
     CurvePoint,
@@ -1331,7 +1331,7 @@ from inductor_designer.materials.records import (
 )
 
 
-def _loss_series(
+def make_loss_series(
     series_id: str = "loss-100khz",
     frequency_hz: float | None = 100_000.0,
     temperature_c: float | None = 25.0,
@@ -1355,7 +1355,7 @@ def _loss_series(
 
 def test_loss_table_is_preferred_and_interpolated_inside_its_range() -> None:
     result = core_loss_w(
-        _selection(series=(_loss_series(),)),
+        make_material_selection(series=(make_loss_series(),)),
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
         core_temperature_c=25.0,
@@ -1370,7 +1370,7 @@ def test_loss_table_is_preferred_and_interpolated_inside_its_range() -> None:
 
 def test_flux_beyond_the_loss_table_range_is_not_extrapolated() -> None:
     result = core_loss_w(
-        _selection(series=(_loss_series(),)),
+        make_material_selection(series=(make_loss_series(),)),
         b_ac_peak_t=0.5,
         frequency_hz=100_000.0,
         core_temperature_c=25.0,
@@ -1383,7 +1383,7 @@ def test_flux_beyond_the_loss_table_range_is_not_extrapolated() -> None:
 
 def test_temperature_mismatch_names_the_recorded_temperatures() -> None:
     result = core_loss_w(
-        _selection(series=(_loss_series(temperature_c=25.0),)),
+        make_material_selection(series=(make_loss_series(temperature_c=25.0),)),
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
         core_temperature_c=80.0,
@@ -1397,7 +1397,7 @@ def test_temperature_mismatch_names_the_recorded_temperatures() -> None:
 
 def test_nonzero_dc_bias_without_supporting_data_is_unavailable() -> None:
     result = core_loss_w(
-        _selection(series=(_loss_series(dc_bias_a_per_m=0.0),)),
+        make_material_selection(series=(make_loss_series(dc_bias_a_per_m=0.0),)),
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
         core_temperature_c=25.0,
@@ -1410,7 +1410,7 @@ def test_nonzero_dc_bias_without_supporting_data_is_unavailable() -> None:
 
 
 def test_steinmetz_fit_is_used_when_no_table_matches_the_frequency() -> None:
-    selection = _selection(series=(_loss_series(frequency_hz=50_000.0),))
+    selection = make_material_selection(series=(make_loss_series(frequency_hz=50_000.0),))
     fitted = replace_steinmetz(selection, SteinmetzFit(2.0, 1.5, 2.0, 0.0, 0.0))
 
     result = core_loss_w(
@@ -1429,7 +1429,7 @@ def test_steinmetz_fit_is_used_when_no_table_matches_the_frequency() -> None:
 
 
 def test_frequency_outside_the_fit_envelope_is_refused() -> None:
-    selection = _selection(series=(_loss_series(frequency_hz=100_000.0),))
+    selection = make_material_selection(series=(make_loss_series(frequency_hz=100_000.0),))
     fitted = replace_steinmetz(selection, SteinmetzFit(2.0, 1.5, 2.0, 0.0, 0.0))
 
     result = core_loss_w(
@@ -1446,7 +1446,7 @@ def test_frequency_outside_the_fit_envelope_is_refused() -> None:
 
 def test_no_loss_model_at_all_is_unavailable() -> None:
     result = core_loss_w(
-        _selection(),
+        make_material_selection(),
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
         core_temperature_c=25.0,
@@ -1458,7 +1458,7 @@ def test_no_loss_model_at_all_is_unavailable() -> None:
 
 
 def test_non_positive_frequency_and_volume_are_refused() -> None:
-    selection = _selection(series=(_loss_series(),))
+    selection = make_material_selection(series=(make_loss_series(),))
 
     zero_frequency = core_loss_w(
         selection, 0.075, 0.0, 25.0, 0.0, 5.34e-6
@@ -1805,7 +1805,7 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import CurrentDirection, WindingDefinition
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
-from tests.unit.simulation.test_magnetic_estimate import _bh_series, _selection
+from tests.unit.simulation.test_magnetic_estimate import make_bh_series, make_material_selection
 
 
 @pytest.fixture
@@ -1816,7 +1816,7 @@ def sample_request() -> PreliminaryRequest:
     so flux density is Estimated. No loss series is present, so core loss is
     Unavailable — the tests that need core loss add a series explicitly.
     """
-    selection = _selection(series=(_bh_series(),), bh_series_id="bh-25c")
+    selection = make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c")
     core_record = CoreRecord(
         part_number="C058071A2",
         manufacturer="Magnetics",
@@ -2029,7 +2029,7 @@ def _core_estimates(
     )
 
 
-def _winding_row(request: PreliminaryRequest, winding_id: str) -> WindingPreliminary:
+def make_winding_row(request: PreliminaryRequest, winding_id: str) -> WindingPreliminary:
     conductor = request.conductors_by_winding.get(winding_id)
     if conductor is None:
         reason = unavailable(
@@ -2233,6 +2233,7 @@ shipped data rather than a fixture:
 ```python
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -2352,16 +2353,37 @@ def test_preliminary_estimates_reproduce_without_qt_maxwell_or_femm(
     )
     assert result.totals.total_wire_loss.state is ResultState.ESTIMATED
     assert result.totals.total_loss.code == DiagnosticCode.TOTAL_LOSS_INCOMPLETE
-    assert result.material_revision_id == revision_for_assertions(result)
-    # The estimator itself must not drag in Qt or a solver.
-    for forbidden in ("PySide6", "ansys.aedt.core", "femm"):
-        assert forbidden not in sys.modules
+    assert result.material_revision_id == repository_revision()
 
 
-def revision_for_assertions(result: object) -> str:
+def repository_revision() -> str:
     """The pinned revision is whatever the overlay currently holds."""
-    repository = FileOverlayMaterialRepository(ROOT / "materials-overlay")
-    return repository.list_revisions(REF)[0]
+    return FileOverlayMaterialRepository(ROOT / "materials-overlay").list_revisions(REF)[0]
+
+
+def test_the_estimator_imports_no_qt_and_no_solver() -> None:
+    """Specification section 5 boundary, checked in a clean interpreter.
+
+    Asserting on sys.modules inside the suite would only report what earlier
+    tests imported, so this runs a fresh interpreter that imports the estimator
+    and nothing else.
+    """
+    probe = (
+        "import sys;"
+        "import inductor_designer.simulation.preliminary;"
+        "leaked=[name for name in sys.modules"
+        " if name.split('.')[0] in {'PySide6', 'ansys', 'femm', 'sqlite3'}];"
+        "print(leaked)"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=ROOT,
+    )
+
+    assert completed.stdout.strip() == "[]", completed.stdout
 ```
 
 Confirm the catalog accessor names before writing this file; `core(...)` and
@@ -2374,9 +2396,8 @@ Confirm the catalog accessor names before writing this file; `core(...)` and
 - [ ] **Step 2: Run it and verify it passes**
 
 Run: `.venv/Scripts/python.exe -m pytest tests/integration/test_preliminary_estimator.py -q`
-Expected: `1 passed`. If `PySide6` is already imported by an earlier test in the
-same session, run this file alone — the assertion is about the estimator's own
-imports.
+Expected: `2 passed`. The boundary test spawns a clean interpreter, so it does
+not depend on what the rest of the suite imported.
 
 - [ ] **Step 3: Run the complete gate set**
 

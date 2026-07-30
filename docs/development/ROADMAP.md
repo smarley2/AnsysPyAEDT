@@ -535,6 +535,47 @@ Detailed requirements and physical assumptions:
 Run artifact and solver visibility decision:
 [ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md).
 
+## Milestone 7a: Solver-independent preliminary estimator
+
+M7 is split into three independently testable plans (M7a/M7b/M7c); see the
+[implementation-plan index](../superpowers/plans/README.md) for the split
+rationale. This section records only the first slice.
+
+- Compute B (DC, min, max, AC peak, peak magnitude), current density
+  (`J_AC_RMS`, `J_AC_peak`, `J_DC`), DC-resistance wire loss, and B-H/loss-table
+  or Steinmetz-fallback core loss, each as one independently reported quantity.
+- Refuse core loss under DC bias when the material's loss data was recorded
+  only at zero bias, instead of interpolating or extrapolating a correction.
+- Keep the estimator free of Qt, PyAEDT, FEMM, and SQLite: it consumes already
+  resolved catalog and material records rather than repositories.
+- Report every unavailable quantity with a stable diagnostic code and English
+  text; never omit a quantity silently.
+
+Exit criterion: the estimator reproduces traceable estimates for the real
+shipped material overlay revision (`Magnetics / High Flux / 60`) and the real
+core catalog record (`C058071A2`) with 5 A DC per winding, correctly refusing
+core loss for that DC bias because the material's loss series was recorded
+only at 0 A/m, and a clean-interpreter import of the estimator module pulls in
+none of `PySide6`, `ansys`, `femm`, or `sqlite3`.
+
+### Current state
+
+Milestone 7a is **implementation complete as of 2026-07-29 and awaiting
+acceptance**. The final whole-branch review and Fabio Posser's sign-off are
+outstanding; only he accepts a milestone. Evidence gathered so far is
+`tests/integration/test_preliminary_estimator.py`, run against the real
+`materials-overlay` revision and the real `catalog/` record with no fixture
+substitution. The full non-solver suite passed 876 tests (874 recorded before
+this change, plus the 2 new exit-criterion tests) and the offscreen UI suite
+passed its recorded 37 tests; `ruff check .`, `mypy src tools`, and
+`tools/check_architecture.py` all passed with no changes to production code.
+No live AEDT or FEMM solver was used or required.
+
+M7b (project-local run artifacts implementing
+[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md))
+is the next plan to write. M7 as a whole is not yet accepted; only this M7a
+slice is.
+
 ## Milestone 8: Simulation and Results
 
 - Execute one Operating Point in Maxwell 3D, Maxwell 2D, and FEMM.

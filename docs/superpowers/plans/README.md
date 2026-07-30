@@ -31,10 +31,15 @@ before the next plan freezes assumptions that depend on it.
   covers three independently testable subsystems and one combined plan would
   gate a whole milestone behind a single review. Requirements are unchanged; only
   the delivery order is:
-  - **M7a**, active:
+  - **M7a**, implementation complete on branch `m7a/preliminary-estimator`:
     [solver-independent preliminary estimator](2026-07-29-m7a-preliminary-estimator.md)
-    — specification sections 5–8, no Qt and no solver.
-  - **M7b**, not yet written: project-local run artifacts implementing
+    — specification sections 5–8, no Qt and no solver. All eight tasks are
+    implemented and reviewed. Exit criterion proven against the real shipped
+    overlay revision `94e880a99b98` and core `C058071A2`: 876 non-solver tests
+    pass, no live solver was required, and the estimator's import isolation is
+    verified in a clean interpreter. Awaiting the final whole-branch review and
+    Fabio Posser's acceptance.
+  - **M7b**, next plan to write: project-local run artifacts implementing
     [ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)
     — `runs/<run-id>-<backend>/`, background generation by default, optional
     solver-window visibility, post-generation open actions.
