@@ -39,9 +39,8 @@ before the next plan freezes assumptions that depend on it.
     `C058071A2`, with 889 non-solver and 37 UI tests passing on the merged
     result, import isolation verified in a clean interpreter, and no live solver
     required.
-  - **M7b implementation is complete** on branch
-    `m7b/project-local-run-artifacts`, awaiting Fabio Posser's review and
-    acceptance; it is **not yet accepted**:
+  - **M7b, accepted by Fabio Posser on 2026-07-30** and squash-merged to `main`
+    as `67ac851` after live AEDT and FEMM verification:
     [2026-07-30 M7b project-local run artifacts](2026-07-30-m7b-project-local-run-artifacts.md)
     implementing
     [ADR 0007](../../adr/0007-project-local-run-artifacts-and-solver-visibility.md)

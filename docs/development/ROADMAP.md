@@ -627,9 +627,19 @@ Detailed task-by-task plan and evidence:
 
 ### Current state
 
-M7b implementation is complete on branch `m7b/project-local-run-artifacts`
-and is awaiting Fabio Posser's review and acceptance; it is **not yet
-accepted**.
+**M7b was accepted by Fabio Posser on 2026-07-30** and squash-merged to `main`
+as `67ac851`.
+
+Live acceptance evidence on AEDT 2025 R2 Commercial: three consecutive FEMM
+runs and two Maxwell 3D runs each took their own `runs/<run-id>-<backend>/`
+directory without disturbing an earlier one; every manifest recorded a
+project-relative `runs/...` artifact path, an empty reserved `results/`, and a
+run id equal to its directory name; all fifteen Maxwell 3D stages passed
+including `Design validation passed` with DC applied to both windings; a run
+blocked before any adapter wrote left no directory behind; the `-Graphical`
+run showed the AEDT window and still succeeded, while the default run logged
+`Non-graphical mode detected`; and the M5a live material suite (Maxwell 3D,
+Maxwell 2D, FEMM) passed in 85 s.
 
 Every Guided Studio screen remains M7c work, including the `Show solver
 window` control and the `Open generated file` / `Open run folder` buttons
@@ -638,7 +648,7 @@ delivered. M7c has no detailed plan yet. `results/` population and Generate
 and Solve remain M8 work; M7b reserves an empty `results/` directory but never
 writes into it.
 
-M7 as a whole is not yet accepted; only the M7a slice is.
+M7a and M7b are both accepted. M7 as a whole is not complete until M7c ships.
 
 ## Milestone 8: Simulation and Results
 
