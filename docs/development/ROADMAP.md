@@ -560,16 +560,35 @@ none of `PySide6`, `ansys`, `femm`, or `sqlite3`.
 
 ### Current state
 
-Milestone 7a is **implementation complete as of 2026-07-29 and awaiting
-acceptance**. The final whole-branch review and Fabio Posser's sign-off are
-outstanding; only he accepts a milestone. Evidence gathered so far is
+Milestone 7a is **accepted as of 2026-07-29 (Fabio Posser)**, squash-merged to
+`main` as `4f56e41`. Acceptance evidence is
 `tests/integration/test_preliminary_estimator.py`, run against the real
-`materials-overlay` revision and the real `catalog/` record with no fixture
-substitution. The full non-solver suite passed 876 tests (874 recorded before
-this change, plus the 2 new exit-criterion tests) and the offscreen UI suite
-passed its recorded 37 tests; `ruff check .`, `mypy src tools`, and
-`tools/check_architecture.py` all passed with no changes to production code.
-No live AEDT or FEMM solver was used or required.
+`materials-overlay` revision `94e880a99b98` and the real `catalog/` record
+`C058071A2` with no fixture substitution. On the merged result the full
+non-solver suite passed 889 tests and the offscreen UI suite passed 37;
+`ruff check .`, `mypy src tools`, `tools/check_architecture.py` and
+`git diff --check` all passed. No live AEDT or FEMM solver was used or required.
+
+Two whole-branch review waves closed four Critical findings, every one of them a
+defect in the plan rather than in the implementation: a totals rule that
+contradicted the plan's own no-partial-sums constraint; a turn-count parameter
+that duplicated `WindingDefinition.turns` and could silently override the design
+while still reporting an estimate; a Steinmetz fit applied across temperatures it
+was not fitted for; and a temperature diagnostic that offered advice which could
+never succeed.
+
+One in-scope physics decision is worth recording, because it makes core loss
+unavailable more often than a looser reading would. Specification section 8
+requires that every source sample behind a Steinmetz fit support the requested
+temperature and DC-bias condition, but the stored fit pools all recorded loss
+series regardless of condition. The estimator therefore refuses the fit whenever
+any loss series on the record mismatches the request
+(`core_loss.fit_sources_mismatch_condition`). Recording condition provenance on
+`SteinmetzFit` would be a material-schema change and was deliberately not taken.
+
+The remaining M7 work is unstarted: M7b covers project-local run artifacts under
+[ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md) and
+M7c the Guided Studio flow. Neither has a detailed plan yet.
 
 M7b (project-local run artifacts implementing
 [ADR 0007](../adr/0007-project-local-run-artifacts-and-solver-visibility.md))
