@@ -48,6 +48,11 @@ _RUN_BACKENDS = {
 }
 
 
+def run_backend_for(backend: GenerationBackend) -> RunBackend:
+    """The run-contract backend behind a UI backend label."""
+    return _RUN_BACKENDS[backend]
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationResult(Sequence[str]):
     """UI display lines with optional immutable failed-run evidence."""

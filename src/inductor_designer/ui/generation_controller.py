@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -10,8 +11,6 @@ from inductor_designer.application.services.project_run import ProjectRunFailed
 from inductor_designer.ui.generation_lines import GenerationResult
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.simulation.run_contracts import RunManifest
 
@@ -45,7 +44,7 @@ class GenerationController(QObject):
 
     def __init__(
         self,
-        runner: Callable[[str], GenerationResult | Sequence[str]],
+        runner: Callable[[str, bool], GenerationResult | Sequence[str]],
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -78,8 +77,16 @@ class GenerationController(QObject):
     def last_generated_file(self) -> Path | None:
         return self._last_generated_file
 
-    @Slot(str)
-    def generate(self, backend_label: str) -> None:
+    def record_run_evidence(
+        self, run_directory: Path | None, generated_file: Path | None
+    ) -> None:
+        """Publish where the last run landed. Called by the worker, and by tests."""
+        self._last_run_directory = run_directory
+        self._last_generated_file = generated_file
+        self.linesChanged.emit()
+
+    @Slot(str, bool)
+    def generate(self, backend_label: str, show_solver_window: bool = False) -> None:
         if self._busy:
             return
         self._busy = True
@@ -90,7 +97,7 @@ class GenerationController(QObject):
 
         def worker() -> None:
             try:
-                raw_result = self._runner(backend_label)
+                raw_result = self._runner(backend_label, show_solver_window)
                 result = (
                     raw_result
                     if isinstance(raw_result, GenerationResult)
@@ -117,8 +124,7 @@ class GenerationController(QObject):
             finally:
                 self._lines = list(result.lines)
                 self._failed_manifest = result.failed_manifest
-                self._last_run_directory = result.run_directory
-                self._last_generated_file = result.generated_file
+                self.record_run_evidence(result.run_directory, result.generated_file)
                 self._busy = False
                 self.linesChanged.emit()
                 self.busyChanged.emit()

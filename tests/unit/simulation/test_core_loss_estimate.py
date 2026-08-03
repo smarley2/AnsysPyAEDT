@@ -173,6 +173,16 @@ def test_non_positive_frequency_and_volume_are_refused() -> None:
     assert zero_volume.code == DiagnosticCode.CORE_LOSS_NON_POSITIVE_VOLUME
 
 
+def test_non_finite_volume_is_a_diagnostic_not_a_crash() -> None:
+    selection = make_material_selection(series=(make_loss_series(),))
+
+    result = core_loss_w(
+        selection, 0.075, 100_000.0, 25.0, 0.0, float("inf")
+    )
+
+    assert result.code == DiagnosticCode.CORE_LOSS_NON_FINITE_VOLUME
+
+
 def test_flux_beyond_the_fit_envelope_is_not_extrapolated() -> None:
     # Same bounding-frequency setup as the Steinmetz-fit test above (25 kHz and
     # 100 kHz tables, request at 50 kHz so the fit branch is taken), but this

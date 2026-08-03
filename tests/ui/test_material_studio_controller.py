@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -27,15 +27,11 @@ from inductor_designer.application.services.material_drafts import (  # noqa: E4
     save_material_session,
     session_from_import,
 )
-from inductor_designer.domain.project import (  # noqa: E402
-    InductorProject,
-    ManualCoreSelection,
-)
+from inductor_designer.domain.project import MaterialRevisionSelection  # noqa: E402
 from inductor_designer.ui.material_studio_controller import (  # noqa: E402
     MaterialStudioController,
 )
 from tests.fakes.material_repository import InMemoryMaterialRepository  # noqa: E402
-from tests.unit.domain.test_project import make_project  # noqa: E402
 
 _APP = QGuiApplication.instance() or QGuiApplication([])
 _CREATED_AT = "2026-07-19T09:00:00+00:00"
@@ -61,31 +57,20 @@ def _approved_material(
 def _controller(
     repository: InMemoryMaterialRepository,
     *,
-    with_project: bool = True,
-) -> tuple[MaterialStudioController, list[InductorProject]]:
-    saved_projects: list[InductorProject] = []
-    project = make_project()
-    project = replace(
-        project,
-        design=replace(
-            project.design,
-            core=ManualCoreSelection(0.03279, 0.02009, 0.01067, 0.0),
-        ),
-    )
-    controller = MaterialStudioController(
+    pinned_revision: Callable[[], MaterialRevisionSelection | None] | None = None,
+) -> MaterialStudioController:
+    return MaterialStudioController(
         repository,
-        project=project if with_project else None,
-        project_save_callback=saved_projects.append if with_project else None,
+        pinned_revision=pinned_revision,
         now=lambda: "2026-07-19T10:00:00+00:00",
     )
-    return controller, saved_projects
 
 
 @pytest.mark.ui
 def test_library_refresh_and_revision_selection_expose_table_provenance() -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
-    controller, _ = _controller(repository)
+    controller = _controller(repository)
 
     assert controller.materials == [
         {
@@ -113,7 +98,7 @@ def test_import_table_persists_imported_revision_without_dirty_editor_state(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
@@ -133,7 +118,7 @@ def test_curve_points_are_exposed_in_retained_spreadsheet_units(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
@@ -149,7 +134,7 @@ def test_curve_points_are_exposed_in_retained_spreadsheet_units(
 @pytest.mark.ui
 def test_replace_selected_material_replaces_unpinned_imported_revision(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     first_path = tmp_path / "first.csv"
     second_path = tmp_path / "second.csv"
@@ -173,7 +158,7 @@ def test_replace_selected_material_replaces_unpinned_imported_revision(tmp_path:
 @pytest.mark.ui
 def test_replace_selected_material_rejects_identity_mismatch(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     first_path = tmp_path / "first.csv"
     other_path = tmp_path / "other.csv"
@@ -190,28 +175,57 @@ def test_replace_selected_material_rejects_identity_mismatch(tmp_path: Path) -> 
 
 
 @pytest.mark.ui
-def test_delete_selected_material_is_blocked_when_project_pins_revision(
+def test_delete_selected_material_is_blocked_when_revision_is_pinned(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, saved_projects = _controller(repository, with_project=True)
+    pinned_selection: list[MaterialRevisionSelection | None] = [None]
+    controller = _controller(repository, pinned_revision=lambda: pinned_selection[0])
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
 
     controller.importTable(_file_url(source_path))
-    controller.useInProject("bh-25c")
+    ref = controller._selected_ref  # type: ignore[assignment]
+    revision_id = str(controller.selectedRevision["revisionId"])
+    record = repository.get(ref, revision_id)
+    pinned_selection[0] = MaterialRevisionSelection(
+        ref=record.ref,
+        revision_id=record.revision_id,
+        snapshot=record,
+        bh_series_id="bh-25c",
+    )
+
     controller.deleteSelectedMaterial()
 
-    assert saved_projects
+    assert repository.get(ref, revision_id) == record
     assert "pinned" in controller.statusMessage
     assert controller.materials
 
 
 @pytest.mark.ui
+def test_delete_selected_material_removes_it_when_nothing_is_pinned(
+    tmp_path: Path,
+) -> None:
+    repository = InMemoryMaterialRepository()
+    controller = _controller(repository, pinned_revision=lambda: None)
+    template = material_import_template("csv")
+    source_path = tmp_path / template.filename
+    source_path.write_bytes(template.data)
+
+    controller.importTable(_file_url(source_path))
+    ref = controller._selected_ref  # type: ignore[assignment]
+
+    controller.deleteSelectedMaterial()
+
+    assert repository.list_revisions(ref) == ()
+    assert not controller.materials
+
+
+@pytest.mark.ui
 def test_imported_material_does_not_allow_direct_point_mutation(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
@@ -229,7 +243,7 @@ def test_import_table_is_immediately_persisted_and_has_no_lifecycle_actions(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
@@ -246,7 +260,7 @@ def test_import_table_is_immediately_persisted_and_has_no_lifecycle_actions(
 def test_approved_material_revision_is_read_only_in_material_studio() -> None:
     repository = InMemoryMaterialRepository()
     approved = _approved_material(repository)
-    controller, _ = _controller(repository)
+    controller = _controller(repository)
     controller.selectMaterial("Example Magnetics", "Synthetic Ferrite", "F1")
     controller.selectRevision(approved.record.revision_id)
     original = deepcopy(approved.record)
@@ -265,7 +279,7 @@ def test_imported_material_rejects_series_metadata_and_series_editing(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("csv")
     source_path = tmp_path / template.filename
     source_path.write_bytes(template.data)
@@ -303,7 +317,7 @@ def test_table_template_actions_accept_local_csv_and_reject_non_file_urls(
     tmp_path: Path,
 ) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     destination = tmp_path / "template.csv"
 
     controller.downloadTemplate("csv", _file_url(destination))
@@ -317,7 +331,7 @@ def test_table_template_actions_accept_local_csv_and_reject_non_file_urls(
 @pytest.mark.ui
 def test_exported_material_workbook_round_trips_all_series(tmp_path: Path) -> None:
     repository = InMemoryMaterialRepository()
-    controller, _ = _controller(repository, with_project=False)
+    controller = _controller(repository)
     template = material_import_template("xlsx")
     source = tmp_path / template.filename
     source.write_bytes(template.data)
@@ -333,19 +347,3 @@ def test_exported_material_workbook_round_trips_all_series(tmp_path: Path) -> No
     )
 
     assert [item.series_id for item in imported.record.series] == expected_ids
-
-
-@pytest.mark.ui
-def test_approved_bh_series_can_be_pinned_to_project() -> None:
-    repository = InMemoryMaterialRepository()
-    approved = _approved_material(repository)
-    controller, saved_projects = _controller(repository)
-    controller.selectMaterial("Example Magnetics", "Synthetic Ferrite", "F1")
-    controller.selectRevision(approved.record.revision_id)
-
-    controller.useInProject("bh-25c")
-
-    assert len(saved_projects) == 1
-    selection = saved_projects[0].design.core_material
-    assert selection is not None
-    assert selection.bh_series_id == "bh-25c"

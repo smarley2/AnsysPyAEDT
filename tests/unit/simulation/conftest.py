@@ -26,6 +26,7 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
+from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
 from tests.unit.simulation.test_magnetic_estimate import make_bh_series, make_material_selection
 
 
@@ -129,7 +130,10 @@ def sample_request() -> PreliminaryRequest:
     )
     return PreliminaryRequest(
         project=project,
-        core_record=core_record,
+        core=CoreMagneticProperties(
+            path_length_m=core_record.path_length_m,
+            volume_m3=core_record.volume_m3,
+        ),
         conductors_by_winding={"w1": conductor, "w2": conductor},
         packings_by_winding={
             winding_id: PackedWinding(

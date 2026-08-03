@@ -10,13 +10,15 @@ if TYPE_CHECKING:
     from PySide6.QtQml import QQmlApplicationEngine
 
     from inductor_designer.domain.project import InductorProject
-    from inductor_designer.ui.generation_controller import (
-        CurrentProjectProvider,
-        GenerationController,
-    )
+    from inductor_designer.ui.core_material_controller import CoreMaterialController
+    from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.guided_studio_controller import GuidedStudioController
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
+    from inductor_designer.ui.preliminary_controller import PreliminaryController
     from inductor_designer.ui.preview_geometry import PreviewEntry
+    from inductor_designer.ui.project_session import ProjectSession
+    from inductor_designer.ui.review_controller import ReviewController
+    from inductor_designer.ui.simulation_controller import SimulationController
 
 _DEFAULT_CATALOG = Path("artifacts/catalog/catalog.sqlite")
 _DEFAULT_SCHEMAS = Path("schemas")
@@ -35,6 +37,11 @@ def create_engine(
     backend_choices: list[str] | None = None,
     material_studio_controller: MaterialStudioController | None = None,
     guided_studio_controller: GuidedStudioController | None = None,
+    project_session: ProjectSession | None = None,
+    core_material_controller: CoreMaterialController | None = None,
+    preliminary_controller: PreliminaryController | None = None,
+    simulation_controller: SimulationController | None = None,
+    review_controller: ReviewController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -49,6 +56,11 @@ def create_engine(
     engine.rootContext().setContextProperty(
         "materialStudioController", material_studio_controller
     )
+    engine.rootContext().setContextProperty("projectSession", project_session)
+    engine.rootContext().setContextProperty("coreMaterialController", core_material_controller)
+    engine.rootContext().setContextProperty("preliminaryController", preliminary_controller)
+    engine.rootContext().setContextProperty("simulationController", simulation_controller)
+    engine.rootContext().setContextProperty("reviewController", review_controller)
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -78,7 +90,7 @@ def _load_simulation_summary(project: InductorProject) -> list[str]:
 
 
 def _build_generation_controller(
-    project_provider: CurrentProjectProvider,
+    session: ProjectSession,
     catalog_path: Path,
     matrix_path: Path,
     project_document_path: Path,
@@ -107,8 +119,8 @@ def _build_generation_controller(
     maxwell2d_exporter = PyaedtMaxwell2dExporter()
     femm_solver = PyfemmSolver()
 
-    def runner(backend_label: str) -> GenerationResult:
-        project = project_provider.current()
+    def runner(backend_label: str, show_solver_window: bool) -> GenerationResult:
+        project = session.project
         capabilities = matrix.snapshot_for(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
@@ -123,19 +135,10 @@ def _build_generation_controller(
             maxwell3d_exporter=maxwell3d_exporter,
             maxwell2d_exporter=maxwell2d_exporter,
             femm_solver=femm_solver,
+            show_solver_window=show_solver_window,
         )
 
     return GenerationController(runner)
-
-
-def _persist_and_publish_project(
-    project: InductorProject,
-    persist: Callable[[InductorProject], None],
-    provider: CurrentProjectProvider,
-) -> None:
-    """Publish a project to same-session consumers only after disk persistence."""
-    persist(project)
-    provider.replace(project)
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -165,7 +168,6 @@ def main() -> int:
     preview_entries: list[PreviewEntry] | None = None
     simulation_summary: list[str] = []
     generation_controller: GenerationController | None = None
-    project_provider: CurrentProjectProvider | None = None
     backend_choices: list[str] = []
     project: InductorProject | None = None
     if args.project is not None:
@@ -189,12 +191,6 @@ def main() -> int:
             for issue in error.issues:
                 print(issue, file=sys.stderr)
             return 3
-        from inductor_designer.ui.generation_controller import CurrentProjectProvider
-
-        project_provider = CurrentProjectProvider(project)
-        generation_controller = _build_generation_controller(
-            project_provider, args.catalog, args.matrix, args.project
-        )
         backend_choices = [backend.value for backend in GenerationBackend]
         print(
             f"Loaded {args.project.name}: {len(preview_entries) - 1} winding(s); opening viewer.",
@@ -217,31 +213,78 @@ def main() -> int:
         project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
 
         def save_project(updated_project: InductorProject) -> None:
-            assert project_provider is not None
-            _persist_and_publish_project(
-                updated_project,
-                lambda value: project_repository.save(value, args.project),
-                project_provider,
-            )
+            project_repository.save(updated_project, args.project)
 
         project_save_callback = save_project
 
+    session: ProjectSession | None = None
+    if project is not None:
+        from inductor_designer.ui.project_session import ProjectSession
+
+        session = ProjectSession(project, args.project, project_save_callback)
+        generation_controller = _build_generation_controller(
+            session, args.catalog, args.matrix, args.project
+        )
+
+    material_repository = FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY)
     material_studio_controller = MaterialStudioController(
-        FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY),
-        project=project,
-        project_save_callback=project_save_callback,
+        material_repository,
+        pinned_revision=(
+            lambda: session.project.design.core_material if session is not None else None
+        ),
     )
 
+    from inductor_designer.adapters.system.path_opener import DesktopPathOpener
+    from inductor_designer.application.services.aedt_support import (
+        SUPPORTED_AEDT_EDITION,
+        SUPPORTED_AEDT_RELEASE,
+    )
+    from inductor_designer.ui.core_material_controller import CoreMaterialController
+    from inductor_designer.ui.preliminary_controller import PreliminaryController
+    from inductor_designer.ui.review_controller import ReviewController
+    from inductor_designer.ui.simulation_controller import SimulationController
+
     guided_studio_controller: GuidedStudioController | None = None
-    if project is not None:
+    core_material_controller: CoreMaterialController | None = None
+    preliminary_controller: PreliminaryController | None = None
+    simulation_controller: SimulationController | None = None
+    review_controller: ReviewController | None = None
+    if session is not None and generation_controller is not None:
         from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
+        from inductor_designer.adapters.compatibility.matrix_repository import (
+            MatrixCapabilityRepository,
+        )
         from inductor_designer.ui.guided_studio_controller import GuidedStudioController
 
-        guided_studio_controller = GuidedStudioController(
-            project,
-            SqliteCatalogRepository(args.catalog),
-            project_save_callback,
+        # One catalog reader and one material overlay reader, shared by every
+        # screen: a material imported in the Material Studio window (which
+        # shares `material_repository` above) is visible to the Core &
+        # Material selector without a process restart.
+        catalog_repository = SqliteCatalogRepository(args.catalog)
+        capabilities = MatrixCapabilityRepository(args.matrix).snapshot_for(
+            SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION
         )
+        guided_studio_controller = GuidedStudioController(session, catalog_repository)
+        core_material_controller = CoreMaterialController(
+            session, catalog_repository, material_repository
+        )
+        preliminary_controller = PreliminaryController(session, catalog_repository)
+        simulation_controller = SimulationController(
+            session, generation_controller, capabilities
+        )
+        review_controller = ReviewController(
+            session,
+            preliminary_controller,
+            generation_controller,
+            catalog_repository,
+            DesktopPathOpener(),
+        )
+        # One project, one recompute path: every edit lands on the session,
+        # and the dependent screens refresh from it. ReviewController already
+        # connects session.projectChanged to its own refresh in its
+        # constructor, so it is deliberately not connected again here.
+        session.projectChanged.connect(preliminary_controller.refresh)
+        session.projectChanged.connect(guided_studio_controller.refresh)
 
     engine = create_engine(
         preview_entries,
@@ -250,6 +293,11 @@ def main() -> int:
         backend_choices,
         material_studio_controller,
         guided_studio_controller,
+        session,
+        core_material_controller,
+        preliminary_controller,
+        simulation_controller,
+        review_controller,
     )
     roots = engine.rootObjects()
     if not roots:

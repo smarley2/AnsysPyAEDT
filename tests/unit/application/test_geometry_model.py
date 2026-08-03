@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
 
 import pytest
@@ -140,3 +141,56 @@ def test_bare_diameter_recorded() -> None:
     project = make_project(design=replace(make_project().design, windings=(make_winding(turns=5),)))
     model = build_geometry_model(project, CATALOG)
     assert model.bare_diameter_m["w1"] == pytest.approx(0.00102362)
+
+
+class ListingFailsCatalog:
+    """A repository failure surfacing from `list_conductor_names`.
+
+    `SqliteCatalogRepository` opens a fresh `sqlite3.connect()` per call, so a
+    catalog file deleted or locked mid-session raises `OSError`/
+    `sqlite3.OperationalError`, not a `GeometryModelError` -- this stands in
+    for that failure.
+    """
+
+    def get_core(self, part_number: str) -> CoreRecord | None:
+        return None
+
+    def list_cores(self) -> tuple[CoreRecord, ...]:
+        return ()
+
+    def get_conductor(self, name: str) -> ConductorRecord | None:
+        return None
+
+    def list_conductor_names(self) -> tuple[str, ...]:
+        raise OSError("catalog file is locked")
+
+
+class LookupFailsCatalog:
+    """A repository failure surfacing from `get_conductor` for one winding."""
+
+    def __init__(self, names: tuple[str, ...]) -> None:
+        self._names = names
+
+    def get_core(self, part_number: str) -> CoreRecord | None:
+        return None
+
+    def list_cores(self) -> tuple[CoreRecord, ...]:
+        return ()
+
+    def list_conductor_names(self) -> tuple[str, ...]:
+        return self._names
+
+    def get_conductor(self, name: str) -> ConductorRecord | None:
+        raise sqlite3.OperationalError("database is locked")
+
+
+def test_a_catalog_listing_failure_becomes_a_geometry_model_error() -> None:
+    project = make_project(design=replace(make_project().design, windings=(make_winding(turns=5),)))
+    with pytest.raises(GeometryModelError, match="Catalog is unavailable"):
+        build_geometry_model(project, ListingFailsCatalog())
+
+
+def test_a_catalog_conductor_lookup_failure_becomes_a_geometry_model_error() -> None:
+    project = make_project(design=replace(make_project().design, windings=(make_winding(turns=5),)))
+    with pytest.raises(GeometryModelError, match="Catalog is unavailable"):
+        build_geometry_model(project, LookupFailsCatalog(("AWG 18",)))

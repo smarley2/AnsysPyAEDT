@@ -36,6 +36,7 @@ from inductor_designer.simulation.preliminary import (
     estimate_preliminary,
 )
 from inductor_designer.simulation.preliminary_contracts import (
+    CoreMagneticProperties,
     DiagnosticCode,
     ResultState,
 )
@@ -119,7 +120,10 @@ def _real_project_request(tmp_path: Path) -> PreliminaryRequest:
     )
     return PreliminaryRequest(
         project=project,
-        core_record=core_record,
+        core=CoreMagneticProperties(
+            path_length_m=core_record.path_length_m,
+            volume_m3=core_record.volume_m3,
+        ),
         conductors_by_winding={winding_id: conductor for winding_id in winding_ids},
         packings_by_winding={
             winding_id: PackedWinding(

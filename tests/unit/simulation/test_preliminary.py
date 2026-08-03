@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
+from inductor_designer.domain.project import ManualCoreSelection
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,
     PreliminaryResult,
@@ -22,7 +23,7 @@ from inductor_designer.simulation.winding_estimate import (
 def test_a_missing_core_makes_only_core_quantities_unavailable(
     sample_request: PreliminaryRequest,
 ) -> None:
-    request = replace(sample_request, core_record=None)
+    request = replace(sample_request, core=None)
 
     result = estimate_preliminary(request)
 
@@ -42,7 +43,7 @@ def test_core_loss_reports_its_own_code_not_the_flux_density_reason(
     density to work from -- and must carry its own core_loss.* code instead of
     the upstream flux_density.* code being stamped straight across.
     """
-    request = replace(sample_request, core_record=None)
+    request = replace(sample_request, core=None)
 
     result = estimate_preliminary(request)
 
@@ -78,7 +79,7 @@ def test_total_wire_loss_sums_available_windings(
 def test_total_loss_is_unavailable_unless_both_components_exist(
     sample_request: PreliminaryRequest,
 ) -> None:
-    result = estimate_preliminary(replace(sample_request, core_record=None))
+    result = estimate_preliminary(replace(sample_request, core=None))
 
     assert result.totals.total_loss.state is ResultState.UNAVAILABLE
     assert result.totals.total_loss.code == DiagnosticCode.TOTAL_LOSS_INCOMPLETE
@@ -195,3 +196,57 @@ def test_wire_length_survives_an_out_of_range_winding_temperature(
     assert w1.wire_length.value == 0.4
     assert any("closed-loop turn length" in note for note in w1.wire_length.notes)
     assert not any("skin effect" in note for note in w1.wire_length.notes)
+
+
+def test_an_unacknowledged_manual_core_material_pair_blocks_core_quantities(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """Specification section 4.1: selecting a material for a Manual core
+    requires a visible compatibility acknowledgment before Preliminary can
+    treat the pair as complete. Generation and solve already honor this
+    (`run_planning.py`, `domain/validation.py`); the estimator did not.
+    """
+    manual_core = ManualCoreSelection(0.0272, 0.0138, 0.0112, 0.0)
+    project = replace(
+        sample_request.project,
+        design=replace(
+            sample_request.project.design,
+            core=manual_core,
+            manual_material_compatibility_acknowledged=False,
+        ),
+    )
+    request = replace(sample_request, project=project)
+
+    result = estimate_preliminary(request)
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert (
+        result.core.b_dc.code
+        == DiagnosticCode.FLUX_DENSITY_MANUAL_COMPATIBILITY_UNACKNOWLEDGED
+    )
+    assert result.core.core_loss.state is ResultState.UNAVAILABLE
+    # Per-quantity independence: winding rows never depend on the core's
+    # acknowledgment state.
+    assert result.windings[0].j_ac_rms.state is ResultState.ESTIMATED
+    assert result.windings[0].wire_length.state is ResultState.ESTIMATED
+    assert result.windings[0].resistance.state is ResultState.ESTIMATED
+    assert result.windings[0].wire_loss.state is ResultState.ESTIMATED
+
+
+def test_acknowledging_the_manual_core_material_pair_restores_core_estimates(
+    sample_request: PreliminaryRequest,
+) -> None:
+    manual_core = ManualCoreSelection(0.0272, 0.0138, 0.0112, 0.0)
+    project = replace(
+        sample_request.project,
+        design=replace(
+            sample_request.project.design,
+            core=manual_core,
+            manual_material_compatibility_acknowledged=True,
+        ),
+    )
+    request = replace(sample_request, project=project)
+
+    result = estimate_preliminary(request)
+
+    assert result.core.b_dc.state is ResultState.ESTIMATED

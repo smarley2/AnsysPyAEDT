@@ -641,14 +641,89 @@ run showed the AEDT window and still succeeded, while the default run logged
 `Non-graphical mode detected`; and the M5a live material suite (Maxwell 3D,
 Maxwell 2D, FEMM) passed in 85 s.
 
-Every Guided Studio screen remains M7c work, including the `Show solver
-window` control and the `Open generated file` / `Open run folder` buttons
-that bind to the `PathOpener` port and run-directory contracts this milestone
-delivered. M7c has no detailed plan yet. `results/` population and Generate
-and Solve remain M8 work; M7b reserves an empty `results/` directory but never
-writes into it.
+Every Guided Studio screen remained M7c work at M7b acceptance time, including
+the `Show solver window` control and the `Open generated file` / `Open run
+folder` buttons that bind to the `PathOpener` port and run-directory contracts
+this milestone delivered. M7c (below) has since implemented all of it.
+`results/` population and Generate and Solve remain M8 work; M7b reserves an
+empty `results/` directory but never writes into it.
 
 M7a and M7b are both accepted. M7 as a whole is not complete until M7c ships.
+
+## Milestone 7c: Guided Studio flow
+
+M7c is the third and final M7 slice: the five-screen Guided Studio flow itself
+— `Core & Material`, `Windings`, `Preliminary`, `Simulation`, `Review` — wired
+to the M7a estimator and the M7b run services.
+
+- Bidirectional core/material filtering that clears the incompatible side and
+  never substitutes a selection.
+- A separate `Open Material Studio` window (not a step) that refreshes the
+  material library on close.
+- Native numeric validators plus authoritative domain validation on every
+  winding and operating-point input, and `ComboBox` selectors for enumerated
+  values.
+- Live, read-only preliminary B/J/wire-loss/core-loss estimates with
+  assumptions, exclusions, units, and the pinned revision always visible.
+- The `Show solver window` choice and `Open generated file` / `Open run
+  folder` actions from ADR 0007.
+
+Plan-level decisions taken with Fabio Posser on 2026-07-30, recorded in the
+[implementation plan's Global Constraints](../superpowers/plans/2026-07-30-m7c-guided-studio-flow.md#global-constraints):
+
+1. **Layout:** `Preliminary` and `Review` take the full workspace width with
+   the geometry canvas hidden; the other three screens keep the canvas plus
+   the right-hand context panel.
+2. **Run gate:** `Generate` is disabled, with a visible reason, while the
+   project has unsaved edits or no document path — a run never starts from
+   state that is not on disk, and generation never saves the project itself.
+3. **Units:** preliminary numbers display in engineering units (`mT`,
+   `A/mm²`, `mΩ`, `mm`, `mm²`, `W`); the estimator keeps SI internally, and
+   every conversion lives in one pure module, `ui/preliminary_rows.py`.
+4. **Windings:** adding and removing windings is in scope. A new winding
+   allocates its id and matching `WindingOperatingPoint` together; the last
+   winding cannot be removed.
+5. **Manual-core magnetic path:** a Manual core's path length and volume are
+   computed from its entered dimensions
+   (`l_e = pi * (outer_diameter + inner_diameter) / 2`,
+   `A_e = ((outer_diameter - inner_diameter) / 2) * height`,
+   `V_e = A_e * l_e`), always reported with a visible assumption note.
+   Manufacturer effective values are never invented for a Manual core.
+
+Exit criterion: a user authors, saves, reopens, inspects analytical
+B/J/wire/core-loss estimates or explicit unavailable reasons, reviews, and
+generates a non-hardcoded toroidal Design from the Windows UI. Generate and
+Solve is intentionally not exposed — specification section 12 assigns solving
+and `results/` population to M8.
+
+### Current state
+
+Milestone 7c implementation is **complete and awaiting Fabio Posser's
+verification** (only he accepts a milestone). `main.py` now constructs and
+shares one `ProjectSession`, one `SqliteCatalogRepository`, and one
+`FileOverlayMaterialRepository` across all five controllers, so a material
+imported in the Material Studio window is visible to the Core & Material
+selector without a restart, and `session.projectChanged` drives the
+Preliminary, Windings, and Review screens to refresh from every edit.
+`tests/integration/test_guided_studio_flow.py` proves the specification
+section 11 acceptance walk (a catalog core plus a real imported material
+revision, and a Manual core with a computed magnetic path) end to end against
+the real shipped catalog and material overlay, with no Qt window, Maxwell, or
+FEMM involved.
+
+One deliberate behavior change from the M6 design: pinning a material
+revision no longer writes `*.inductor.json` on the spot. Task 8 of the M7c
+plan deleted Material Studio's `Select for simulation` writer, so the Core &
+Material screen pins into the session and the top-bar `Save` persists it —
+which is also what the run gate above requires.
+
+Still outstanding: the visual walkthrough of the wired application (launch
+the Windows UI, check the step rail order, the Material Studio window, the
+full-width Preliminary/Review layout, and the disabled-until-saved Generate
+button) has not been performed in this headless environment and remains for
+Fabio Posser to confirm.
+
+M7a, M7b, and M7c together complete Milestone 7.
 
 ## Milestone 8: Simulation and Results
 

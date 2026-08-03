@@ -53,7 +53,13 @@ def insulated_diameter(record: ConductorRecord) -> float:
 
 
 def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -> GeometryModel:
-    validation = validate_project(project, known_conductors=catalog.list_conductor_names())
+    try:
+        known_conductors = catalog.list_conductor_names()
+    except Exception as error:  # noqa: BLE001 - any repository failure is a geometry input failure
+        raise GeometryModelError(
+            (f"Catalog is unavailable, so geometry cannot be validated: {error}",)
+        ) from error
+    validation = validate_project(project, known_conductors=known_conductors)
     errors = tuple(
         f"{issue.code}: {issue.message}"
         for issue in validation
@@ -73,7 +79,12 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
     insulated: dict[str, float] = {}
     bare: dict[str, float] = {}
     for winding in project.design.windings:
-        record = catalog.get_conductor(winding.conductor_name)
+        try:
+            record = catalog.get_conductor(winding.conductor_name)
+        except Exception as error:  # noqa: BLE001 - any repository failure is a geometry input failure
+            raise GeometryModelError(
+                (f"Catalog is unavailable, so geometry cannot be validated: {error}",)
+            ) from error
         assert record is not None  # validation already checked membership
         d_ins = insulated_diameter(record)
         insulated[winding.winding_id] = d_ins

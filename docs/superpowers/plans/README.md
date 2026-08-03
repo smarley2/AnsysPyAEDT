@@ -54,10 +54,23 @@ before the next plan freezes assumptions that depend on it.
     still owns every screen, including the `Show solver window` choice and the
     `Open generated file` / `Open run folder` buttons, and M8 still owns
     `results/` population.
-  - **M7c**, not yet written: the Guided Studio flow — `Core & Material`,
-    `Windings`, `Preliminary`, `Simulation`, `Review`, bidirectional
-    core/material filtering, numeric validators, and the separate Material
-    Studio window.
+  - **M7c implementation is complete and awaiting Fabio Posser's
+    verification** (only he accepts a milestone):
+    [2026-07-30 M7c guided-studio-flow](2026-07-30-m7c-guided-studio-flow.md)
+    — the five-screen Guided Studio flow, `Core & Material`, `Windings`,
+    `Preliminary`, `Simulation`, `Review`, with bidirectional core/material
+    filtering that clears the incompatible side and never substitutes, native
+    numeric validators plus authoritative domain validation, and `Open
+    Material Studio` opening in its own separate window (not a step) that
+    refreshes the material library on close. Preliminary results display in
+    engineering units (`mT`, `A/mm²`, `mΩ`, `mm`, `mm²`, `W`) computed by one
+    pure conversion module while the estimator keeps SI; `Generate` is
+    disabled with a visible reason while the project has unsaved edits or no
+    document path; and a Manual core's magnetic path length and volume are
+    computed from its entered dimensions rather than invented, with a visible
+    assumption note. `tests/integration/test_guided_studio_flow.py` proves the
+    specification section 11 acceptance walk against the real catalog and
+    material overlay.
 
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`

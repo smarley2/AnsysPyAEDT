@@ -37,6 +37,19 @@ class ManualCoreSelection:
     height_m: float
     corner_radius_m: float
 
+    def __post_init__(self) -> None:
+        # Finiteness only: ordering and positivity are reported as diagnostics by
+        # `_validate_core` and `resolve_finished_core`. NaN is what those checks
+        # cannot see, because every comparison against it is False.
+        for name, value in (
+            ("outer_diameter_m", self.outer_diameter_m),
+            ("inner_diameter_m", self.inner_diameter_m),
+            ("height_m", self.height_m),
+            ("corner_radius_m", self.corner_radius_m),
+        ):
+            if not isfinite(value):
+                raise ValueError(f"ManualCoreSelection {name} must be finite")
+
 
 CoreSelection = CatalogCoreSelection | ManualCoreSelection
 

@@ -41,6 +41,12 @@ def field_strengths(
     path_length_m: float,
 ) -> FieldStrengths | PreliminaryValue:
     """Return field strengths, or the diagnostic explaining why they are absent."""
+    if not math.isfinite(path_length_m):
+        return unavailable(
+            DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE,
+            "Core effective magnetic path length is not a finite number, so "
+            "the core dimensions are out of range.",
+        )
     if not path_length_m > 0.0:
         return unavailable(
             DiagnosticCode.FLUX_DENSITY_NON_POSITIVE_PATH_LENGTH,
@@ -66,6 +72,13 @@ def field_strengths(
 
     h_ac_peak = abs(ac_phasor) / path_length_m
     h_dc = dc_ampere_turns / path_length_m
+    if not all(math.isfinite(value) for value in (h_ac_peak, h_dc)):
+        return unavailable(
+            DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE,
+            "Core effective magnetic path length is too small for the winding "
+            "ampere-turns, so the field strength overflows; the core dimensions "
+            "are out of range.",
+        )
     return FieldStrengths(
         h_ac_peak_a_per_m=h_ac_peak,
         h_dc_a_per_m=h_dc,

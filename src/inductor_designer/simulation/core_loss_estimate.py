@@ -6,6 +6,8 @@ extrapolation, flux-density extrapolation, or material substitution is invented.
 
 from __future__ import annotations
 
+from math import isfinite
+
 from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.materials.records import PointSeries, SeriesKind
 from inductor_designer.simulation.interpolation import interpolate_within_range
@@ -64,6 +66,12 @@ def core_loss_w(
         return unavailable(
             DiagnosticCode.CORE_LOSS_NON_POSITIVE_FREQUENCY,
             f"Core loss requires a positive frequency; got {frequency_hz:g} Hz.",
+        )
+    if not isfinite(core_volume_m3):
+        return unavailable(
+            DiagnosticCode.CORE_LOSS_NON_FINITE_VOLUME,
+            "Core volume is not a finite number, so the core dimensions are "
+            "out of range.",
         )
     if not core_volume_m3 > 0.0:
         return unavailable(

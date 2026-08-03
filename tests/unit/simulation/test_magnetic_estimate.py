@@ -146,6 +146,33 @@ def test_non_positive_path_length_is_a_diagnostic_not_a_crash() -> None:
     assert result.code == DiagnosticCode.FLUX_DENSITY_NON_POSITIVE_PATH_LENGTH
 
 
+def test_non_finite_path_length_is_a_diagnostic_not_a_crash() -> None:
+    result = field_strengths(
+        make_operating_point(make_winding("w1", ac_rms=1.0)),
+        {"w1": 10},
+        path_length_m=float("inf"),
+    )
+
+    assert isinstance(result, PreliminaryValue)
+    assert result.code == DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE
+
+
+def test_denormal_path_length_overflowing_field_strength_is_a_diagnostic() -> None:
+    """A path length that is finite but denormally small (e.g. from an
+    underflowing core geometry) divides a normal ampere-turns numerator into
+    an overflowing field strength. That must be reported, not returned as
+    `inf`.
+    """
+    result = field_strengths(
+        make_operating_point(make_winding("w1", ac_rms=1.0)),
+        {"w1": 10},
+        path_length_m=5e-320,
+    )
+
+    assert isinstance(result, PreliminaryValue)
+    assert result.code == DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE
+
+
 def test_a_winding_without_a_turn_count_contributes_nothing() -> None:
     result = field_strengths(
         make_operating_point(make_winding("w1", ac_rms=1.0), make_winding("w2", ac_rms=1.0)),

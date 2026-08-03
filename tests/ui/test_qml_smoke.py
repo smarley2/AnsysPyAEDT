@@ -110,8 +110,6 @@ class RecordingMaterialStudioController(QObject):
     canSave = Property(bool, lambda self: False, notify=selectionChanged)
     canReview = Property(bool, lambda self: False, notify=selectionChanged)
     canApprove = Property(bool, lambda self: False, notify=selectionChanged)
-    canUseInProject = Property(bool, lambda self: False, notify=selectionChanged)
-    hasProject = Property(bool, lambda self: False, constant=True)
     statusMessage = Property(str, lambda self: "Ready", notify=statusMessageChanged)
 
     @Slot(str, str, str, result=bool)
@@ -179,10 +177,6 @@ class RecordingMaterialStudioController(QObject):
     def approveRevision(self, actor: str) -> None:
         self.calls.append(("approveRevision", actor))
 
-    @Slot(str)
-    def useInProject(self, series_id: str) -> None:
-        self.calls.append(("useInProject", series_id))
-
 
 def _root(
     controller: RecordingMaterialStudioController,
@@ -190,7 +184,7 @@ def _root(
     app = QGuiApplication.instance() or QGuiApplication([])
     engine = create_engine(material_studio_controller=controller)
     root = engine.rootObjects()[0]
-    root.findChild(QObject, "guidedStepList").setProperty("currentIndex", 2)
+    root.findChild(QObject, "materialStudioWindow").setProperty("visible", True)
     app.processEvents()
     return app, engine, root, controller
 
