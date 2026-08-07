@@ -323,8 +323,26 @@ P_core = P_volume * core_volume
 
 No temperature correction, DC-bias correction, waveform correction,
 frequency extrapolation, flux-density extrapolation, or material substitution
-is invented. Nonzero DC bias without supporting loss data makes core loss
-unavailable while leaving other quantities unaffected.
+is invented. When a material's loss data at the requested temperature is
+bias-characterized (it records a nonzero DC bias), a nonzero requested bias
+without a matching recorded bias makes core loss unavailable while leaving
+other quantities unaffected.
+
+> **Amendment, 2026-08-03 (decided by Fabio Posser):** manufacturer loss
+> curves are almost always published at zero DC bias only, so the strict rule
+> above left core loss unavailable for nearly every real biased choke. When
+> the selected material revision records loss data at the requested
+> temperature that is *only* zero-DC-bias (no series at that temperature
+> records a nonzero bias), core loss is now evaluated from that zero-bias data
+> at the requested `B_AC_peak` regardless of the requested DC bias, and the
+> result carries a visible approximation note. DC premagnetization raises AC
+> loss for a given flux swing (the swing rides higher on the B-H curve, and
+> incremental permeability falls), so this estimate is optimistic — it
+> understates the true loss — which is why it is labelled rather than
+> presented as equivalent to a matching bias measurement. When the material
+> *does* record bias-dependent loss data at the requested temperature, the
+> original strict rule is unchanged: a nonzero requested bias must match a
+> recorded bias exactly, or core loss remains unavailable.
 
 ## 9. Validation and diagnostics
 

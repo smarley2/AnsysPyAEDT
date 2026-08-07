@@ -28,10 +28,10 @@ from inductor_designer.simulation.capabilities import (
     CapabilitySnapshot,
 )
 from inductor_designer.simulation.run_contracts import RunBackend, RunMode, RunRequest
-from inductor_designer.ui.generation_controller import CurrentProjectProvider
+from inductor_designer.ui.core_material_controller import CoreMaterialController
 from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
-from inductor_designer.ui.main import _persist_and_publish_project
 from inductor_designer.ui.material_studio_controller import MaterialStudioController
+from inductor_designer.ui.project_session import ProjectSession
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.fakes.maxwell_exporter import RecordingMaxwell3dExporter
@@ -97,17 +97,17 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     projects = ProjectRepository(SchemaRepository(ROOT / "schemas"))
     project_path = tmp_path / "material-studio.inductor.json"
     projects.save(projects.load(PROJECT_FIXTURE), project_path)
-    provider = CurrentProjectProvider(projects.load(project_path))
+    session = ProjectSession(
+        projects.load(project_path),
+        project_path,
+        lambda project: projects.save(project, project_path),
+    )
     controller = MaterialStudioController(
         materials,
-        project=provider.current(),
-        project_save_callback=lambda project: _persist_and_publish_project(
-            project,
-            lambda value: projects.save(value, project_path),
-            provider,
-        ),
+        pinned_revision=lambda: session.project.design.core_material,
         now=lambda: "2026-07-19T12:00:00+00:00",
     )
+    core_material = CoreMaterialController(session, CATALOG, materials)
 
     template_path = tmp_path / "material-template.xlsx"
     controller.downloadTemplate("xlsx", _file_url(template_path))
@@ -119,8 +119,10 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     base_revision = str(controller.selectedRevision["revisionId"])
     ref = MaterialRef("Magnetics", "Kool Mu", "60")
     base_record = deepcopy(materials.get(ref, base_revision))
-    controller.useInProject("bh-25c")
-    assert controller.statusMessage == "Material revision saved to the project."
+    assert core_material.selectMaterial(
+        ref.manufacturer, ref.name, ref.grade, base_revision, "bh-25c"
+    )
+    assert session.saveProject() is True
     exported_path = tmp_path / "selected-revision.xlsx"
     exported_path.write_bytes(export_material_record_xlsx(base_record).data)
     _edit_exported_workbook(exported_path)
@@ -180,10 +182,18 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     assert exporter.requests == []
 
     before_pin = project_path.read_bytes()
-    controller.useInProject("")
-    assert "multiple B-H series" in controller.statusMessage
+
+    assert (
+        core_material.selectMaterial(
+            ref.manufacturer, ref.name, ref.grade, edited_revision, ""
+        )
+        is False
+    )
+    assert "multiple B-H series" in core_material.message
     assert project_path.read_bytes() == before_pin
-    project_before_failed_pin = provider.current()
+    assert session.project.design.core_material is None or (
+        session.project.design.core_material.revision_id != edited_revision
+    )
 
     from inductor_designer.adapters.persistence import project_repository as project_module
 
@@ -193,13 +203,18 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
         "replace",
         lambda _source, _destination: (_ for _ in ()).throw(OSError("replace failed")),
     )
-    controller.useInProject("bh-100c")
-    assert controller.statusMessage == "replace failed"
+
+    assert core_material.selectMaterial(
+        ref.manufacturer, ref.name, ref.grade, edited_revision, "bh-100c"
+    )
+
+    assert session.saveProject() is False
+    assert "replace failed" in session.statusMessage
     assert project_path.read_bytes() == before_pin
-    assert provider.current() == project_before_failed_pin
+    assert session.dirty is True
     monkeypatch.setattr(project_module.os, "replace", real_replace)
 
-    controller.useInProject("bh-100c")
+    assert session.saveProject() is True
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
     assert persisted_document["schemaVersion"] == 5
     assert persisted_document["design"]["coreMaterial"]["revisionId"] == edited_revision
@@ -214,7 +229,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     same_session_exporter = RecordingMaxwell3dExporter()
     lines = run_generation(
         GenerationBackend.MAXWELL_3D,
-        provider.current(),
+        session.project,
         project_path,
         CATALOG,
         CAPABILITIES,
@@ -292,16 +307,8 @@ def test_imported_material_edits_never_pin_implicitly(
     assert not controller.dirty
     assert repository.get(ref, revision_id) == imported
 
-    persisted_projects = []
-    library = MaterialStudioController(
-        repository,
-        project=ProjectRepository(SchemaRepository(ROOT / "schemas")).load(
-            PROJECT_FIXTURE
-        ),
-        project_save_callback=persisted_projects.append,
-    )
+    library = MaterialStudioController(repository)
     assert library.selectMaterial(ref.manufacturer, ref.name, ref.grade)
     assert library.selectedRevision["revisionId"] == revision_id
     assert library.selectedRevision["status"] == "imported"
     assert [item["isLatestApproved"] for item in library.revisions] == [False]
-    assert persisted_projects == []

@@ -119,6 +119,30 @@ def make_material_record() -> MaterialRecord:
     )
 
 
+def make_project_with_material(**overrides: object) -> InductorProject:
+    """`make_project()` with its catalog core's own material revision pinned.
+
+    `make_material_record()` is Magnetics Kool Mu 60, exactly
+    `make_core().material`, so this pair is compatible. The record carries no
+    series, so flux density comes from its relative permeability and
+    `bh_series_id` stays None.
+    """
+    record = make_material_record()
+    project = make_project(**overrides)
+    return replace(
+        project,
+        design=replace(
+            project.design,
+            core_material=MaterialRevisionSelection(
+                ref=record.ref,
+                revision_id=record.revision_id,
+                snapshot=record,
+                bh_series_id=None,
+            ),
+        ),
+    )
+
+
 def make_material_series(
     series_id: str = "bh-25c",
     kind: SeriesKind = SeriesKind.BH_CURVE,
@@ -397,6 +421,20 @@ def test_material_revision_selection_rejects_mismatched_revision() -> None:
 
     with pytest.raises(ValueError, match="revision_id"):
         MaterialRevisionSelection(snapshot.ref, "abcdef012345", snapshot)
+
+
+def test_manual_core_refuses_non_finite_dimensions() -> None:
+    with pytest.raises(ValueError, match="outer_diameter_m must be finite"):
+        ManualCoreSelection(float("nan"), 0.0138, 0.0112, 0.0)
+    with pytest.raises(ValueError, match="height_m must be finite"):
+        ManualCoreSelection(0.0272, 0.0138, float("inf"), 0.0)
+
+
+def test_manual_core_still_accepts_dimensions_its_diagnostics_own() -> None:
+    """Inverted or zero dimensions are reported downstream, not refused here."""
+    inverted = ManualCoreSelection(0.010, 0.020, 0.005, 0.0)
+
+    assert inverted.inner_diameter_m > inverted.outer_diameter_m
 
 
 def test_material_revision_selection_rejects_blank_revision() -> None:

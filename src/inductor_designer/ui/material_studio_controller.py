@@ -44,9 +44,8 @@ from inductor_designer.application.services.material_library import (
 )
 from inductor_designer.application.services.material_selection import (
     MaterialSelectionError,
-    pin_material_revision,
 )
-from inductor_designer.domain.project import InductorProject
+from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.domain.units import from_canonical
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -85,16 +84,14 @@ class MaterialStudioController(QObject):
     def __init__(
         self,
         repository: MaterialRepository,
-        project: InductorProject | None = None,
-        project_save_callback: Callable[[InductorProject], None] | None = None,
         *,
+        pinned_revision: Callable[[], MaterialRevisionSelection | None] | None = None,
         now: Callable[[], str] = _utc_now,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._repository = repository
-        self._project = project
-        self._project_save_callback = project_save_callback
+        self._pinned_revision = pinned_revision
         self._now = now
         self._selected_ref: MaterialRef | None = None
         self._session: MaterialDraftSession | None = None
@@ -223,21 +220,6 @@ class MaterialStudioController(QObject):
         )
 
     canApprove = Property(bool, _get_can_approve, notify=selectionChanged)
-
-    def _get_can_use_in_project(self) -> bool:
-        return (
-            self._session is not None
-            and self._session.record.status in (MaterialStatus.IMPORTED, MaterialStatus.APPROVED)
-            and self._project is not None
-            and self._project_save_callback is not None
-        )
-
-    canUseInProject = Property(bool, _get_can_use_in_project, notify=selectionChanged)
-
-    def _get_has_project(self) -> bool:
-        return self._project is not None
-
-    hasProject = Property(bool, _get_has_project, constant=True)
 
     @staticmethod
     def _material_dict(ref: MaterialRef) -> dict[str, object]:
@@ -833,7 +815,7 @@ class MaterialStudioController(QObject):
             replacement = session_from_import(imported.record, imported.source_files)
             self._repository.save(replacement.record, dict(replacement.source_files))
             selection = (
-                None if self._project is None else self._project.design.core_material
+                None if self._pinned_revision is None else self._pinned_revision()
             )
             pinned = (
                 {selection.revision_id}
@@ -872,7 +854,7 @@ class MaterialStudioController(QObject):
             if self._selected_ref is None:
                 raise ValueError("Select a material before deleting it.")
             selection = (
-                None if self._project is None else self._project.design.core_material
+                None if self._pinned_revision is None else self._pinned_revision()
             )
             pinned = (
                 (selection.revision_id,)
@@ -1325,27 +1307,5 @@ class MaterialStudioController(QObject):
                 approved,
                 "Material revision approved.",
             )
-
-        self._run_action(action)
-
-    @Slot(str)
-    def useInProject(self, bh_series_id: str) -> None:
-        def action() -> None:
-            if self._project is None:
-                raise ValueError("No project is loaded.")
-            if self._project_save_callback is None:
-                raise ValueError("Project persistence is unavailable.")
-            if self._session is None:
-                raise ValueError("Select an imported or approved material revision first.")
-            selected_id = bh_series_id.strip() or None
-            updated = pin_material_revision(
-                self._project,
-                self._session.record,
-                bh_series_id=selected_id,
-            )
-            self._project_save_callback(updated)
-            self._project = updated
-            self.selectionChanged.emit()
-            self._set_status("Material revision saved to the project.")
 
         self._run_action(action)

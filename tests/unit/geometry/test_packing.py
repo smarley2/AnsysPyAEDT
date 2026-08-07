@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import math
+import threading
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackingError, WindingSpec, pack_winding
+from inductor_designer.domain.project import ManualCoreSelection
+from inductor_designer.geometry.core_solid import FinishedCore, resolve_finished_core
+from inductor_designer.geometry.packing import (
+    PackedWinding,
+    PackingError,
+    WindingSpec,
+    pack_winding,
+)
 from inductor_designer.geometry.turn_path import turn_loop_length_m
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
@@ -79,6 +86,26 @@ def test_full_circle_sector_reserves_lead_gap() -> None:
 
 def test_determinism() -> None:
     assert pack_winding(CORE, spec()) == pack_winding(CORE, spec())
+
+
+def test_extreme_core_dimensions_pack_without_spinning() -> None:
+    """Layer enumeration must cost the requested turns, not the core's magnitude.
+
+    A 1e200 m bore admits ~1e202 layers before the wire runs out of room, so
+    enumerating every layer that could exist never returns (observed: > 9 GB
+    resident before the process was killed). The run is threaded with a join
+    timeout so a regression fails this test instead of hanging the suite.
+    """
+    core = resolve_finished_core(ManualCoreSelection(1e200, 0.5e200, 1e50, 0.0))
+    packed: list[PackedWinding] = []
+    worker = threading.Thread(
+        target=lambda: packed.append(pack_winding(core, spec(turns=5))), daemon=True
+    )
+    worker.start()
+    worker.join(timeout=5.0)
+
+    assert not worker.is_alive(), "pack_winding did not terminate for a 1e200 m core"
+    assert sum(len(layer.station_deg) for layer in packed[0].layers) == 5
 
 
 def test_zero_capacity_sector() -> None:

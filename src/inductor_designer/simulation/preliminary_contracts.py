@@ -28,12 +28,16 @@ class DiagnosticCode:
 
     FLUX_DENSITY_NO_CORE_SELECTED = "flux_density.no_core_selected"
     FLUX_DENSITY_NO_MATERIAL_SELECTED = "flux_density.no_material_selected"
+    FLUX_DENSITY_MANUAL_COMPATIBILITY_UNACKNOWLEDGED = (
+        "flux_density.manual_compatibility_unacknowledged"
+    )
     FLUX_DENSITY_NO_BH_SERIES_FOR_TEMPERATURE = (
         "flux_density.no_bh_series_for_temperature"
     )
     FLUX_DENSITY_NO_SUPPORTED_MODEL = "flux_density.no_supported_model"
     FLUX_DENSITY_FIELD_OUTSIDE_BH_RANGE = "flux_density.field_outside_bh_range"
     FLUX_DENSITY_NON_POSITIVE_PATH_LENGTH = "flux_density.non_positive_path_length"
+    FLUX_DENSITY_CORE_PATH_NOT_FINITE = "flux_density.core_path_not_finite"
 
     CURRENT_DENSITY_NO_CONDUCTOR = "current_density.no_conductor"
 
@@ -43,6 +47,7 @@ class DiagnosticCode:
     CORE_LOSS_NO_FLUX_DENSITY = "core_loss.no_flux_density"
     CORE_LOSS_NON_POSITIVE_FREQUENCY = "core_loss.non_positive_frequency"
     CORE_LOSS_NON_POSITIVE_VOLUME = "core_loss.non_positive_volume"
+    CORE_LOSS_NON_FINITE_VOLUME = "core_loss.non_finite_volume"
     CORE_LOSS_NO_LOSS_DATA_FOR_TEMPERATURE = "core_loss.no_loss_data_for_temperature"
     CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS = "core_loss.no_loss_data_for_dc_bias"
     CORE_LOSS_FLUX_OUTSIDE_LOSS_RANGE = "core_loss.flux_outside_loss_range"
@@ -55,6 +60,21 @@ class DiagnosticCode:
     )
 
     TOTAL_LOSS_INCOMPLETE = "total_loss.incomplete"
+
+
+@dataclass(frozen=True, slots=True)
+class CoreMagneticProperties:
+    """The two core properties the estimator reads, and how they were obtained.
+
+    A catalog core supplies the manufacturer's effective values. A Manual core
+    has no record, so the caller computes them from the entered dimensions and
+    says so in `notes`. Keeping this separate from `CoreRecord` means no caller
+    ever has to fabricate manufacturer provenance to get an estimate.
+    """
+
+    path_length_m: float
+    volume_m3: float
+    notes: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)

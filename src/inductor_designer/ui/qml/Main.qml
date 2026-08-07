@@ -7,8 +7,8 @@ import QtQuick.Window
 ApplicationWindow {
     id: window
     objectName: "canvasFirstShell"
-    property string pendingMaterialAction: ""
-    property var pendingMaterialArguments: []
+    property bool wideStep: guidedStepList.currentIndex === 2
+        || guidedStepList.currentIndex === 4
     property bool allowCloseOnce: false
     width: Math.min(1800, Math.max(1200, Math.round(Screen.width * 0.82)))
     height: Math.min(1100, Math.max(760, Math.round(Screen.height * 0.84)))
@@ -19,48 +19,14 @@ ApplicationWindow {
     title: qsTr("PyAEDT Inductor Designer")
 
     function requestStep(index) {
-        if (index === guidedStepList.currentIndex) {
-            return
-        }
-        requestMaterialAction("navigate", [index])
-    }
-
-    function requestMaterialAction(action, arguments_) {
-        if (materialStudioController !== null
-                && materialStudioController.dirty) {
-            pendingMaterialAction = action
-            pendingMaterialArguments = arguments_
-            dirtyMaterialTransactionDialog.open()
-            return
-        }
-        executeMaterialAction(action, arguments_)
-    }
-
-    function executeMaterialAction(action, arguments_) {
-        if (action === "navigate") {
-            guidedStepList.currentIndex = arguments_[0]
-        } else if (action === "closeApplication") {
-            allowCloseOnce = true
-            window.close()
-        } else {
-            materialStudioPage.performTransactionAction(action, arguments_)
-        }
-    }
-
-    function completePendingMaterialAction() {
-        const action = pendingMaterialAction
-        const arguments_ = pendingMaterialArguments
-        pendingMaterialAction = ""
-        pendingMaterialArguments = []
-        dirtyMaterialTransactionDialog.close()
-        executeMaterialAction(action, arguments_)
+        guidedStepList.currentIndex = index
     }
 
     function stepEyebrow() {
         switch (guidedStepList.currentIndex) {
-        case 0: return qsTr("Design / Core")
+        case 0: return qsTr("Design / Core & Material")
         case 1: return qsTr("Design / Windings")
-        case 2: return qsTr("Design / Materials")
+        case 2: return qsTr("Design / Preliminary")
         case 3: return qsTr("Design / Simulation")
         default: return qsTr("Design / Review")
         }
@@ -68,34 +34,58 @@ ApplicationWindow {
 
     function stepTitle() {
         switch (guidedStepList.currentIndex) {
-        case 0: return qsTr("Choose a core")
+        case 0: return qsTr("Pair a core and material")
         case 1: return qsTr("Define windings")
-        case 2: return qsTr("Pin materials")
+        case 2: return qsTr("Preliminary estimates")
         case 3: return qsTr("Configure a run")
         default: return qsTr("Review before generation")
         }
     }
 
-    onClosing: function(close) {
+    // Exposed as a testable function rather than inlined in `onClosing`
+    // because Qt has no supported way to reach a window's `onClosing` handler
+    // from a test -- `requestApplicationClose()` is what the handler
+    // delegates to, and what the tests call directly.
+    function requestApplicationClose() {
         if (allowCloseOnce) {
+            // Save/Discard on the unsaved-project dialog re-issue window.close()
+            // once the blocking condition is gone, which re-enters this
+            // function; without this bypass that second call would just see
+            // the (still momentarily dirty, or freshly re-evaluated) state
+            // again and loop back into a dialog instead of actually closing.
             allowCloseOnce = false
-            close.accepted = true
-        } else if (materialStudioController !== null
-                && materialStudioController.dirty) {
-            close.accepted = false
-            requestMaterialAction("closeApplication", [])
+            return true
         }
+        if (materialStudioController !== null && materialStudioController.dirty) {
+            // Never lose a material draft to an application close: surface the
+            // window that owns the unsaved edit and let its dialog decide.
+            // This guard takes precedence over the project session below.
+            materialStudioWindow.show()
+            materialStudioWindow.requestClose()
+            return false
+        }
+        if (guidedStudioController !== null && guidedStudioController.dirty) {
+            // Never lose unsaved winding, core, material-pin, or simulation
+            // edits held by the project session either.
+            unsavedProjectDialog.open()
+            return false
+        }
+        return true
+    }
+
+    onClosing: function(close) {
+        close.accepted = window.requestApplicationClose()
     }
 
     ObjectModel {
         id: guidedStepsModel
 
         ItemDelegate {
-            id: coreStep
-            objectName: "coreStep"
+            id: coreMaterialStep
+            objectName: "coreMaterialStep"
             width: Math.max(140, guidedStepList.width / 5)
             height: 64
-            text: qsTr("Core")
+            text: qsTr("Core & Material")
             highlighted: guidedStepList.currentIndex === 0
             activeFocusOnTab: true
             Accessible.name: text
@@ -105,8 +95,21 @@ ApplicationWindow {
             Keys.onSpacePressed: window.requestStep(0)
             background: Rectangle {
                 radius: 8
-                color: coreStep.highlighted ? "#e9efff" : "transparent"
-                border.color: coreStep.highlighted ? "#2e65e7" : "transparent"
+                color: coreMaterialStep.highlighted ? "#e9efff" : "transparent"
+                border.color: coreMaterialStep.highlighted ? "#2e65e7" : "transparent"
+            }
+            // The native style's built-in label (1) paints highlighted text
+            // in a colour this app never chose, which vanishes against the
+            // `#e9efff` highlight background above, and (2) treats "&" as a
+            // mnemonic marker and draws "Core _Material" instead of
+            // "Core & Material". A plain `Label` does neither: it takes an
+            // explicit, always-visible colour, and performs no mnemonic
+            // processing at all.
+            contentItem: Label {
+                text: coreMaterialStep.text
+                color: coreMaterialStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
         ItemDelegate {
@@ -127,13 +130,19 @@ ApplicationWindow {
                 color: windingsStep.highlighted ? "#e9efff" : "transparent"
                 border.color: windingsStep.highlighted ? "#2e65e7" : "transparent"
             }
+            contentItem: Label {
+                text: windingsStep.text
+                color: windingsStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
         ItemDelegate {
-            id: materialsStep
-            objectName: "materialsStep"
+            id: preliminaryStep
+            objectName: "preliminaryStep"
             width: Math.max(140, guidedStepList.width / 5)
             height: 64
-            text: qsTr("Materials")
+            text: qsTr("Preliminary")
             highlighted: guidedStepList.currentIndex === 2
             activeFocusOnTab: true
             Accessible.name: text
@@ -143,8 +152,14 @@ ApplicationWindow {
             Keys.onSpacePressed: window.requestStep(2)
             background: Rectangle {
                 radius: 8
-                color: materialsStep.highlighted ? "#e9efff" : "transparent"
-                border.color: materialsStep.highlighted ? "#2e65e7" : "transparent"
+                color: preliminaryStep.highlighted ? "#e9efff" : "transparent"
+                border.color: preliminaryStep.highlighted ? "#2e65e7" : "transparent"
+            }
+            contentItem: Label {
+                text: preliminaryStep.text
+                color: preliminaryStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
         ItemDelegate {
@@ -165,6 +180,12 @@ ApplicationWindow {
                 color: simulationStep.highlighted ? "#e9efff" : "transparent"
                 border.color: simulationStep.highlighted ? "#2e65e7" : "transparent"
             }
+            contentItem: Label {
+                text: simulationStep.text
+                color: simulationStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
         ItemDelegate {
             id: reviewStep
@@ -183,6 +204,12 @@ ApplicationWindow {
                 radius: 8
                 color: reviewStep.highlighted ? "#e9efff" : "transparent"
                 border.color: reviewStep.highlighted ? "#2e65e7" : "transparent"
+            }
+            contentItem: Label {
+                text: reviewStep.text
+                color: reviewStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
     }
@@ -286,18 +313,33 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        // A plain Item, not a RowLayout: `contextPanel` below needs both its
+        // `width` and whether it stretches to the full workspace width to
+        // flip together, in the same tick, whenever `window.wideStep`
+        // toggles (Preliminary/Review vs. the other three screens). Qt
+        // Quick Layouts was observed to sometimes miss re-arranging a
+        // `RowLayout` child when two of its `Layout.*` attached properties
+        // (`Layout.fillWidth` and `Layout.preferredWidth`) change in the
+        // same evaluation -- `contextPanel` could then stay latched at its
+        // narrow width even though `wideStep` had already flipped true.
+        // Plain `width` bindings (not `Layout.*` attached properties) do
+        // not go through that codepath and were never observed to go
+        // stale, so both children size themselves directly instead of
+        // relying on a `RowLayout` to arrange them.
+        Item {
             id: workspace
             objectName: "workspace"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
 
             Rectangle {
                 id: canvasCard
                 objectName: "canvasCard"
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                visible: !window.wideStep
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: window.wideStep ? 0 : parent.width - contextPanel.width - 10
                 color: "#fbfaf8"
                 radius: 10
                 border.color: "#d8d4cd"
@@ -361,109 +403,83 @@ ApplicationWindow {
             Rectangle {
                 id: contextPanel
                 objectName: "contextPanel"
-                Layout.preferredWidth: Math.max(330, Math.min(410, window.width * 0.29))
-                Layout.minimumWidth: 300
-                Layout.fillHeight: true
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: Math.max(300, window.wideStep
+                    ? parent.width
+                    : Math.max(330, Math.min(410, window.width * 0.29)))
                 color: "#fbfaf8"
                 radius: 10
                 border.color: "#d8d4cd"
 
-                StackLayout {
+                // A plain Item, not a `StackLayout`: `StackLayout` (and,
+                // through it, each screen's own nested `ColumnLayout`s and
+                // `GridLayout`s) was observed to sometimes leave a
+                // non-current screen latched at a *previous* size -- most
+                // clearly, failing to shrink a screen's `Layout.fillWidth`
+                // fields back down after `contextPanel` had been widened for
+                // Preliminary/Review and then narrowed again for one of the
+                // other three screens, even though the screen's own
+                // top-level `width` (an ordinary property, not something a
+                // Layout's internal arrange-on-dependency-change bookkeeping
+                // touches) read back correctly the whole time. Every screen
+                // stays permanently `visible: true` (never `false`, which is
+                // when Qt Quick Layouts was seen skipping the re-arrange
+                // that would have caught the size change) and is instead
+                // shown or hidden with `opacity`/`enabled`.
+                Item {
+                    id: stepPagesHost
+                    objectName: "stepPagesHost"
                     anchors.fill: parent
                     anchors.margins: 4
-                    currentIndex: guidedStepList.currentIndex
 
-                    ScrollView {
-                        clip: true
-                        contentWidth: availableWidth
-                        ColumnLayout {
-                            width: parent.width - 20
-                            anchors.margins: 10
-                            spacing: 12
-                            Label { text: qsTr("Design / Core"); color: "#6d7a7e" }
-                            Label { text: qsTr("Choose a core"); font.pixelSize: 24; font.bold: true; color: "#1e2b32" }
-                            Label {
-                                Layout.fillWidth: true
-                                text: qsTr("Select a traceable catalog record or define a manual toroid before placing windings.")
-                                wrapMode: Text.WordWrap
-                                color: "#6d7a7e"
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 120
-                                radius: 8
-                                color: "#f3f1ed"
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: qsTr("Core selection workspace")
-                                    color: "#6d7a7e"
-                                }
-                            }
-                        }
+                    CoreMaterialPanel {
+                        // Deviation from the task brief: the brief's Main.qml
+                        // snippet sets objectName: "coreMaterialPanelHost"
+                        // here, but QML instance-site property assignments
+                        // override a component's own root-level assignment
+                        // (verified empirically), so that would shadow
+                        // CoreMaterialPanel.qml's own
+                        // `objectName: "coreMaterialPanel"` and break
+                        // test_core_material_panel_exposes_both_selectors_and_manual_dimensions,
+                        // which requires "coreMaterialPanel" to resolve via
+                        // findChild. No test references
+                        // "coreMaterialPanelHost", so the override is simply
+                        // omitted.
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 0 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 0
+                        controller: coreMaterialController
                     }
 
                     WindingPanel {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 1 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 1
                         controller: guidedStudioController
                     }
 
-                    MaterialStudioPage {
-                        id: materialStudioPage
-                        objectName: "materialStudioPage"
-                        controller: materialStudioController
-                        transactionHost: window
+                    PreliminaryPage {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 2 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 2
+                        controller: preliminaryController
                     }
 
-                    ScrollView {
-                        clip: true
-                        contentWidth: availableWidth
-                        ColumnLayout {
-                            width: parent.width - 20
-                            anchors.margins: 10
-                            spacing: 12
-                            Label { text: qsTr("Design / Simulation"); color: "#6d7a7e" }
-                            Label { text: qsTr("Configure a run"); font.pixelSize: 24; font.bold: true; color: "#1e2b32" }
-                            Label {
-                                Layout.fillWidth: true
-                                text: qsTr("Choose a backend and requested outputs. Generation remains behind the existing controller.")
-                                wrapMode: Text.WordWrap
-                                color: "#6d7a7e"
-                            }
-                            ComboBox {
-                                objectName: "simulationBackendCombo"
-                                Layout.fillWidth: true
-                                model: backendChoices
-                                enabled: generationController !== null
-                            }
-                            Button {
-                                objectName: "simulationGenerateButton"
-                                Layout.fillWidth: true
-                                text: generationController !== null && generationController.busy
-                                    ? qsTr("Generating…") : qsTr("Generate project")
-                                enabled: generationController !== null && !generationController.busy
-                                onClicked: generationController.generate(simulationBackendCombo.currentText)
-                            }
-                        }
+                    SimulationPanel {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 3 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 3
+                        controller: simulationController
+                        generation: generationController
                     }
 
-                    ScrollView {
-                        clip: true
-                        contentWidth: availableWidth
-                        ColumnLayout {
-                            width: parent.width - 20
-                            anchors.margins: 10
-                            spacing: 12
-                            Label { text: qsTr("Design / Review"); color: "#6d7a7e" }
-                            Label { text: qsTr("Review before generation"); font.pixelSize: 24; font.bold: true; color: "#1e2b32" }
-                            Label {
-                                Layout.fillWidth: true
-                                text: qsTr("Check the selected core, windings, materials, and solver intent before a project is generated.")
-                                wrapMode: Text.WordWrap
-                                color: "#6d7a7e"
-                            }
-                            Label { text: qsTr("✓ Geometry inputs available"); color: "#157a61" }
-                            Label { text: qsTr("✓ Material selection available"); color: "#157a61" }
-                            Label { text: qsTr("○ Solver outputs pending"); color: "#6d7a7e" }
-                        }
+                    ReviewPage {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 4 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 4
+                        controller: reviewController
                     }
                 }
             }
@@ -509,19 +525,38 @@ ApplicationWindow {
         }
     }
 
+    MaterialStudioWindow {
+        id: materialStudioWindow
+        controller: materialStudioController
+        onClosedAfterEditing: {
+            if (coreMaterialController !== null) {
+                coreMaterialController.refreshLibrary()
+            }
+        }
+    }
+
+    Connections {
+        target: coreMaterialController
+        function onMaterialStudioRequested() {
+            materialStudioWindow.show()
+            materialStudioWindow.raise()
+            materialStudioWindow.requestActivate()
+        }
+    }
+
     Dialog {
-        id: dirtyMaterialTransactionDialog
-        objectName: "dirtyMaterialTransactionDialog"
+        id: unsavedProjectDialog
+        objectName: "unsavedProjectDialog"
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        title: qsTr("Unsaved material changes")
+        title: qsTr("Unsaved project changes")
 
         ColumnLayout {
             Label {
                 Layout.preferredWidth: 420
                 text: qsTr(
-                    "Save the material draft, discard unsaved changes, or cancel the pending action."
+                    "Save the project, discard unsaved changes, or cancel closing."
                 )
                 wrapMode: Text.WordWrap
                 Accessible.name: text
@@ -529,40 +564,37 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 Button {
-                    objectName: "dirtyMaterialTransactionSaveButton"
+                    objectName: "unsavedProjectSaveButton"
                     text: qsTr("Save")
-                    enabled: materialStudioController !== null
-                        && materialStudioController.canSave
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Save material changes and continue")
+                    Accessible.name: qsTr("Save the project and close")
                     onClicked: {
-                        materialStudioController.saveDraft()
-                        if (!materialStudioController.dirty) {
-                            window.completePendingMaterialAction()
+                        if (guidedStudioController.saveDraft()) {
+                            unsavedProjectDialog.close()
+                            window.allowCloseOnce = true
+                            window.close()
                         }
+                        // A failed save leaves the dialog and the window open:
+                        // the failure is already reported in the status bar.
                     }
                 }
                 Button {
-                    objectName: "dirtyMaterialTransactionDiscardButton"
+                    objectName: "unsavedProjectDiscardButton"
                     text: qsTr("Discard")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Discard material changes and continue")
+                    Accessible.name: qsTr("Discard unsaved changes and close")
                     onClicked: {
-                        if (materialStudioController.discardChanges()) {
-                            window.completePendingMaterialAction()
-                        }
+                        unsavedProjectDialog.close()
+                        window.allowCloseOnce = true
+                        window.close()
                     }
                 }
                 Button {
-                    objectName: "dirtyMaterialTransactionCancelButton"
+                    objectName: "unsavedProjectCancelButton"
                     text: qsTr("Cancel")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Cancel action and keep editing")
-                    onClicked: {
-                        window.pendingMaterialAction = ""
-                        window.pendingMaterialArguments = []
-                        dirtyMaterialTransactionDialog.close()
-                    }
+                    Accessible.name: qsTr("Cancel closing and keep editing")
+                    onClicked: unsavedProjectDialog.close()
                 }
             }
         }

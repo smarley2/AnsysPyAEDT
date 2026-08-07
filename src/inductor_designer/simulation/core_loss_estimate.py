@@ -6,6 +6,8 @@ extrapolation, flux-density extrapolation, or material substitution is invented.
 
 from __future__ import annotations
 
+from math import isfinite
+
 from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.materials.records import PointSeries, SeriesKind
 from inductor_designer.simulation.interpolation import interpolate_within_range
@@ -21,6 +23,14 @@ _STEINMETZ_NOTE = (
     "DC-bias, or waveform correction is applied"
 )
 _TABLE_NOTE = "interpolated from a recorded loss table at the requested condition"
+# Decision: Fabio Posser, 2026-08-03 (see spec section 8 amendment). Manufacturer
+# loss curves are almost always published at zero DC bias only; refusing every
+# biased operating point left core loss blank for most real designs.
+_ZERO_BIAS_APPROXIMATION_NOTE = (
+    "core loss evaluated from zero-DC-bias loss data; DC premagnetization "
+    "increases loss for a given AC flux swing and is not modeled, so this "
+    "estimate is optimistic"
+)
 
 
 def _loss_series(selection: MaterialRevisionSelection) -> tuple[PointSeries, ...]:
@@ -31,19 +41,48 @@ def _loss_series(selection: MaterialRevisionSelection) -> tuple[PointSeries, ...
     )
 
 
+def _is_zero_bias(series: PointSeries) -> bool:
+    recorded_bias = series.conditions.dc_bias_a_per_m
+    return recorded_bias is None or recorded_bias == 0.0
+
+
+def _bias_characterized_at_temperature(
+    series: tuple[PointSeries, ...], core_temperature_c: float
+) -> bool:
+    """True when the material has at least one loss series, recorded at the
+    requested temperature, with a nonzero DC bias.
+
+    That is the only case with real bias-dependent loss data, so it is the
+    only case where the strict exact-bias-match rule applies. Otherwise only
+    zero-bias data exists at this temperature, and it is used to approximate
+    any requested bias (specification section 8 amendment, 2026-08-03).
+    """
+    return any(
+        item.conditions.temperature_c == core_temperature_c and not _is_zero_bias(item)
+        for item in series
+    )
+
+
 def _supports_condition(
-    series: PointSeries, core_temperature_c: float, h_dc_a_per_m: float
+    series: PointSeries,
+    core_temperature_c: float,
+    h_dc_a_per_m: float,
+    bias_characterized: bool,
 ) -> bool:
     if series.conditions.temperature_c != core_temperature_c:
         return False
-    recorded_bias = series.conditions.dc_bias_a_per_m
-    if recorded_bias is None:
-        # An ordinary unbiased datasheet curve never recorded a bias field at
-        # all -- it is a measurement taken at zero DC bias, not a measurement
-        # of unknown bias. It supports a request for exactly zero bias and
-        # nothing else.
-        return h_dc_a_per_m == 0.0
-    return recorded_bias == h_dc_a_per_m
+    if _is_zero_bias(series):
+        if bias_characterized:
+            # This material does have bias-dependent data at this
+            # temperature, just not from this particular (zero-bias) series,
+            # so the strict rule applies: it supports only a zero-bias
+            # request.
+            return h_dc_a_per_m == 0.0
+        # No bias-dependent data exists for this material at this
+        # temperature at all, so the zero-bias curve is the best available
+        # data and is used to approximate any requested bias.
+        return True
+    return series.conditions.dc_bias_a_per_m == h_dc_a_per_m
 
 
 def _interpolate_loss(series: PointSeries, b_ac_peak_t: float) -> float | None:
@@ -65,6 +104,12 @@ def core_loss_w(
             DiagnosticCode.CORE_LOSS_NON_POSITIVE_FREQUENCY,
             f"Core loss requires a positive frequency; got {frequency_hz:g} Hz.",
         )
+    if not isfinite(core_volume_m3):
+        return unavailable(
+            DiagnosticCode.CORE_LOSS_NON_FINITE_VOLUME,
+            "Core volume is not a finite number, so the core dimensions are "
+            "out of range.",
+        )
     if not core_volume_m3 > 0.0:
         return unavailable(
             DiagnosticCode.CORE_LOSS_NON_POSITIVE_VOLUME,
@@ -79,8 +124,11 @@ def core_loss_w(
             "fit, so core loss cannot be estimated.",
         )
 
+    bias_characterized = _bias_characterized_at_temperature(series, core_temperature_c)
     supported = [
-        item for item in series if _supports_condition(item, core_temperature_c, h_dc_a_per_m)
+        item
+        for item in series
+        if _supports_condition(item, core_temperature_c, h_dc_a_per_m, bias_characterized)
     ]
     if not supported:
         temperatures = sorted(
@@ -148,7 +196,10 @@ def core_loss_w(
                 f"range of series {exact[0].series_id} ({lowest:g} to "
                 f"{highest:g} T); extrapolation is not performed.",
             )
-        return estimated(volumetric * core_volume_m3, notes=(_TABLE_NOTE,))
+        notes: tuple[str, ...] = (_TABLE_NOTE,)
+        if not bias_characterized and h_dc_a_per_m != 0.0:
+            notes = notes + (_ZERO_BIAS_APPROXIMATION_NOTE,)
+        return estimated(volumetric * core_volume_m3, notes=notes)
 
     fit = selection.snapshot.steinmetz
     if fit is None:
@@ -165,7 +216,7 @@ def core_loss_w(
     # this condition could be silently answered by a fit contaminated with
     # data recorded at another temperature or bias.
     if any(
-        not _supports_condition(item, core_temperature_c, h_dc_a_per_m)
+        not _supports_condition(item, core_temperature_c, h_dc_a_per_m, bias_characterized)
         for item in series
     ):
         return unavailable(
@@ -213,4 +264,7 @@ def core_loss_w(
         )
 
     volumetric = fit.k * frequency_hz**fit.alpha * b_ac_peak_t**fit.beta
-    return estimated(volumetric * core_volume_m3, notes=(_STEINMETZ_NOTE,))
+    fit_notes: tuple[str, ...] = (_STEINMETZ_NOTE,)
+    if not bias_characterized and h_dc_a_per_m != 0.0:
+        fit_notes = fit_notes + (_ZERO_BIAS_APPROXIMATION_NOTE,)
+    return estimated(volumetric * core_volume_m3, notes=fit_notes)

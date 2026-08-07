@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.simulation.preliminary_contracts import (
+    CoreMagneticProperties,
     DiagnosticCode,
     PreliminaryValue,
     ResultState,
@@ -68,3 +69,21 @@ def test_every_diagnostic_code_is_a_dotted_lowercase_string() -> None:
         assert quantity and reason, code
         assert " " not in code, code
     assert len(set(codes)) == len(codes), "diagnostic codes must be unique"
+
+
+def test_core_magnetic_properties_allow_every_number_including_non_finite() -> None:
+    """Bad geometry is a diagnosed condition, never a constructor error.
+
+    `flux_density.non_positive_path_length`, `flux_density.core_path_not_finite`,
+    `core_loss.non_positive_volume`, and `core_loss.non_finite_volume` all report
+    these, so raising here would replace a user-facing diagnostic with a crash
+    inside the Preliminary controller's constructor.
+    """
+    zero = CoreMagneticProperties(path_length_m=0.0, volume_m3=0.0)
+    overflowed = CoreMagneticProperties(
+        path_length_m=float("inf"), volume_m3=float("inf")
+    )
+
+    assert zero.path_length_m == 0.0
+    assert zero.notes == ()
+    assert overflowed.volume_m3 == float("inf")

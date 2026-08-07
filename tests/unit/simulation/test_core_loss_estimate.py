@@ -11,7 +11,11 @@ from inductor_designer.materials.records import (
     SeriesKind,
     SteinmetzFit,
 )
-from inductor_designer.simulation.core_loss_estimate import core_loss_w
+from inductor_designer.simulation.core_loss_estimate import (
+    _STEINMETZ_NOTE,
+    _ZERO_BIAS_APPROXIMATION_NOTE,
+    core_loss_w,
+)
 from inductor_designer.simulation.preliminary_contracts import (
     DiagnosticCode,
     ResultState,
@@ -89,9 +93,28 @@ def test_temperature_mismatch_names_the_recorded_temperatures() -> None:
     assert "25" in str(result.message)
 
 
-def test_nonzero_dc_bias_without_supporting_data_is_unavailable() -> None:
+def test_nonzero_dc_bias_with_only_zero_bias_data_is_an_optimistic_estimate() -> None:
+    """Spec section 8 amendment (Fabio Posser, 2026-08-03): a material with no
+    bias-dependent loss data at all -- only a zero-bias table -- is not
+    refused for a biased request. The zero-bias curve is used to approximate
+    the biased operating point, labelled with the approximation note, instead
+    of leaving core loss Unavailable for every real biased choke.
+
+    This replaces the old assertion that this scenario refused with
+    CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS: that refusal is exactly the bug the
+    amendment fixes when no bias-characterized data exists for the material.
+    """
+    selection = make_material_selection(series=(make_loss_series(dc_bias_a_per_m=0.0),))
+    zero_bias = core_loss_w(
+        selection,
+        b_ac_peak_t=0.075,
+        frequency_hz=100_000.0,
+        core_temperature_c=25.0,
+        h_dc_a_per_m=0.0,
+        core_volume_m3=5.34e-6,
+    )
     result = core_loss_w(
-        make_material_selection(series=(make_loss_series(dc_bias_a_per_m=0.0),)),
+        selection,
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
         core_temperature_c=25.0,
@@ -99,8 +122,11 @@ def test_nonzero_dc_bias_without_supporting_data_is_unavailable() -> None:
         core_volume_m3=5.34e-6,
     )
 
-    assert result.code == DiagnosticCode.CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS
-    assert "1800" in str(result.message)
+    assert result.state is ResultState.ESTIMATED
+    assert result.value is not None
+    assert math.isclose(result.value, zero_bias.value)
+    assert _ZERO_BIAS_APPROXIMATION_NOTE in result.notes
+    assert _ZERO_BIAS_APPROXIMATION_NOTE not in zero_bias.notes
 
 
 def test_steinmetz_fit_is_used_when_no_table_matches_the_frequency() -> None:
@@ -173,6 +199,16 @@ def test_non_positive_frequency_and_volume_are_refused() -> None:
     assert zero_volume.code == DiagnosticCode.CORE_LOSS_NON_POSITIVE_VOLUME
 
 
+def test_non_finite_volume_is_a_diagnostic_not_a_crash() -> None:
+    selection = make_material_selection(series=(make_loss_series(),))
+
+    result = core_loss_w(
+        selection, 0.075, 100_000.0, 25.0, 0.0, float("inf")
+    )
+
+    assert result.code == DiagnosticCode.CORE_LOSS_NON_FINITE_VOLUME
+
+
 def test_flux_beyond_the_fit_envelope_is_not_extrapolated() -> None:
     # Same bounding-frequency setup as the Steinmetz-fit test above (25 kHz and
     # 100 kHz tables, request at 50 kHz so the fit branch is taken), but this
@@ -213,7 +249,12 @@ def test_flux_below_the_loss_table_range_is_not_extrapolated() -> None:
 def test_an_unbiased_loss_table_supports_a_zero_bias_request() -> None:
     """A recorded dc_bias_a_per_m of None is an ordinary unbiased datasheet
     curve -- it never recorded a bias field -- and must be usable for a
-    zero-bias request, while still refusing a nonzero one.
+    zero-bias request.
+
+    A nonzero request used to be refused here; per the spec section 8
+    amendment (Fabio Posser, 2026-08-03) it is now an approximated estimate
+    from the same zero-bias curve, since this material records no
+    bias-dependent data at all.
     """
     unbiased = make_material_selection(
         series=(make_loss_series(dc_bias_a_per_m=None),)
@@ -237,19 +278,30 @@ def test_an_unbiased_loss_table_supports_a_zero_bias_request() -> None:
     )
 
     assert zero_bias.state is ResultState.ESTIMATED
-    assert nonzero_bias.code == DiagnosticCode.CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS
+    assert nonzero_bias.state is ResultState.ESTIMATED
+    assert _ZERO_BIAS_APPROXIMATION_NOTE in nonzero_bias.notes
+    assert _ZERO_BIAS_APPROXIMATION_NOTE not in zero_bias.notes
 
 
 def test_dc_bias_mismatch_message_does_not_name_a_bias_from_another_temperature() -> None:
     """A series at 100 C happens to record a distinctive nonzero bias. A
     request at 25 C with no supporting bias data must not list that 100 C
     bias as though it were recorded at the requested temperature.
+
+    The 25 C series also needs a nonzero recorded bias (900 A/m) so this
+    material is bias-characterized at 25 C: otherwise, per the spec section 8
+    amendment, the zero-bias 25 C series alone would approximate any request
+    instead of refusing, and this test would no longer exercise the mismatch
+    message at all.
     """
     result = core_loss_w(
         make_material_selection(
             series=(
                 make_loss_series(
-                    series_id="loss-25c", temperature_c=25.0, dc_bias_a_per_m=0.0
+                    series_id="loss-25c-0", temperature_c=25.0, dc_bias_a_per_m=0.0
+                ),
+                make_loss_series(
+                    series_id="loss-25c-900", temperature_c=25.0, dc_bias_a_per_m=900.0
                 ),
                 make_loss_series(
                     series_id="loss-100c", temperature_c=100.0, dc_bias_a_per_m=4200.0
@@ -317,10 +369,26 @@ def test_bias_mismatch_names_zero_when_recorded_bias_is_none() -> None:
     enumeration must coerce the same way instead of reporting it as
     unrecorded -- naming "none recorded" for the very table just treated as
     zero-bias data would contradict that support rule.
+
+    A second, nonzero-bias 25 C series keeps this material bias-characterized
+    at 25 C, so the request still refuses (per the spec section 8 amendment,
+    a purely zero-bias material would instead approximate the request rather
+    than refuse it, which is a different scenario covered elsewhere).
     """
     result = core_loss_w(
         make_material_selection(
-            series=(make_loss_series(temperature_c=25.0, dc_bias_a_per_m=None),)
+            series=(
+                make_loss_series(
+                    series_id="loss-25c-none",
+                    temperature_c=25.0,
+                    dc_bias_a_per_m=None,
+                ),
+                make_loss_series(
+                    series_id="loss-25c-500",
+                    temperature_c=25.0,
+                    dc_bias_a_per_m=500.0,
+                ),
+            )
         ),
         b_ac_peak_t=0.075,
         frequency_hz=100_000.0,
@@ -330,7 +398,7 @@ def test_bias_mismatch_names_zero_when_recorded_bias_is_none() -> None:
     )
 
     assert result.code == DiagnosticCode.CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS
-    assert "recorded bias: 0 A/m" in str(result.message)
+    assert "recorded bias: 0 A/m, 500 A/m" in str(result.message)
     assert "none recorded" not in str(result.message)
 
 
@@ -401,3 +469,70 @@ def test_loss_table_wins_over_a_present_steinmetz_fit_with_a_different_answer() 
     assert result.value is not None
     assert math.isclose(result.value, 2500.0 * 5.34e-6)
     assert not math.isclose(result.value, fit_volumetric * 5.34e-6)
+
+
+def test_a_bias_characterized_material_still_refuses_an_unrecorded_third_bias() -> None:
+    """A material recording loss at both 0 A/m and a nonzero bias (900 A/m) is
+    bias-characterized at 25 C, so the strict exact-match rule from before the
+    amendment still applies: a third, unrecorded bias must still refuse, and
+    the recorded nonzero bias must be usable directly, with no approximation
+    note attached since it is not an approximation.
+    """
+    selection = make_material_selection(
+        series=(
+            make_loss_series(series_id="loss-0", dc_bias_a_per_m=0.0),
+            make_loss_series(series_id="loss-900", dc_bias_a_per_m=900.0),
+        )
+    )
+
+    unrecorded = core_loss_w(
+        selection,
+        b_ac_peak_t=0.075,
+        frequency_hz=100_000.0,
+        core_temperature_c=25.0,
+        h_dc_a_per_m=1800.0,
+        core_volume_m3=5.34e-6,
+    )
+    matching = core_loss_w(
+        selection,
+        b_ac_peak_t=0.075,
+        frequency_hz=100_000.0,
+        core_temperature_c=25.0,
+        h_dc_a_per_m=900.0,
+        core_volume_m3=5.34e-6,
+    )
+
+    assert unrecorded.code == DiagnosticCode.CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS
+    assert matching.state is ResultState.ESTIMATED
+    assert _ZERO_BIAS_APPROXIMATION_NOTE not in matching.notes
+
+
+def test_steinmetz_fit_under_bias_with_only_zero_bias_sources_carries_both_notes() -> None:
+    """The Steinmetz path pools the same loss series and reuses
+    _supports_condition, so it must open up to a nonzero bias request exactly
+    like the loss-table path when only zero-bias source data exists -- and the
+    approximation note must reach its result too.
+    """
+    selection = make_material_selection(
+        series=(
+            make_loss_series(series_id="loss-25khz", frequency_hz=25_000.0),
+            make_loss_series(series_id="loss-100khz-b", frequency_hz=100_000.0),
+        )
+    )
+    fitted = replace_steinmetz(selection, SteinmetzFit(2.0, 1.5, 2.0, 0.0, 0.0))
+
+    result = core_loss_w(
+        fitted,
+        b_ac_peak_t=0.075,
+        frequency_hz=50_000.0,
+        core_temperature_c=25.0,
+        h_dc_a_per_m=1800.0,
+        core_volume_m3=5.34e-6,
+    )
+
+    expected_volume = 2.0 * 50_000.0**1.5 * 0.075**2.0
+    assert result.state is ResultState.ESTIMATED
+    assert result.value is not None
+    assert math.isclose(result.value, expected_volume * 5.34e-6)
+    assert _STEINMETZ_NOTE in result.notes
+    assert _ZERO_BIAS_APPROXIMATION_NOTE in result.notes

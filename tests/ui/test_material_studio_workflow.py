@@ -49,7 +49,7 @@ def _root(
         controller.importTable(_file_url(path))
     engine = create_engine(material_studio_controller=controller)
     root = engine.rootObjects()[0]
-    root.findChild(QObject, "guidedStepList").setProperty("currentIndex", 2)
+    root.findChild(QObject, "materialStudioWindow").setProperty("visible", True)
     _APP.processEvents()
     return controller, engine, root
 
@@ -89,7 +89,6 @@ def test_material_workflow_exposes_table_import_and_curve_plot_regions(
         "curvePlotXAxisTicks",
         "curvePlotYAxisTicks",
         "curvePlotLogNotice",
-        "selectForSimulationButton",
     ):
         assert root.findChild(QObject, name) is not None, name
 
@@ -215,7 +214,7 @@ def test_material_can_be_reselected_from_library_after_restart(tmp_path: Path) -
     controller = MaterialStudioController(repository)
     engine = create_engine(material_studio_controller=controller)
     root = engine.rootObjects()[0]
-    root.findChild(QObject, "guidedStepList").setProperty("currentIndex", 2)
+    root.findChild(QObject, "materialStudioWindow").setProperty("visible", True)
     _APP.processEvents()
 
     material_list = root.findChild(QObject, "materialList")

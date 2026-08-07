@@ -31,12 +31,13 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.materials.identity import MaterialRef
+from inductor_designer.simulation.core_loss_estimate import _ZERO_BIAS_APPROXIMATION_NOTE
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,
     estimate_preliminary,
 )
 from inductor_designer.simulation.preliminary_contracts import (
-    DiagnosticCode,
+    CoreMagneticProperties,
     ResultState,
 )
 from tools.build_catalog import build
@@ -119,7 +120,10 @@ def _real_project_request(tmp_path: Path) -> PreliminaryRequest:
     )
     return PreliminaryRequest(
         project=project,
-        core_record=core_record,
+        core=CoreMagneticProperties(
+            path_length_m=core_record.path_length_m,
+            volume_m3=core_record.volume_m3,
+        ),
         conductors_by_winding={winding_id: conductor for winding_id in winding_ids},
         packings_by_winding={
             winding_id: PackedWinding(
@@ -146,14 +150,14 @@ def test_preliminary_estimates_reproduce_without_qt_maxwell_or_femm(
     assert result.core.b_peak_magnitude.state is ResultState.ESTIMATED
     assert result.windings[0].j_ac_rms.state is ResultState.ESTIMATED
     assert result.windings[0].wire_loss.state is ResultState.ESTIMATED
-    # 5 A DC with loss data recorded only at 0 A/m: core loss must be refused,
-    # never invented by ignoring the DC-bias condition.
-    assert (
-        result.core.core_loss.code
-        == DiagnosticCode.CORE_LOSS_NO_LOSS_DATA_FOR_DC_BIAS
-    )
+    # 5 A DC with loss data recorded only at 0 A/m: per the spec section 8
+    # amendment (Fabio Posser, 2026-08-03), this material records no
+    # bias-dependent loss data at all, so core loss is now an approximated
+    # estimate from the zero-bias table rather than refused.
+    assert result.core.core_loss.state is ResultState.ESTIMATED
+    assert _ZERO_BIAS_APPROXIMATION_NOTE in result.core.core_loss.notes
     assert result.totals.total_wire_loss.state is ResultState.ESTIMATED
-    assert result.totals.total_loss.code == DiagnosticCode.TOTAL_LOSS_INCOMPLETE
+    assert result.totals.total_loss.state is ResultState.ESTIMATED
     assert result.material_revision_id == _repository_revision()
 
 

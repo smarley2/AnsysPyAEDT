@@ -10,8 +10,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from inductor_designer.domain.catalog_records import ConductorRecord, CoreRecord
-from inductor_designer.domain.project import InductorProject
+from inductor_designer.domain.catalog_records import ConductorRecord
+from inductor_designer.domain.project import InductorProject, ManualCoreSelection
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.magnetic_estimate import (
@@ -21,6 +21,7 @@ from inductor_designer.simulation.magnetic_estimate import (
     flux_densities,
 )
 from inductor_designer.simulation.preliminary_contracts import (
+    CoreMagneticProperties,
     DiagnosticCode,
     PreliminaryValue,
     ResultState,
@@ -45,7 +46,7 @@ class PreliminaryRequest:
     """
 
     project: InductorProject
-    core_record: CoreRecord | None
+    core: CoreMagneticProperties | None
     conductors_by_winding: Mapping[str, ConductorRecord]
     packings_by_winding: Mapping[str, PackedWinding]
 
@@ -115,7 +116,7 @@ def _core_estimates(
     request: PreliminaryRequest,
     fields: FieldStrengths,
     densities: FluxDensities,
-    core_record: CoreRecord,
+    core: CoreMagneticProperties,
 ) -> CorePreliminary:
     material = request.project.design.core_material
     if material is None:  # guarded by the caller
@@ -127,14 +128,17 @@ def _core_estimates(
         frequency_hz=operating_point.frequency_hz,
         core_temperature_c=operating_point.core_temperature_c,
         h_dc_a_per_m=fields.h_dc_a_per_m,
-        core_volume_m3=core_record.volume_m3,
+        core_volume_m3=core.volume_m3,
     )
+    # The core's own notes describe how its path length and volume were
+    # obtained, which is an assumption behind every B value below.
+    notes = densities.notes + core.notes
     return CorePreliminary(
-        b_dc=estimated(densities.b_dc_t, densities.notes),
-        b_min=estimated(densities.b_min_t, densities.notes),
-        b_max=estimated(densities.b_max_t, densities.notes),
-        b_ac_peak=estimated(densities.b_ac_peak_t, densities.notes),
-        b_peak_magnitude=estimated(densities.b_peak_magnitude_t, densities.notes),
+        b_dc=estimated(densities.b_dc_t, notes),
+        b_min=estimated(densities.b_min_t, notes),
+        b_max=estimated(densities.b_max_t, notes),
+        b_ac_peak=estimated(densities.b_ac_peak_t, notes),
+        b_peak_magnitude=estimated(densities.b_peak_magnitude_t, notes),
         core_loss=loss,
     )
 
@@ -269,7 +273,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
     design = request.project.design
     material = design.core_material
 
-    if request.core_record is None:
+    if request.core is None:
         core = _core_all(
             unavailable(
                 DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED,
@@ -285,6 +289,25 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 "and core loss cannot be estimated.",
             )
         )
+    elif (
+        isinstance(design.core, ManualCoreSelection)
+        and not design.manual_material_compatibility_acknowledged
+    ):
+        # Specification section 4.1: a Manual core paired with a material
+        # requires a visible compatibility acknowledgment before Preliminary
+        # can treat the pair as complete. Generation and solve already refuse
+        # an unacknowledged pair (`run_planning.py`, `domain/validation.py`);
+        # this closes the same gap here. Winding quantities do not depend on
+        # the core, so they stay estimated below.
+        core = _core_all(
+            unavailable(
+                DiagnosticCode.FLUX_DENSITY_MANUAL_COMPATIBILITY_UNACKNOWLEDGED,
+                "The Manual core and pinned material pair is not yet "
+                "acknowledged, so core flux density and core loss cannot be "
+                "estimated. Confirm material compatibility on the Core & "
+                "Material screen.",
+            )
+        )
     else:
         # Built from the design itself, never taken from the caller, so this
         # can never disagree with WindingDefinition.turns.
@@ -294,7 +317,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
         fields = field_strengths(
             request.project.operating_point,
             turns_by_winding,
-            request.core_record.path_length_m,
+            request.core.path_length_m,
         )
         if isinstance(fields, PreliminaryValue):
             core = _core_all(fields)
@@ -307,7 +330,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
             if isinstance(densities, PreliminaryValue):
                 core = _core_all(densities)
             else:
-                core = _core_estimates(request, fields, densities, request.core_record)
+                core = _core_estimates(request, fields, densities, request.core)
 
     windings = tuple(
         _winding_row(request, definition.winding_id) for definition in design.windings

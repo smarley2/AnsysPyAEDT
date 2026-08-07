@@ -10,26 +10,8 @@ Page {
     property var transactionHost: null
     property var revisionSources: controller !== null
         ? (controller.selectedRevision["sources"] || []) : []
-    property var bhSeries: controller !== null
-        ? controller.series.filter(function(item) { return item.kind === "bh-curve" })
-        : []
-    property var bhSeriesOptions: bhSeries.map(function(item) {
-        return {
-            "seriesId": item.seriesId,
-            "label": qsTr("%1 — temperature %2 — DC bias %3")
-                .arg(item.seriesId)
-                .arg(conditionText(item.temperatureC, qsTr("°C")))
-                .arg(conditionText(item.dcBiasAPerM, qsTr("A/m")))
-        }
-    })
     property int overviewColumns: width < 1000 ? 1 : width < 1400 ? 2 : 3
     property int workspaceColumns: width < 1200 ? 1 : 2
-
-    function conditionText(value, unit) {
-        return value === undefined || value === null
-            ? qsTr("unspecified")
-            : qsTr("%1 %2").arg(value).arg(unit)
-    }
 
     function sourceTraceText(source) {
         return [
@@ -347,39 +329,6 @@ Page {
                                 wrapMode: Text.WrapAnywhere
                                 Accessible.name: text
                             }
-                        }
-                        ComboBox {
-                            id: projectBhSeriesChoice
-                            objectName: "projectBhSeriesChoice"
-                            visible: controller !== null && controller.hasProject
-                            Layout.fillWidth: true
-                            model: materialStudioPage.bhSeriesOptions
-                            textRole: "label"
-                            valueRole: "seriesId"
-                            currentIndex: count === 1 ? 0 : -1
-                            Accessible.name: qsTr("Explicit B-H series for simulation")
-                        }
-                        Button {
-                            id: selectForSimulationButton
-                            objectName: "selectForSimulationButton"
-                            visible: controller !== null && controller.hasProject
-                            Layout.fillWidth: true
-                            text: qsTr("Select for simulation")
-                            enabled: controller !== null
-                                && controller.canUseInProject
-                                && (projectBhSeriesChoice.count <= 1
-                                    || projectBhSeriesChoice.currentIndex >= 0)
-                            onClicked: controller.useInProject(
-                                projectBhSeriesChoice.currentIndex >= 0
-                                    ? projectBhSeriesChoice.currentValue : ""
-                            )
-                        }
-                        Label {
-                            visible: controller === null || !controller.hasProject
-                            Layout.fillWidth: true
-                            text: qsTr("Load a project to select this revision for simulation.")
-                            wrapMode: Text.WordWrap
-                            color: palette.mid
                         }
                     }
                 }
