@@ -67,7 +67,14 @@ def pack_winding(core: FinishedCore, spec: WindingSpec) -> PackedWinding:
 
     capacities: list[tuple[int, float, float]] = []  # (layer, min_pitch_rad, capacity)
     layer = 1
-    while True:
+    total_capacity = 0
+    # Stop as soon as the requested turns are covered: layer count grows with
+    # r_inner / d, so enumerating every layer the bore admits is unbounded work
+    # for a core far outside the physical range (a 1e200 m bore admits ~1e202
+    # layers). Bounding by `spec.turns` keeps the cost scale-independent, and the
+    # loop still runs to exhaustion whenever the turns do not fit -- which is the
+    # only case where `total_capacity` is reported.
+    while total_capacity < spec.turns:
         min_pitch = _min_pitch_rad(core, layer, d, spec.min_spacing_m)
         if min_pitch is None:
             break
@@ -75,9 +82,9 @@ def pack_winding(core: FinishedCore, spec: WindingSpec) -> PackedWinding:
         if capacity <= 0:
             break
         capacities.append((layer, min_pitch, float(capacity)))
+        total_capacity += capacity
         layer += 1
 
-    total_capacity = int(sum(capacity for _, _, capacity in capacities))
     if spec.turns > total_capacity:
         raise PackingError(
             spec.winding_id,

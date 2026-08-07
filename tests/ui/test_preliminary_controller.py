@@ -128,14 +128,12 @@ def test_overflowing_manual_core_dimensions_are_reported_not_raised() -> None:
 
     `core_magnetic_properties` (which feeds these rows) computes the core's
     path length and volume with closed-form arithmetic, never packing, so it
-    stays fast at any magnitude. `build_geometry_model` is a different
-    story: it hands these same dimensions to `resolve_finished_core` and
-    `pack_winding`, which are not built for a 1e200 m toroid and can spin
-    for a very long time. The winding is deliberately made invalid (turns=0)
-    so validation raises `GeometryModelError` before ever reaching that
-    packing code -- irrelevant to `coreRows`, which never depend on the
-    geometry model, but exactly what stands between this test finishing
-    quickly and it not finishing at all.
+    stays fast at any magnitude. `build_geometry_model` hands these same
+    dimensions to `resolve_finished_core` and `pack_winding`, which used to
+    enumerate every winding layer a 1e200 m bore admits and never return;
+    `pack_winding` now bounds that enumeration by the requested turns, so the
+    real winding can stay in the project (see
+    `tests/unit/geometry/test_packing.py::test_extreme_core_dimensions_pack_without_spinning`).
     """
     QGuiApplication.instance() or QGuiApplication([])
     base = make_project_with_material()
@@ -144,7 +142,6 @@ def test_overflowing_manual_core_dimensions_are_reported_not_raised() -> None:
         design=replace(
             base.design,
             core=ManualCoreSelection(1e200, 0.5e200, 1e50, 0.0),
-            windings=(replace(base.design.windings[0], turns=0),),
             # Acknowledged so the overflow this test targets is what blocks
             # core quantities, not the Manual-core compatibility gate.
             manual_material_compatibility_acknowledged=True,
