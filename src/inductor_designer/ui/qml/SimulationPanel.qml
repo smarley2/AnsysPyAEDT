@@ -43,15 +43,19 @@ Pane {
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Simulation")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Configure a run")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {

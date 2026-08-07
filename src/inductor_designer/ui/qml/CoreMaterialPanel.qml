@@ -37,15 +37,19 @@ Pane {
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Core & Material")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Pair a core with an exact material revision")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -195,18 +199,41 @@ Pane {
                 }
             }
 
-            CheckBox {
-                id: manualCompatibilityCheckBox
-                objectName: "manualCompatibilityCheckBox"
+            // A native style (this app sets none explicitly, so it is
+            // whatever Qt Quick Controls resolves to on the host platform)
+            // refuses to let a `CheckBox` customize its `contentItem` --
+            // overriding it to wrap this long acknowledgement text produced
+            // a `QML Label: The current style does not support
+            // customization of this control` warning and, on a style that
+            // truly ignores the override, would silently not wrap at all.
+            // A plain `CheckBox` also cannot wrap its own built-in label.
+            // Splitting the checkbox itself (indicator only, text left
+            // empty) from an ordinary wrapping `Label` beside it sidesteps
+            // both problems without touching CheckBox's internals.
+            RowLayout {
+                id: manualCompatibilityRow
+                objectName: "manualCompatibilityRow"
                 Layout.fillWidth: true
                 visible: coreMaterialPanel.controller !== null
                     && coreMaterialPanel.controller.acknowledgementRequired
-                checked: coreMaterialPanel.controller !== null
-                    && coreMaterialPanel.controller.acknowledged
-                activeFocusOnTab: true
-                text: qsTr("I accept that core and material compatibility is my assumption for this manual core")
-                Accessible.name: text
-                onToggled: coreMaterialPanel.controller.setAcknowledged(checked)
+                spacing: 8
+
+                CheckBox {
+                    id: manualCompatibilityCheckBox
+                    objectName: "manualCompatibilityCheckBox"
+                    Layout.alignment: Qt.AlignTop
+                    checked: coreMaterialPanel.controller !== null
+                        && coreMaterialPanel.controller.acknowledged
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("I accept that core and material compatibility is my assumption for this manual core")
+                    onToggled: coreMaterialPanel.controller.setAcknowledged(checked)
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("I accept that core and material compatibility is my assumption for this manual core")
+                    wrapMode: Text.WordWrap
+                    color: "#1e2b32"
+                }
             }
 
             Button {

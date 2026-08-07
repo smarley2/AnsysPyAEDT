@@ -17,15 +17,19 @@ Pane {
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Review")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Review before generation")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -63,6 +67,7 @@ Pane {
                             spacing: 8
                             Label {
                                 Layout.preferredWidth: 240
+                                Layout.minimumWidth: 0
                                 text: modelData.label
                                 color: "#6d7a7e"
                                 wrapMode: Text.WordWrap
