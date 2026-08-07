@@ -20,6 +20,7 @@ This repository is developed by people and multiple coding agents. These rules a
 - Do not commit copyrighted datasheets, screenshots, AEDT projects, generated solver output, credentials, or license files unless their redistribution is explicitly allowed.
 - Record significant architectural changes in `docs/adr/`.
 - Run the verification commands required by the active plan before claiming completion.
+- Run the full suite with `pytest -n 8`. Use serial `pytest` for single tests and debugging.
 
 ## Collaboration
 
