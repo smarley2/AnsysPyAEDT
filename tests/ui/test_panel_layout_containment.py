@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import gc
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -100,7 +101,22 @@ from tests.unit.domain.test_project import (  # noqa: E402
     make_project_with_material,
 )
 
-pytestmark = pytest.mark.ui
+# Windows-only: this test asserts on exact pixel geometry, and both of its
+# inputs are platform-specific. The Qt Quick Controls style differs (the
+# Windows style's vertical `ScrollBar` is 17px wide, the Basic style Linux
+# falls back to is 8px), and so do the default font metrics, which decide how
+# tall each screen's content is and therefore whether a vertical scrollbar is
+# there at all at the heights below. On Linux the same code reports overflows
+# of 3-9px that no Windows user can see. The application only runs on Windows
+# (Ansys AEDT and FEMM are Windows-only), so the containment guard is kept
+# where it describes something real rather than being retuned per platform.
+pytestmark = [
+    pytest.mark.ui,
+    pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="pixel-exact layout assertions are tuned to the Windows Qt style and fonts",
+    ),
+]
 
 SUPPORTED = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
