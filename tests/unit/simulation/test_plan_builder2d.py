@@ -7,6 +7,7 @@ from inductor_designer.domain.winding import CurrentDirection, WindingDefinition
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.planar import PlanarModel, build_planar_model
 from inductor_designer.materials.records import MaterialRecord
+from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
 from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan
@@ -54,6 +55,7 @@ def build2d(
     frequency_hz: float = 100_000.0,
     recipe: SimulationRecipe | None = None,
     material_record: MaterialRecord | None = None,
+    dc_bias_decision: DcBiasDecision | None = None,
 ) -> Maxwell2dDesignPlan:
     effective = effective_inputs
     if effective is None:
@@ -67,6 +69,7 @@ def build2d(
         {definition.winding_id: BARE for definition in definitions},
         frequency_hz=frequency_hz,
         recipe=recipe or make_recipe(),
+        dc_bias_decision=dc_bias_decision,
         material_record=material_record or make_approved_material_record(),
         material_bh_series_id=None,
     )
@@ -114,6 +117,30 @@ def test_effective_current_direction_controls_base_polarity() -> None:
 def test_two_d_approximation_note_always_present() -> None:
     plan = build2d((make_definition(),))
     assert any("approximate" in note and "cross-section" in note for note in plan.notes)
+
+
+AC_ONLY = DcBiasDecision(
+    DcBiasStrategy.AC_ONLY_DC_IGNORED, True, "AC-only; DC bias ignored for the test"
+)
+
+
+def test_ac_only_decision_lands_in_plan_and_notes() -> None:
+    # Decision: Fabio Posser, 2026-08-07 -- 2D/FEMM run AC-only rather than
+    # refuse; the plan still records the requested DC current (for the
+    # manifest), but the decision and a plain-language note travel with it.
+    plan = build2d(
+        (make_definition(),),
+        (make_effective(dc_current_a=5.0),),
+        dc_bias_decision=AC_ONLY,
+    )
+    assert plan.dc_bias is AC_ONLY
+    assert any("AC-only" in note for note in plan.notes)
+    assert all(winding.dc_current_a == 5.0 for winding in plan.windings)
+
+
+def test_no_dc_bias_notes_when_no_dc_is_requested() -> None:
+    plan = build2d((make_definition(),), dc_bias_decision=AC_ONLY)
+    assert not any("DC" in note for note in plan.notes)
 
 
 @pytest.mark.parametrize(

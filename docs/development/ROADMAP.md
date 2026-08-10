@@ -241,6 +241,16 @@ pyaedt limits. Implemented deliverables:
 The 2024 R2 rows were not part of this acceptance and are not current product
 targets.
 
+**Amendment, 2026-08-07 (decided by Fabio Posser):** the 2D fallback described
+above as "blocked from generation" now generates. Hitting that refusal in the
+shipped app with 5 A DC on the windings, Fabio decided that neither Maxwell 2D
+nor FEMM can represent a DC bias in an AC solve, and neither ever will, but
+refusing the run outright was the wrong response to that fact. Both backends
+now generate **AC-only, with the DC current ignored**, after the user is
+warned and explicitly confirms; see
+[`docs/development/dc-bias-compatibility.md`](dc-bias-compatibility.md) for
+the full decision record. 3D DC-bias handling is unchanged.
+
 ## Milestone 4.5: Automation interfaces — MCP server and FEMM 2D backend
 
 Requirements added 2026-07-17 by Fabio Posser:

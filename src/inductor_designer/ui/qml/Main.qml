@@ -576,10 +576,17 @@ ApplicationWindow {
             id: statusDock
             objectName: "statusDock"
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
+            // A wrapped long message (lastLogLineLabel) can be taller than
+            // the 50px a short one-line status bar needs; grow to fit it
+            // instead of clipping (the previous fixed 50px) or overflowing
+            // into surrounding UI (the previous `clip: false`). `clip: true`
+            // stays as a backstop in case some future content is taller
+            // than a single layout pass accounts for.
+            Layout.preferredHeight: Math.max(50, lastLogLineLabel.implicitHeight + 16)
             color: "#fbfaf8"
             radius: 10
             border.color: "#d8d4cd"
+            clip: true
 
             RowLayout {
                 anchors.fill: parent
@@ -599,9 +606,10 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Label {
+                    id: lastLogLineLabel
                     visible: generationController !== null && generationController.lines.length > 0
                     text: visible ? generationController.lines[generationController.lines.length - 1] : ""
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
                     Layout.maximumWidth: 300
                 }
                 Label {

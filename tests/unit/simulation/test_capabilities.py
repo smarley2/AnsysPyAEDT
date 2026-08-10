@@ -43,10 +43,15 @@ def test_reviewed_environment_without_native_dc_is_blocked_without_fallback() ->
     assert "no fallback is supported" in decision.reason
 
 
-def test_2d_dc_bias_is_blocked_until_a_supported_policy_exists() -> None:
+def test_2d_dc_bias_runs_ac_only_and_ignores_the_requested_bias() -> None:
+    # Decision: Fabio Posser, 2026-08-07 — neither Maxwell 2D nor FEMM can
+    # carry a DC premagnetization into an AC solve, so instead of refusing the
+    # run outright it proceeds AC-only, with the DC bias recorded as ignored.
     decision = select_dc_bias_strategy(snapshot("2026.1", True), ModelDimension.TWO_D)
-    assert decision.strategy is DcBiasStrategy.BLOCKED
+    assert decision.strategy is DcBiasStrategy.AC_ONLY_DC_IGNORED
+    assert decision.approximate is True
     assert "Maxwell 2D" in decision.reason
+    assert "FEMM" in decision.reason
 
 
 def test_unknown_3d_capability_is_blocked_instead_of_guessed() -> None:

@@ -248,4 +248,6 @@ def dc_bias_notes(
                 "effect on a linear material."
             )
         return tuple(notes)
+    if decision.strategy is DcBiasStrategy.AC_ONLY_DC_IGNORED:
+        return (f"DC bias ignored; this is an AC-only result: {decision.reason}",)
     return (f"DC operating currents are recorded but not applied: {decision.reason}",)

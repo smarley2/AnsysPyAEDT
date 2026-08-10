@@ -19,6 +19,7 @@ __all__ = [
 
 class DcBiasStrategy(str, Enum):
     NATIVE_INCLUDE_DC_FIELDS = "native-include-dc-fields"
+    AC_ONLY_DC_IGNORED = "ac-only-dc-ignored"
     BLOCKED = "blocked"
 
 
@@ -56,9 +57,11 @@ def select_dc_bias_strategy(
 ) -> DcBiasDecision:
     if dimension is ModelDimension.TWO_D:
         return DcBiasDecision(
-            DcBiasStrategy.BLOCKED,
-            False,
-            "Maxwell 2D DC-bias generation is blocked until a validated policy is available.",
+            DcBiasStrategy.AC_ONLY_DC_IGNORED,
+            True,
+            "Maxwell 2D and FEMM linearize about zero bias and cannot carry a DC "
+            "premagnetization into an AC solve; this run models the AC excitation "
+            "only and ignores the requested DC bias.",
         )
     if capabilities.review_status is CapabilityReviewStatus.UNREVIEWED:
         return DcBiasDecision(

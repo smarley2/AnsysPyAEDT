@@ -789,3 +789,41 @@ def test_without_a_base_the_artifact_path_is_unchanged() -> None:
     outcome, _, _, _ = generate_one(RunBackend.FEMM)
 
     assert outcome.manifest.artifacts[0].path.endswith("outputs/m6/Boost_inductor_2d.fem")
+
+
+@pytest.mark.parametrize("backend", [RunBackend.MAXWELL_2D, RunBackend.FEMM])
+def test_manifest_warns_when_dc_bias_is_ignored_and_is_silent_when_there_is_none(
+    backend: RunBackend,
+) -> None:
+    # Decision: Fabio Posser, 2026-08-07 -- a run-manifest.json reader must
+    # never mistake an AC-only 2D/FEMM run for a biased solve.
+    dc_project = replace(
+        project_for_runs(),
+        operating_point=replace(
+            project_for_runs().operating_point,
+            windings=(
+                replace(
+                    project_for_runs().operating_point.windings[0], dc_current_a=5.0
+                ),
+            ),
+        ),
+    )
+    dc_outcome = generate_run(
+        dc_project,
+        RunRequest(backend, RunMode.GENERATE_ONLY),
+        CATALOG,
+        CAPABILITIES,
+        OUTPUT_DIRECTORY,
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id=f"dc-warning-{backend.value}",
+        application_version="0.7.0-test",
+    )
+    assert any(
+        "DC bias ignored" in warning and "AC-only" in warning
+        for warning in dc_outcome.manifest.warnings
+    )
+
+    no_dc_outcome, _, _, _ = generate_one(backend)
+    assert not any("DC bias ignored" in warning for warning in no_dc_outcome.manifest.warnings)

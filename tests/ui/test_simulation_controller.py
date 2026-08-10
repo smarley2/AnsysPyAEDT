@@ -40,7 +40,10 @@ SUPPORTED = CapabilitySnapshot(
 
 
 def build(
-    *, dirty: bool = False, document: Path | None = Path("boost.inductor.json")
+    *,
+    dirty: bool = False,
+    document: Path | None = Path("boost.inductor.json"),
+    dc_current_a: float | None = None,
 ) -> tuple[
     ProjectSession,
     list[tuple[str, bool]],
@@ -54,7 +57,22 @@ def build(
         calls.append((backend_label, show_solver_window))
         return ("done",)
 
-    session = ProjectSession(make_project(), document, lambda project: None)
+    # make_project()'s default winding already carries 5 A DC; dc_current_a
+    # only needs overriding to build the DC-free case.
+    project = make_project()
+    if dc_current_a is not None:
+        project = replace(
+            project,
+            operating_point=replace(
+                project.operating_point,
+                windings=(
+                    replace(
+                        project.operating_point.windings[0], dc_current_a=dc_current_a
+                    ),
+                ),
+            ),
+        )
+    session = ProjectSession(project, document, lambda project: None)
     generation = GenerationController(runner)
     controller = SimulationController(session, generation, SUPPORTED)
     if dirty:
@@ -169,7 +187,7 @@ def test_generation_is_blocked_without_a_document_path() -> None:
 
 def test_generating_passes_the_backend_and_the_visibility_choice() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
-    _, calls, generation, controller = build()
+    _, calls, generation, controller = build(dc_current_a=0.0)
     controller.setBackend("FEMM 2D")
     controller.setShowSolverWindow(True)
 
@@ -177,3 +195,94 @@ def test_generating_passes_the_backend_and_the_visibility_choice() -> None:
     wait_until_idle(app, generation)
 
     assert calls == [("FEMM 2D", True)]
+
+
+# make_project()'s default winding carries 5 A DC (tests/unit/domain/test_project.py),
+# matching Fabio Posser's exact reported scenario. Maxwell 3D applies it
+# natively under SUPPORTED, so only switching to a 2D/FEMM backend triggers
+# the AC-only confirmation gate (decision: Fabio Posser, 2026-08-07).
+
+
+def test_no_dc_bias_dialog_is_needed_when_the_backend_applies_dc_natively() -> None:
+    _, _, _, controller = build()
+
+    assert controller.dcBiasIgnored is False
+    assert controller.dcBiasNotice == ""
+
+
+def test_switching_to_a_2d_or_femm_backend_reports_the_dc_bias_would_be_ignored() -> None:
+    _, _, _, controller = build()
+
+    assert controller.setBackend("Maxwell 2D (Ansys)") is True
+    assert controller.dcBiasIgnored is True
+    assert "AC-only" in controller.dcBiasNotice or "AC" in controller.dcBiasNotice
+
+    assert controller.setBackend("FEMM 2D") is True
+    assert controller.dcBiasIgnored is True
+
+
+def test_a_dc_free_project_never_triggers_the_dialog_on_a_2d_or_femm_backend() -> None:
+    _, _, _, controller = build(dc_current_a=0.0)
+
+    assert controller.setBackend("FEMM 2D") is True
+    assert controller.dcBiasIgnored is False
+    assert controller.dcBiasNotice == ""
+
+
+def test_generate_refuses_to_start_an_unconfirmed_ac_only_run() -> None:
+    _, calls, _, controller = build()
+    controller.setBackend("FEMM 2D")
+
+    assert controller.dcBiasIgnored is True
+    assert controller.generate() is False
+    assert calls == []
+
+
+def test_proceed_ac_only_starts_the_run_after_confirmation() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    _, calls, generation, controller = build()
+    controller.setBackend("FEMM 2D")
+
+    assert controller.generate() is False
+    assert controller.proceedAcOnly() is True
+    wait_until_idle(app, generation)
+
+    assert calls == [("FEMM 2D", False)]
+
+
+# Finding 1 (review, 2026-08-10): proceedAcOnly() must only authorise the run
+# a refused generate() actually warned about -- naming the backend that was
+# pending, not just "some generate() was refused at some point" -- so a
+# caller that skips the dialog (a shortcut, a second dialog, MCP automation)
+# cannot start an unconfirmed AC-only run.
+
+
+def test_proceed_ac_only_without_a_pending_confirmation_refuses() -> None:
+    _, calls, _, controller = build()
+    controller.setBackend("FEMM 2D")
+
+    assert controller.proceedAcOnly() is False
+    assert calls == []
+
+
+def test_proceed_ac_only_refuses_once_the_backend_no_longer_matches() -> None:
+    _, calls, _, controller = build()
+    controller.setBackend("FEMM 2D")
+    assert controller.generate() is False
+
+    assert controller.setBackend("Maxwell 2D (Ansys)") is True
+    assert controller.proceedAcOnly() is False
+    assert calls == []
+
+
+def test_a_second_proceed_ac_only_after_a_successful_run_refuses() -> None:
+    app = QGuiApplication.instance() or QGuiApplication([])
+    _, calls, generation, controller = build()
+    controller.setBackend("FEMM 2D")
+    assert controller.generate() is False
+
+    assert controller.proceedAcOnly() is True
+    wait_until_idle(app, generation)
+
+    assert controller.proceedAcOnly() is False
+    assert calls == [("FEMM 2D", False)]

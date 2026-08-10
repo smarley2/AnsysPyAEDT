@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from inductor_designer.application.services.dc_bias_visibility import (
+    DcBiasVisibility,
+    dc_bias_visibility,
+)
 from inductor_designer.application.services.solver_visibility import (
     visible_window_support,
 )
@@ -50,12 +54,20 @@ class SimulationController(QObject):
         self._capabilities = capabilities
         self._backend = GenerationBackend.MAXWELL_3D
         self._show_solver_window = False
+        # Set when generate() refuses because DC bias would be ignored, so
+        # proceedAcOnly() can verify the confirmation the caller obtained
+        # still matches the current backend (finding: the invariant must
+        # live here, not in the QML wiring that happens to call it once).
+        self._pending_ac_only_backend: GenerationBackend | None = None
         session.dirtyChanged.connect(self.gateChanged)
         # `documentPath` changes on Open/Save As without necessarily also
         # changing `dirty` (a freshly opened project is clean both before and
         # after), so the gate needs its own hook on that signal too.
         session.documentPathChanged.connect(self.gateChanged)
         generation.busyChanged.connect(self.gateChanged)
+        # The DC-bias notice depends on the operating point (edited from the
+        # Windings screen, not from here), so it needs its own hook too.
+        session.projectChanged.connect(self.configurationChanged)
 
     def _get_backend_options(self) -> list[str]:
         return [item.value for item in GenerationBackend]
@@ -134,6 +146,27 @@ class SimulationController(QObject):
     visibleWindowReason = Property(
         str, _get_visible_window_reason, notify=visibilityChanged
     )
+
+    def _dc_bias(self) -> DcBiasVisibility:
+        dc_requested = any(
+            winding.dc_current_a != 0.0
+            for winding in self._session.project.operating_point.windings
+        )
+        return dc_bias_visibility(
+            run_backend_for(self._backend),
+            self._capabilities,
+            dc_requested=dc_requested,
+        )
+
+    def _get_dc_bias_ignored(self) -> bool:
+        return self._dc_bias().ignored
+
+    dcBiasIgnored = Property(bool, _get_dc_bias_ignored, notify=configurationChanged)
+
+    def _get_dc_bias_notice(self) -> str:
+        return self._dc_bias().notice
+
+    dcBiasNotice = Property(str, _get_dc_bias_notice, notify=configurationChanged)
 
     def _gate(self) -> str:
         """Why a run cannot start, or an empty string when it can."""
@@ -252,11 +285,47 @@ class SimulationController(QObject):
         self.visibilityChanged.emit()
         return True
 
-    @Slot(result=bool)
-    def generate(self) -> bool:
+    def _start(self, *, dc_confirmed: bool) -> bool:
         blocked = self._gate()
         if blocked:
             self._session.set_status(blocked)
             return False
+        if self._dc_bias().ignored and not dc_confirmed:
+            # QML must show the AC-only confirmation dialog instead of
+            # retrying silently; this refusal never starts a run. Record
+            # which backend the caller is about to be asked to confirm, so
+            # a later proceedAcOnly() can check it is still the same one.
+            self._pending_ac_only_backend = self._backend
+            return False
+        # Either this run needed no confirmation, or it is about to consume
+        # one -- either way, nothing should stay pending afterwards.
+        self._pending_ac_only_backend = None
         self._generation.generate(self._backend.value, self._show_solver_window)
         return True
+
+    @Slot(result=bool)
+    def generate(self) -> bool:
+        return self._start(dc_confirmed=False)
+
+    @Slot(result=bool)
+    def proceedAcOnly(self) -> bool:
+        """Start the run after the user confirmed the AC-only DC-bias notice.
+
+        Only authorises a run for the exact backend a refused `generate()`
+        warned about. There is no other source of "confirmed" for this
+        controller, so a call with no matching pending refusal -- none ever
+        happened, the backend changed since, or a previous confirmation
+        already consumed it -- refuses instead of silently starting an
+        unconfirmed AC-only run.
+        """
+        if self._pending_ac_only_backend != self._backend:
+            stale = self._pending_ac_only_backend is not None
+            self._pending_ac_only_backend = None
+            self._session.set_status(
+                "The backend changed since the DC-bias confirmation; confirm "
+                "again before starting."
+                if stale
+                else "No DC-bias confirmation is pending for the current backend."
+            )
+            return False
+        return self._start(dc_confirmed=True)
