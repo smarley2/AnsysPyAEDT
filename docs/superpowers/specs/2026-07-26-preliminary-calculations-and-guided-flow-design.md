@@ -328,7 +328,7 @@ bias-characterized (it records a nonzero DC bias), a nonzero requested bias
 without a matching recorded bias makes core loss unavailable while leaving
 other quantities unaffected.
 
-> **Amendment, 2026-08-03 (decided by Fabio Posser):** manufacturer loss
+> **Amendment, 2026-08-07 (decided by Fabio Posser):** manufacturer loss
 > curves are almost always published at zero DC bias only, so the strict rule
 > above left core loss unavailable for nearly every real biased choke. When
 > the selected material revision records loss data at the requested
