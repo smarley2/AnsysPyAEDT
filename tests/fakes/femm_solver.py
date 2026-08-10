@@ -8,6 +8,11 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
     FemmWindingResult,
 )
+from inductor_designer.simulation.run_control import (
+    StagePhase,
+    emit_stage_event,
+    is_cancelled,
+)
 
 
 def _current_components(current_peak_a: float, phase_deg: float) -> tuple[float, float]:
@@ -24,8 +29,20 @@ class RecordingFemmSolver:
     def solve(self, request: FemmSolveRequest) -> FemmSolveResult:
         self.requests.append(request)
         fem_path = request.output_directory / f"{request.project_name}.fem"
+        messages = ["recorded peak-current phasors"]
+        emit_stage_event(
+            request.progress, "generate", StagePhase.SUCCEEDED, messages[-1]
+        )
 
-        if request.analyze:
+        analyzed = request.analyze and not is_cancelled(request.cancellation)
+        if request.analyze and not analyzed:
+            messages.append("Run cancelled before the FEMM analysis.")
+            emit_stage_event(
+                request.progress, "analyze", StagePhase.CANCELLED, messages[-1]
+            )
+
+        if analyzed:
+            emit_stage_event(request.progress, "analyze", StagePhase.STARTED, None)
             results = {
                 circuit.name: FemmWindingResult(
                     resistance_ohm=0.1,
@@ -39,14 +56,18 @@ class RecordingFemmSolver:
                 )
                 for circuit in request.problem.circuits
             }
+            messages.append(f"Analyzed; {len(results)} circuit(s) extracted.")
+            emit_stage_event(
+                request.progress, "analyze", StagePhase.SUCCEEDED, messages[-1]
+            )
         else:
             results = None
 
         return FemmSolveResult(
             fem_path=fem_path,
-            analyzed=request.analyze,
+            analyzed=analyzed,
             results=results,
-            messages=("recorded peak-current phasors",),
+            messages=tuple(messages),
             adapter_version="recording-fake",
             solver_version=None,
         )

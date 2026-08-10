@@ -80,6 +80,7 @@ def test_run_contract_enum_values_are_stable() -> None:
     }
     assert {item.name: item.value for item in RunStatus} == {
         "PLANNED": "planned",
+        "RUNNING": "running",
         "SUCCEEDED": "succeeded",
         "FAILED": "failed",
         "CANCELLED": "cancelled",

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from inductor_designer.simulation.femm_problem import FemmProblem
+from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,8 @@ class FemmSolveRequest:
     project_name: str
     analyze: bool
     show_window: bool = False
+    progress: ProgressSink | None = None
+    cancellation: CancellationToken | None = None
 
 
 @dataclass(frozen=True, slots=True)

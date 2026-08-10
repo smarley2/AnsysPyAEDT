@@ -38,7 +38,7 @@ class RecordingOpener:
 def build() -> tuple[RecordingOpener, GenerationController, ReviewController]:
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project_with_material(), Path("boost.inductor.json"))
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
     opener = RecordingOpener()
     controller = ReviewController(
         session,
@@ -130,7 +130,7 @@ def test_open_actions_use_the_last_run_evidence(tmp_path: Path) -> None:
 def test_an_opener_failure_is_reported_not_raised(tmp_path: Path) -> None:
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project_with_material(), Path("boost.inductor.json"))
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
 
     class Failing:
         def open_path(self, path: Path) -> None:
@@ -158,7 +158,7 @@ def test_an_opener_runtime_error_is_reported_not_raised(tmp_path: Path) -> None:
     """
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project_with_material(), Path("boost.inductor.json"))
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
 
     class Failing:
         def open_path(self, path: Path) -> None:
@@ -193,7 +193,7 @@ def test_review_refreshes_after_preliminary_catches_up_to_an_edit() -> None:
     """
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project_with_material())
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
     preliminary = PreliminaryController(session, CATALOG)
     controller = ReviewController(
         session, preliminary, generation, CATALOG, RecordingOpener()

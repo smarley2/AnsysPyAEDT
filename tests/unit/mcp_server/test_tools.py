@@ -266,18 +266,24 @@ def test_generate_2d_bogus_backend_returns_error(
     assert "error" in result
 
 
-def test_generate_2d_analyze_true_reports_m8_block(
+def test_generate_2d_analyze_true_runs_a_femm_solve(
     context: tools.ToolContext,
     document: dict[str, object],
     tmp_path: Path,
 ) -> None:
+    """M8a lets the MCP FEMM path solve; it still normalizes no result."""
     target = tmp_path / "saved.inductor.json"
     _save(context, document, target)
+
     result = tools.generate_2d(context, str(target), backend="femm", analyze=True)
-    assert result["issues"] == [
-        "Generate and Solve execution belongs to M8; "
-        "M6 only validates its Run Request."
+
+    assert result["mode"] == "generate-and-solve"
+    assert result["status"] == "succeeded"
+    assert [stage["name"] for stage in result["stages"]] == [  # type: ignore[index,union-attr]
+        "generate",
+        "analyze",
     ]
+    assert result["results"] is None
 
 
 def test_generate_maxwell3d_writes_into_the_project_run_directory(

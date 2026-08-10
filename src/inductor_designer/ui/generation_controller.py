@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from inductor_designer.application.services.project_run import ProjectRunFailed
-from inductor_designer.ui.generation_lines import GenerationResult
+from inductor_designer.simulation.run_control import (
+    CancellationToken,
+    StageEvent,
+)
+from inductor_designer.ui.generation_lines import GenerationResult, UiRunRequest
 
 if TYPE_CHECKING:
     from inductor_designer.domain.project import InductorProject
@@ -44,7 +48,7 @@ class GenerationController(QObject):
 
     def __init__(
         self,
-        runner: Callable[[str, bool], GenerationResult | Sequence[str]],
+        runner: Callable[[UiRunRequest], GenerationResult | Sequence[str]],
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -54,6 +58,7 @@ class GenerationController(QObject):
         self._last_run_directory: Path | None = None
         self._last_generated_file: Path | None = None
         self._busy = False
+        self._token: CancellationToken | None = None
 
     def _get_lines(self) -> list[str]:
         return self._lines
@@ -85,19 +90,67 @@ class GenerationController(QObject):
         self._last_generated_file = generated_file
         self.linesChanged.emit()
 
-    @Slot(str, bool)
-    def generate(self, backend_label: str, show_solver_window: bool = False) -> None:
+    def _append_line(self, line: str) -> None:
+        self._lines = [*self._lines, line]
+        self.linesChanged.emit()
+
+    @property
+    def cancellable(self) -> bool:
+        return self._busy and self._token is not None
+
+    @Slot(result=bool)
+    def cancel(self) -> bool:
+        """Ask the running adapter to stop at its next stage boundary."""
+        token = self._token
+        if token is None or not self._busy:
+            return False
+        token.cancel()
+        self._append_line("Cancelling after the current stage...")
+        return True
+
+    @Slot(str, bool, bool)
+    def generate(
+        self,
+        backend_label: str,
+        show_solver_window: bool = False,
+        solve: bool = False,
+    ) -> None:
         if self._busy:
             return
         self._busy = True
         self._failed_manifest = None
         self._last_run_directory = None
         self._last_generated_file = None
+        self._lines = []
+        token = CancellationToken()
+        self._token = token
         self.busyChanged.emit()
+
+        class _Sink:
+            """Streams stage progress into the visible lines while the run works."""
+
+            def __init__(self, controller: GenerationController) -> None:
+                self._controller = controller
+
+            def emit(self, event: StageEvent) -> None:
+                # `started` matters here: a long analyze stage would otherwise
+                # leave the panel silent for minutes.
+                suffix = f" - {event.message}" if event.message else ""
+                self._controller._append_line(
+                    f"{event.stage_name}: {event.phase.value}{suffix}"
+                )
+
+        request = UiRunRequest(
+            backend_label=backend_label,
+            show_solver_window=show_solver_window,
+            solve=solve,
+            progress=_Sink(self),
+            cancellation=token,
+        )
 
         def worker() -> None:
             try:
-                raw_result = self._runner(backend_label, show_solver_window)
+                raw_result = self._runner(request)
                 result = (
                     raw_result
                     if isinstance(raw_result, GenerationResult)

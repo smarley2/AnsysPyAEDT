@@ -54,8 +54,11 @@ before the next plan freezes assumptions that depend on it.
     still owns every screen, including the `Show solver window` choice and the
     `Open generated file` / `Open run folder` buttons, and M8 still owns
     `results/` population.
-  - **M7c implementation is complete and awaiting Fabio Posser's
-    verification** (only he accepts a milestone):
+  - **M7c, accepted by Fabio Posser on 2026-08-10** and merged to `main` as
+    `c9d980f` after his visual walkthrough of the wired Windows application
+    (step rail order, the separate Material Studio window, the full-width
+    `Preliminary`/`Review` layout, and the disabled-until-saved `Generate`
+    button):
     [2026-07-30 M7c guided-studio-flow](2026-07-30-m7c-guided-studio-flow.md)
     — the five-screen Guided Studio flow, `Core & Material`, `Windings`,
     `Preliminary`, `Simulation`, `Review`, with bidirectional core/material
@@ -71,6 +74,26 @@ before the next plan freezes assumptions that depend on it.
     assumption note. `tests/integration/test_guided_studio_flow.py` proves the
     specification section 11 acceptance walk against the real catalog and
     material overlay.
+
+- **Milestone 8 is split into three plans**, for the same reason M7 was: its
+  approved scope covers three independently testable subsystems, each with its
+  own failure modes and its own live evidence.
+  - **M8a implementation is complete and awaiting Fabio Posser's live
+    verification** (only he accepts a milestone); the evidence record is
+    [m8a-live-solve-evidence.md](../../development/m8a-live-solve-evidence.md):
+    [2026-08-10 M8a solve execution](2026-08-10-m8a-solve-execution.md) —
+    solve execution on all three backends, stage progress, cooperative
+    cancellation between stages, a durable `running` manifest, failed-stage
+    diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
+    `RunManifest.results` stays `None` through the whole slice.
+  - **M8b**, not yet planned: scalar normalized results (resistance,
+    inductance, impedance, supported matrices, copper/core/total loss,
+    magnetic energy, convergence and solver status), JSON and CSV export, and
+    the Review result display.
+  - **M8c**, not yet planned: field results, implementing the approved
+    [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md)
+    — feature-anchored core planes, skin-depth-gated conductor discs,
+    per-section evidence, worst-section mean and across-section average.
 
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`

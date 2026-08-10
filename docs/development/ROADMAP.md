@@ -712,8 +712,22 @@ and `results/` population to M8.
 
 ### Current state
 
-Milestone 7c implementation is **complete and awaiting Fabio Posser's
-verification** (only he accepts a milestone). `main.py` now constructs and
+**Milestone 7c was accepted by Fabio Posser on 2026-08-10**, after he ran the
+visual walkthrough of the wired Windows application that was the last
+outstanding item: the step rail order, the separate Material Studio window,
+the full-width `Preliminary` and `Review` layout, and the
+disabled-until-saved `Generate` button. The accepted code is on `main` as
+merge commit `c9d980f` (pull request #5), which carries the Guided Studio
+flow merged as `b0f1584` (pull request #4) plus the panel-containment fix,
+the `File`/`Help` menus, and AC-only generation for Maxwell 2D and FEMM.
+
+The non-live gate on the accepted tree was clean: Ruff clean, strict mypy
+clean across 124 source files, `tools.check_architecture` clean, and
+`pytest -n 8 -m "not aedt and not femm"` reporting 1161 passed in 25.41 s.
+No live AEDT or FEMM claim is added by this acceptance; the last live
+evidence remains the M7b and M5a runs already recorded above.
+
+`main.py` now constructs and
 shares one `ProjectSession`, one `SqliteCatalogRepository`, and one
 `FileOverlayMaterialRepository` across all five controllers, so a material
 imported in the Material Studio window is visible to the Core & Material
@@ -731,13 +745,8 @@ plan deleted Material Studio's `Select for simulation` writer, so the Core &
 Material screen pins into the session and the top-bar `Save` persists it —
 which is also what the run gate above requires.
 
-Still outstanding: the visual walkthrough of the wired application (launch
-the Windows UI, check the step rail order, the Material Studio window, the
-full-width Preliminary/Review layout, and the disabled-until-saved Generate
-button) has not been performed in this headless environment and remains for
-Fabio Posser to confirm.
-
-M7a, M7b, and M7c together complete Milestone 7.
+M7a, M7b, and M7c are all accepted, so **Milestone 7 is complete as of
+2026-08-10**.
 
 ## Milestone 8: Simulation and Results
 
@@ -758,6 +767,49 @@ M7a, M7b, and M7c together complete Milestone 7.
 Exit criterion: controlled runs for all three backends produce traceable
 Normalized Result Sets in which every requested quantity is evidenced or
 explicitly unavailable.
+
+Milestone 8 is split into three plans, for the same reason M7 was: its scope
+covers three independently testable subsystems, each with its own failure
+modes and its own live evidence.
+
+### Milestone 8a: Solve execution
+
+Scope, from the [M8a plan](../superpowers/plans/2026-08-10-m8a-solve-execution.md):
+run the solve on all three backends, emit a stage event around every stage,
+cancel cooperatively between stages, write a durable `running` status before
+the adapter is dispatched, and leave `results/solve-log.txt` behind. It
+normalizes nothing: `RunManifest.results` stays `None` for the whole slice.
+
+The `analyze` stage runs after `save`, so a solve that fails still leaves the
+saved pre-solve project on disk. A cancelled run reports
+`RunStatus.CANCELLED`, never `succeeded` and never `failed`.
+
+#### Current state
+
+M8a implementation is **complete and awaiting Fabio Posser's live
+verification** (only he accepts a milestone). The non-live gate is clean:
+Ruff, strict mypy across 127 source files, `tools.check_architecture`, and
+1213 tests passing under `pytest -n 8 -m "not aedt and not femm"`.
+
+Two live commands remain, both now covered by dedicated tests rather than
+manual steps: `pytest -m aedt` runs one Maxwell 3D and one Maxwell 2D
+`generate-and-solve` run, and `pytest -m femm` runs one FEMM solve. The
+evidence record is
+[m8a-live-solve-evidence.md](m8a-live-solve-evidence.md).
+
+### Milestone 8b: Scalar normalized results
+
+Not yet planned. Resistance, inductance, impedance, supported matrices,
+copper/core/total loss, magnetic energy, convergence and solver status, JSON
+and CSV export, and the Review result display.
+
+### Milestone 8c: Field results
+
+Not yet planned. Implements the approved
+[Representative Cross Sections design](../superpowers/specs/2026-08-10-representative-cross-sections-design.md):
+feature-anchored core planes, skin-depth-gated conductor discs, per-section
+evidence, and the worst-section mean alongside the across-section
+area-weighted average.
 
 ## Milestone 9: Reliability
 

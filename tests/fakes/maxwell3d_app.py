@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -163,6 +164,11 @@ class FakeMaxwell3dApp:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.raise_on = raise_on
         self.falsy_on = falsy_on
+        self.analyzed_setups: tuple[str, ...] = ()
+        self.fail_analyze = False
+        # Lets a test act (cancel a run, for example) exactly when the design
+        # reaches a named call, without patching the adapter.
+        self.on_call: dict[str, Callable[[], None]] = {}
         self.modeler = _Recorder(self.calls, "modeler.", falsy_on=falsy_on)
         self.mesh = _Recorder(self.calls, "mesh.")
         self.post = _Recorder(self.calls, "post.")
@@ -170,7 +176,13 @@ class FakeMaxwell3dApp:
         self.odesign = _FakeODesign(self.calls, raise_on=raise_on, falsy_on=falsy_on)
         self.released: list[tuple[bool, bool]] = []
 
+    def _hook(self, name: str) -> None:
+        callback = self.on_call.get(name)
+        if callback is not None:
+            callback()
+
     def _record(self, _name: str, **kwargs: Any) -> Any:
+        self._hook(_name)
         if self.raise_on == _name:
             raise RuntimeError(f"boom in {_name}")
         self.calls.append((_name, kwargs))
@@ -197,6 +209,7 @@ class FakeMaxwell3dApp:
         return self._record("eddy_effects_on", assignment=assignment, **kwargs)
 
     def create_setup(self, name: str) -> _FakeSetup:
+        self._hook("create_setup")
         if self.raise_on == "create_setup":
             raise RuntimeError("boom in create_setup")
         self.calls.append(("create_setup", {"name": name}))
@@ -209,12 +222,25 @@ class FakeMaxwell3dApp:
         return self._record("assign_balloon", assignment=assignment, **kwargs)
 
     def validate_simple(self, log_file: str | None = None) -> int:
+        self._hook("validate_simple")
         if self.raise_on == "validate_simple":
             raise RuntimeError("boom in validate_simple")
         self.calls.append(("validate_simple", {}))
         return 1
 
+    def analyze_setup(self, name: str) -> bool:
+        self._hook("analyze_setup")
+        if self.fail_analyze:
+            raise RuntimeError("Solver returned a nonzero exit code.")
+        self.analyzed_setups += (name,)
+        self.calls.append(("analyze_setup", {"name": name}))
+        return True
+
+    def setup_convergence(self, name: str) -> str:
+        return "3 passes, 0.42% error"
+
     def save_project(self, path: str) -> bool:
+        self._hook("save_project")
         if self.raise_on == "save_project":
             raise RuntimeError("boom in save_project")
         self.calls.append(("save_project", {"path": path}))

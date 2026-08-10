@@ -33,7 +33,10 @@ def test_fake_records_request_with_analyze_true(tmp_path: Path) -> None:
     assert solver.requests == [request]
     assert result.fem_path == tmp_path / "test_inductor.fem"
     assert result.analyzed is True
-    assert result.messages == ("recorded peak-current phasors",)
+    assert result.messages == (
+        "recorded peak-current phasors",
+        "Analyzed; 1 circuit(s) extracted.",
+    )
     assert result.adapter_version == "recording-fake"
     assert result.solver_version is None
 

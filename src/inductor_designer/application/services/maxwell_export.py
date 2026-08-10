@@ -11,12 +11,14 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
 )
 from inductor_designer.application.ports.maxwell2d_exporter import (
+    SOLVE_STAGE_NAMES_2D,
     STAGE_NAMES_2D,
     Maxwell2dExporter,
     Maxwell2dExportRequest,
 )
 from inductor_designer.application.ports.maxwell_exporter import (
     GEOMETRY_ONLY_STAGE_NAMES,
+    SOLVE_STAGE_NAMES,
     STAGE_NAMES,
     Maxwell3dExporter,
     Maxwell3dExportRequest,
@@ -60,11 +62,13 @@ from inductor_designer.simulation.run_contracts import (
     RunStatus,
     StageStatus,
 )
+from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 _PROJECT_SCHEMA_VERSION = 5
-_GENERATE_AND_SOLVE_BLOCK = (
-    "Generate and Solve execution belongs to M8; M6 only validates its Run Request."
-)
+
+# The adapters close an interrupted run with this stage rather than a failed
+# one, so a cancelled run is never reported as a failure or a success.
+CANCELLED_STAGE_NAME = "cancelled"
 
 
 class MaxwellExportBlocked(ValueError):
@@ -94,6 +98,19 @@ class RunGenerationFailed(RuntimeError):
         super().__init__("; ".join(manifest.diagnostics))
 
 
+class RunCancelledDuringGeneration(RuntimeError):
+    """The user cancelled between stages; the manifest holds the evidence."""
+
+    def __init__(
+        self,
+        planned_run: PlannedRun,
+        manifest: RunManifest,
+    ) -> None:
+        self.planned_run = planned_run
+        self.manifest = manifest
+        super().__init__("; ".join(manifest.diagnostics))
+
+
 class _AdapterDispatchError(Exception):
     def __init__(self, error: Exception) -> None:
         self.error = error
@@ -111,6 +128,9 @@ def _export_maxwell3d_plan(
     output_directory: Path,
     *,
     non_graphical: bool,
+    solve: bool,
+    progress: ProgressSink | None,
+    cancellation: CancellationToken | None,
 ) -> MaxwellExportResult:
     if isinstance(planned_run, GeometryOnlyRunPlan):
         geometry_request = Maxwell3dGeometryOnlyRequest(
@@ -135,6 +155,9 @@ def _export_maxwell3d_plan(
         non_graphical=non_graphical,
         output_directory=output_directory,
         project_name=_project_name(project),
+        solve=solve,
+        progress=progress,
+        cancellation=cancellation,
     )
     try:
         return exporter.export(export_request)
@@ -149,6 +172,9 @@ def _export_maxwell2d_plan(
     output_directory: Path,
     *,
     non_graphical: bool,
+    solve: bool,
+    progress: ProgressSink | None,
+    cancellation: CancellationToken | None,
 ) -> MaxwellExportResult:
     plan = planned_run.solver_plan
     if not isinstance(plan, Maxwell2dDesignPlan):
@@ -160,6 +186,9 @@ def _export_maxwell2d_plan(
         non_graphical=non_graphical,
         output_directory=output_directory,
         project_name=f"{_project_name(project)}_2d",
+        solve=solve,
+        progress=progress,
+        cancellation=cancellation,
     )
     try:
         return exporter.export(request)
@@ -174,6 +203,9 @@ def _export_femm_plan(
     output_directory: Path,
     *,
     show_solver_window: bool,
+    solve: bool,
+    progress: ProgressSink | None,
+    cancellation: CancellationToken | None,
 ) -> FemmSolveResult:
     problem = planned_run.solver_plan
     if not isinstance(problem, FemmProblem):
@@ -182,8 +214,10 @@ def _export_femm_plan(
         problem=problem,
         output_directory=output_directory,
         project_name=f"{_project_name(project)}_2d",
-        analyze=False,
+        analyze=solve,
         show_window=show_solver_window,
+        progress=progress,
+        cancellation=cancellation,
     )
     try:
         return solver.solve(request)
@@ -242,8 +276,13 @@ def _maxwell_evidence(
                 diagnostic=sequence_diagnostic,
             ),
         )
+    cancelled = any(
+        stage.name == CANCELLED_STAGE_NAME for stage in result.stages
+    )
     status = (
-        RunStatus.SUCCEEDED
+        RunStatus.CANCELLED
+        if cancelled
+        else RunStatus.SUCCEEDED
         if all_stages_succeeded and received_stage_names == expected_stage_names
         else RunStatus.FAILED
     )
@@ -274,6 +313,7 @@ def _artifact_path(path: Path, artifact_base_directory: Path | None) -> str:
 def _femm_evidence(
     result: FemmSolveResult,
     *,
+    solve_requested: bool,
     artifact_base_directory: Path | None,
 ) -> tuple[
     tuple[ManifestStage, ...],
@@ -281,16 +321,41 @@ def _femm_evidence(
     tuple[str, ...],
     tuple[ManifestArtifact, ...],
 ]:
-    return (
-        (
-            ManifestStage(
-                name="generate",
-                status=StageStatus.SUCCEEDED,
-                diagnostic="; ".join(result.messages),
-            ),
+    stages: tuple[ManifestStage, ...] = (
+        ManifestStage(
+            name="generate",
+            status=StageStatus.SUCCEEDED,
+            diagnostic="; ".join(result.messages),
         ),
-        RunStatus.SUCCEEDED,
-        (),
+    )
+    status = RunStatus.SUCCEEDED
+    diagnostics: tuple[str, ...] = ()
+    if solve_requested:
+        if result.analyzed:
+            stages += (
+                ManifestStage(
+                    name="analyze",
+                    status=StageStatus.SUCCEEDED,
+                    diagnostic="; ".join(result.messages),
+                ),
+            )
+        else:
+            # The adapter reached its cancellation check before analyzing; the
+            # generated model is on disk but no solve happened.
+            diagnostic = "Run cancelled before the FEMM analysis."
+            stages += (
+                ManifestStage(
+                    name=CANCELLED_STAGE_NAME,
+                    status=StageStatus.FAILED,
+                    diagnostic=diagnostic,
+                ),
+            )
+            status = RunStatus.CANCELLED
+            diagnostics = (diagnostic,)
+    return (
+        stages,
+        status,
+        diagnostics,
         (
             ManifestArtifact(
                 kind="femm-project",
@@ -315,6 +380,7 @@ def _manifest_for_result(
             raise TypeError("FEMM run returned a non-FEMM adapter result.")
         stages, status, diagnostics, artifacts = _femm_evidence(
             result,
+            solve_requested=planned_run.request.mode is RunMode.GENERATE_AND_SOLVE,
             artifact_base_directory=artifact_base_directory,
         )
         solver_version = result.solver_version
@@ -322,13 +388,15 @@ def _manifest_for_result(
     else:
         if not isinstance(result, MaxwellExportResult):
             raise TypeError("Maxwell run returned a non-Maxwell adapter result.")
-        expected_stage_names = (
-            GEOMETRY_ONLY_STAGE_NAMES
-            if isinstance(planned_run, GeometryOnlyRunPlan)
-            else STAGE_NAMES
-            if backend is RunBackend.MAXWELL_3D
-            else STAGE_NAMES_2D
-        )
+        solve_requested = planned_run.request.mode is RunMode.GENERATE_AND_SOLVE
+        if isinstance(planned_run, GeometryOnlyRunPlan):
+            expected_stage_names = GEOMETRY_ONLY_STAGE_NAMES
+        elif backend is RunBackend.MAXWELL_3D:
+            expected_stage_names = SOLVE_STAGE_NAMES if solve_requested else STAGE_NAMES
+        else:
+            expected_stage_names = (
+                SOLVE_STAGE_NAMES_2D if solve_requested else STAGE_NAMES_2D
+            )
         stages, status, diagnostics, artifacts = _maxwell_evidence(
             result,
             expected_stage_names,
@@ -464,9 +532,9 @@ def generate_run(
     application_version: str,
     show_solver_window: bool = False,
     artifact_base_directory: Path | None = None,
+    progress: ProgressSink | None = None,
+    cancellation: CancellationToken | None = None,
 ) -> RunOutcome:
-    if request.mode is RunMode.GENERATE_AND_SOLVE:
-        raise MaxwellExportBlocked((_GENERATE_AND_SOLVE_BLOCK,))
     if request.backend is not RunBackend.FEMM:
         support_issues = aedt_support_issues(
             SUPPORTED_AEDT_RELEASE,
@@ -477,6 +545,7 @@ def generate_run(
             raise MaxwellExportBlocked(support_issues)
 
     non_graphical = not show_solver_window
+    solve = request.mode is RunMode.GENERATE_AND_SOLVE
     planned_run = plan_run(project, request, catalog, capabilities)
     adapter_result: AdapterResult
     try:
@@ -487,6 +556,9 @@ def generate_run(
                 maxwell3d_exporter,
                 output_directory,
                 non_graphical=non_graphical,
+                solve=solve,
+                progress=progress,
+                cancellation=cancellation,
             )
         elif request.backend is RunBackend.MAXWELL_2D:
             if not isinstance(planned_run, SolveReadyRunPlan):
@@ -497,6 +569,9 @@ def generate_run(
                 maxwell2d_exporter,
                 output_directory,
                 non_graphical=non_graphical,
+                solve=solve,
+                progress=progress,
+                cancellation=cancellation,
             )
         else:
             if not isinstance(planned_run, SolveReadyRunPlan):
@@ -507,6 +582,9 @@ def generate_run(
                 femm_solver,
                 output_directory,
                 show_solver_window=show_solver_window,
+                solve=solve,
+                progress=progress,
+                cancellation=cancellation,
             )
     except _AdapterDispatchError as dispatch_failure:
         raise _generation_failure(
@@ -519,6 +597,7 @@ def generate_run(
 
     if (
         request.backend is RunBackend.FEMM
+        and not solve
         and isinstance(adapter_result, FemmSolveResult)
         and (adapter_result.analyzed or adapter_result.results is not None)
     ):
@@ -557,6 +636,8 @@ def generate_run(
             run_id=run_id,
             application_version=application_version,
         ) from error
+    if manifest.status is RunStatus.CANCELLED:
+        raise RunCancelledDuringGeneration(planned_run, manifest)
     if manifest.status is RunStatus.FAILED:
         raise RunGenerationFailed(planned_run, manifest)
     return RunOutcome(

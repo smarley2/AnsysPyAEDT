@@ -81,7 +81,7 @@ def open_flow(
         make_project_with_material(), Path("boost.inductor.json"), lambda project: None
     )
     preliminary = PreliminaryController(session, CATALOG)
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
     simulation = SimulationController(session, generation, SUPPORTED)
     review = ReviewController(
         session, preliminary, generation, CATALOG, RecordingOpener()

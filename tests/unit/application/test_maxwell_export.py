@@ -24,7 +24,6 @@ from inductor_designer.application.ports.maxwell_exporter import (
     StageRecord,
 )
 from inductor_designer.application.services.maxwell_export import (
-    MaxwellExportBlocked,
     RunGenerationFailed,
     RunOutcome,
     generate_run,
@@ -175,37 +174,35 @@ def test_generate_only_manifests_match_golden_and_share_physical_inputs() -> Non
 
 
 @pytest.mark.parametrize("backend", tuple(RunBackend))
-def test_generate_and_solve_blocks_before_every_adapter_call(
+def test_generate_and_solve_reaches_the_adapter_asking_for_a_solve(
     backend: RunBackend,
 ) -> None:
+    """M8a replaced the M6 block; the request now carries the solve intent."""
     maxwell3d = RecordingMaxwell3dExporter()
     maxwell2d = RecordingMaxwell2dExporter()
     femm = RecordingFemmSolver()
 
-    with pytest.raises(
-        MaxwellExportBlocked,
-        match=(
-            r"^Generate and Solve execution belongs to M8; "
-            r"M6 only validates its Run Request\.$"
-        ),
-    ):
-        generate_run(
-            project_for_runs(),
-            RunRequest(backend, RunMode.GENERATE_AND_SOLVE),
-            CATALOG,
-            CAPABILITIES,
-            OUTPUT_DIRECTORY,
-            maxwell3d_exporter=maxwell3d,
-            maxwell2d_exporter=maxwell2d,
-            femm_solver=femm,
-            run_id="blocked",
-            application_version="0.6.0-test",
-        )
+    outcome = generate_run(
+        project_for_runs(),
+        RunRequest(backend, RunMode.GENERATE_AND_SOLVE),
+        CATALOG,
+        CAPABILITIES,
+        OUTPUT_DIRECTORY,
+        maxwell3d_exporter=maxwell3d,
+        maxwell2d_exporter=maxwell2d,
+        femm_solver=femm,
+        run_id="solve",
+        application_version="0.6.0-test",
+    )
 
-    assert maxwell3d.requests == []
-    assert maxwell3d.geometry_only_requests == []
-    assert maxwell2d.requests == []
-    assert femm.requests == []
+    assert outcome.manifest.status is RunStatus.SUCCEEDED
+    assert outcome.manifest.results is None, "M8a normalizes nothing"
+    if backend is RunBackend.MAXWELL_3D:
+        assert maxwell3d.requests[0].solve is True
+    elif backend is RunBackend.MAXWELL_2D:
+        assert maxwell2d.requests[0].solve is True
+    else:
+        assert femm.requests[0].analyze is True
 
 
 def test_confirmed_unresolved_run_uses_geometry_only_adapter_boundary() -> None:

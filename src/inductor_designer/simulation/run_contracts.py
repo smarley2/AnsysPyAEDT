@@ -26,6 +26,7 @@ class RunMode(str, Enum):
 
 class RunStatus(str, Enum):
     PLANNED = "planned"
+    RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
