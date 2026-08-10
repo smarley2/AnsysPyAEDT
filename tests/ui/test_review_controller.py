@@ -73,6 +73,20 @@ def test_review_shows_the_paired_core_material_operating_point_and_estimates() -
     )
 
 
+def test_review_reports_each_winding_inductance() -> None:
+    _, _, controller = build()
+
+    rows = [
+        row
+        for section in controller.sections
+        if section["title"] == "Preliminary estimates"
+        for row in section["rows"]
+    ]
+
+    assert any(row["label"] == "w1 inductance" for row in rows)
+    assert any(row["label"] == "Effective A_L" for row in rows)
+
+
 def test_review_lists_validation_findings() -> None:
     _, _, controller = build()
 

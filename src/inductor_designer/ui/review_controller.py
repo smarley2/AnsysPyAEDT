@@ -178,6 +178,13 @@ class ReviewController(QObject):
             }
             for row in winding_rows
         )
+        rows.extend(
+            {
+                "label": f"{row['windingId']} inductance",
+                "text": str(row["inductance"]["text"]),  # type: ignore[index]
+            }
+            for row in winding_rows
+        )
         assumptions: list[str] = self._preliminary.assumptions  # type: ignore[assignment]
         rows.extend({"label": "Limitation", "text": note} for note in assumptions)
         geometry_issues: list[str] = self._preliminary.geometryIssues  # type: ignore[assignment]
