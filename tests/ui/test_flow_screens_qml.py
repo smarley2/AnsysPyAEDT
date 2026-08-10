@@ -138,7 +138,7 @@ def _winding_table_geometry(root: QObject, width: int) -> list[tuple[float, floa
     assert header is not None
     header_cells = list(header.childItems())
     row_cells = _winding_table_row_cells(root)
-    assert len(header_cells) == len(row_cells) == 8
+    assert len(header_cells) == len(row_cells) == 9
 
     geometry: list[tuple[float, float]] = []
     for header_cell, row_cell in zip(header_cells, row_cells, strict=True):
@@ -173,7 +173,7 @@ def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
     }
 
     for width, geometry in geometry_by_width.items():
-        for column in range(8):
+        for column in range(9):
             header_geom = geometry[2 * column]
             data_geom = geometry[2 * column + 1]
             assert header_geom == data_geom, (
@@ -181,12 +181,42 @@ def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
                 f"header (x, width)={header_geom} data (x, width)={data_geom}"
             )
 
-    narrow_widths = [geometry_by_width[1000][2 * c][1] for c in range(8)]
-    wide_widths = [geometry_by_width[1786][2 * c][1] for c in range(8)]
+    narrow_widths = [geometry_by_width[1000][2 * c][1] for c in range(9)]
+    wide_widths = [geometry_by_width[1786][2 * c][1] for c in range(9)]
     assert narrow_widths == wide_widths, (
         f"column widths must not scale with the window: "
         f"at 1000px={narrow_widths}, at 1786px={wide_widths}"
     )
+
+
+def test_each_winding_column_renders_the_quantity_its_heading_names() -> None:
+    """The geometry test above pins column widths and positions but not which
+    quantity lands in which column: swapping two data cells passes it, and
+    passes `test_winding_rows_cover_every_specified_winding_quantity` too, which
+    checks each dict key independently of order. This ties the rendered cell
+    texts, in column order, to the row keys in heading order.
+    """
+    _, root, _ = open_flow(2)
+    controller = _ENGINES[-1][1]
+
+    row = controller.windingRows[0]
+    expected = [
+        row["windingId"],
+        row["conductorArea"]["text"],
+        row["wireLength"]["text"],
+        row["resistance"]["text"],
+        row["jAcRms"]["text"],
+        row["jAcPeak"]["text"],
+        row["jDc"]["text"],
+        row["wireLoss"]["text"],
+        row["inductance"]["text"],
+    ]
+
+    rendered = [cell.property("text") for cell in _winding_table_row_cells(root)]
+
+    assert rendered == expected
+    # Every value distinct, or a swap of two equal texts would slip through.
+    assert len(set(rendered)) == len(rendered)
 
 
 def test_preliminary_page_shows_core_winding_totals_and_assumptions() -> None:
@@ -201,7 +231,7 @@ def test_preliminary_page_shows_core_winding_totals_and_assumptions() -> None:
         "preliminaryMaterialLabel",
     ):
         assert root.findChild(QObject, name) is not None, name
-    assert root.findChild(QObject, "preliminaryCoreTable").property("count") == 6
+    assert root.findChild(QObject, "preliminaryCoreTable").property("count") == 15
     assert root.findChild(QObject, "preliminaryTotalsTable").property("count") == 3
     assert (
         make_material_record().revision_id

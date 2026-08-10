@@ -79,11 +79,19 @@ def test_core_magnetic_properties_allow_every_number_including_non_finite() -> N
     these, so raising here would replace a user-facing diagnostic with a crash
     inside the Preliminary controller's constructor.
     """
-    zero = CoreMagneticProperties(path_length_m=0.0, volume_m3=0.0)
+    zero = CoreMagneticProperties(
+        path_length_m=0.0, volume_m3=0.0, effective_area_m2=0.0, al_value_nh=None
+    )
     overflowed = CoreMagneticProperties(
-        path_length_m=float("inf"), volume_m3=float("inf")
+        path_length_m=float("inf"),
+        volume_m3=float("inf"),
+        effective_area_m2=float("inf"),
+        al_value_nh=61.0,
     )
 
     assert zero.path_length_m == 0.0
+    assert zero.effective_area_m2 == 0.0
+    assert zero.al_value_nh is None
     assert zero.notes == ()
     assert overflowed.volume_m3 == float("inf")
+    assert overflowed.effective_area_m2 == float("inf")

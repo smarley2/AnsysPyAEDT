@@ -3,7 +3,14 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
+import pytest
+
 from inductor_designer.domain.project import ManualCoreSelection
+from inductor_designer.simulation.inductance_estimate import (
+    AL_TOLERANCE_NOTE,
+    INDUCTANCE_EXCLUSION_NOTE,
+    STORED_ENERGY_INTEGRATED_NOTE,
+)
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,
     PreliminaryResult,
@@ -250,3 +257,222 @@ def test_acknowledging_the_manual_core_material_pair_restores_core_estimates(
     result = estimate_preliminary(request)
 
     assert result.core.b_dc.state is ResultState.ESTIMATED
+
+
+def test_the_core_reports_its_inductance_factor_and_stored_energy(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    assert result.core.al_effective.state is ResultState.ESTIMATED
+    assert result.core.mu_r_effective.state is ResultState.ESTIMATED
+    assert result.core.stored_energy.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.state is ResultState.ESTIMATED
+    assert INDUCTANCE_EXCLUSION_NOTE in result.notes
+    # The fixture records a B-H series, so energy follows the integrated path.
+    assert STORED_ENERGY_INTEGRATED_NOTE in result.notes
+
+
+def test_every_winding_inductance_is_its_turns_squared_times_the_core_factor(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    al_effective = result.core.al_effective.value
+    assert al_effective is not None
+    for row, definition in zip(
+        result.windings, sample_request.project.design.windings, strict=True
+    ):
+        assert row.inductance.value == pytest.approx(definition.turns**2 * al_effective)
+
+
+def test_the_effective_geometry_echo_reports_the_values_actually_used(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    core = sample_request.core
+    assert core is not None
+    assert result.core.effective_area.value == core.effective_area_m2
+    assert result.core.path_length.value == core.path_length_m
+    assert result.core.volume.value == core.volume_m3
+
+
+def test_a_missing_bh_series_does_not_hide_the_core_geometry(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The echo is independent of flux density: the dimensions are still known."""
+    project = replace(
+        sample_request.project,
+        operating_point=replace(
+            sample_request.project.operating_point, core_temperature_c=85.0
+        ),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.effective_area.state is ResultState.ESTIMATED
+    assert result.core.al_effective.state is ResultState.UNAVAILABLE
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    assert (
+        result.core.stored_energy.code
+        == DiagnosticCode.STORED_ENERGY_NO_FLUX_DENSITY
+    )
+
+
+def test_how_the_effective_area_was_obtained_reaches_the_assumptions(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The A_e provenance note (Manual-core formula, or catalog overrides) rides
+    on `CoreMagneticProperties.notes`. It used to reach the screen only through
+    `b_dc`, which carries no notes when flux density is refused -- exactly when
+    the geometry rows are the only core numbers left.
+    """
+    core = sample_request.core
+    assert core is not None
+    request = replace(
+        sample_request, core=replace(core, notes=("HOW-A_e-WAS-OBTAINED",))
+    )
+    project = replace(
+        request.project,
+        operating_point=replace(request.project.operating_point, core_temperature_c=85.0),
+    )
+
+    result = estimate_preliminary(replace(request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.effective_area.state is ResultState.ESTIMATED
+    assert "HOW-A_e-WAS-OBTAINED" in result.notes
+
+
+def test_the_catalog_tolerance_caveat_stays_off_the_inductance_values(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """That caveat is about the DEVIATION mixing roll-off with catalog
+    tolerance. An inductance does not depend on the catalog value at all, so
+    claiming the caveat applies to it would misdescribe the number.
+    """
+    result = estimate_preliminary(sample_request)
+
+    assert AL_TOLERANCE_NOTE in result.core.al_deviation.notes
+    assert AL_TOLERANCE_NOTE in result.core.al_catalog.notes
+    assert AL_TOLERANCE_NOTE in result.core.mu_r_initial.notes
+    assert AL_TOLERANCE_NOTE not in result.core.al_effective.notes
+    assert AL_TOLERANCE_NOTE not in result.core.mu_r_effective.notes
+    assert AL_TOLERANCE_NOTE not in result.windings[0].inductance.notes
+
+
+def test_no_core_leaves_the_geometry_echo_unavailable(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(replace(sample_request, core=None))
+
+    # Its own code, not the flux-density one, so triaging a manifest on
+    # `core_geometry.*` finds this case too.
+    assert (
+        result.core.effective_area.code
+        == DiagnosticCode.CORE_GEOMETRY_NO_CORE_SELECTED
+    )
+    # No core means no datasheet to reference either.
+    assert result.core.al_catalog.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.mu_r_initial.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    assert result.windings[0].inductance.code == (
+        DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    )
+
+
+def test_the_catalog_reference_survives_a_missing_bh_series(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The catalog A_L and the initial permeability derived from it depend only
+    on the core's datasheet numbers and its dimensions -- not on flux density,
+    not on the operating point. Withholding them when flux density is refused
+    hid a datasheet value for a reason it does not depend on. Only the deviation
+    needs the effective A_L, so only the deviation goes unavailable.
+    """
+    project = replace(
+        sample_request.project,
+        operating_point=replace(
+            sample_request.project.operating_point, core_temperature_c=85.0
+        ),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.al_catalog.state is ResultState.ESTIMATED
+    assert result.core.al_catalog.value == pytest.approx(61e-9)
+    assert result.core.mu_r_initial.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+
+
+def test_the_catalog_reference_survives_an_unexcited_operating_point(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """Same reasoning at zero excitation: the datasheet does not stop being the
+    datasheet because no current flows.
+    """
+    operating_point = sample_request.project.operating_point
+    unexcited = tuple(
+        replace(winding, ac_rms_current_a=0.0, dc_current_a=0.0)
+        for winding in operating_point.windings
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=unexcited),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+    assert result.core.al_catalog.state is ResultState.ESTIMATED
+    assert result.core.mu_r_initial.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+
+
+def test_a_core_without_a_catalog_al_still_reports_inductance(
+    sample_request: PreliminaryRequest,
+) -> None:
+    core = sample_request.core
+    assert core is not None
+    request = replace(sample_request, core=replace(core, al_value_nh=None))
+
+    result = estimate_preliminary(request)
+
+    assert result.core.al_effective.state is ResultState.ESTIMATED
+    assert result.core.al_catalog.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.al_deviation.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.mu_r_initial.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.windings[0].inductance.state is ResultState.ESTIMATED
+
+
+def test_inductance_survives_a_missing_conductor_record(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """Inductance depends on the core, not on the copper, unlike every other
+    winding quantity. Dropping the conductor must not take it down with the
+    current densities.
+    """
+    result = estimate_preliminary(replace(sample_request, conductors_by_winding={}))
+
+    assert result.windings[0].j_ac_rms.state is ResultState.UNAVAILABLE
+    assert result.windings[0].inductance.state is ResultState.ESTIMATED
+
+
+def test_a_non_finite_volume_refuses_only_stored_energy_and_core_loss(
+    sample_request: PreliminaryRequest,
+) -> None:
+    core = sample_request.core
+    assert core is not None
+    request = replace(sample_request, core=replace(core, volume_m3=float("inf")))
+
+    result = estimate_preliminary(request)
+
+    assert result.core.volume.code == DiagnosticCode.CORE_GEOMETRY_NOT_FINITE
+    assert (
+        result.core.stored_energy.code
+        == DiagnosticCode.STORED_ENERGY_NON_FINITE_VOLUME
+    )
+    assert result.core.al_effective.state is ResultState.ESTIMATED

@@ -106,6 +106,12 @@ class FluxDensities:
     b_ac_peak_t: float
     b_peak_magnitude_t: float
     notes: tuple[str, ...]
+    # The curve these came from, so a consumer needing the shape of B(H) and
+    # not just its value at a few points -- stored energy integrates it -- does
+    # not have to re-select a series and risk choosing a different one. None
+    # means the linear-permeability branch below produced these values, and
+    # there is no recorded curve to integrate.
+    bh_series: PointSeries | None = None
 
 
 def _interpolate(series: PointSeries, h: float) -> float | None:
@@ -171,7 +177,7 @@ def flux_densities(
         notes: tuple[str, ...] = ()
         if min(fields.h_min_a_per_m, fields.h_dc_a_per_m, fields.h_max_a_per_m) < 0.0:
             notes = (_ODD_SYMMETRY_NOTE,)
-        return _assemble(b_dc, b_min, b_max, notes)
+        return _assemble(b_dc, b_min, b_max, notes, bh_series)
 
     available = sorted(
         {
@@ -218,7 +224,11 @@ def flux_densities(
 
 
 def _assemble(
-    b_dc: float, b_min: float, b_max: float, notes: tuple[str, ...]
+    b_dc: float,
+    b_min: float,
+    b_max: float,
+    notes: tuple[str, ...],
+    bh_series: PointSeries | None = None,
 ) -> FluxDensities:
     return FluxDensities(
         b_dc_t=b_dc,
@@ -227,4 +237,5 @@ def _assemble(
         b_ac_peak_t=(b_max - b_min) / 2.0,
         b_peak_magnitude_t=max(abs(b_min), abs(b_max)),
         notes=notes,
+        bh_series=bh_series,
     )

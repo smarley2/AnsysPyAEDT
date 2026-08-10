@@ -29,6 +29,14 @@ MILLIOHM = DisplayUnit("mΩ", 1000.0, 4)
 MILLIMETRE = DisplayUnit("mm", 1000.0, 2)
 SQUARE_MILLIMETRE = DisplayUnit("mm²", 1e6, 4)
 WATT = DisplayUnit("W", 1.0, 4)
+MICROHENRY = DisplayUnit("µH", 1e6, 3)
+NANOHENRY_PER_TURNS_SQUARED = DisplayUnit("nH/N²", 1e9, 2)
+CUBIC_CENTIMETRE = DisplayUnit("cm³", 1e6, 3)
+MILLIJOULE = DisplayUnit("mJ", 1000.0, 4)
+PERCENT = DisplayUnit("%", 100.0, 2)
+# A permeability ratio has no unit. `cell` strips the trailing separator so the
+# value does not render with a stray space after it.
+DIMENSIONLESS = DisplayUnit("", 1.0, 1)
 
 _STATE_TEXT = {
     ResultState.UNAVAILABLE: "Unavailable",
@@ -39,7 +47,7 @@ _STATE_TEXT = {
 def cell(value: PreliminaryValue, unit: DisplayUnit) -> dict[str, object]:
     """One displayed quantity: its state, its text, and why if it has no number."""
     if value.state is ResultState.ESTIMATED and value.value is not None:
-        text = f"{value.value * unit.scale:.{unit.decimals}f} {unit.suffix}"
+        text = f"{value.value * unit.scale:.{unit.decimals}f} {unit.suffix}".rstrip()
     else:
         text = _STATE_TEXT[value.state]
     return {
@@ -66,6 +74,21 @@ def core_rows(result: PreliminaryResult) -> list[dict[str, object]]:
         _labelled("Maximum flux density", core.b_max, MILLITESLA),
         _labelled("Peak flux-density magnitude", core.b_peak_magnitude, MILLITESLA),
         _labelled("Core loss", core.core_loss, WATT),
+        _labelled("Effective area A_e", core.effective_area, SQUARE_MILLIMETRE),
+        _labelled("Magnetic path length l_e", core.path_length, MILLIMETRE),
+        _labelled("Effective volume V_e", core.volume, CUBIC_CENTIMETRE),
+        _labelled(
+            "Effective relative permeability", core.mu_r_effective, DIMENSIONLESS
+        ),
+        _labelled(
+            "Initial relative permeability (from catalog A_L)",
+            core.mu_r_initial,
+            DIMENSIONLESS,
+        ),
+        _labelled("Catalog A_L", core.al_catalog, NANOHENRY_PER_TURNS_SQUARED),
+        _labelled("Effective A_L", core.al_effective, NANOHENRY_PER_TURNS_SQUARED),
+        _labelled("A_L deviation", core.al_deviation, PERCENT),
+        _labelled("Stored energy", core.stored_energy, MILLIJOULE),
     ]
 
 
@@ -80,6 +103,7 @@ def winding_rows(result: PreliminaryResult) -> list[dict[str, object]]:
             "wireLength": cell(row.wire_length, MILLIMETRE),
             "resistance": cell(row.resistance, MILLIOHM),
             "wireLoss": cell(row.wire_loss, WATT),
+            "inductance": cell(row.inductance, MICROHENRY),
         }
         for row in result.windings
     ]

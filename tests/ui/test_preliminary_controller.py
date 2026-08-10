@@ -35,7 +35,7 @@ def test_a_complete_project_reports_estimated_rows() -> None:
     session = ProjectSession(make_project_with_material())
     controller = PreliminaryController(session, CATALOG)
 
-    assert len(controller.coreRows) == 6
+    assert len(controller.coreRows) == 15
     assert len(controller.windingRows) == 1
     assert len(controller.totalRows) == 3
     assert controller.windingRows[0]["jAcRms"]["state"] == ResultState.ESTIMATED.value
@@ -46,6 +46,26 @@ def test_a_complete_project_reports_estimated_rows() -> None:
     assert controller.bhSeriesId == ""
     assert any("linear permeability" in note for note in controller.assumptions)
     assert controller.geometryIssues == []
+
+
+def test_every_winding_row_reports_an_inductance_and_the_permeability_used() -> None:
+    """`make_project_with_material()` pins a record with no B-H series, so flux
+    density comes from its `relative_permeability = 60.0`. The incremental slope
+    of a linear model is that same permeability, which makes the reported
+    effective permeability exactly 60 -- a fixed number to assert against rather
+    than a re-derivation of the formula under test.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project_with_material())
+    controller = PreliminaryController(session, CATALOG)
+
+    assert controller.windingRows[0]["inductance"]["state"] == (
+        ResultState.ESTIMATED.value
+    )
+    # 20 turns on a core whose A_L works out to 77.65 nH: 400 * 77.65 nH.
+    assert controller.windingRows[0]["inductance"]["text"] == "31.062 µH"
+    assert controller.coreRows[9]["label"] == "Effective relative permeability"
+    assert controller.coreRows[9]["text"] == "60.0"
 
 
 def test_editing_the_project_refreshes_the_rows() -> None:

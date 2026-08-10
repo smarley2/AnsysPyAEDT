@@ -41,6 +41,30 @@ class DiagnosticCode:
 
     CURRENT_DENSITY_NO_CONDUCTOR = "current_density.no_conductor"
 
+    INDUCTANCE_NO_FLUX_DENSITY = "inductance.no_flux_density"
+    INDUCTANCE_NO_EXCITATION = "inductance.no_excitation"
+    INDUCTANCE_NON_POSITIVE_PERMEABILITY = "inductance.non_positive_permeability"
+    INDUCTANCE_NON_POSITIVE_GEOMETRY = "inductance.non_positive_geometry"
+    INDUCTANCE_NON_FINITE_GEOMETRY = "inductance.non_finite_geometry"
+    INDUCTANCE_NOT_FINITE = "inductance.not_finite"
+
+    AL_CHECK_NO_CATALOG_AL = "al_check.no_catalog_al"
+    AL_CHECK_NOT_FINITE = "al_check.not_finite"
+
+    STORED_ENERGY_NO_FLUX_DENSITY = "stored_energy.no_flux_density"
+    STORED_ENERGY_NON_POSITIVE_VOLUME = "stored_energy.non_positive_volume"
+    STORED_ENERGY_NON_FINITE_VOLUME = "stored_energy.non_finite_volume"
+    STORED_ENERGY_NOT_FINITE = "stored_energy.not_finite"
+    STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE = "stored_energy.flux_outside_bh_range"
+    STORED_ENERGY_NON_MONOTONIC_BH = "stored_energy.non_monotonic_bh"
+
+    # The effective-geometry echo is reported independently of flux density, so
+    # it needs its own reasons rather than borrowing the flux-density or
+    # core-loss ones.
+    CORE_GEOMETRY_NON_POSITIVE = "core_geometry.non_positive"
+    CORE_GEOMETRY_NOT_FINITE = "core_geometry.not_finite"
+    CORE_GEOMETRY_NO_CORE_SELECTED = "core_geometry.no_core_selected"
+
     WIRE_LOSS_NO_GEOMETRY = "wire_loss.no_geometry"
     WIRE_LOSS_TEMPERATURE_OUT_OF_RANGE = "wire_loss.temperature_out_of_range"
 
@@ -64,16 +88,23 @@ class DiagnosticCode:
 
 @dataclass(frozen=True, slots=True)
 class CoreMagneticProperties:
-    """The two core properties the estimator reads, and how they were obtained.
+    """The core properties the estimator reads, and how they were obtained.
 
     A catalog core supplies the manufacturer's effective values. A Manual core
     has no record, so the caller computes them from the entered dimensions and
     says so in `notes`. Keeping this separate from `CoreRecord` means no caller
     ever has to fabricate manufacturer provenance to get an estimate.
+
+    `al_value_nh` is None exactly when the core has no manufacturer inductance
+    factor, which is the Manual-core case. Neither it nor the effective area
+    has a default: a default would let a caller silently omit the area and get
+    an Unavailable A_L instead of a construction error.
     """
 
     path_length_m: float
     volume_m3: float
+    effective_area_m2: float
+    al_value_nh: float | None
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
