@@ -251,10 +251,10 @@ def test_generation_uses_current_project_and_fixed_supported_environment(
     QGuiApplication.instance() or QGuiApplication([])
     original = make_project()
     updated = replace(original, name="provider changed project")
-    session = ProjectSession(original)
+    project_document_path = Path("project.inductor.json")
+    session = ProjectSession(original, project_document_path)
     capability_calls: list[tuple[AedtRelease, AedtEdition]] = []
     generation_calls: list[tuple[object, object]] = []
-    project_document_path = Path("project.inductor.json")
 
     class Matrix:
         def snapshot_for(
@@ -284,7 +284,7 @@ def test_generation_uses_current_project_and_fixed_supported_environment(
 
     monkeypatch.setattr(generation_lines, "run_generation", record_generation)
     controller = _build_generation_controller(
-        session, object(), object(), project_document_path  # type: ignore[arg-type]
+        session, object(), object()  # type: ignore[arg-type]
     )
     session.apply(updated)
     app = QGuiApplication.instance() or QGuiApplication([])

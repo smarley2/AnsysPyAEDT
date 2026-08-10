@@ -1,13 +1,13 @@
 """Regression test for Fabio's "context panel content is far wider than the
 panel" report: labels clipped, input fields pushed off the right edge.
 
-Two independent, unrelated mechanisms were found and fixed, and this test
-guards both. Screen visit order ("visited while hidden") was the leading
-hypothesis going in but was directly refuted (the bug reproduced with
-`CoreMaterialPanel` fully visible from the moment it was constructed, in a
-standalone instance with no `Main.qml`, no `StackLayout`, and no controller
+Three independent, unrelated mechanisms were found and fixed, and this test
+guards all three. Screen visit order ("visited while hidden") was an early
+hypothesis but was directly refuted (the first mechanism below reproduced
+with `CoreMaterialPanel` fully visible from the moment it was constructed, in
+a standalone instance with no `Main.qml`, no `StackLayout`, and no controller
 at all) -- so this test does not key its scenarios off visit order for its
-own sake, only because the actual mechanisms happen to be sensitive to it:
+own sake, only because the second mechanism happens to be sensitive to it:
 
 1. A non-`Layout.fillWidth`, non-wrapping `Label` (a screen title, or a
    `CheckBox`'s own built-in label) with long text has an implicit width
@@ -31,11 +31,27 @@ own sake, only because the actual mechanisms happen to be sensitive to it:
    `visible: true` (shown/hidden with `opacity`/`enabled` instead) -- both
    swaps trade a `Layout`'s internal "did I actually re-arrange" bookkeeping
    for ordinary property bindings, which were never observed to go stale.
+3. The first round's version of this test measured every screen's content
+   against `contextPanel`'s own width. That boundary is wrong: each screen's
+   content sits inside a `ScrollView`, and a `ScrollView`'s vertical
+   scrollbar is an overlay that does not shrink `contextPanel` -- it only
+   shrinks the `ScrollView`'s own `availableWidth` once there is enough
+   content to need scrolling. Every one of the five screens sized its inner
+   `ColumnLayout` off the *panel's* width minus a hand-picked constant
+   (`windingsPanel.width - 24`) rather than the `ScrollView`'s
+   `availableWidth`, so a field could satisfy the old (too-loose)
+   `contextPanel`-width test while still being visually clipped or hidden
+   behind the scrollbar -- exactly what Fabio's Windings screenshot showed.
+   Fixed by giving every screen's `ScrollView` an `id` and binding its
+   `ColumnLayout`'s `width` to that `ScrollView`'s own `availableWidth`,
+   mirroring the pattern `MaterialStudioPage.qml` already used correctly.
 
-This walks every visible descendant of `contextPanel` (the Rectangle that
-hosts all five screens) and asserts none of them extends past its right
-edge, for each of the five screens, at a narrow and a wide window size, and
-both when the screen is the first one visited and after visiting others
+This walks every visible descendant of each screen's `ScrollView` and
+asserts none of them extends past that `ScrollView`'s own `availableWidth`
+(not `contextPanel`'s width), for each of the five screens, at a narrow and
+a wide window width, with the vertical scrollbar both absent (content
+shorter than the viewport) and present (content taller than the viewport),
+and both when the screen is the first one visited and after visiting others
 first.
 """
 
@@ -43,6 +59,7 @@ from __future__ import annotations
 
 import gc
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -84,7 +101,22 @@ from tests.unit.domain.test_project import (  # noqa: E402
     make_project_with_material,
 )
 
-pytestmark = pytest.mark.ui
+# Windows-only: this test asserts on exact pixel geometry, and both of its
+# inputs are platform-specific. The Qt Quick Controls style differs (the
+# Windows style's vertical `ScrollBar` is 17px wide, the Basic style Linux
+# falls back to is 8px), and so do the default font metrics, which decide how
+# tall each screen's content is and therefore whether a vertical scrollbar is
+# there at all at the heights below. On Linux the same code reports overflows
+# of 3-9px that no Windows user can see. The application only runs on Windows
+# (Ansys AEDT and FEMM are Windows-only), so the containment guard is kept
+# where it describes something real rather than being retuned per platform.
+pytestmark = [
+    pytest.mark.ui,
+    pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="pixel-exact layout assertions are tuned to the Windows Qt style and fonts",
+    ),
+]
 
 SUPPORTED = CapabilitySnapshot(
     release=AedtRelease(2025, 2),
@@ -97,6 +129,21 @@ SUPPORTED = CapabilitySnapshot(
 
 NARROW_WIDTH = 1000  # window.minimumWidth
 WIDE_WIDTH = 1786
+
+# Window heights chosen (see scratchpad probing during development) so that,
+# at both NARROW_WIDTH and WIDE_WIDTH, every one of the five screens' own
+# `ScrollView` reports no vertical scrollbar reserve at ROOMY_HEIGHT
+# (`availableWidth == width`) and a reserve at CRAMPED_HEIGHT
+# (`availableWidth < width`) -- one pair of heights that reliably exercises
+# both the "no scrollbar" and "scrollbar visible" cases across all five
+# screens' differing content lengths, rather than a bespoke height per
+# screen. This deliberately goes below `window.minimumHeight` (700):
+# `minimumHeight` only constrains interactive resizing, and setting `height`
+# directly (like `width` above, at `NARROW_WIDTH` == `minimumWidth`) is the
+# same idiom the rest of this file already relies on to reach a specific
+# layout state under the offscreen QPA platform.
+ROOMY_HEIGHT = 1119  # no screen's content needs to scroll
+CRAMPED_HEIGHT = 300  # every screen's content needs to scroll
 
 STEP_NAMES = (
     "coreMaterialPanel",
@@ -186,15 +233,40 @@ def _go_to(app: QGuiApplication, steps: QObject, root: QObject, index: int) -> N
     _settle(app, root)
 
 
-def _overflowing_descendants(container: QObject, tolerance: float = 2.0) -> list[str]:
-    """Every visible descendant of `container` whose right edge (mapped into
-    `container`'s coordinate space) extends past `container`'s own width.
+def _scroll_view_of(panel: QObject) -> QObject:
+    """The screen's own `ScrollView`.
+
+    Found by walking the panel's direct children for the control's class
+    name, not by `objectName` -- the fix under test is precisely what gives
+    each screen's `ScrollView` an `id`/`objectName`, and this lookup has to
+    work identically whether or not that fix is present so the "this test
+    fails on the old code" claim is about the boundary the test checks, not
+    about infrastructure the fix happens to add.
     """
-    limit = container.property("width")
+    for child in panel.children():
+        if "ScrollView" in child.metaObject().className():
+            return child
+    raise AssertionError(f"{panel.objectName()} has no ScrollView")
+
+
+def _overflowing_descendants(scroll_view: QObject, tolerance: float = 2.0) -> list[str]:
+    """Every visible descendant of `scroll_view` whose right edge (mapped
+    into `scroll_view`'s own coordinate space) extends past `scroll_view`'s
+    `availableWidth` -- the correct containment boundary. `contextPanel`'s
+    width is not: it does not shrink when the vertical scrollbar appears, so
+    content can satisfy a `contextPanel`-width check while still sitting
+    under the scrollbar.
+    """
+    limit = scroll_view.property("availableWidth")
     violations: list[str] = []
 
     def walk(item: QObject) -> None:
         for child in item.childItems():
+            if "ScrollBar" in child.metaObject().className():
+                # The scrollbar itself (and its internal handle/track items)
+                # lives in the band `availableWidth` reserves for it -- it is
+                # the thing content must stay clear of, not content itself.
+                continue
             # `visible` alone is not enough: the five screens hide their
             # inactive siblings with `opacity: 0` (see Main.qml), not
             # `visible: false`, so an invisible-to-the-user screen still
@@ -203,50 +275,58 @@ def _overflowing_descendants(container: QObject, tolerance: float = 2.0) -> list
             # scoped to what is on screen.
             if not child.property("visible") or child.property("opacity") <= 0:
                 continue
-            origin = child.mapToItem(container, QPointF(0.0, 0.0))
+            origin = child.mapToItem(scroll_view, QPointF(0.0, 0.0))
             right_edge = origin.x() + child.property("width")
             if right_edge > limit + tolerance:
                 label = child.property("objectName") or child.metaObject().className()
                 violations.append(
-                    f"{label}: right_edge={right_edge:.1f} > container_width={limit:.1f}"
+                    f"{label}: right_edge={right_edge:.1f} > available_width={limit:.1f}"
                 )
             walk(child)
 
-    walk(container)
+    walk(scroll_view)
     return violations
 
 
+@pytest.mark.parametrize("height", (ROOMY_HEIGHT, CRAMPED_HEIGHT))
 @pytest.mark.parametrize("width", (NARROW_WIDTH, WIDE_WIDTH))
 @pytest.mark.parametrize("index", range(5))
-def test_screen_content_fits_the_context_panel_when_visited_first(
-    index: int, width: int
+def test_screen_content_fits_the_scroll_view_when_visited_first(
+    index: int, width: int, height: int
 ) -> None:
     app, root, steps = _build_engine()
     root.setProperty("width", width)
+    root.setProperty("height", height)
     _go_to(app, steps, root, index)
 
-    context_panel = root.findChild(QObject, "contextPanel")
-    violations = _overflowing_descendants(context_panel)
+    panel = root.findChild(QObject, STEP_NAMES[index])
+    scroll_view = _scroll_view_of(panel)
+    violations = _overflowing_descendants(scroll_view)
     assert not violations, (
-        f"{STEP_NAMES[index]} at width={width}, visited first: {violations}"
+        f"{STEP_NAMES[index]} at width={width}, height={height}, visited first: "
+        f"{violations}"
     )
 
 
+@pytest.mark.parametrize("height", (ROOMY_HEIGHT, CRAMPED_HEIGHT))
 @pytest.mark.parametrize("width", (NARROW_WIDTH, WIDE_WIDTH))
 @pytest.mark.parametrize("index", range(5))
-def test_screen_content_fits_the_context_panel_after_visiting_others(
-    index: int, width: int
+def test_screen_content_fits_the_scroll_view_after_visiting_others(
+    index: int, width: int, height: int
 ) -> None:
     app, root, steps = _build_engine()
     root.setProperty("width", width)
+    root.setProperty("height", height)
     _settle(app, root)
     for other in range(5):
         if other != index:
             _go_to(app, steps, root, other)
     _go_to(app, steps, root, index)
 
-    context_panel = root.findChild(QObject, "contextPanel")
-    violations = _overflowing_descendants(context_panel)
+    panel = root.findChild(QObject, STEP_NAMES[index])
+    scroll_view = _scroll_view_of(panel)
+    violations = _overflowing_descendants(scroll_view)
     assert not violations, (
-        f"{STEP_NAMES[index]} at width={width}, visited after others: {violations}"
+        f"{STEP_NAMES[index]} at width={width}, height={height}, "
+        f"visited after others: {violations}"
     )

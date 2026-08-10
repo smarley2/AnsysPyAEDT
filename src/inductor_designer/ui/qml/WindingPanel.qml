@@ -100,12 +100,26 @@ Pane {
     Component.onCompleted: refreshFields()
 
     ScrollView {
+        id: windingsScrollView
+        objectName: "windingsScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // `availableWidth` reserves room for the vertical scrollbar
+        // dynamically, based on content height -- but content height here
+        // depends on this column's own width (wrapping `Label`s), so
+        // binding the column's width to `availableWidth` closes a feedback
+        // loop: Qt Quick Layouts was observed to leave a nested
+        // `GridLayout`'s `Layout.fillWidth` children stuck at a stale width
+        // once that loop settled (reproduced at width=1000, height=300 on
+        // this screen). Reserving the scrollbar's own fixed, style-defined
+        // width unconditionally instead breaks the loop; the only cost is a
+        // few unused pixels on the right when no scrollbar is needed.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: windingsPanel.width - 24
+            width: windingsScrollView.width - windingsScrollView.leftPadding
+                - windingsScrollView.scrollBarReserve
             spacing: 12
 
             Label {
@@ -133,13 +147,18 @@ Pane {
 
             Label { text: qsTr("Shared operating point"); font.bold: true; color: "#1e2b32" }
 
+            // `width: parent.width`, not `Layout.fillWidth: true`: this is
+            // the nested `GridLayout` the class comment above refers to --
+            // an ordinary property binding tracks `ColumnLayout`'s width
+            // reliably even after it shrinks, where `Layout.fillWidth`'s
+            // internal re-arrange was observed not to.
             GridLayout {
-                Layout.fillWidth: true
+                width: parent.width
                 columns: 2
                 columnSpacing: 10
                 rowSpacing: 8
 
-                Label { text: qsTr("Frequency (Hz)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Frequency (Hz)") }
                 TextField {
                     id: frequencyField
                     objectName: "operatingFrequencyField"
@@ -151,7 +170,7 @@ Pane {
                     Accessible.name: qsTr("Shared frequency in hertz")
                     onEditingFinished: windingsPanel.applyOperatingPoint("frequencyHz", frequencyField)
                 }
-                Label { text: qsTr("Winding temperature (°C)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Winding temperature (°C)") }
                 TextField {
                     id: windingTemperatureField
                     objectName: "windingTemperatureField"
@@ -164,7 +183,7 @@ Pane {
                     onEditingFinished: windingsPanel.applyOperatingPoint(
                         "windingTemperatureC", windingTemperatureField)
                 }
-                Label { text: qsTr("Core temperature (°C)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Core temperature (°C)") }
                 TextField {
                     id: coreTemperatureField
                     objectName: "coreTemperatureField"
@@ -251,13 +270,18 @@ Pane {
                 color: "#1e2b32"
             }
 
+            // `width: parent.width`, not `Layout.fillWidth: true`: this is
+            // the nested `GridLayout` the class comment above refers to --
+            // an ordinary property binding tracks `ColumnLayout`'s width
+            // reliably even after it shrinks, where `Layout.fillWidth`'s
+            // internal re-arrange was observed not to.
             GridLayout {
-                Layout.fillWidth: true
+                width: parent.width
                 columns: 2
                 columnSpacing: 10
                 rowSpacing: 8
 
-                Label { text: qsTr("Label") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Label") }
                 TextField {
                     id: labelField
                     objectName: "windingLabelField"
@@ -267,7 +291,7 @@ Pane {
                     Accessible.name: qsTr("Winding label")
                     onEditingFinished: windingsPanel.applyField("label", labelField)
                 }
-                Label { text: qsTr("Turns") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Turns") }
                 TextField {
                     id: turnsField
                     objectName: "windingTurnsField"
@@ -279,7 +303,7 @@ Pane {
                     Accessible.name: qsTr("Turn count, integers only")
                     onEditingFinished: windingsPanel.applyField("turns", turnsField)
                 }
-                Label { text: qsTr("Conductor") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Conductor") }
                 ComboBox {
                     id: conductorCombo
                     objectName: "windingConductorCombo"
@@ -290,7 +314,7 @@ Pane {
                     Accessible.name: qsTr("Conductor")
                     onActivated: windingsPanel.applyChoice("conductor", currentText)
                 }
-                Label { text: qsTr("Conductor mode") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Conductor mode") }
                 ComboBox {
                     id: modeCombo
                     objectName: "windingModeCombo"
@@ -301,7 +325,7 @@ Pane {
                     Accessible.name: qsTr("Conductor mode")
                     onActivated: windingsPanel.applyChoice("mode", currentText)
                 }
-                Label { text: qsTr("AC RMS current (A)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("AC RMS current (A)") }
                 TextField {
                     id: currentField
                     objectName: "windingCurrentField"
@@ -313,7 +337,7 @@ Pane {
                     Accessible.name: qsTr("AC RMS current in amperes")
                     onEditingFinished: windingsPanel.applyField("acRmsCurrentA", currentField)
                 }
-                Label { text: qsTr("AC phase (deg)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("AC phase (deg)") }
                 TextField {
                     id: phaseField
                     objectName: "windingPhaseField"
@@ -325,7 +349,7 @@ Pane {
                     Accessible.name: qsTr("AC phase in degrees")
                     onEditingFinished: windingsPanel.applyField("acPhaseDeg", phaseField)
                 }
-                Label { text: qsTr("DC current (A)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("DC current (A)") }
                 TextField {
                     id: dcCurrentField
                     objectName: "windingDcCurrentField"
@@ -337,7 +361,7 @@ Pane {
                     Accessible.name: qsTr("DC current in amperes")
                     onEditingFinished: windingsPanel.applyField("dcCurrentA", dcCurrentField)
                 }
-                Label { text: qsTr("Current direction") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Current direction") }
                 ComboBox {
                     id: currentDirectionCombo
                     objectName: "windingCurrentDirectionCombo"
@@ -348,7 +372,7 @@ Pane {
                     Accessible.name: qsTr("Current direction")
                     onActivated: windingsPanel.applyChoice("currentDirection", currentText)
                 }
-                Label { text: qsTr("Start angle (deg)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Start angle (deg)") }
                 TextField {
                     id: startAngleField
                     objectName: "windingStartAngleField"
@@ -360,7 +384,7 @@ Pane {
                     Accessible.name: qsTr("Start angle in degrees")
                     onEditingFinished: windingsPanel.applyField("startAngleDeg", startAngleField)
                 }
-                Label { text: qsTr("Sector (deg)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Sector (deg)") }
                 TextField {
                     id: sectorField
                     objectName: "windingSectorField"
@@ -372,7 +396,7 @@ Pane {
                     Accessible.name: qsTr("Sector span in degrees")
                     onEditingFinished: windingsPanel.applyField("sectorDeg", sectorField)
                 }
-                Label { text: qsTr("Spacing (mm)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Spacing (mm)") }
                 TextField {
                     id: spacingField
                     objectName: "windingSpacingField"
@@ -384,7 +408,7 @@ Pane {
                     Accessible.name: qsTr("Minimum turn spacing in millimetres")
                     onEditingFinished: windingsPanel.applyField("spacingMm", spacingField)
                 }
-                Label { text: qsTr("Clearance (mm)") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Clearance (mm)") }
                 TextField {
                     id: clearanceField
                     objectName: "windingClearanceField"
@@ -396,7 +420,7 @@ Pane {
                     Accessible.name: qsTr("Minimum clearance in millimetres")
                     onEditingFinished: windingsPanel.applyField("clearanceMm", clearanceField)
                 }
-                Label { text: qsTr("Winding direction") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Winding direction") }
                 ComboBox {
                     id: directionField
                     objectName: "windingDirectionField"
@@ -407,7 +431,7 @@ Pane {
                     Accessible.name: qsTr("Winding direction")
                     onActivated: windingsPanel.applyChoice("direction", currentText)
                 }
-                Label { text: qsTr("Terminal intent") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Terminal intent") }
                 TextField {
                     id: terminalIntentField
                     objectName: "windingTerminalIntentField"

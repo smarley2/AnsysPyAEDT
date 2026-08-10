@@ -34,12 +34,21 @@ Pane {
     Component.onCompleted: refreshFields()
 
     ScrollView {
+        id: simulationScrollView
+        objectName: "simulationScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: simulationPanel.width - 24
+            width: simulationScrollView.width - simulationScrollView.leftPadding
+                - simulationScrollView.scrollBarReserve
             spacing: 12
 
             Label {
@@ -100,13 +109,24 @@ Pane {
                 onActivated: simulationPanel.controller.setMeshIntent(currentText)
             }
 
+            // `width: parent.width`, not `Layout.fillWidth: true`: matches
+            // `WindingPanel.qml`'s nested `GridLayout`s -- an ordinary
+            // property binding tracks the `ColumnLayout`'s width reliably
+            // even after it shrinks, where `Layout.fillWidth`'s internal
+            // re-arrange was observed not to (see `WindingPanel.qml` for the
+            // feedback-loop staleness this avoids). Both labels also get
+            // `Layout.fillWidth: true` / `Layout.minimumWidth: 0` /
+            // `wrapMode: Text.WordWrap`, the same idiom `WindingPanel.qml`
+            // uses for every label beside a shrinkable field, so a longer
+            // label added here later shares the row with its field instead
+            // of claiming it outright.
             GridLayout {
-                Layout.fillWidth: true
+                width: parent.width
                 columns: 2
                 columnSpacing: 10
                 rowSpacing: 8
 
-                Label { text: qsTr("Maximum passes") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Maximum passes") }
                 TextField {
                     id: passesField
                     objectName: "simulationMaximumPassesField"
@@ -122,7 +142,7 @@ Pane {
                         }
                     }
                 }
-                Label { text: qsTr("Percent error") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Percent error") }
                 TextField {
                     id: percentErrorField
                     objectName: "simulationPercentErrorField"
@@ -201,7 +221,19 @@ Pane {
                     ? qsTr("Generating…") : qsTr("Generate project")
                 enabled: simulationPanel.controller !== null && simulationPanel.controller.canGenerate
                 Accessible.name: qsTr("Generate the solver project")
-                onClicked: simulationPanel.controller.generate()
+                onClicked: {
+                    // generate() itself records the pending AC-only
+                    // confirmation when it refuses (SimulationController),
+                    // so it must always be called first -- opening the
+                    // dialog without it would leave proceedAcOnly() with
+                    // nothing to confirm.
+                    if (simulationPanel.controller.generate()) {
+                        return
+                    }
+                    if (simulationPanel.controller.dcBiasIgnored) {
+                        dcBiasConfirmDialog.open()
+                    }
+                }
             }
 
             Label {
@@ -217,7 +249,14 @@ Pane {
             ListView {
                 objectName: "simulationRunLog"
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(180, Math.max(0, count * 22))
+                // Size to the *actual* wrapped content (contentHeight), not
+                // an assumed 22px-per-line heuristic that undercounts any
+                // entry which wraps to more than one line -- capped so a
+                // hundred log lines cannot push the rest of the layout
+                // apart. Past the cap the view stays interactive (its
+                // default), so the remainder is reachable by scrolling
+                // rather than silently clipped.
+                Layout.preferredHeight: Math.min(180, Math.max(0, contentHeight))
                 clip: true
                 model: simulationPanel.generation !== null ? simulationPanel.generation.lines : []
                 Accessible.name: qsTr("Generation log")
@@ -225,9 +264,57 @@ Pane {
                     required property string modelData
                     width: ListView.view.width
                     text: modelData
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
                     font.pixelSize: 11
                     color: "#1e2b32"
+                }
+            }
+        }
+    }
+
+    // The selected backend (Maxwell 2D or FEMM) linearizes about zero bias
+    // and cannot carry a DC premagnetization into an AC solve (decision:
+    // Fabio Posser, 2026-08-07). A sibling of the ScrollView, not a Layout
+    // child, matching the `unsavedProjectDialog` / `dirtyMaterialTransactionDialog`
+    // convention. Generate() itself refuses to start until Proceed is
+    // clicked, so Cancel truly starts nothing.
+    Dialog {
+        id: dcBiasConfirmDialog
+        objectName: "dcBiasConfirmDialog"
+        anchors.centerIn: parent
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        title: qsTr("DC bias will be ignored")
+
+        ColumnLayout {
+            Label {
+                objectName: "dcBiasConfirmMessage"
+                Layout.preferredWidth: 420
+                text: simulationPanel.controller === null
+                    ? "" : simulationPanel.controller.dcBiasNotice
+                wrapMode: Text.WordWrap
+                Accessible.name: text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                Button {
+                    objectName: "dcBiasConfirmProceedButton"
+                    text: qsTr("Proceed AC-only")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr(
+                        "Proceed with an AC-only run and ignore the DC bias"
+                    )
+                    onClicked: {
+                        dcBiasConfirmDialog.close()
+                        simulationPanel.controller.proceedAcOnly()
+                    }
+                }
+                Button {
+                    objectName: "dcBiasConfirmCancelButton"
+                    text: qsTr("Cancel")
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("Cancel; do not start the run")
+                    onClicked: dcBiasConfirmDialog.close()
                 }
             }
         }

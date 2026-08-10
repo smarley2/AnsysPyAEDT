@@ -12,7 +12,7 @@ from inductor_designer.simulation.femm_problem import (
 from inductor_designer.simulation.maxwell_plan import Polarity
 from inductor_designer.simulation.run_contracts import EffectiveWindingInput
 from tests.unit.simulation.test_maxwell_plan import make_approved_material_record
-from tests.unit.simulation.test_plan_builder import build, make_definition
+from tests.unit.simulation.test_plan_builder import build, make_definition, make_effective
 from tests.unit.simulation.test_plan_builder2d import build2d
 
 
@@ -69,6 +69,20 @@ def test_solid_winding_gets_conductive_copper() -> None:
     assert problem.conductors[0].material == "Copper_solid"
     assert materials["Copper_solid"].conductivity_ms_per_m == COPPER_CONDUCTIVITY_MS_PER_M
     assert materials["Air"].relative_permeability == 1.0
+
+
+def test_nonzero_dc_current_never_reaches_the_femm_circuit() -> None:
+    # FEMM runs AC-only (decision: Fabio Posser, 2026-08-07): FemmCircuit has
+    # no DC field at all, so a requested DC current cannot leak into the
+    # generated .fem problem regardless of what the 2D plan records.
+    plan = build2d(
+        (make_definition(),),
+        (make_effective(dc_current_a=5.0),),
+    )
+    problem = femm_problem_from_plan(plan)  # type: ignore[arg-type]
+
+    assert not hasattr(problem.circuits[0], "dc_current_a")
+    assert problem.circuits[0].current_peak_a == pytest.approx(2.8284271247461903)
 
 
 def test_core_bh_curve_is_forwarded_as_femm_material_points() -> None:

@@ -58,6 +58,35 @@ def test_geometry_and_depth_calls(tmp_path: Path) -> None:
     assert balloon_calls[0]["boundary"] == "Balloon"
 
 
+def test_nonzero_dc_current_never_reaches_the_generated_design(tmp_path: Path) -> None:
+    # 2D runs AC-only (decision: Fabio Posser, 2026-08-07): the plan carries
+    # the requested DC current for the record, but the adapter must never
+    # forward it into `assign_winding` or set any DC-flavored property.
+    app = FakeMaxwell2dApp()
+    plan = build2d((make_definition(),))
+    dc_plan = replace(
+        plan,
+        windings=tuple(replace(group, dc_current_a=5.0) for group in plan.windings),
+    )
+    request = replace(make_request(tmp_path), plan=dc_plan)
+    exporter = PyaedtMaxwell2dExporter(app_factory=FakeMaxwell2dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert result.succeeded(STAGE_NAMES_2D)
+    winding_calls = [k for n, k in app.calls if n == "assign_winding"]
+    assert len(winding_calls) == 1
+    assert set(winding_calls[0]) == {
+        "assignment",
+        "winding_type",
+        "is_solid",
+        "current",
+        "phase",
+        "name",
+    }
+    assert not any("dc" in key.lower() for key in winding_calls[0])
+
+
 def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp()
     request = replace(

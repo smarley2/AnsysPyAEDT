@@ -51,6 +51,9 @@ class ReviewController(QObject):
         self._message = ""
         generation.linesChanged.connect(self.refresh)
         session.projectChanged.connect(self.refresh)
+        # Save As moves the document path without touching the project
+        # itself, but the "Project document" row below reads that path.
+        session.documentPathChanged.connect(self.refresh)
         # Ordering hazard: `main.py` connects `session.projectChanged` to
         # `preliminary_controller.refresh` AFTER this constructor runs, so on
         # every edit Qt fires the connection above (this refresh) before

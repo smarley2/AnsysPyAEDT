@@ -23,6 +23,7 @@ from inductor_designer.domain.project import (
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
+    DcBiasStrategy,
 )
 from inductor_designer.simulation.femm_problem import FemmProblem
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
@@ -269,16 +270,33 @@ def test_manual_material_without_acknowledgment_blocks_every_operation(
 
 
 @pytest.mark.parametrize("backend", [RunBackend.MAXWELL_2D, RunBackend.FEMM])
-def test_nonzero_dc_blocks_equivalent_cross_section_backends(
+def test_nonzero_dc_generates_ac_only_for_equivalent_cross_section_backends(
     backend: RunBackend,
 ) -> None:
-    with pytest.raises(RunPlanningError, match="DC-bias"):
-        plan_run(
-            project_with_material(dc_current_a=5.0),
-            RunRequest(backend, RunMode.GENERATE_ONLY),
-            CATALOG,
-            capability_snapshot(),
-        )
+    # Decision: Fabio Posser, 2026-08-07 -- Maxwell 2D and FEMM no longer
+    # refuse a project with DC winding current; they run AC-only instead,
+    # with the omission recorded as a plan warning (this replaces the former
+    # `test_nonzero_dc_blocks_equivalent_cross_section_backends`, which
+    # asserted the refusal this change deliberately removes).
+    planned = plan_run(
+        project_with_material(dc_current_a=5.0),
+        RunRequest(backend, RunMode.GENERATE_ONLY),
+        CATALOG,
+        capability_snapshot(),
+    )
+
+    assert isinstance(planned, SolveReadyRunPlan)
+    assert any(
+        "DC bias ignored" in warning and "AC-only" in warning
+        for warning in planned.warnings
+    )
+    if backend is RunBackend.MAXWELL_2D:
+        assert isinstance(planned.solver_plan, Maxwell2dDesignPlan)
+        assert planned.solver_plan.dc_bias is not None
+        assert planned.solver_plan.dc_bias.strategy is DcBiasStrategy.AC_ONLY_DC_IGNORED
+    else:
+        assert isinstance(planned.solver_plan, FemmProblem)
+        assert not hasattr(planned.solver_plan.circuits[0], "dc_current_a")
 
 
 def test_reviewed_native_dc_capability_permits_maxwell3d() -> None:

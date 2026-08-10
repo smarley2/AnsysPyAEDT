@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQml.Models
 import QtQuick.Window
@@ -10,6 +11,12 @@ ApplicationWindow {
     property bool wideStep: guidedStepList.currentIndex === 2
         || guidedStepList.currentIndex === 4
     property bool allowCloseOnce: false
+    // Set by `requestApplicationClose()` (to "close the window") or by
+    // `requestGuardedProjectAction()` (to "run this Open/etc. action") right
+    // before `unsavedProjectDialog` opens, then invoked and cleared by
+    // whichever of its three buttons is clicked. One dialog, one guard, two
+    // different callers -- see the file-level note above the dialog itself.
+    property var pendingUnsavedAction: null
     width: Math.min(1800, Math.max(1200, Math.round(Screen.width * 0.82)))
     height: Math.min(1100, Math.max(760, Math.round(Screen.height * 0.84)))
     minimumWidth: 1000
@@ -17,6 +24,69 @@ ApplicationWindow {
     visible: true
     color: "#f3f1ed"
     title: qsTr("PyAEDT Inductor Designer")
+
+    menuBar: MenuBar {
+        objectName: "appMenuBar"
+
+        Menu {
+            objectName: "fileMenu"
+            title: qsTr("File")
+
+            MenuItem {
+                objectName: "openProjectMenuItem"
+                text: qsTr("Open…")
+                enabled: projectSession !== null
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Open is unavailable: start the application with a project first."
+                )
+                onTriggered: window.requestGuardedProjectAction(function() {
+                    openProjectDialog.open()
+                })
+            }
+            MenuItem {
+                objectName: "saveProjectMenuItem"
+                text: qsTr("Save")
+                enabled: guidedStudioController !== null && guidedStudioController.dirty
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Save is unavailable: no project is loaded, or there are no unsaved changes."
+                )
+                onTriggered: guidedStudioController.saveDraft()
+            }
+            MenuItem {
+                objectName: "saveProjectAsMenuItem"
+                text: qsTr("Save As…")
+                enabled: projectSession !== null
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Save As is unavailable: start the application with a project first."
+                )
+                onTriggered: saveProjectAsDialog.open()
+            }
+            MenuSeparator {}
+            MenuItem {
+                objectName: "exitMenuItem"
+                text: qsTr("Exit")
+                Accessible.name: text
+                // Routes through the exact same guard as the window's close
+                // button: `window.close()` triggers `onClosing`, which
+                // delegates to `requestApplicationClose()`.
+                onTriggered: window.close()
+            }
+        }
+        Menu {
+            objectName: "helpMenu"
+            title: qsTr("Help")
+
+            MenuItem {
+                objectName: "aboutMenuItem"
+                text: qsTr("About")
+                Accessible.name: text
+                onTriggered: aboutDialog.open()
+            }
+        }
+    }
 
     function requestStep(index) {
         guidedStepList.currentIndex = index
@@ -67,10 +137,27 @@ ApplicationWindow {
         if (guidedStudioController !== null && guidedStudioController.dirty) {
             // Never lose unsaved winding, core, material-pin, or simulation
             // edits held by the project session either.
+            pendingUnsavedAction = function() {
+                window.allowCloseOnce = true
+                window.close()
+            }
             unsavedProjectDialog.open()
             return false
         }
         return true
+    }
+
+    // File > Open must not silently replace a dirty project (same rule as
+    // closing the window): if there are unsaved edits, `action` is deferred
+    // until the user resolves `unsavedProjectDialog`'s Save/Discard/Cancel
+    // choice; Cancel simply drops `action` and never runs it.
+    function requestGuardedProjectAction(action) {
+        if (guidedStudioController !== null && guidedStudioController.dirty) {
+            pendingUnsavedAction = action
+            unsavedProjectDialog.open()
+            return
+        }
+        action()
     }
 
     onClosing: function(close) {
@@ -489,10 +576,17 @@ ApplicationWindow {
             id: statusDock
             objectName: "statusDock"
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
+            // A wrapped long message (lastLogLineLabel) can be taller than
+            // the 50px a short one-line status bar needs; grow to fit it
+            // instead of clipping (the previous fixed 50px) or overflowing
+            // into surrounding UI (the previous `clip: false`). `clip: true`
+            // stays as a backstop in case some future content is taller
+            // than a single layout pass accounts for.
+            Layout.preferredHeight: Math.max(50, lastLogLineLabel.implicitHeight + 16)
             color: "#fbfaf8"
             radius: 10
             border.color: "#d8d4cd"
+            clip: true
 
             RowLayout {
                 anchors.fill: parent
@@ -512,9 +606,10 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Label {
+                    id: lastLogLineLabel
                     visible: generationController !== null && generationController.lines.length > 0
                     text: visible ? generationController.lines[generationController.lines.length - 1] : ""
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
                     Layout.maximumWidth: 300
                 }
                 Label {
@@ -544,6 +639,12 @@ ApplicationWindow {
         }
     }
 
+    // Shared by two callers: `requestApplicationClose()` (window close and
+    // File > Exit, which routes through it) and
+    // `requestGuardedProjectAction()` (File > Open). Both set
+    // `pendingUnsavedAction` before opening this dialog; Save and Discard run
+    // it, Cancel drops it. Neither caller is named in the copy below so the
+    // one dialog reads correctly for both.
     Dialog {
         id: unsavedProjectDialog
         objectName: "unsavedProjectDialog"
@@ -556,7 +657,7 @@ ApplicationWindow {
             Label {
                 Layout.preferredWidth: 420
                 text: qsTr(
-                    "Save the project, discard unsaved changes, or cancel closing."
+                    "Save the project, discard unsaved changes, or cancel."
                 )
                 wrapMode: Text.WordWrap
                 Accessible.name: text
@@ -567,12 +668,15 @@ ApplicationWindow {
                     objectName: "unsavedProjectSaveButton"
                     text: qsTr("Save")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Save the project and close")
+                    Accessible.name: qsTr("Save the project and continue")
                     onClicked: {
                         if (guidedStudioController.saveDraft()) {
                             unsavedProjectDialog.close()
-                            window.allowCloseOnce = true
-                            window.close()
+                            var action = window.pendingUnsavedAction
+                            window.pendingUnsavedAction = null
+                            if (action !== null) {
+                                action()
+                            }
                         }
                         // A failed save leaves the dialog and the window open:
                         // the failure is already reported in the status bar.
@@ -582,20 +686,84 @@ ApplicationWindow {
                     objectName: "unsavedProjectDiscardButton"
                     text: qsTr("Discard")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Discard unsaved changes and close")
+                    Accessible.name: qsTr("Discard unsaved changes and continue")
                     onClicked: {
                         unsavedProjectDialog.close()
-                        window.allowCloseOnce = true
-                        window.close()
+                        var action = window.pendingUnsavedAction
+                        window.pendingUnsavedAction = null
+                        if (action !== null) {
+                            action()
+                        }
                     }
                 }
                 Button {
                     objectName: "unsavedProjectCancelButton"
                     text: qsTr("Cancel")
                     activeFocusOnTab: true
-                    Accessible.name: qsTr("Cancel closing and keep editing")
-                    onClicked: unsavedProjectDialog.close()
+                    Accessible.name: qsTr("Cancel and keep editing")
+                    onClicked: {
+                        unsavedProjectDialog.close()
+                        window.pendingUnsavedAction = null
+                    }
                 }
+            }
+        }
+    }
+
+    FileDialog {
+        id: openProjectDialog
+        objectName: "openProjectDialog"
+        title: qsTr("Open project")
+        nameFilters: [qsTr("Inductor project (*.inductor.json)")]
+        onAccepted: {
+            if (projectSession !== null) {
+                projectSession.openProject(selectedFile)
+            }
+        }
+    }
+
+    FileDialog {
+        id: saveProjectAsDialog
+        objectName: "saveProjectAsDialog"
+        title: qsTr("Save project as")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Inductor project (*.inductor.json)")]
+        onAccepted: {
+            if (projectSession !== null) {
+                projectSession.saveProjectAs(selectedFile)
+            }
+        }
+    }
+
+    Dialog {
+        id: aboutDialog
+        objectName: "aboutDialog"
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("About")
+        standardButtons: Dialog.Ok
+
+        ColumnLayout {
+            spacing: 6
+            Label {
+                objectName: "aboutApplicationNameLabel"
+                text: appInfo !== null ? appInfo.applicationName : ""
+                font.bold: true
+                Accessible.name: text
+            }
+            Label {
+                objectName: "aboutVersionLabel"
+                text: appInfo !== null ? qsTr("Version %1").arg(appInfo.version) : ""
+                Accessible.name: text
+            }
+            Label {
+                objectName: "aboutAedtTargetLabel"
+                text: appInfo !== null
+                    ? qsTr("Supported AEDT target: %1 (%2)")
+                        .arg(appInfo.supportedAedtRelease)
+                        .arg(appInfo.supportedAedtEdition)
+                    : ""
+                Accessible.name: text
             }
         }
     }

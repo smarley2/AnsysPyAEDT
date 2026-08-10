@@ -16,7 +16,7 @@ from inductor_designer.application.services.maxwell_export import (
     run_manifest_json,
 )
 from inductor_designer.application.services.run_planning import (
-    RunPlanningError,
+    SolveReadyRunPlan,
     plan_run,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
@@ -263,14 +263,24 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
         ),
     )
     # FEMM uses the 2D capability policy and has no native DC source field:
-    # exact zero reaches FemmProblem above, while nonzero DC is rejected here.
-    with pytest.raises(RunPlanningError, match="Maxwell 2D DC-bias generation is blocked"):
-        plan_run(
-            project_with_femm_dc,
-            RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
-            CATALOG,
-            CAPABILITIES,
-        )
+    # decision (Fabio Posser, 2026-08-07) is to run AC-only rather than
+    # refuse, for both exact zero and nonzero requested DC. This replaces the
+    # former assertion that nonzero DC raised RunPlanningError -- that
+    # refusal is exactly the behavior this change removes.
+    femm_dc_planned = plan_run(
+        project_with_femm_dc,
+        RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+        CATALOG,
+        CAPABILITIES,
+    )
+    assert isinstance(femm_dc_planned, SolveReadyRunPlan)
+    assert any("AC-only" in warning for warning in femm_dc_planned.warnings)
+    assert isinstance(femm_dc_planned.solver_plan, FemmProblem)
+    # The requested 1 A DC never reaches the FEMM circuit -- it has no DC
+    # field, so the peak stays the pure AC value.
+    assert femm_dc_planned.solver_plan.circuits[0].current_peak_a == pytest.approx(
+        2.8284271247461903
+    )
 
     effective_inputs = {
         outcome.planned_run.effective_inputs for outcome in outcomes.values()

@@ -28,12 +28,21 @@ Pane {
     Component.onCompleted: refreshManualFields()
 
     ScrollView {
+        id: coreMaterialScrollView
+        objectName: "coreMaterialScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: coreMaterialPanel.width - 24
+            width: coreMaterialScrollView.width - coreMaterialScrollView.leftPadding
+                - coreMaterialScrollView.scrollBarReserve
             spacing: 12
 
             Label {

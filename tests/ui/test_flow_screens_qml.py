@@ -14,6 +14,14 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QObject  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
+# Importing `QQuickWindow` before any QML engine is created is what makes
+# PySide wrap `engine.rootObjects()[0]` as a `QQuickWindow` (with
+# `grabWindow()`) instead of the plain `QWindow` base class it otherwise
+# falls back to -- observed only when this module runs standalone, since
+# some other already-imported test module normally does this first when the
+# whole suite runs together.
+from PySide6.QtQuick import QQuickWindow  # noqa: E402, F401
+
 from inductor_designer.simulation.capabilities import (  # noqa: E402
     AedtEdition,
     AedtRelease,
@@ -94,6 +102,93 @@ def open_flow(
     return app, root, session
 
 
+def _first_descendant(item: QObject, class_substring: str) -> QObject | None:
+    for child in item.childItems():
+        if class_substring in child.metaObject().className():
+            return child
+        found = _first_descendant(child, class_substring)
+        if found is not None:
+            return found
+    return None
+
+
+def _winding_table_row_cells(root: QObject) -> list[QObject]:
+    """The first per-winding data row's cell items, in column order --
+    matching `preliminaryWindingTableHeader`'s children one-to-one.
+    """
+    table = root.findChild(QObject, "preliminaryWindingTable")
+    delegate = _first_descendant(table, "ColumnLayout")
+    assert delegate is not None, "preliminaryWindingTable has no row delegate"
+    row = _first_descendant(delegate, "RowLayout")
+    assert row is not None, "the row delegate has no RowLayout of cells"
+    return list(row.childItems())
+
+
+def _winding_table_geometry(root: QObject, width: int) -> list[tuple[float, float]]:
+    """(x, width) for each header column and each first-row data cell, at
+    the given window width, after a forced layout settle.
+    """
+    root.setProperty("width", width)
+    root.grabWindow()
+    app = QGuiApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+
+    header = root.findChild(QObject, "preliminaryWindingTableHeader")
+    assert header is not None
+    header_cells = list(header.childItems())
+    row_cells = _winding_table_row_cells(root)
+    assert len(header_cells) == len(row_cells) == 8
+
+    geometry: list[tuple[float, float]] = []
+    for header_cell, row_cell in zip(header_cells, row_cells, strict=True):
+        geometry.append((header_cell.property("x"), header_cell.property("width")))
+        geometry.append((row_cell.property("x"), row_cell.property("width")))
+    return geometry
+
+
+def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
+    """Regression test for Fabio's second report: "the columns of Windings
+    does not have a fixed row, it is moving the width according to the width
+    of the screen". A first attempt gave the header's seven columns
+    `Layout.fillWidth: true` (so they could shrink on a narrow window) and
+    then made the data cells match by giving them `Layout.fillWidth: true`
+    too -- which does make header and data track each other, but means both
+    now scale with the window, which is exactly what was reported as wrong.
+    The fix is fixed-width columns (no `Layout.fillWidth` on any of the
+    sixteen header/data cells) shared by both `RowLayout`s, so a column's
+    width -- and a heading's position directly above its values -- never
+    changes with the window.
+
+    Asserts, for every column, at two very different window widths:
+    - the header cell's `(x, width)` equals the data cell's `(x, width)`
+      (header lines up with its data), and
+    - the column's `width` is identical at both window widths (does not
+      scale with the window).
+    """
+    _, root, _ = open_flow(2)
+
+    geometry_by_width = {
+        width: _winding_table_geometry(root, width) for width in (1000, 1786)
+    }
+
+    for width, geometry in geometry_by_width.items():
+        for column in range(8):
+            header_geom = geometry[2 * column]
+            data_geom = geometry[2 * column + 1]
+            assert header_geom == data_geom, (
+                f"width={width}, column {column}: "
+                f"header (x, width)={header_geom} data (x, width)={data_geom}"
+            )
+
+    narrow_widths = [geometry_by_width[1000][2 * c][1] for c in range(8)]
+    wide_widths = [geometry_by_width[1786][2 * c][1] for c in range(8)]
+    assert narrow_widths == wide_widths, (
+        f"column widths must not scale with the window: "
+        f"at 1000px={narrow_widths}, at 1786px={wide_widths}"
+    )
+
+
 def test_preliminary_page_shows_core_winding_totals_and_assumptions() -> None:
     _, root, _ = open_flow(2)
 
@@ -130,6 +225,71 @@ def test_simulation_panel_exposes_every_run_choice() -> None:
     ):
         assert root.findChild(QObject, name) is not None, name
     assert root.findChild(QObject, "showSolverWindowCheckBox").property("enabled") is True
+
+
+@pytest.mark.parametrize("width", (1000, 1786))
+def test_simulation_run_grid_fields_track_the_column_not_their_native_width(
+    width: int,
+) -> None:
+    """Regression guard for Fabio's report of "a similar issue on the right
+    panel width" on the Simulation screen. `WindingPanel.qml` had a real,
+    confirmed instance of this class of bug: a nested `GridLayout`'s
+    `Layout.fillWidth` field lagging its enclosing column at a stale, larger
+    width (root cause: `Layout.fillWidth`'s internal re-arrange, not an
+    ordinary property binding, occasionally missing a step in this exact
+    "`ColumnLayout` width bound to its own `ScrollView`" structure --
+    `SimulationPanel.qml`'s "Maximum passes" / "Percent error" `GridLayout`
+    has the identical structure). Extensive reproduction attempts (offscreen
+    and native "windows" QPA, every window size from 1000-1786 x every
+    height from 300-1119, toggled requested-output checkboxes, edited
+    fields, switched backends, an unsupported-capability snapshot, and a
+    dirty session) never actually caught this `GridLayout` stuck at a stale
+    or oversized width -- but the class of bug it was hardened against
+    (`width: parent.width` instead of `Layout.fillWidth: true`, matching
+    `WindingPanel.qml`) is a real, previously-confirmed one for the
+    identical structure, so this pins the contract precisely rather than
+    relying on the weaker "does not overflow" containment check alone.
+
+    Asserts the two numeric fields' rendered width always equals the
+    `GridLayout`'s own width minus the wider of the two labels' width minus
+    the column spacing -- i.e. the field is sized from the *current*
+    available space, never left stuck at its own native/native-style
+    `implicitWidth`.
+    """
+    _, root, _ = open_flow(3)
+    root.setProperty("width", width)
+    # `height: 300` forces a vertical scrollbar (see
+    # `test_panel_layout_containment.py`'s `CRAMPED_HEIGHT`) -- the exact
+    # condition report 2 used to reproduce `WindingPanel.qml`'s stale
+    # `GridLayout` bug, since the scrollbar's reservation feeds back into
+    # the `ColumnLayout`'s own width.
+    root.setProperty("height", 300)
+    root.grabWindow()
+    app = QGuiApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+
+    passes_field = root.findChild(QObject, "simulationMaximumPassesField")
+    percent_field = root.findChild(QObject, "simulationPercentErrorField")
+    grid = passes_field.parent()
+    assert "GridLayout" in grid.metaObject().className()
+
+    labels = [
+        child
+        for child in grid.childItems()
+        if child not in (passes_field, percent_field)
+    ]
+    assert len(labels) == 2
+    label_column_width = max(label.property("width") for label in labels)
+    column_spacing = grid.property("columnSpacing")
+    expected_field_width = grid.property("width") - label_column_width - column_spacing
+
+    for field in (passes_field, percent_field):
+        assert field.property("width") == pytest.approx(expected_field_width, abs=1.0), (
+            f"width={width}: field={field.objectName()} "
+            f"rendered={field.property('width')} expected={expected_field_width} "
+            f"(native implicitWidth={field.property('implicitWidth')})"
+        )
 
 
 def test_generate_is_disabled_and_explained_while_the_project_is_dirty() -> None:

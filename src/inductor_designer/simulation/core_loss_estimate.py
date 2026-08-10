@@ -23,7 +23,7 @@ _STEINMETZ_NOTE = (
     "DC-bias, or waveform correction is applied"
 )
 _TABLE_NOTE = "interpolated from a recorded loss table at the requested condition"
-# Decision: Fabio Posser, 2026-08-03 (see spec section 8 amendment). Manufacturer
+# Decision: Fabio Posser, 2026-08-07 (see spec section 8 amendment). Manufacturer
 # loss curves are almost always published at zero DC bias only; refusing every
 # biased operating point left core loss blank for most real designs.
 _ZERO_BIAS_APPROXIMATION_NOTE = (
@@ -55,7 +55,7 @@ def _bias_characterized_at_temperature(
     That is the only case with real bias-dependent loss data, so it is the
     only case where the strict exact-bias-match rule applies. Otherwise only
     zero-bias data exists at this temperature, and it is used to approximate
-    any requested bias (specification section 8 amendment, 2026-08-03).
+    any requested bias (specification section 8 amendment, 2026-08-07).
     """
     return any(
         item.conditions.temperature_c == core_temperature_c and not _is_zero_bias(item)
