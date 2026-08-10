@@ -86,7 +86,9 @@ before the next plan freezes assumptions that depend on it.
     cancellation between stages, a durable `running` manifest, failed-stage
     diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
     `RunManifest.results` stays `None` through the whole slice.
-  - **M8b is planned**, not yet implemented:
+  - **M8b implementation is complete and awaiting Fabio Posser's live
+    verification**; the evidence record is
+    [m8b-results-evidence.md](../../development/m8b-results-evidence.md):
     [2026-08-10 M8b scalar results](2026-08-10-m8b-scalar-results.md) — scalar
     normalized results (resistance, inductance, impedance, supported matrices,
     copper/core/total loss, magnetic energy, convergence and solver status),

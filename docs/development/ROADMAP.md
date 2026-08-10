@@ -799,8 +799,10 @@ evidence record is
 
 ### Milestone 8b: Scalar normalized results
 
-Planned, not yet implemented:
-[2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md).
+Implementation is **complete and awaiting Fabio Posser's live verification**;
+the plan is
+[2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md)
+and the evidence record is [m8b-results-evidence.md](m8b-results-evidence.md).
 Resistance, inductance and complex impedance per winding, supported matrices,
 copper/core/total loss, magnetic energy, convergence history and solver
 status, exported as JSON and CSV, and shown on the Review screen.
