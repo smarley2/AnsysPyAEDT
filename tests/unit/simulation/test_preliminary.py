@@ -3,7 +3,13 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
+import pytest
+
 from inductor_designer.domain.project import ManualCoreSelection
+from inductor_designer.simulation.inductance_estimate import (
+    INDUCTANCE_EXCLUSION_NOTE,
+    STORED_ENERGY_NOTE,
+)
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,
     PreliminaryResult,
@@ -250,3 +256,124 @@ def test_acknowledging_the_manual_core_material_pair_restores_core_estimates(
     result = estimate_preliminary(request)
 
     assert result.core.b_dc.state is ResultState.ESTIMATED
+
+
+def test_the_core_reports_its_inductance_factor_and_stored_energy(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    assert result.core.al_effective.state is ResultState.ESTIMATED
+    assert result.core.mu_r_effective.state is ResultState.ESTIMATED
+    assert result.core.stored_energy.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.state is ResultState.ESTIMATED
+    assert INDUCTANCE_EXCLUSION_NOTE in result.notes
+    assert STORED_ENERGY_NOTE in result.notes
+
+
+def test_every_winding_inductance_is_its_turns_squared_times_the_core_factor(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    al_effective = result.core.al_effective.value
+    assert al_effective is not None
+    for row, definition in zip(
+        result.windings, sample_request.project.design.windings, strict=True
+    ):
+        assert row.inductance.value == pytest.approx(definition.turns**2 * al_effective)
+
+
+def test_the_effective_geometry_echo_reports_the_values_actually_used(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(sample_request)
+
+    core = sample_request.core
+    assert core is not None
+    assert result.core.effective_area.value == core.effective_area_m2
+    assert result.core.path_length.value == core.path_length_m
+    assert result.core.volume.value == core.volume_m3
+
+
+def test_a_missing_bh_series_does_not_hide_the_core_geometry(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The echo is independent of flux density: the dimensions are still known."""
+    project = replace(
+        sample_request.project,
+        operating_point=replace(
+            sample_request.project.operating_point, core_temperature_c=85.0
+        ),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.effective_area.state is ResultState.ESTIMATED
+    assert result.core.al_effective.state is ResultState.UNAVAILABLE
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    assert (
+        result.core.stored_energy.code
+        == DiagnosticCode.STORED_ENERGY_NO_FLUX_DENSITY
+    )
+
+
+def test_no_core_leaves_the_geometry_echo_unavailable(
+    sample_request: PreliminaryRequest,
+) -> None:
+    result = estimate_preliminary(replace(sample_request, core=None))
+
+    assert (
+        result.core.effective_area.code == DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED
+    )
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    assert result.windings[0].inductance.code == (
+        DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+    )
+
+
+def test_a_core_without_a_catalog_al_still_reports_inductance(
+    sample_request: PreliminaryRequest,
+) -> None:
+    core = sample_request.core
+    assert core is not None
+    request = replace(sample_request, core=replace(core, al_value_nh=None))
+
+    result = estimate_preliminary(request)
+
+    assert result.core.al_effective.state is ResultState.ESTIMATED
+    assert result.core.al_catalog.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.al_deviation.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.mu_r_initial.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.windings[0].inductance.state is ResultState.ESTIMATED
+
+
+def test_inductance_survives_a_missing_conductor_record(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """Inductance depends on the core, not on the copper, unlike every other
+    winding quantity. Dropping the conductor must not take it down with the
+    current densities.
+    """
+    result = estimate_preliminary(replace(sample_request, conductors_by_winding={}))
+
+    assert result.windings[0].j_ac_rms.state is ResultState.UNAVAILABLE
+    assert result.windings[0].inductance.state is ResultState.ESTIMATED
+
+
+def test_a_non_finite_volume_refuses_only_stored_energy_and_core_loss(
+    sample_request: PreliminaryRequest,
+) -> None:
+    core = sample_request.core
+    assert core is not None
+    request = replace(sample_request, core=replace(core, volume_m3=float("inf")))
+
+    result = estimate_preliminary(request)
+
+    assert result.core.volume.code == DiagnosticCode.CORE_GEOMETRY_NOT_FINITE
+    assert (
+        result.core.stored_energy.code
+        == DiagnosticCode.STORED_ENERGY_NON_POSITIVE_VOLUME
+    )
+    assert result.core.al_effective.state is ResultState.ESTIMATED

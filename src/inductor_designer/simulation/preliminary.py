@@ -7,6 +7,7 @@ Results are derived data and are never persisted into the Project document.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -14,6 +15,11 @@ from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject, ManualCoreSelection
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
+from inductor_designer.simulation.inductance_estimate import (
+    CoreInductance,
+    core_inductance,
+    stored_energy_j,
+)
 from inductor_designer.simulation.magnetic_estimate import (
     FieldStrengths,
     FluxDensities,
@@ -61,6 +67,9 @@ class WindingPreliminary:
     wire_length: PreliminaryValue
     resistance: PreliminaryValue
     wire_loss: PreliminaryValue
+    # Depends on the core, not on this winding's conductor record, so it stays
+    # estimated when the copper quantities are refused.
+    inductance: PreliminaryValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +80,15 @@ class CorePreliminary:
     b_ac_peak: PreliminaryValue
     b_peak_magnitude: PreliminaryValue
     core_loss: PreliminaryValue
+    effective_area: PreliminaryValue
+    path_length: PreliminaryValue
+    volume: PreliminaryValue
+    mu_r_effective: PreliminaryValue
+    mu_r_initial: PreliminaryValue
+    al_catalog: PreliminaryValue
+    al_effective: PreliminaryValue
+    al_deviation: PreliminaryValue
+    stored_energy: PreliminaryValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,16 +108,75 @@ class PreliminaryResult:
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
-def _core_all(flux_reason: PreliminaryValue) -> CorePreliminary:
+@dataclass(frozen=True, slots=True)
+class _GeometryEcho:
+    """The effective dimensions actually used, reported independently of flux.
+
+    A missing B-H series must not make the core's area read Unavailable, so
+    this is evaluated from `CoreMagneticProperties` alone -- the same reason
+    wire length is evaluated independently of wire loss.
+    """
+
+    effective_area: PreliminaryValue
+    path_length: PreliminaryValue
+    volume: PreliminaryValue
+
+
+def _echoed(value: float, name: str, notes: tuple[str, ...]) -> PreliminaryValue:
+    if not math.isfinite(value):
+        return unavailable(
+            DiagnosticCode.CORE_GEOMETRY_NOT_FINITE,
+            f"Core {name} is not a finite number, so the core dimensions are "
+            "out of range.",
+        )
+    if not value > 0.0:
+        return unavailable(
+            DiagnosticCode.CORE_GEOMETRY_NON_POSITIVE,
+            f"Core {name} must be positive; got {value:g}.",
+        )
+    return estimated(value, notes)
+
+
+def _geometry_echo(core: CoreMagneticProperties) -> _GeometryEcho:
+    return _GeometryEcho(
+        effective_area=_echoed(core.effective_area_m2, "effective area", core.notes),
+        path_length=_echoed(core.path_length_m, "magnetic path length", core.notes),
+        volume=_echoed(core.volume_m3, "effective volume", core.notes),
+    )
+
+
+def _no_geometry(reason: PreliminaryValue) -> _GeometryEcho:
+    """With no core there are no dimensions to echo, and the reason is exactly
+    the one flux density reports: no core is selected.
+    """
+    return _GeometryEcho(effective_area=reason, path_length=reason, volume=reason)
+
+
+def _core_all(
+    flux_reason: PreliminaryValue, geometry: _GeometryEcho
+) -> CorePreliminary:
     """One flux-density reason, reported identically for every B quantity.
 
-    Core loss gets its OWN diagnostic (CORE_LOSS_NO_FLUX_DENSITY): stamping
-    the flux-density code onto core loss would claim core loss failed for a
-    reason it didn't -- it failed because flux density was unavailable.
+    Core loss, inductance, and stored energy each get their OWN diagnostic
+    (CORE_LOSS_NO_FLUX_DENSITY, INDUCTANCE_NO_FLUX_DENSITY,
+    STORED_ENERGY_NO_FLUX_DENSITY): stamping the flux-density code onto them
+    would claim they failed for a reason they didn't -- they failed because
+    flux density was unavailable. The geometry echo does not depend on flux
+    density at all, so it is passed in already evaluated.
     """
     core_loss_reason = unavailable(
         DiagnosticCode.CORE_LOSS_NO_FLUX_DENSITY,
         "Core loss requires a flux-density estimate, which is unavailable: "
+        f"{flux_reason.message}",
+    )
+    inductance_reason = unavailable(
+        DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY,
+        "Inductance requires a flux-density estimate, which is unavailable: "
+        f"{flux_reason.message}",
+    )
+    energy_reason = unavailable(
+        DiagnosticCode.STORED_ENERGY_NO_FLUX_DENSITY,
+        "Stored energy requires a flux-density estimate, which is unavailable: "
         f"{flux_reason.message}",
     )
     return CorePreliminary(
@@ -109,6 +186,15 @@ def _core_all(flux_reason: PreliminaryValue) -> CorePreliminary:
         b_ac_peak=flux_reason,
         b_peak_magnitude=flux_reason,
         core_loss=core_loss_reason,
+        effective_area=geometry.effective_area,
+        path_length=geometry.path_length,
+        volume=geometry.volume,
+        mu_r_effective=inductance_reason,
+        mu_r_initial=inductance_reason,
+        al_catalog=inductance_reason,
+        al_effective=inductance_reason,
+        al_deviation=inductance_reason,
+        stored_energy=energy_reason,
     )
 
 
@@ -117,6 +203,7 @@ def _core_estimates(
     fields: FieldStrengths,
     densities: FluxDensities,
     core: CoreMagneticProperties,
+    geometry: _GeometryEcho,
 ) -> CorePreliminary:
     material = request.project.design.core_material
     if material is None:  # guarded by the caller
@@ -133,6 +220,30 @@ def _core_estimates(
     # The core's own notes describe how its path length and volume were
     # obtained, which is an assumption behind every B value below.
     notes = densities.notes + core.notes
+    inductance = core_inductance(fields, densities, core)
+    if isinstance(inductance, CoreInductance):
+        inductance_notes = inductance.notes + core.notes
+        mu_r_effective = estimated(inductance.mu_r_effective, inductance_notes)
+        al_effective = estimated(inductance.al_effective_h, inductance_notes)
+        if inductance.catalog is None:
+            no_reference = unavailable(
+                DiagnosticCode.AL_CHECK_NO_CATALOG_AL,
+                "The selected core has no manufacturer inductance factor, so "
+                "the effective A_L has no reference to be checked against.",
+            )
+            al_catalog = no_reference
+            al_deviation = no_reference
+            mu_r_initial = no_reference
+        else:
+            al_catalog = estimated(inductance.catalog.al_catalog_h, inductance_notes)
+            al_deviation = estimated(inductance.catalog.al_deviation, inductance_notes)
+            mu_r_initial = estimated(inductance.catalog.mu_r_initial, inductance_notes)
+    else:
+        mu_r_effective = inductance
+        al_effective = inductance
+        al_catalog = inductance
+        al_deviation = inductance
+        mu_r_initial = inductance
     return CorePreliminary(
         b_dc=estimated(densities.b_dc_t, notes),
         b_min=estimated(densities.b_min_t, notes),
@@ -140,10 +251,33 @@ def _core_estimates(
         b_ac_peak=estimated(densities.b_ac_peak_t, notes),
         b_peak_magnitude=estimated(densities.b_peak_magnitude_t, notes),
         core_loss=loss,
+        effective_area=geometry.effective_area,
+        path_length=geometry.path_length,
+        volume=geometry.volume,
+        mu_r_effective=mu_r_effective,
+        mu_r_initial=mu_r_initial,
+        al_catalog=al_catalog,
+        al_effective=al_effective,
+        al_deviation=al_deviation,
+        stored_energy=stored_energy_j(fields, densities, core),
     )
 
 
-def _winding_row(request: PreliminaryRequest, winding_id: str) -> WindingPreliminary:
+def _winding_inductance(turns: int, al_effective: PreliminaryValue) -> PreliminaryValue:
+    """`turns**2 * A_L`, or the core's own reason unchanged.
+
+    Returning `al_effective` itself is deliberate: the winding's inductance
+    failed for exactly the core's reason, so it carries the same code, message
+    and notes rather than a paraphrase.
+    """
+    if al_effective.state is not ResultState.ESTIMATED or al_effective.value is None:
+        return al_effective
+    return estimated(turns**2 * al_effective.value, al_effective.notes)
+
+
+def _winding_row(
+    request: PreliminaryRequest, winding_id: str, inductance: PreliminaryValue
+) -> WindingPreliminary:
     # Wire length is packing geometry, not a loss computation: it is known and
     # temperature-independent whenever a packing exists, regardless of
     # whether a conductor record resolved or whether resistance and wire loss
@@ -178,6 +312,7 @@ def _winding_row(request: PreliminaryRequest, winding_id: str) -> WindingPrelimi
             wire_length=length,
             resistance=reason,
             wire_loss=reason,
+            inductance=inductance,
         )
 
     area = conductor_area_m2(conductor.bare_diameter_m)
@@ -217,6 +352,7 @@ def _winding_row(request: PreliminaryRequest, winding_id: str) -> WindingPrelimi
         wire_length=length,
         resistance=resistance,
         wire_loss=wire_loss,
+        inductance=inductance,
     )
 
 
@@ -274,20 +410,20 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
     material = design.core_material
 
     if request.core is None:
-        core = _core_all(
-            unavailable(
-                DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED,
-                "No core is selected, so core flux density and core loss cannot "
-                "be estimated.",
-            )
+        reason = unavailable(
+            DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED,
+            "No core is selected, so core flux density and core loss cannot "
+            "be estimated.",
         )
+        core = _core_all(reason, _no_geometry(reason))
     elif material is None:
         core = _core_all(
             unavailable(
                 DiagnosticCode.FLUX_DENSITY_NO_MATERIAL_SELECTED,
                 "No core material revision is selected, so core flux density "
                 "and core loss cannot be estimated.",
-            )
+            ),
+            _geometry_echo(request.core),
         )
     elif (
         isinstance(design.core, ManualCoreSelection)
@@ -306,7 +442,8 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 "acknowledged, so core flux density and core loss cannot be "
                 "estimated. Confirm material compatibility on the Core & "
                 "Material screen.",
-            )
+            ),
+            _geometry_echo(request.core),
         )
     else:
         # Built from the design itself, never taken from the caller, so this
@@ -319,8 +456,9 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
             turns_by_winding,
             request.core.path_length_m,
         )
+        geometry = _geometry_echo(request.core)
         if isinstance(fields, PreliminaryValue):
-            core = _core_all(fields)
+            core = _core_all(fields, geometry)
         else:
             densities = flux_densities(
                 material,
@@ -328,16 +466,29 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 request.project.operating_point.core_temperature_c,
             )
             if isinstance(densities, PreliminaryValue):
-                core = _core_all(densities)
+                core = _core_all(densities, geometry)
             else:
-                core = _core_estimates(request, fields, densities, request.core)
+                core = _core_estimates(
+                    request, fields, densities, request.core, geometry
+                )
 
     windings = tuple(
-        _winding_row(request, definition.winding_id) for definition in design.windings
+        _winding_row(
+            request,
+            definition.winding_id,
+            _winding_inductance(definition.turns, core.al_effective),
+        )
+        for definition in design.windings
     )
 
     notes: list[str] = []
-    for value in (core.b_dc, core.core_loss, *(row.wire_loss for row in windings)):
+    for value in (
+        core.b_dc,
+        core.core_loss,
+        core.al_effective,
+        core.stored_energy,
+        *(row.wire_loss for row in windings),
+    ):
         for note in value.notes:
             if note not in notes:
                 notes.append(note)
