@@ -21,6 +21,7 @@ from inductor_designer.application.services.project_run import (
 from inductor_designer.application.services.run_directory import RunDirectoryError
 from inductor_designer.application.services.run_planning import RunPlanningError
 from inductor_designer.simulation.run_contracts import (
+    NormalizedResultSet,
     RunBackend,
     RunManifest,
     RunMode,
@@ -78,6 +79,7 @@ class GenerationResult(Sequence[str]):
     failed_manifest: RunManifest | None = None
     run_directory: Path | None = None
     generated_file: Path | None = None
+    result_set: NormalizedResultSet | None = None
 
     @overload
     def __getitem__(self, index: int) -> str: ...
@@ -162,6 +164,7 @@ def run_generation(
             tuple(lines),
             run_directory=result.location.directory,
             generated_file=generated_file,
+            result_set=result.outcome.manifest.results,
         )
     except ProjectRunCancelled as cancelled:
         return GenerationResult(

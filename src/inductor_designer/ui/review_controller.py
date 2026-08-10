@@ -19,6 +19,7 @@ from inductor_designer.domain.project import (
     ManualCoreSelection,
 )
 from inductor_designer.domain.validation import validate_project
+from inductor_designer.ui.result_rows import result_rows
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -209,6 +210,14 @@ class ReviewController(QObject):
         return rows
 
     def _get_sections(self) -> list[dict[str, object]]:
+        results = self._generation.last_result_set
+        # No section at all before a solved run: an empty Results heading would
+        # read as "the solver returned nothing", which is a different claim.
+        results_section: list[dict[str, object]] = (
+            [{"title": "Results", "rows": result_rows(results)}]
+            if results is not None
+            else []
+        )
         return [
             {"title": "Core and material", "rows": self._core_rows()},
             {
@@ -221,6 +230,7 @@ class ReviewController(QObject):
             {"title": "Winding excitations", "rows": self._winding_rows()},
             {"title": "Preliminary estimates", "rows": self._preliminary_rows()},
             {"title": "Run request", "rows": self._run_rows()},
+            *results_section,
         ]
 
     sections = Property(list, _get_sections, notify=reviewChanged)

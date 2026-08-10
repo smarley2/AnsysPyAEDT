@@ -16,7 +16,10 @@ from inductor_designer.ui.generation_lines import GenerationResult, UiRunRequest
 
 if TYPE_CHECKING:
     from inductor_designer.domain.project import InductorProject
-    from inductor_designer.simulation.run_contracts import RunManifest
+    from inductor_designer.simulation.run_contracts import (
+        NormalizedResultSet,
+        RunManifest,
+    )
 
 
 class CurrentProjectProvider:
@@ -57,6 +60,7 @@ class GenerationController(QObject):
         self._failed_manifest: RunManifest | None = None
         self._last_run_directory: Path | None = None
         self._last_generated_file: Path | None = None
+        self._last_result_set: NormalizedResultSet | None = None
         self._busy = False
         self._token: CancellationToken | None = None
 
@@ -73,6 +77,11 @@ class GenerationController(QObject):
     @property
     def failed_manifest(self) -> RunManifest | None:
         return self._failed_manifest
+
+    @property
+    def last_result_set(self) -> NormalizedResultSet | None:
+        """The last successful run's normalized results, if it produced any."""
+        return self._last_result_set
 
     @property
     def last_run_directory(self) -> Path | None:
@@ -121,6 +130,7 @@ class GenerationController(QObject):
         self._failed_manifest = None
         self._last_run_directory = None
         self._last_generated_file = None
+        self._last_result_set = None
         self._lines = []
         token = CancellationToken()
         self._token = token
@@ -177,6 +187,7 @@ class GenerationController(QObject):
             finally:
                 self._lines = list(result.lines)
                 self._failed_manifest = result.failed_manifest
+                self._last_result_set = result.result_set
                 self.record_run_evidence(result.run_directory, result.generated_file)
                 self._busy = False
                 self.linesChanged.emit()
