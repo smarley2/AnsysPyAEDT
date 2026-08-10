@@ -127,6 +127,7 @@ def build(
         dc_bias_decision=dc_bias_decision,
         material_record=material_record or make_approved_material_record(),
         material_bh_series_id=None,
+        winding_temperature_c=45.0,
     )
 
 
@@ -264,6 +265,7 @@ def test_selected_bh_series_is_threaded_to_3d_plan() -> None:
         recipe=make_recipe(),
         material_record=make_multi_bh_material_record(),
         material_bh_series_id="bh-100c",
+        winding_temperature_c=45.0,
     )
 
     assert plan.core.material.bh_curve == ((0.0, 0.0), (0.03, 120.0))

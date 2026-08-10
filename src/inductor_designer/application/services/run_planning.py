@@ -191,6 +191,9 @@ def plan_run(
                     dc_bias_decision=dc_bias_decision,
                     material_record=material.snapshot,
                     material_bh_series_id=material.bh_series_id,
+                    winding_temperature_c=(
+                        project.operating_point.winding_temperature_c
+                    ),
                 )
             )
         else:

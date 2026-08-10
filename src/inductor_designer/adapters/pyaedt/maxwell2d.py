@@ -3,6 +3,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
 )
@@ -72,6 +73,14 @@ class Maxwell2dApp(Protocol):
 
     def solution_values(self, expressions: tuple[str, ...]) -> Any: ...
 
+    def field_value(
+        self,
+        quantity: str,
+        scalar_function: str,
+        object_name: str,
+        object_type: str,
+    ) -> float: ...
+
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]: ...
 
     def save_project(self, path: str) -> bool: ...
@@ -96,7 +105,7 @@ class DefaultMaxwell2dAppFactory:
     def create(self, **kwargs: object) -> Maxwell2dApp:
         from ansys.aedt.core import Maxwell2d
 
-        return cast(Maxwell2dApp, Maxwell2d(**kwargs))
+        return cast(Maxwell2dApp, LiveAppExtraction(Maxwell2d(**kwargs)))
 
 
 def _stage_units(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:

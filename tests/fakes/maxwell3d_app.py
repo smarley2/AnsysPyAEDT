@@ -152,6 +152,13 @@ class _FakeODesign:
         )
 
 
+@dataclass
+class _FakeSheet:
+    name: str
+    non_model: bool
+    kind: str
+
+
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
@@ -167,6 +174,8 @@ class FakeMaxwell3dApp:
         self.analyzed_setups: tuple[str, ...] = ()
         self.fail_analyze = False
         self.fail_solution_values = False
+        self.fail_field_value_for: str | None = None
+        self.created_sheets: list[_FakeSheet] = []
         # Lets a test act (cancel a run, for example) exactly when the design
         # reaches a named call, without patching the adapter.
         self.on_call: dict[str, Callable[[], None]] = {}
@@ -257,6 +266,39 @@ class FakeMaxwell3dApp:
 
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
         return ((1, 12.5), (2, 0.8))
+
+    def create_section_rectangle(
+        self,
+        name: str,
+        azimuth_deg: float,
+        r_inner_m: float,
+        r_outer_m: float,
+        half_height_m: float,
+    ) -> str:
+        self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="rectangle"))
+        return name
+
+    def create_section_disc(
+        self,
+        name: str,
+        center_m: tuple[float, float, float],
+        normal: tuple[float, float, float],
+        radius_m: float,
+    ) -> str:
+        self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="disc"))
+        return name
+
+    def field_value(
+        self,
+        quantity: str,
+        scalar_function: str,
+        object_name: str,
+        object_type: str,
+    ) -> float:
+        if self.fail_field_value_for and self.fail_field_value_for in object_name:
+            raise RuntimeError(f"no field data on {object_name}")
+        # Integral over the sheet, and a point maximum above the mean.
+        return 1e-5 if scalar_function == "Integrate" else 0.42
 
     def save_project(self, path: str) -> bool:
         self._hook("save_project")
