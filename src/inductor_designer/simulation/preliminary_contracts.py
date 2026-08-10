@@ -49,6 +49,7 @@ class DiagnosticCode:
     INDUCTANCE_NOT_FINITE = "inductance.not_finite"
 
     AL_CHECK_NO_CATALOG_AL = "al_check.no_catalog_al"
+    AL_CHECK_NOT_FINITE = "al_check.not_finite"
 
     STORED_ENERGY_NO_FLUX_DENSITY = "stored_energy.no_flux_density"
     STORED_ENERGY_NON_POSITIVE_VOLUME = "stored_energy.non_positive_volume"

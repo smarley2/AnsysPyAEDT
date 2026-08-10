@@ -17,7 +17,10 @@ from inductor_designer.simulation.inductance_estimate import (
     STORED_ENERGY_LINEAR_NOTE,
     STORED_ENERGY_ORIGIN_NOTE,
     ZERO_RIPPLE_NOTE,
+    CatalogReference,
     CoreInductance,
+    al_deviation,
+    catalog_reference,
     core_inductance,
     stored_energy_j,
 )
@@ -76,34 +79,36 @@ def test_al_effective_is_permeability_times_area_over_path_length() -> None:
     assert result.al_effective_h == pytest.approx(1e-6)
 
 
-def test_the_catalog_check_reports_the_roll_off_against_the_manufacturer_value() -> None:
-    result = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, CORE)
+def test_the_catalog_reference_needs_only_the_core_not_an_operating_point() -> None:
+    """No `FieldStrengths`, no `FluxDensities`: the datasheet A_L and the
+    permeability it implies are facts about the core, which is why they stay
+    reported when the operating point yields nothing.
+    """
+    result = catalog_reference(CORE)
 
-    assert isinstance(result, CoreInductance)
-    assert result.catalog is not None
-    assert result.catalog.al_catalog_h == pytest.approx(1.25e-6)
-    assert result.catalog.al_deviation == pytest.approx(-0.2)
-    # The reference permeability is derived from the catalog A_L, never read
-    # from the material record, so the two reported numbers cannot disagree.
-    assert result.catalog.mu_r_initial == pytest.approx(
+    assert isinstance(result, CatalogReference)
+    assert result.al_catalog_h == pytest.approx(1.25e-6)
+    # Derived from the catalog A_L, never read from the material record, so the
+    # two reported permeabilities cannot disagree.
+    assert result.mu_r_initial == pytest.approx(
         1.25e-6 * CORE.path_length_m / (MU_0 * CORE.effective_area_m2)
     )
-    # The catalog-tolerance caveat is attached by the caller, to the
-    # catalog-derived values only -- see test_preliminary.py.
-    assert INDUCTANCE_EXCLUSION_NOTE in result.notes
+
+
+def test_the_deviation_measures_the_effective_factor_against_the_catalog() -> None:
+    reference = catalog_reference(CORE)
+
+    assert isinstance(reference, CatalogReference)
+    assert al_deviation(1e-6, reference.al_catalog_h) == pytest.approx(-0.2)
 
 
 def test_an_effective_factor_above_catalog_reports_a_positive_deviation() -> None:
     """Sign check: the deviation must not be reported as a magnitude."""
-    core = CoreMagneticProperties(
-        path_length_m=0.1, volume_m3=1e-5, effective_area_m2=1e-4, al_value_nh=800.0
-    )
+    assert al_deviation(1e-6, 800e-9) == pytest.approx(0.25)
 
-    result = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, core)
 
-    assert isinstance(result, CoreInductance)
-    assert result.catalog is not None
-    assert result.catalog.al_deviation == pytest.approx(0.25)
+def test_an_overflowing_deviation_is_reported_as_absent() -> None:
+    assert al_deviation(1e308, 1e-308) is None
 
 
 def test_zero_ripple_falls_back_to_the_secant_at_the_bias_and_says_so() -> None:
@@ -158,11 +163,14 @@ def test_a_manual_core_has_no_reference_to_check_against() -> None:
         path_length_m=0.1, volume_m3=1e-5, effective_area_m2=1e-4, al_value_nh=None
     )
 
-    result = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, core)
+    reference = catalog_reference(core)
+    inductance = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, core)
 
-    assert isinstance(result, CoreInductance)
-    assert result.catalog is None
-    assert result.al_effective_h == pytest.approx(1e-6)
+    assert isinstance(reference, PreliminaryValue)
+    assert reference.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    # The inductance does not reference the catalog, so it is unaffected.
+    assert isinstance(inductance, CoreInductance)
+    assert inductance.al_effective_h == pytest.approx(1e-6)
 
 
 def test_a_decreasing_excursion_is_refused_not_reported_as_negative() -> None:
@@ -304,11 +312,13 @@ def test_an_unusable_catalog_al_refuses_the_check_but_keeps_the_inductance() -> 
         al_value_nh=float("inf"),
     )
 
-    result = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, core)
+    reference = catalog_reference(core)
+    inductance = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, core)
 
-    assert isinstance(result, CoreInductance)
-    assert result.catalog is None
-    assert result.al_effective_h == pytest.approx(1e-6)
+    assert isinstance(reference, PreliminaryValue)
+    assert reference.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert isinstance(inductance, CoreInductance)
+    assert inductance.al_effective_h == pytest.approx(1e-6)
 
 
 def test_the_two_reported_permeabilities_agree_with_the_reported_deviation() -> None:
@@ -316,12 +326,15 @@ def test_the_two_reported_permeabilities_agree_with_the_reported_deviation() -> 
     catalog A_L precisely so the two rows cannot contradict each other. This
     pins that relation, which a factor slip in either one would break.
     """
-    result = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, CORE)
+    inductance = core_inductance(BIASED_FIELDS, BIASED_DENSITIES, CORE)
+    reference = catalog_reference(CORE)
 
-    assert isinstance(result, CoreInductance)
-    assert result.catalog is not None
-    assert result.mu_r_effective / result.catalog.mu_r_initial == pytest.approx(
-        1.0 + result.catalog.al_deviation
+    assert isinstance(inductance, CoreInductance)
+    assert isinstance(reference, CatalogReference)
+    deviation = al_deviation(inductance.al_effective_h, reference.al_catalog_h)
+    assert deviation is not None
+    assert inductance.mu_r_effective / reference.mu_r_initial == pytest.approx(
+        1.0 + deviation
     )
 
 

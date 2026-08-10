@@ -97,6 +97,15 @@ A_L_deviation = A_L_effective / A_L_catalog - 1     [shown as a percentage]
 point is `100 % + A_L_deviation`. Only one of the two is reported, because they
 are the same fact.
 
+`A_L_catalog` and `mu_r_initial` depend on nothing but the core: the
+manufacturer's number and the core's own dimensions. They are therefore reported
+**whenever a catalog core is selected**, including when flux density,
+permeability, effective `A_L`, and inductance are all unavailable — a datasheet
+value must not be withheld for a reason it does not depend on. Only
+`A_L_deviation` needs an operating point, because only it references the
+effective `A_L`; it reports the effective value's own reason when that is
+missing.
+
 The reported `mu_r_initial` is derived from `A_L_catalog`, not read from the
 material record. The material snapshot's `relative_permeability` remains what it
 is today: a fallback B-H model, never a reference for this check.
@@ -153,7 +162,8 @@ New stable codes, added to `DiagnosticCode` and never reused:
 | `inductance.non_positive_geometry` | The core's effective area or magnetic path length is not positive, or their ratio underflows to zero, so `A_L` cannot be evaluated. |
 | `inductance.non_finite_geometry` | The core's effective area or magnetic path length is not finite, or their ratio overflows. |
 | `inductance.non_positive_permeability` | The recorded B-H excursion does not increase with field strength. Corrupt series data, which material selection blocks but a persisted project snapshot is never revalidated against; without this the screen reports a negative inductance as Estimated. |
-| `al_check.no_catalog_al` | The core has no usable manufacturer `A_L` value, so the check has no reference. Reported for a Manual core, and for a recorded value that is not positive and finite. |
+| `al_check.no_catalog_al` | The core has no usable manufacturer `A_L` value, so the check has no reference. Reported for a Manual core, for a recorded value that is not positive and finite, and when no core is selected at all. |
+| `al_check.not_finite` | The permeability implied by the catalog `A_L`, or the ratio of effective to catalog `A_L`, overflows. |
 | `stored_energy.no_flux_density` | Flux density is unavailable, so stored energy cannot be evaluated. |
 | `stored_energy.non_positive_volume` | The core's effective volume is not positive. |
 | `stored_energy.non_finite_volume` | The core's effective volume is not a finite number. |
@@ -211,11 +221,18 @@ A winding's inductance depends on the core, not on its conductor record, so it
 stays estimated when a conductor fails to resolve, and becomes Unavailable when
 the core does. This is the reverse of the copper quantities and is deliberate.
 
-The effective-geometry echo is evaluated from `CoreMagneticProperties`
+The core echo — the effective dimensions, the catalog `A_L`, and the initial
+permeability derived from it — is evaluated from `CoreMagneticProperties`
 independently of flux density, in the same way wire length is evaluated
 independently of wire loss. A missing B-H series at the requested temperature
-must not make the core's effective area read Unavailable, which is why the echo
-carries its own `core_geometry.*` reasons.
+must not make the core's effective area or its datasheet `A_L` read Unavailable,
+which is why the dimensions carry their own `core_geometry.*` reasons and the
+datasheet rows carry `al_check.no_catalog_al`.
+
+The split lives in the estimator module as two entry points: `catalog_reference`
+takes only the core, and `al_deviation` takes the two inductance factors. Keeping
+the deviation out of `catalog_reference` is what lets the reference be reported
+without an operating point at all.
 
 ### 5.4 Presentation
 

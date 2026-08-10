@@ -374,10 +374,62 @@ def test_no_core_leaves_the_geometry_echo_unavailable(
         result.core.effective_area.code
         == DiagnosticCode.CORE_GEOMETRY_NO_CORE_SELECTED
     )
+    # No core means no datasheet to reference either.
+    assert result.core.al_catalog.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
+    assert result.core.mu_r_initial.code == DiagnosticCode.AL_CHECK_NO_CATALOG_AL
     assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
     assert result.windings[0].inductance.code == (
         DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
     )
+
+
+def test_the_catalog_reference_survives_a_missing_bh_series(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The catalog A_L and the initial permeability derived from it depend only
+    on the core's datasheet numbers and its dimensions -- not on flux density,
+    not on the operating point. Withholding them when flux density is refused
+    hid a datasheet value for a reason it does not depend on. Only the deviation
+    needs the effective A_L, so only the deviation goes unavailable.
+    """
+    project = replace(
+        sample_request.project,
+        operating_point=replace(
+            sample_request.project.operating_point, core_temperature_c=85.0
+        ),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.al_catalog.state is ResultState.ESTIMATED
+    assert result.core.al_catalog.value == pytest.approx(61e-9)
+    assert result.core.mu_r_initial.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
+
+
+def test_the_catalog_reference_survives_an_unexcited_operating_point(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """Same reasoning at zero excitation: the datasheet does not stop being the
+    datasheet because no current flows.
+    """
+    operating_point = sample_request.project.operating_point
+    unexcited = tuple(
+        replace(winding, ac_rms_current_a=0.0, dc_current_a=0.0)
+        for winding in operating_point.windings
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=unexcited),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+    assert result.core.al_catalog.state is ResultState.ESTIMATED
+    assert result.core.mu_r_initial.state is ResultState.ESTIMATED
+    assert result.core.al_deviation.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
 
 
 def test_a_core_without_a_catalog_al_still_reports_inductance(

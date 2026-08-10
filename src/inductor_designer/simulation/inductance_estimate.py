@@ -62,24 +62,24 @@ STORED_ENERGY_ORIGIN_NOTE = (
 
 
 @dataclass(frozen=True, slots=True)
-class AlCheck:
-    """The catalog reference and the deviation from it.
+class CatalogReference:
+    """What the core's own datasheet says, independent of any operating point.
 
-    These three travel together because they are either all available or all
-    absent: without a manufacturer `A_L` there is no reference, no derived
-    initial permeability, and no deviation.
+    Both values come from `al_value_nh` and the core dimensions alone, so they
+    are reported whenever a catalog core is selected -- including when flux
+    density, permeability, and inductance are all unavailable. Only the
+    deviation between this reference and the effective `A_L` needs an operating
+    point.
     """
 
     al_catalog_h: float
     mu_r_initial: float
-    al_deviation: float
 
 
 @dataclass(frozen=True, slots=True)
 class CoreInductance:
     mu_r_effective: float
     al_effective_h: float
-    catalog: AlCheck | None
     notes: tuple[str, ...]
 
 
@@ -209,35 +209,54 @@ def core_inductance(
     return CoreInductance(
         mu_r_effective=mu_r_effective,
         al_effective_h=al_effective_h,
-        catalog=_al_check(core.al_value_nh, al_effective_h, ratio),
         notes=notes,
     )
 
 
-def _al_check(
-    al_value_nh: float | None, al_effective_h: float, ratio: float
-) -> AlCheck | None:
-    """The catalog comparison, or None when there is no usable reference.
+def catalog_reference(
+    core: CoreMagneticProperties,
+) -> CatalogReference | PreliminaryValue:
+    """The datasheet `A_L` and the permeability it implies, from the core alone.
 
-    None covers both a Manual core, which has no manufacturer value at all, and
-    a recorded value that cannot be compared against: `CoreRecord` validates
-    only `al_value_nh > 0`, and `inf > 0` is True, which would otherwise yield a
-    plausible-looking "-100 %" deviation out of corrupt data. Garbage in the
-    reference withdraws the check only -- the effective A_L does not depend on
-    it and stays estimated.
+    Deliberately independent of `FieldStrengths` and `FluxDensities`: these are
+    the manufacturer's number and a restatement of it, so they are reported even
+    when nothing about the operating point can be evaluated.
     """
-    if al_value_nh is None or not (al_value_nh > 0.0 and math.isfinite(al_value_nh)):
-        return None
-    al_catalog_h = al_value_nh * 1e-9
+    if core.al_value_nh is None or not (
+        core.al_value_nh > 0.0 and math.isfinite(core.al_value_nh)
+    ):
+        # Either a Manual core, which has no manufacturer value, or a recorded
+        # value that cannot be referenced: `CoreRecord` validates only
+        # `al_value_nh > 0`, and `inf > 0` is True, which would otherwise print a
+        # plausible-looking "-100 %" deviation out of corrupt data.
+        return unavailable(
+            DiagnosticCode.AL_CHECK_NO_CATALOG_AL,
+            "The selected core has no usable manufacturer inductance factor, so "
+            "there is no reference to check the effective A_L against.",
+        )
+    ratio = _geometry_ratio(core)
+    if isinstance(ratio, PreliminaryValue):
+        return ratio
+    al_catalog_h = core.al_value_nh * 1e-9
     mu_r_initial = al_catalog_h / (MU_0 * ratio)
-    al_deviation = al_effective_h / al_catalog_h - 1.0
-    if not all(math.isfinite(value) for value in (mu_r_initial, al_deviation)):
-        return None
-    return AlCheck(
-        al_catalog_h=al_catalog_h,
-        mu_r_initial=mu_r_initial,
-        al_deviation=al_deviation,
-    )
+    if not math.isfinite(mu_r_initial):
+        return unavailable(
+            DiagnosticCode.AL_CHECK_NOT_FINITE,
+            "The permeability implied by the catalog inductance factor overflows "
+            "for these core dimensions, so it is not reported.",
+        )
+    return CatalogReference(al_catalog_h=al_catalog_h, mu_r_initial=mu_r_initial)
+
+
+def al_deviation(al_effective_h: float, al_catalog_h: float) -> float | None:
+    """`A_L_effective / A_L_catalog - 1`, or None when that is not finite.
+
+    Kept apart from `catalog_reference` because it is the one part of the check
+    that needs an operating point: the reference is a datasheet fact, the
+    deviation is a measurement against it.
+    """
+    deviation = al_effective_h / al_catalog_h - 1.0
+    return deviation if math.isfinite(deviation) else None
 
 
 def stored_energy_j(

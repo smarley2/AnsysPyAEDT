@@ -17,7 +17,10 @@ from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.inductance_estimate import (
     AL_TOLERANCE_NOTE,
+    CatalogReference,
     CoreInductance,
+    al_deviation,
+    catalog_reference,
     core_inductance,
     stored_energy_j,
 )
@@ -110,17 +113,20 @@ class PreliminaryResult:
 
 
 @dataclass(frozen=True, slots=True)
-class _GeometryEcho:
-    """The effective dimensions actually used, reported independently of flux.
+class _CoreEcho:
+    """What the core itself states, reported independently of the flux estimate.
 
-    A missing B-H series must not make the core's area read Unavailable, so
-    this is evaluated from `CoreMagneticProperties` alone -- the same reason
-    wire length is evaluated independently of wire loss.
+    A missing B-H series must not make the core's area, or its datasheet
+    inductance factor, read Unavailable -- the same reason wire length is
+    evaluated independently of wire loss. Everything here comes from
+    `CoreMagneticProperties` alone.
     """
 
     effective_area: PreliminaryValue
     path_length: PreliminaryValue
     volume: PreliminaryValue
+    al_catalog: PreliminaryValue
+    mu_r_initial: PreliminaryValue
 
 
 def _echoed(value: float, name: str, notes: tuple[str, ...]) -> PreliminaryValue:
@@ -138,40 +144,62 @@ def _echoed(value: float, name: str, notes: tuple[str, ...]) -> PreliminaryValue
     return estimated(value, notes)
 
 
-def _geometry_echo(core: CoreMagneticProperties) -> _GeometryEcho:
-    return _GeometryEcho(
+def _core_echo(core: CoreMagneticProperties) -> _CoreEcho:
+    reference = catalog_reference(core)
+    if isinstance(reference, CatalogReference):
+        # The tolerance caveat belongs to the values that reference the catalog.
+        catalog_notes = (*core.notes, AL_TOLERANCE_NOTE)
+        al_catalog = estimated(reference.al_catalog_h, catalog_notes)
+        mu_r_initial = estimated(reference.mu_r_initial, catalog_notes)
+    else:
+        al_catalog = reference
+        mu_r_initial = reference
+    return _CoreEcho(
         effective_area=_echoed(core.effective_area_m2, "effective area", core.notes),
         path_length=_echoed(core.path_length_m, "magnetic path length", core.notes),
         volume=_echoed(core.volume_m3, "effective volume", core.notes),
+        al_catalog=al_catalog,
+        mu_r_initial=mu_r_initial,
     )
 
 
-def _no_geometry() -> _GeometryEcho:
-    """With no core selected there are no dimensions to echo.
+def _no_core_echo() -> _CoreEcho:
+    """With no core selected there is nothing of the core's own to report.
 
-    Its own code, not the flux-density one: a run manifest triaged on
-    `core_geometry.*` must find every reason the geometry echo was withheld,
-    including this one.
+    The dimensions get their own `core_geometry.*` code rather than the
+    flux-density one: a run manifest triaged on `core_geometry.*` must find
+    every reason the echo was withheld, including this one. The datasheet rows
+    get the no-catalog-value code, which is exactly what no core means for them.
     """
-    reason = unavailable(
+    geometry_reason = unavailable(
         DiagnosticCode.CORE_GEOMETRY_NO_CORE_SELECTED,
         "No core is selected, so it has no effective area, magnetic path "
         "length, or volume to report.",
     )
-    return _GeometryEcho(effective_area=reason, path_length=reason, volume=reason)
+    catalog_reason = unavailable(
+        DiagnosticCode.AL_CHECK_NO_CATALOG_AL,
+        "No core is selected, so there is no manufacturer inductance factor to "
+        "reference.",
+    )
+    return _CoreEcho(
+        effective_area=geometry_reason,
+        path_length=geometry_reason,
+        volume=geometry_reason,
+        al_catalog=catalog_reason,
+        mu_r_initial=catalog_reason,
+    )
 
 
-def _core_all(
-    flux_reason: PreliminaryValue, geometry: _GeometryEcho
-) -> CorePreliminary:
+def _core_all(flux_reason: PreliminaryValue, echo: _CoreEcho) -> CorePreliminary:
     """One flux-density reason, reported identically for every B quantity.
 
     Core loss, inductance, and stored energy each get their OWN diagnostic
     (CORE_LOSS_NO_FLUX_DENSITY, INDUCTANCE_NO_FLUX_DENSITY,
     STORED_ENERGY_NO_FLUX_DENSITY): stamping the flux-density code onto them
     would claim they failed for a reason they didn't -- they failed because
-    flux density was unavailable. The geometry echo does not depend on flux
-    density at all, so it is passed in already evaluated.
+    flux density was unavailable. The core echo -- dimensions, catalog A_L, and
+    the permeability that A_L implies -- does not depend on flux density at all,
+    so it is passed in already evaluated and stays visible here.
     """
     core_loss_reason = unavailable(
         DiagnosticCode.CORE_LOSS_NO_FLUX_DENSITY,
@@ -195,16 +223,42 @@ def _core_all(
         b_ac_peak=flux_reason,
         b_peak_magnitude=flux_reason,
         core_loss=core_loss_reason,
-        effective_area=geometry.effective_area,
-        path_length=geometry.path_length,
-        volume=geometry.volume,
+        effective_area=echo.effective_area,
+        path_length=echo.path_length,
+        volume=echo.volume,
         mu_r_effective=inductance_reason,
-        mu_r_initial=inductance_reason,
-        al_catalog=inductance_reason,
+        mu_r_initial=echo.mu_r_initial,
+        al_catalog=echo.al_catalog,
         al_effective=inductance_reason,
+        # The deviation is the one part of the check that needs an operating
+        # point, so it follows inductance rather than the echo.
         al_deviation=inductance_reason,
         stored_energy=energy_reason,
     )
+
+
+def _al_deviation(
+    al_effective: PreliminaryValue,
+    al_catalog: PreliminaryValue,
+    core_notes: tuple[str, ...],
+) -> PreliminaryValue:
+    """How far the effective inductance factor sits from the catalog one.
+
+    Needs both sides, so it reports whichever is missing -- the effective value
+    first, because that is the one an operating point can withhold.
+    """
+    if al_effective.state is not ResultState.ESTIMATED or al_effective.value is None:
+        return al_effective
+    if al_catalog.state is not ResultState.ESTIMATED or al_catalog.value is None:
+        return al_catalog
+    deviation = al_deviation(al_effective.value, al_catalog.value)
+    if deviation is None:
+        return unavailable(
+            DiagnosticCode.AL_CHECK_NOT_FINITE,
+            "The ratio of effective to catalog inductance factor overflows, so "
+            "the deviation is not reported.",
+        )
+    return estimated(deviation, (*core_notes, AL_TOLERANCE_NOTE))
 
 
 def _core_estimates(
@@ -212,7 +266,7 @@ def _core_estimates(
     fields: FieldStrengths,
     densities: FluxDensities,
     core: CoreMagneticProperties,
-    geometry: _GeometryEcho,
+    echo: _CoreEcho,
 ) -> CorePreliminary:
     material = request.project.design.core_material
     if material is None:  # guarded by the caller
@@ -234,28 +288,10 @@ def _core_estimates(
         inductance_notes = inductance.notes + core.notes
         mu_r_effective = estimated(inductance.mu_r_effective, inductance_notes)
         al_effective = estimated(inductance.al_effective_h, inductance_notes)
-        if inductance.catalog is None:
-            no_reference = unavailable(
-                DiagnosticCode.AL_CHECK_NO_CATALOG_AL,
-                "The selected core has no manufacturer inductance factor, so "
-                "the effective A_L has no reference to be checked against.",
-            )
-            al_catalog = no_reference
-            al_deviation = no_reference
-            mu_r_initial = no_reference
-        else:
-            # The tolerance caveat belongs to the values that reference the
-            # catalog, not to the inductance quantities above.
-            catalog_notes = (*inductance_notes, AL_TOLERANCE_NOTE)
-            al_catalog = estimated(inductance.catalog.al_catalog_h, catalog_notes)
-            al_deviation = estimated(inductance.catalog.al_deviation, catalog_notes)
-            mu_r_initial = estimated(inductance.catalog.mu_r_initial, catalog_notes)
     else:
         mu_r_effective = inductance
         al_effective = inductance
-        al_catalog = inductance
-        al_deviation = inductance
-        mu_r_initial = inductance
+    deviation = _al_deviation(al_effective, echo.al_catalog, core.notes)
     return CorePreliminary(
         b_dc=estimated(densities.b_dc_t, notes),
         b_min=estimated(densities.b_min_t, notes),
@@ -263,14 +299,14 @@ def _core_estimates(
         b_ac_peak=estimated(densities.b_ac_peak_t, notes),
         b_peak_magnitude=estimated(densities.b_peak_magnitude_t, notes),
         core_loss=loss,
-        effective_area=geometry.effective_area,
-        path_length=geometry.path_length,
-        volume=geometry.volume,
+        effective_area=echo.effective_area,
+        path_length=echo.path_length,
+        volume=echo.volume,
         mu_r_effective=mu_r_effective,
-        mu_r_initial=mu_r_initial,
-        al_catalog=al_catalog,
+        mu_r_initial=echo.mu_r_initial,
+        al_catalog=echo.al_catalog,
         al_effective=al_effective,
-        al_deviation=al_deviation,
+        al_deviation=deviation,
         stored_energy=stored_energy_j(fields, densities, core),
     )
 
@@ -428,7 +464,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 "No core is selected, so core flux density and core loss cannot "
                 "be estimated.",
             ),
-            _no_geometry(),
+            _no_core_echo(),
         )
     elif material is None:
         core = _core_all(
@@ -437,7 +473,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 "No core material revision is selected, so core flux density "
                 "and core loss cannot be estimated.",
             ),
-            _geometry_echo(request.core),
+            _core_echo(request.core),
         )
     elif (
         isinstance(design.core, ManualCoreSelection)
@@ -457,7 +493,7 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 "estimated. Confirm material compatibility on the Core & "
                 "Material screen.",
             ),
-            _geometry_echo(request.core),
+            _core_echo(request.core),
         )
     else:
         # Built from the design itself, never taken from the caller, so this
@@ -470,9 +506,9 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
             turns_by_winding,
             request.core.path_length_m,
         )
-        geometry = _geometry_echo(request.core)
+        echo = _core_echo(request.core)
         if isinstance(fields, PreliminaryValue):
-            core = _core_all(fields, geometry)
+            core = _core_all(fields, echo)
         else:
             densities = flux_densities(
                 material,
@@ -480,10 +516,10 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                 request.project.operating_point.core_temperature_c,
             )
             if isinstance(densities, PreliminaryValue):
-                core = _core_all(densities, geometry)
+                core = _core_all(densities, echo)
             else:
                 core = _core_estimates(
-                    request, fields, densities, request.core, geometry
+                    request, fields, densities, request.core, echo
                 )
 
     windings = tuple(
