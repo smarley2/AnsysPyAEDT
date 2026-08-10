@@ -15,6 +15,7 @@ from inductor_designer.simulation.preliminary_contracts import (
     unavailable,
 )
 from inductor_designer.ui.preliminary_rows import (
+    DIMENSIONLESS,
     MILLITESLA,
     cell,
     core_rows,
@@ -37,6 +38,15 @@ def make_result() -> PreliminaryResult:
             b_ac_peak=estimated(0.095),
             b_peak_magnitude=estimated(0.18),
             core_loss=REFUSED,
+            effective_area=estimated(6.56e-5),
+            path_length=estimated(0.0814),
+            volume=estimated(5.34e-6),
+            mu_r_effective=estimated(795.7747154594767),
+            mu_r_initial=estimated(994.7183943243459),
+            al_catalog=estimated(1.25e-6),
+            al_effective=estimated(1e-6),
+            al_deviation=estimated(-0.2),
+            stored_energy=estimated(7.5e-4),
         ),
         windings=(
             WindingPreliminary(
@@ -48,6 +58,7 @@ def make_result() -> PreliminaryResult:
                 wire_length=estimated(0.4),
                 resistance=estimated(0.008379),
                 wire_loss=estimated(0.243),
+                inductance=estimated(1e-4),
             ),
         ),
         totals=PreliminaryTotals(
@@ -97,9 +108,32 @@ def test_core_rows_cover_the_specified_core_summary() -> None:
         "Maximum flux density",
         "Peak flux-density magnitude",
         "Core loss",
+        "Effective area A_e",
+        "Magnetic path length l_e",
+        "Effective volume V_e",
+        "Effective relative permeability",
+        "Initial relative permeability (from catalog A_L)",
+        "Catalog A_L",
+        "Effective A_L",
+        "A_L deviation",
+        "Stored energy",
     ]
     assert rows[0]["text"] == "84.700 mT"
     assert rows[5]["state"] == ResultState.UNAVAILABLE.value
+    assert rows[6]["text"] == "65.6000 mm²"
+    assert rows[7]["text"] == "81.40 mm"
+    assert rows[8]["text"] == "5.340 cm³"
+    assert rows[9]["text"] == "795.8"
+    assert rows[10]["text"] == "994.7"
+    assert rows[11]["text"] == "1250.00 nH/N²"
+    assert rows[12]["text"] == "1000.00 nH/N²"
+    assert rows[13]["text"] == "-20.00 %"
+    assert rows[14]["text"] == "0.7500 mJ"
+
+
+def test_a_dimensionless_cell_carries_no_unit_suffix_or_trailing_space() -> None:
+    """A permeability has no unit, and "795.8 " would show as a stray space."""
+    assert cell(estimated(795.7747154594767), DIMENSIONLESS)["text"] == "795.8"
 
 
 def test_winding_rows_cover_every_specified_winding_quantity() -> None:
@@ -115,6 +149,7 @@ def test_winding_rows_cover_every_specified_winding_quantity() -> None:
     assert row["wireLength"]["text"] == "400.00 mm"
     assert row["resistance"]["text"] == "8.3790 mΩ"
     assert row["wireLoss"]["text"] == "0.2430 W"
+    assert row["inductance"]["text"] == "100.000 µH"
 
 
 def test_totals_report_the_refusal_instead_of_a_partial_sum() -> None:
