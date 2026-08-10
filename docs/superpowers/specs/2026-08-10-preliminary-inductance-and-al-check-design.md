@@ -122,6 +122,9 @@ New stable codes, added to `DiagnosticCode` and never reused:
 | `al_check.no_catalog_al` | The core has no manufacturer `A_L` value, so the check has no reference. Reported for a Manual core. |
 | `stored_energy.no_flux_density` | Flux density is unavailable, so stored energy cannot be evaluated. |
 | `stored_energy.non_positive_volume` | The core's effective volume is not a positive finite number. |
+| `inductance.not_finite` | The field excursion is too small for the flux swing, so the permeability slope overflows. Prevents a non-finite estimate from becoming a screen-level failure. |
+| `core_geometry.non_positive` | An echoed effective dimension is not positive. |
+| `core_geometry.not_finite` | An echoed effective dimension is not a finite number. |
 
 Each dependent quantity reports its own code rather than borrowing the
 flux-density code, following the rule already established for
@@ -168,6 +171,12 @@ for core loss.
 A winding's inductance depends on the core, not on its conductor record, so it
 stays estimated when a conductor fails to resolve, and becomes Unavailable when
 the core does. This is the reverse of the copper quantities and is deliberate.
+
+The effective-geometry echo is evaluated from `CoreMagneticProperties`
+independently of flux density, in the same way wire length is evaluated
+independently of wire loss. A missing B-H series at the requested temperature
+must not make the core's effective area read Unavailable, which is why the echo
+carries its own `core_geometry.*` reasons.
 
 ### 5.4 Presentation
 

@@ -41,6 +41,22 @@ class DiagnosticCode:
 
     CURRENT_DENSITY_NO_CONDUCTOR = "current_density.no_conductor"
 
+    INDUCTANCE_NO_FLUX_DENSITY = "inductance.no_flux_density"
+    INDUCTANCE_NO_EXCITATION = "inductance.no_excitation"
+    INDUCTANCE_NON_POSITIVE_AREA = "inductance.non_positive_area"
+    INDUCTANCE_NOT_FINITE = "inductance.not_finite"
+
+    AL_CHECK_NO_CATALOG_AL = "al_check.no_catalog_al"
+
+    STORED_ENERGY_NO_FLUX_DENSITY = "stored_energy.no_flux_density"
+    STORED_ENERGY_NON_POSITIVE_VOLUME = "stored_energy.non_positive_volume"
+
+    # The effective-geometry echo is reported independently of flux density, so
+    # it needs its own reasons rather than borrowing the flux-density or
+    # core-loss ones.
+    CORE_GEOMETRY_NON_POSITIVE = "core_geometry.non_positive"
+    CORE_GEOMETRY_NOT_FINITE = "core_geometry.not_finite"
+
     WIRE_LOSS_NO_GEOMETRY = "wire_loss.no_geometry"
     WIRE_LOSS_TEMPERATURE_OUT_OF_RANGE = "wire_loss.temperature_out_of_range"
 
