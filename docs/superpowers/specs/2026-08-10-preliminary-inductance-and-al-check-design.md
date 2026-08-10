@@ -110,6 +110,17 @@ W = 0.5 * B_peak_magnitude * H_peak * V_e           [shown in mJ]
 where `H_peak = max(|H_min|, |H_max|)`, chosen to pair with the existing
 `b_peak_magnitude_t` so the two factors describe the same instant of the cycle.
 
+This is the energy of a linear medium taken from the origin to the peak, and it
+is an upper bound on the true `V_e * integral of H dB` for any saturating
+curve. It is therefore **not** `0.5 * L * I_peak^2` computed from the reported
+incremental inductance: on a biased powder core the two differ by roughly the
+ratio of the secant to the incremental permeability, measured at 2.6 on a
+representative ferrite point. Both numbers appear on the same screen, so the
+stored-energy note states which permeability it assumes and in which direction
+it errs. Integrating the recorded B-H series instead would remove the
+discrepancy and is the open improvement here; it needs the series itself passed
+into the estimator, which this design does not do.
+
 ## 4. Diagnostics
 
 New stable codes, added to `DiagnosticCode` and never reused:
@@ -118,11 +129,15 @@ New stable codes, added to `DiagnosticCode` and never reused:
 | --- | --- |
 | `inductance.no_flux_density` | Flux density is unavailable, so permeability, inductance, and `A_L` cannot be evaluated. Carries the flux-density reason in its message. |
 | `inductance.no_excitation` | The operating point has neither AC nor DC ampere-turns, so permeability is undefined. |
-| `inductance.non_positive_area` | The core's effective area is not a positive finite number, so `A_L` cannot be evaluated. Reachable only for a Manual core; `CoreRecord` already validates catalog areas. |
-| `al_check.no_catalog_al` | The core has no manufacturer `A_L` value, so the check has no reference. Reported for a Manual core. |
+| `inductance.non_positive_geometry` | The core's effective area or magnetic path length is not positive, or their ratio underflows to zero, so `A_L` cannot be evaluated. |
+| `inductance.non_finite_geometry` | The core's effective area or magnetic path length is not finite, or their ratio overflows. |
+| `inductance.non_positive_permeability` | The recorded B-H excursion does not increase with field strength. Corrupt series data, which material selection blocks but a persisted project snapshot is never revalidated against; without this the screen reports a negative inductance as Estimated. |
+| `al_check.no_catalog_al` | The core has no usable manufacturer `A_L` value, so the check has no reference. Reported for a Manual core, and for a recorded value that is not positive and finite. |
 | `stored_energy.no_flux_density` | Flux density is unavailable, so stored energy cannot be evaluated. |
-| `stored_energy.non_positive_volume` | The core's effective volume is not a positive finite number. |
-| `inductance.not_finite` | The field excursion is too small for the flux swing, so the permeability slope overflows. Prevents a non-finite estimate from becoming a screen-level failure. |
+| `stored_energy.non_positive_volume` | The core's effective volume is not positive. |
+| `stored_energy.non_finite_volume` | The core's effective volume is not a finite number. |
+| `stored_energy.not_finite` | The product of peak flux density, peak field strength, and volume overflows. |
+| `inductance.not_finite` | The permeability slope, or the inductance factor derived from it, overflows. Prevents a non-finite estimate from becoming a screen-level failure. |
 | `core_geometry.non_positive` | An echoed effective dimension is not positive. |
 | `core_geometry.not_finite` | An echoed effective dimension is not a finite number. |
 

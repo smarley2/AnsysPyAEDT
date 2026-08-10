@@ -27,12 +27,15 @@ MANUAL_CORE_PATH_NOTE = (
     "toroid dimensions as l_e = pi * (outer diameter + inner diameter) / 2, "
     "A_e = ((outer diameter - inner diameter) / 2) * height, and "
     "V_e = A_e * l_e. Manufacturer effective values are not available for a "
-    "Manual core."
+    "Manual core. A_e is the full rectangular cross-section: the corner radius "
+    "that the modeled geometry rounds is not subtracted, so A_e, and every "
+    "inductance derived from it, is slightly optimistic for a rounded core."
 )
 CATALOG_OVERRIDE_NOTE = (
     "Core dimension overrides change the modeled geometry but not the "
-    "manufacturer's effective magnetic path length and volume, which are used "
-    "here as recorded in the catalog."
+    "manufacturer's effective magnetic path length, area, volume, or "
+    "inductance factor, which are used here as recorded in the catalog. The "
+    "reported A_L deviation therefore does not reflect the overrides."
 )
 
 

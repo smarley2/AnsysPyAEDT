@@ -374,6 +374,6 @@ def test_a_non_finite_volume_refuses_only_stored_energy_and_core_loss(
     assert result.core.volume.code == DiagnosticCode.CORE_GEOMETRY_NOT_FINITE
     assert (
         result.core.stored_energy.code
-        == DiagnosticCode.STORED_ENERGY_NON_POSITIVE_VOLUME
+        == DiagnosticCode.STORED_ENERGY_NON_FINITE_VOLUME
     )
     assert result.core.al_effective.state is ResultState.ESTIMATED

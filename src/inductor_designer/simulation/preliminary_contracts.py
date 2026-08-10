@@ -43,13 +43,17 @@ class DiagnosticCode:
 
     INDUCTANCE_NO_FLUX_DENSITY = "inductance.no_flux_density"
     INDUCTANCE_NO_EXCITATION = "inductance.no_excitation"
-    INDUCTANCE_NON_POSITIVE_AREA = "inductance.non_positive_area"
+    INDUCTANCE_NON_POSITIVE_PERMEABILITY = "inductance.non_positive_permeability"
+    INDUCTANCE_NON_POSITIVE_GEOMETRY = "inductance.non_positive_geometry"
+    INDUCTANCE_NON_FINITE_GEOMETRY = "inductance.non_finite_geometry"
     INDUCTANCE_NOT_FINITE = "inductance.not_finite"
 
     AL_CHECK_NO_CATALOG_AL = "al_check.no_catalog_al"
 
     STORED_ENERGY_NO_FLUX_DENSITY = "stored_energy.no_flux_density"
     STORED_ENERGY_NON_POSITIVE_VOLUME = "stored_energy.non_positive_volume"
+    STORED_ENERGY_NON_FINITE_VOLUME = "stored_energy.non_finite_volume"
+    STORED_ENERGY_NOT_FINITE = "stored_energy.not_finite"
 
     # The effective-geometry echo is reported independently of flux density, so
     # it needs its own reasons rather than borrowing the flux-density or
