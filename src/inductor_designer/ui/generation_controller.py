@@ -35,12 +35,17 @@ class GenerationController(QObject):
     """Runs a generation backend on a background thread and reports lines to QML.
 
     `runner` binds a GenerationBackend to `run_generation` with real exporters.
-    Qt queues QObject signal delivery across threads, so emitting from the
-    worker thread is safe for the queued connections QML/Property notify use.
+    The worker thread's only interaction with Qt is one `_finished` emit, whose
+    queued delivery publishes the result on the thread that owns this object;
+    see `_publish` for why the worker must not publish it itself.
     """
 
     linesChanged = Signal()
     busyChanged = Signal()
+    # Carries a GenerationResult from the worker thread to `_publish`. Private:
+    # nothing outside this class may connect to it, or that receiver would run
+    # on the worker thread's terms rather than this object's.
+    _finished = Signal(object)
 
     def __init__(
         self,
@@ -54,6 +59,10 @@ class GenerationController(QObject):
         self._last_run_directory: Path | None = None
         self._last_generated_file: Path | None = None
         self._busy = False
+        self._worker: threading.Thread | None = None
+        # Auto connection, and the receiver is this object: emitted from the
+        # worker thread, delivery is queued onto the thread that owns it.
+        self._finished.connect(self._publish)
 
     def _get_lines(self) -> list[str]:
         return self._lines
@@ -80,10 +89,40 @@ class GenerationController(QObject):
     def record_run_evidence(
         self, run_directory: Path | None, generated_file: Path | None
     ) -> None:
-        """Publish where the last run landed. Called by the worker, and by tests."""
+        """Publish where the last run landed. Called by `_publish`, and by tests."""
         self._last_run_directory = run_directory
         self._last_generated_file = generated_file
         self.linesChanged.emit()
+
+    @Slot(object)
+    def _publish(self, result: GenerationResult) -> None:
+        """Adopt a finished run's result, on the thread that owns this object.
+
+        The worker used to publish it itself: set `_busy = False` and then emit
+        `linesChanged`/`busyChanged`. That let the owning thread see the run as
+        finished, and tear the controller and everything wired to those signals
+        down, while the worker thread was still alive and mid-emit. Under
+        `pytest -n 8` that killed an xdist worker with a Windows access
+        violation (sometimes heap corruption instead) roughly one run in five;
+        the fault always landed in the teardown right after a finished run, and
+        it never happened for a controller that had not started one.
+
+        So the worker now computes and emits, and only that: this slot adopts
+        the result on the owning thread, and joins the worker first, so by the
+        time `busy` reads False the thread that ran the generation is gone. The
+        join is immediate in practice -- the worker emits `_finished` as its
+        last statement, so it is already returning when this runs.
+        """
+        worker = self._worker
+        self._worker = None
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(timeout=5.0)
+        self._lines = list(result.lines)
+        self._failed_manifest = result.failed_manifest
+        self.record_run_evidence(result.run_directory, result.generated_file)
+        self._busy = False
+        self.linesChanged.emit()
+        self.busyChanged.emit()
 
     @Slot(str, bool)
     def generate(self, backend_label: str, show_solver_window: bool = False) -> None:
@@ -122,11 +161,7 @@ class GenerationController(QObject):
             except Exception as error:  # noqa: BLE001 - UI must never wedge
                 result = GenerationResult((f"Generation failed: {error}",))
             finally:
-                self._lines = list(result.lines)
-                self._failed_manifest = result.failed_manifest
-                self.record_run_evidence(result.run_directory, result.generated_file)
-                self._busy = False
-                self.linesChanged.emit()
-                self.busyChanged.emit()
+                self._finished.emit(result)
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._worker = threading.Thread(target=worker, daemon=True)
+        self._worker.start()
