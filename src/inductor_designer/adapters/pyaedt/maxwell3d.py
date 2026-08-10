@@ -8,6 +8,7 @@ from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
 )
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
+from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
 from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
@@ -27,6 +28,7 @@ from inductor_designer.simulation.maxwell_plan import (
     Maxwell3dDesignPlan,
     WindingGroupPlan,
 )
+from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_control import (
     StagePhase,
 )
@@ -36,6 +38,15 @@ from inductor_designer.simulation.run_control import (
 from inductor_designer.simulation.run_control import (
     is_cancelled as _cancelled,
 )
+
+
+def _results_message(raw: RawScalarResults) -> str:
+    if raw.diagnostics:
+        return f"Result extraction incomplete: {'; '.join(raw.diagnostics)}"
+    return (
+        f"{len(raw.windings)} winding result(s), {len(raw.matrices)} matrix/matrices, "
+        f"convergence {'read' if raw.convergence is not None else 'not exposed'}."
+    )
 
 
 class Maxwell3dApp(Protocol):
@@ -64,6 +75,10 @@ class Maxwell3dApp(Protocol):
     def analyze_setup(self, name: str) -> bool: ...
 
     def setup_convergence(self, name: str) -> str: ...
+
+    def solution_values(self, expressions: tuple[str, ...]) -> Any: ...
+
+    def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]: ...
 
     def save_project(self, path: str) -> bool: ...
 
@@ -386,6 +401,7 @@ class PyaedtMaxwell3dExporter:
         project_path.unlink(missing_ok=True)
         plan = request.plan
         stages: list[StageRecord] = []
+        raw_results: RawScalarResults | None = None
 
         def result() -> Maxwell3dExportResult:
             return Maxwell3dExportResult(
@@ -393,6 +409,7 @@ class PyaedtMaxwell3dExporter:
                 design_name=plan.design_name,
                 pyaedt_version=self._factory.pyaedt_version,
                 stages=tuple(stages),
+                raw_results=raw_results,
             )
 
         _emit(request.progress, "launch", StagePhase.STARTED, None)
@@ -480,6 +497,23 @@ class PyaedtMaxwell3dExporter:
                         StageRecord(name="analyze", succeeded=True, message=message)
                     )
                     _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
+                    # Extraction never fails a solved run: a read error rides
+                    # along as a diagnostic and normalizes to unavailable.
+                    _emit(request.progress, "results", StagePhase.STARTED, None)
+                    raw_results = read_scalar_results(
+                        app,
+                        matrix_name=plan.matrix_name,
+                        winding_names=tuple(group.name for group in plan.windings),
+                        setup_name=plan.setup.name,
+                        frequency_hz=plan.setup.frequency_hz,
+                    )
+                    results_message = _results_message(raw_results)
+                    stages.append(
+                        StageRecord(name="results", succeeded=True, message=results_message)
+                    )
+                    _emit(
+                        request.progress, "results", StagePhase.SUCCEEDED, results_message
+                    )
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:

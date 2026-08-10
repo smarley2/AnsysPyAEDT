@@ -16,9 +16,9 @@ from inductor_designer.application.ports.maxwell_exporter import (
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 
 
-def test_solve_stage_names_append_analyze_to_the_generate_sequence() -> None:
-    assert SOLVE_STAGE_NAMES == STAGE_NAMES + ("analyze",)
-    assert SOLVE_STAGE_NAMES_2D == STAGE_NAMES_2D + ("analyze",)
+def test_solve_stage_names_append_analyze_and_results() -> None:
+    assert SOLVE_STAGE_NAMES == STAGE_NAMES + ("analyze", "results")
+    assert SOLVE_STAGE_NAMES_2D == STAGE_NAMES_2D + ("analyze", "results")
 
 
 def test_generate_sequences_still_end_with_save() -> None:

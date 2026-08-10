@@ -166,6 +166,7 @@ class FakeMaxwell3dApp:
         self.falsy_on = falsy_on
         self.analyzed_setups: tuple[str, ...] = ()
         self.fail_analyze = False
+        self.fail_solution_values = False
         # Lets a test act (cancel a run, for example) exactly when the design
         # reaches a named call, without patching the adapter.
         self.on_call: dict[str, Callable[[], None]] = {}
@@ -238,6 +239,24 @@ class FakeMaxwell3dApp:
 
     def setup_convergence(self, name: str) -> str:
         return "3 passes, 0.42% error"
+
+    def solution_values(self, expressions: tuple[str, ...]) -> dict[str, complex]:
+        if self.fail_solution_values:
+            raise RuntimeError("Solution data is not available for this setup.")
+        values: dict[str, complex] = {
+            "SolidLoss": 3.0 + 0j,
+            "CoreLoss": 1.25 + 0j,
+            "Total_Energy": 4.2e-4 + 0j,
+        }
+        for expression in expressions:
+            if ".L(" in expression:
+                values[expression] = 1e-4 + 0j
+            elif ".R(" in expression:
+                values[expression] = 0.125 + 0j
+        return values
+
+    def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
+        return ((1, 12.5), (2, 0.8))
 
     def save_project(self, path: str) -> bool:
         self._hook("save_project")

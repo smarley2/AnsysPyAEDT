@@ -97,7 +97,10 @@ def test_maxwell2d_solve_mode_reaches_analyze(tmp_path: Path) -> None:
     result = solve_run(tmp_path, RunBackend.MAXWELL_2D, maxwell2d_exporter=exporter)
 
     assert exporter.requests[0].solve is True
-    assert result.outcome.manifest.stages[-1].name == "analyze"
+    assert [stage.name for stage in result.outcome.manifest.stages][-2:] == [
+        "analyze",
+        "results",
+    ]
 
 
 def test_solve_mode_manifest_carries_no_results_in_m8a(tmp_path: Path) -> None:
