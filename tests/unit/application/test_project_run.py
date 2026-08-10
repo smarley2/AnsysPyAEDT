@@ -18,6 +18,7 @@ from inductor_designer.application.services.project_run import (
     start_project_run,
 )
 from inductor_designer.application.services.run_planning import RunPlanningError
+from inductor_designer.domain.aedt_target import AedtRelease
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.simulation.run_contracts import (
     RunBackend,
@@ -162,15 +163,17 @@ def test_a_manifest_write_failure_does_not_mask_the_adapter_failure(
 
 
 def test_a_blocked_run_leaves_no_empty_directory_behind(tmp_path: Path) -> None:
+    """An unsupported AEDT capability snapshot blocks before any adapter call."""
     document_path = saved_project(tmp_path)
+    unsupported = replace(CAPABILITIES, release=AedtRelease(2026, 1))
 
     with pytest.raises(MaxwellExportBlocked):
         start_project_run(
             project_for_runs(),
             document_path,
-            RunRequest(RunBackend.FEMM, RunMode.GENERATE_AND_SOLVE),
+            RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_AND_SOLVE),
             CATALOG,
-            CAPABILITIES,
+            unsupported,
             maxwell3d_exporter=RecordingMaxwell3dExporter(),
             maxwell2d_exporter=RecordingMaxwell2dExporter(),
             femm_solver=RecordingFemmSolver(),
