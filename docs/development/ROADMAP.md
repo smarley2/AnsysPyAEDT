@@ -829,9 +829,11 @@ normalization, export or the UI. A name AEDT does not recognize yields an
 
 ### Milestone 8c: Field results
 
-Planned, not yet implemented:
-[2026-08-10 M8c field results](../superpowers/plans/2026-08-10-m8c-field-results.md),
-implementing the approved
+Implementation is **complete and awaiting Fabio Posser's live verification**;
+the plan is
+[2026-08-10 M8c field results](../superpowers/plans/2026-08-10-m8c-field-results.md)
+and the evidence record is [m8c-field-evidence.md](m8c-field-evidence.md). It
+implements the approved
 [Representative Cross Sections design](../superpowers/specs/2026-08-10-representative-cross-sections-design.md):
 feature-anchored core planes, skin-depth-gated conductor discs, per-section
 evidence, and the worst-section mean alongside the across-section
