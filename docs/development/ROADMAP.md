@@ -523,7 +523,9 @@ implementation.
 - Support catalog and Manual toroidal cores and complete winding authoring.
 - Enforce numeric editors and enumerated selectors at the UI boundary.
 - Calculate and display solver-independent preliminary B, J, DC-resistance
-  wire loss, and supported core loss.
+  wire loss, supported core loss, and — from ADR 0008 — inductance, the
+  effective and catalog `A_L` with the deviation between them, effective and
+  initial permeability, the effective-core geometry echo, and stored energy.
 - Make the preview reactive to valid geometry edits.
 - Select a backend and execute Generate Only through the existing adapters.
 - Save every run in a new normalized `runs/<run-id>-<backend>/` directory next
@@ -673,8 +675,10 @@ to the M7a estimator and the M7b run services.
 - Native numeric validators plus authoritative domain validation on every
   winding and operating-point input, and `ComboBox` selectors for enumerated
   values.
-- Live, read-only preliminary B/J/wire-loss/core-loss estimates with
-  assumptions, exclusions, units, and the pinned revision always visible.
+- Live, read-only preliminary estimates with assumptions, exclusions, units, and
+  the pinned revision always visible: B, J, wire loss, core loss, and the
+  inductance, `A_L` check, permeability, geometry, and stored-energy rows added
+  by ADR 0008.
 - The `Show solver window` choice and `Open generated file` / `Open run
   folder` actions from ADR 0007.
 
