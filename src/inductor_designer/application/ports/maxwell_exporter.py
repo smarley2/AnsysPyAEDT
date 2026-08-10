@@ -9,6 +9,7 @@ from inductor_designer.simulation.maxwell_plan import (
     GeometryOnlyMaxwell3dPlan,
     Maxwell3dDesignPlan,
 )
+from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 STAGE_NAMES: tuple[str, ...] = (
     "launch",
@@ -36,6 +37,11 @@ GEOMETRY_ONLY_STAGE_NAMES: tuple[str, ...] = (
     "save",
 )
 
+# The solve sequence is the generate sequence plus one analyze stage, so a
+# Generate Only manifest and a Generate and Solve manifest stay comparable
+# stage for stage.
+SOLVE_STAGE_NAMES: tuple[str, ...] = STAGE_NAMES + ("analyze",)
+
 
 @dataclass(frozen=True, slots=True)
 class Maxwell3dExportRequest:
@@ -45,6 +51,9 @@ class Maxwell3dExportRequest:
     non_graphical: bool
     output_directory: Path
     project_name: str
+    solve: bool = False
+    progress: ProgressSink | None = None
+    cancellation: CancellationToken | None = None
 
 
 @dataclass(frozen=True, slots=True)

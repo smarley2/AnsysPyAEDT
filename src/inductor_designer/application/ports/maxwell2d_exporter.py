@@ -7,6 +7,7 @@ from typing import Protocol
 from inductor_designer.application.ports.maxwell_exporter import MaxwellExportResult
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
+from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 STAGE_NAMES_2D: tuple[str, ...] = (
     "launch",
@@ -25,6 +26,8 @@ STAGE_NAMES_2D: tuple[str, ...] = (
     "save",
 )
 
+SOLVE_STAGE_NAMES_2D: tuple[str, ...] = STAGE_NAMES_2D + ("analyze",)
+
 
 @dataclass(frozen=True, slots=True)
 class Maxwell2dExportRequest:
@@ -34,6 +37,9 @@ class Maxwell2dExportRequest:
     non_graphical: bool
     output_directory: Path
     project_name: str
+    solve: bool = False
+    progress: ProgressSink | None = None
+    cancellation: CancellationToken | None = None
 
 
 class Maxwell2dExporter(Protocol):
