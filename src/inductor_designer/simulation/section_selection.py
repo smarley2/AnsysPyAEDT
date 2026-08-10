@@ -6,13 +6,25 @@ in the same order, with the same identifiers, on any machine.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.geometry.core_profile import FinishedCore
+from inductor_designer.geometry.primitives import half_plane_point
+from inductor_designer.geometry.turn_path import radial_build_m
 from inductor_designer.simulation.sections import (
+    CONDUCTOR_STATIONS,
     CORE_FEATURE_PRECEDENCE,
     SECTION_DEDUPE_TOLERANCE_DEG,
+    ConductorSection,
     CoreSection,
+)
+from inductor_designer.simulation.winding_estimate import (
+    COPPER_ALPHA_20_PER_C,
+    COPPER_MAX_TEMPERATURE_C,
+    COPPER_MIN_TEMPERATURE_C,
+    COPPER_RHO_20_OHM_M,
 )
 
 
@@ -110,3 +122,109 @@ def select_core_sections(
 def _within_tolerance(first: float, second: float) -> bool:
     difference = abs(first - second) % 360.0
     return min(difference, 360.0 - difference) < SECTION_DEDUPE_TOLERANCE_DEG
+
+
+MU_0 = 4.0e-7 * math.pi
+
+
+def skin_depth_m(frequency_hz: float, winding_temperature_c: float) -> float | None:
+    """Copper skin depth, or ``None`` where resistivity is not validated.
+
+    The resistivity model and its validated temperature range are the ones
+    already used for the preliminary wire-loss estimate; this introduces no new
+    material constant.
+    """
+    if not (
+        COPPER_MIN_TEMPERATURE_C
+        <= winding_temperature_c
+        <= COPPER_MAX_TEMPERATURE_C
+    ):
+        return None
+    if frequency_hz <= 0.0:
+        return math.inf
+    rho = COPPER_RHO_20_OHM_M * (
+        1.0 + COPPER_ALPHA_20_PER_C * (winding_temperature_c - 20.0)
+    )
+    return math.sqrt(rho / (math.pi * frequency_hz * MU_0))
+
+
+def _station_points(
+    core: FinishedCore,
+    layer: int,
+    insulated_diameter_m: float,
+    station_deg: float,
+) -> dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    """Centre and wire tangent at each named station of one turn.
+
+    The turn is the modelled closed loop: up through the bore, out across the
+    top face, down the outer wall, back across the bottom face. The tangent at
+    each station is that leg's direction, so a disc built on it cuts the wire
+    transversely.
+    """
+    build = radial_build_m(layer, insulated_diameter_m)
+    r_inner = core.r_inner_m - build
+    r_outer = core.r_outer_m + build
+    half_height = core.half_height_m
+    axial = (0.0, 0.0, 1.0)
+    radial = half_plane_point(station_deg, 1.0, 0.0)
+    radial_unit = (radial.x, radial.y, 0.0)
+
+    def point(r: float, z: float) -> tuple[float, float, float]:
+        location = half_plane_point(station_deg, r, z)
+        return (location.x, location.y, location.z)
+
+    return {
+        # In the bore and on the outer wall the wire runs axially; across the
+        # faces it runs radially.
+        "inner-bore": (point(r_inner, 0.0), axial),
+        "top-face": (
+            point((core.r_inner_m + core.r_outer_m) / 2.0, half_height + build),
+            radial_unit,
+        ),
+        "outer-wall": (point(r_outer, 0.0), axial),
+        "bottom-face": (
+            point((core.r_inner_m + core.r_outer_m) / 2.0, -(half_height + build)),
+            radial_unit,
+        ),
+    }
+
+
+def select_conductor_sections(
+    *,
+    core: FinishedCore,
+    winding_id: str,
+    turn_count: int,
+    wire_radius_m: float,
+    insulated_diameter_m: float,
+    layer: int,
+    station_deg: float,
+    frequency_hz: float,
+    winding_temperature_c: float,
+) -> tuple[ConductorSection, ...]:
+    """Skin-depth-gated discs perpendicular to the wire (design section 6).
+
+    One disc represents the winding exactly while the current distribution is
+    uniform: at DC, or wherever the skin depth is not smaller than the wire
+    radius. Below that, proximity crowding makes position matter and four
+    stations sample it. A temperature outside the validated copper range leaves
+    the gate unevaluable, and the conservative four-station branch is taken.
+    """
+    if turn_count <= 0:
+        return ()
+    turn_index = (turn_count - 1) // 2
+    depth = skin_depth_m(frequency_hz, winding_temperature_c)
+    uniform = depth is not None and depth >= wire_radius_m
+    stations = CONDUCTOR_STATIONS[:1] if uniform else CONDUCTOR_STATIONS
+    points = _station_points(core, layer, insulated_diameter_m, station_deg)
+    return tuple(
+        ConductorSection(
+            section_id=f"winding.{winding_id}.turn{turn_index:02d}.{station}",
+            winding_id=winding_id,
+            turn_index=turn_index,
+            station=station,
+            center_m=points[station][0],
+            normal=points[station][1],
+            radius_m=wire_radius_m,
+        )
+        for station in stations
+    )
