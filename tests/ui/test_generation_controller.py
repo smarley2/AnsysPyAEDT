@@ -100,6 +100,38 @@ def test_generate_ignores_calls_while_busy() -> None:
     assert controller.lines == ["done"]
 
 
+def test_a_finished_run_is_published_on_the_owning_thread() -> None:
+    """Nothing may see the run as over while the worker thread is still alive.
+
+    The controller used to set `busy` False and emit its notifications from the
+    worker thread, so a caller could act on "finished" -- in the real app,
+    close the window; in these tests, drop the controller and its session and
+    collect -- while that thread was still mid-emit. Under `pytest -n 8` that
+    killed an xdist worker with a Windows access violation about one run in
+    five.
+    """
+    app = QGuiApplication.instance() or QGuiApplication([])
+    main_thread = threading.current_thread()
+    ran_on: list[threading.Thread] = []
+
+    def runner(request: UiRunRequest) -> tuple[str, ...]:
+        ran_on.append(threading.current_thread())
+        return ("done",)
+
+    controller = GenerationController(runner)
+    # No receiver object, so PySide calls this straight from the emitting
+    # thread: whichever thread announced the state change is the one recorded.
+    announced_on: list[threading.Thread] = []
+    controller.busyChanged.connect(lambda: announced_on.append(threading.current_thread()))
+
+    controller.generate("Maxwell 3D")
+    wait_until_idle(app, controller)
+
+    assert ran_on[0] is not main_thread, "the generation did not run off the GUI thread"
+    assert announced_on[-1] is main_thread, "the worker thread announced the result"
+    assert not ran_on[0].is_alive(), "the worker was still running once busy read False"
+
+
 def test_generate_handles_runner_exception() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
 
