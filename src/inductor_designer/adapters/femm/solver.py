@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import cmath
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
@@ -10,6 +10,10 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveRequest,
     FemmSolveResult,
     FemmWindingResult,
+)
+from inductor_designer.simulation.raw_results import (
+    RawScalarResults,
+    RawWindingResult,
 )
 from inductor_designer.simulation.run_control import (
     StagePhase,
@@ -97,6 +101,38 @@ def _add_block_label(
     femm.mi_selectlabel(x, y)
     femm.mi_setblockprop(material, 1, 0, circuit, 0, 0, turns)
     femm.mi_clearselected()
+
+
+
+def _raw_results(
+    results: Mapping[str, FemmWindingResult], frequency_hz: float
+) -> RawScalarResults:
+    """FEMM reports circuit quantities only; everything else stays unreported.
+
+    The circuit currents are the peak phasors the excitation was built from
+    (ADR 0006), so the cycle-mean copper loss is ``0.5 * R * |I_peak|**2``.
+    """
+    windings = tuple(
+        RawWindingResult(
+            winding_id=name,
+            resistance_ohm=winding.resistance_ohm,
+            inductance_h=winding.inductance_h,
+            impedance=complex(
+                winding.resistance_ohm,
+                2.0 * math.pi * frequency_hz * winding.inductance_h,
+            ),
+        )
+        for name, winding in results.items()
+    )
+    copper_loss = sum(
+        0.5 * winding.resistance_ohm * abs(complex(*winding.current_a)) ** 2
+        for winding in results.values()
+    )
+    return RawScalarResults(
+        windings=windings,
+        copper_loss_w=copper_loss,
+        solver_status=f"FEMM analyzed {len(results)} circuit(s).",
+    )
 
 
 class PyfemmSolver:
@@ -236,6 +272,11 @@ class PyfemmSolver:
             fem_path=fem_path,
             analyzed=analyzed,
             results=results,
+            raw_results=(
+                None
+                if results is None
+                else _raw_results(results, problem.frequency_hz)
+            ),
             messages=tuple(messages),
             adapter_version=self._observed_version("adapter_version"),
             solver_version=self._observed_version("solver_version"),
