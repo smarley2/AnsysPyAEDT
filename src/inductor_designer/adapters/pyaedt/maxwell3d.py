@@ -8,6 +8,15 @@ from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
 )
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
+from inductor_designer.adapters.pyaedt.stage_progress import (
+    cancelled as _cancelled,
+)
+from inductor_designer.adapters.pyaedt.stage_progress import (
+    emit as _emit,
+)
+from inductor_designer.adapters.pyaedt.stage_progress import (
+    record_cancellation as _record_cancellation,
+)
 from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dExportRequest,
     Maxwell3dExportResult,
@@ -24,6 +33,7 @@ from inductor_designer.simulation.maxwell_plan import (
     Maxwell3dDesignPlan,
     WindingGroupPlan,
 )
+from inductor_designer.simulation.run_control import StagePhase
 
 
 class Maxwell3dApp(Protocol):
@@ -48,6 +58,10 @@ class Maxwell3dApp(Protocol):
     def assign_matrix(self, assignment: Any, **kwargs: Any) -> Any: ...
 
     def validate_simple(self, log_file: str | None = None) -> int: ...
+
+    def analyze_setup(self, name: str) -> bool: ...
+
+    def setup_convergence(self, name: str) -> str: ...
 
     def save_project(self, path: str) -> bool: ...
 
@@ -335,6 +349,12 @@ def _stage_validate(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return "Design validation passed."
 
 
+def _stage_analyze(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+    if not app.analyze_setup(plan.setup.name):
+        raise RuntimeError(f"Setup {plan.setup.name} did not solve.")
+    return f"Solved {plan.setup.name}: {app.setup_convergence(plan.setup.name)}."
+
+
 _STAGES: tuple[tuple[str, Any], ...] = (
     ("units", _stage_units),
     ("materials", _stage_materials),
@@ -373,6 +393,7 @@ class PyaedtMaxwell3dExporter:
                 stages=tuple(stages),
             )
 
+        _emit(request.progress, "launch", StagePhase.STARTED, None)
         try:
             app = self._factory.create(
                 project=str(project_path),
@@ -386,20 +407,25 @@ class PyaedtMaxwell3dExporter:
             )
         except Exception as error:  # noqa: BLE001 - stage boundary converts to record
             stages.append(StageRecord(name="launch", succeeded=False, message=str(error)))
+            _emit(request.progress, "launch", StagePhase.FAILED, str(error))
             return result()
+        launch_message = f"Maxwell 3D design {plan.design_name!r} opened."
         stages.append(
-            StageRecord(
-                name="launch",
-                succeeded=True,
-                message=f"Maxwell 3D design {plan.design_name!r} opened.",
-            )
+            StageRecord(name="launch", succeeded=True, message=launch_message)
         )
+        _emit(request.progress, "launch", StagePhase.SUCCEEDED, launch_message)
         try:
+            cancelled_before: str | None = None
             for name, stage in _STAGES:
+                if _cancelled(request.cancellation):
+                    cancelled_before = name
+                    break
+                _emit(request.progress, name, StagePhase.STARTED, None)
                 try:
                     message = stage(app, plan)
                 except Exception as error:  # noqa: BLE001 - stage boundary
                     stages.append(StageRecord(name=name, succeeded=False, message=str(error)))
+                    _emit(request.progress, name, StagePhase.FAILED, str(error))
                     try:
                         app.save_project(str(project_path))
                         stages.append(
@@ -415,17 +441,45 @@ class PyaedtMaxwell3dExporter:
                         )
                     return result()
                 stages.append(StageRecord(name=name, succeeded=True, message=message))
+                _emit(request.progress, name, StagePhase.SUCCEEDED, message)
+            # The save runs even after cancellation: an interrupted run still
+            # keeps whatever the design reached, it just never claims success.
+            _emit(request.progress, "save", StagePhase.STARTED, None)
             try:
                 saved = bool(app.save_project(str(project_path)))
+                save_message = "Project saved." if saved else "save_project returned False."
                 stages.append(
-                    StageRecord(
-                        name="save",
-                        succeeded=saved,
-                        message="Project saved." if saved else "save_project returned False.",
-                    )
+                    StageRecord(name="save", succeeded=saved, message=save_message)
+                )
+                _emit(
+                    request.progress,
+                    "save",
+                    StagePhase.SUCCEEDED if saved else StagePhase.FAILED,
+                    save_message,
                 )
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
+                _emit(request.progress, "save", StagePhase.FAILED, str(error))
+                return result()
+            if cancelled_before is None and request.solve:
+                if _cancelled(request.cancellation):
+                    cancelled_before = "analyze"
+                else:
+                    _emit(request.progress, "analyze", StagePhase.STARTED, None)
+                    try:
+                        message = _stage_analyze(app, plan)
+                    except Exception as error:  # noqa: BLE001 - stage boundary
+                        stages.append(
+                            StageRecord(name="analyze", succeeded=False, message=str(error))
+                        )
+                        _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
+                        return result()
+                    stages.append(
+                        StageRecord(name="analyze", succeeded=True, message=message)
+                    )
+                    _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
+            if cancelled_before is not None:
+                _record_cancellation(stages, request.progress, cancelled_before)
         finally:
             app.release_desktop(close_projects=True, close_desktop=True)
         return result()
