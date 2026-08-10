@@ -10,7 +10,7 @@ import math
 from collections.abc import Sequence
 
 from inductor_designer.domain.winding import WindingDefinition
-from inductor_designer.geometry.core_profile import FinishedCore
+from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import half_plane_point
 from inductor_designer.geometry.turn_path import radial_build_m
 from inductor_designer.simulation.sections import (
