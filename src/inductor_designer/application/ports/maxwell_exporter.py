@@ -9,6 +9,7 @@ from inductor_designer.simulation.maxwell_plan import (
     GeometryOnlyMaxwell3dPlan,
     Maxwell3dDesignPlan,
 )
+from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 STAGE_NAMES: tuple[str, ...] = (
@@ -40,7 +41,9 @@ GEOMETRY_ONLY_STAGE_NAMES: tuple[str, ...] = (
 # The solve sequence is the generate sequence plus one analyze stage, so a
 # Generate Only manifest and a Generate and Solve manifest stay comparable
 # stage for stage.
-SOLVE_STAGE_NAMES: tuple[str, ...] = STAGE_NAMES + ("analyze",)
+# A solved run also extracts its scalar results, so the sequence carries
+# one more stage than the generate sequence plus analyze.
+SOLVE_STAGE_NAMES: tuple[str, ...] = STAGE_NAMES + ("analyze", "results")
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,8 @@ class Maxwell3dExportResult:
     design_name: str
     pyaedt_version: str
     stages: tuple[StageRecord, ...]
+    # Present only for a solved run; ``None`` means nothing was extracted.
+    raw_results: RawScalarResults | None = None
 
     def succeeded(self, expected_stage_names: tuple[str, ...]) -> bool:
         """A partial design is never successful (design spec §12).

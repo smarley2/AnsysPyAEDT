@@ -30,6 +30,9 @@ from inductor_designer.application.services.aedt_support import (
     SUPPORTED_AEDT_RELEASE,
     aedt_support_issues,
 )
+from inductor_designer.application.services.result_normalization import (
+    normalize_scalar_results,
+)
 from inductor_designer.application.services.run_directory import (
     artifact_path_for_manifest,
 )
@@ -45,6 +48,7 @@ from inductor_designer.simulation.capabilities import CapabilitySnapshot
 from inductor_designer.simulation.femm_problem import FemmProblem
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
 from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
+from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_contracts import (
     ComplexValue,
     DimensionalRepresentation,
@@ -385,6 +389,13 @@ def _manifest_for_result(
         )
         solver_version = result.solver_version
         adapter_version = result.adapter_version
+        results = _normalized_results(
+            result.raw_results,
+            planned_run,
+            project,
+            run_id=run_id,
+            provenance="FEMM circuit properties",
+        )
     else:
         if not isinstance(result, MaxwellExportResult):
             raise TypeError("Maxwell run returned a non-Maxwell adapter result.")
@@ -404,6 +415,14 @@ def _manifest_for_result(
         )
         solver_version = str(SUPPORTED_AEDT_RELEASE)
         adapter_version = result.pyaedt_version
+        results = _normalized_results(
+            result.raw_results,
+            planned_run,
+            project,
+            run_id=run_id,
+            provenance=f"Maxwell {'3D' if backend is RunBackend.MAXWELL_3D else '2D'} "
+            "solution data",
+        )
     return _build_manifest(
         project,
         planned_run,
@@ -415,6 +434,27 @@ def _manifest_for_result(
         status=status,
         diagnostics=diagnostics,
         artifacts=artifacts,
+        results=results,
+    )
+
+
+def _normalized_results(
+    raw: RawScalarResults | None,
+    planned_run: PlannedRun,
+    project: InductorProject,
+    *,
+    run_id: str,
+    provenance: str,
+) -> NormalizedResultSet | None:
+    """Only a solve run has results; a Generate Only manifest keeps ``None``."""
+    if raw is None or planned_run.request.mode is not RunMode.GENERATE_AND_SOLVE:
+        return None
+    return normalize_scalar_results(
+        raw,
+        run_id=run_id,
+        backend=planned_run.request.backend,
+        requested_outputs=project.simulation_recipe.requested_outputs,
+        provenance=provenance,
     )
 
 
@@ -430,6 +470,7 @@ def _build_manifest(
     status: RunStatus,
     diagnostics: tuple[str, ...],
     artifacts: tuple[ManifestArtifact, ...],
+    results: NormalizedResultSet | None = None,
 ) -> RunManifest:
     backend = planned_run.request.backend
     return RunManifest(
@@ -461,7 +502,7 @@ def _build_manifest(
         status=status,
         diagnostics=diagnostics,
         artifacts=artifacts,
-        results=None,
+        results=results,
     )
 
 
@@ -680,7 +721,7 @@ def _quantity_to_document(quantity: NormalizedQuantity) -> dict[str, object]:
     }
 
 
-def _results_to_document(results: NormalizedResultSet) -> dict[str, object]:
+def results_to_document(results: NormalizedResultSet) -> dict[str, object]:
     return {
         "runId": results.run_id,
         "backend": results.backend.value,
@@ -758,7 +799,7 @@ def run_manifest_to_document(manifest: RunManifest) -> dict[str, object]:
         "results": (
             None
             if manifest.results is None
-            else _results_to_document(manifest.results)
+            else results_to_document(manifest.results)
         ),
     }
 

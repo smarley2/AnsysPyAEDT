@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from inductor_designer.simulation.femm_problem import FemmProblem
+from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 
@@ -41,6 +42,8 @@ class FemmSolveResult:
     messages: tuple[str, ...]
     adapter_version: str | None = None
     solver_version: str | None = None
+    # Present only for an analyzed run; ``None`` means nothing was extracted.
+    raw_results: RawScalarResults | None = None
 
 
 class FemmSolver(Protocol):

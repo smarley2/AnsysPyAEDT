@@ -23,6 +23,11 @@ from inductor_designer.application.services.maxwell_export import (
     generate_run,
     run_manifest_json,
 )
+from inductor_designer.application.services.result_export import (
+    RESULTS_CSV_ARTIFACT_KIND,
+    RESULTS_JSON_ARTIFACT_KIND,
+    write_result_files,
+)
 from inductor_designer.application.services.run_directory import (
     RunLocation,
     allocate_run_directory,
@@ -130,20 +135,40 @@ def _write_running_document(
 def _with_solve_log(
     location: RunLocation, manifest: RunManifest, sink: RecordingProgressSink
 ) -> RunManifest:
-    """Write the stage log and reference it from the manifest."""
+    """Write the stage log and the result files, and reference them all.
+
+    The result files are written only when the run actually produced a result
+    set, so an interrupted or failed solve leaves the stage log alone rather
+    than an empty results.json that reads like evidence.
+    """
     from dataclasses import replace
 
-    log_path = write_solve_log(location.results_directory, sink.events)
-    return replace(
-        manifest,
-        artifacts=manifest.artifacts
-        + (
-            ManifestArtifact(
-                kind=SOLVE_LOG_ARTIFACT_KIND,
-                path=artifact_path_for_manifest(log_path, location.project_directory),
+    artifacts: tuple[ManifestArtifact, ...] = (
+        ManifestArtifact(
+            kind=SOLVE_LOG_ARTIFACT_KIND,
+            path=artifact_path_for_manifest(
+                write_solve_log(location.results_directory, sink.events),
+                location.project_directory,
             ),
         ),
     )
+    if manifest.results is not None:
+        json_path, csv_path = write_result_files(
+            location.results_directory, manifest.results
+        )
+        artifacts += (
+            ManifestArtifact(
+                kind=RESULTS_JSON_ARTIFACT_KIND,
+                path=artifact_path_for_manifest(
+                    json_path, location.project_directory
+                ),
+            ),
+            ManifestArtifact(
+                kind=RESULTS_CSV_ARTIFACT_KIND,
+                path=artifact_path_for_manifest(csv_path, location.project_directory),
+            ),
+        )
+    return replace(manifest, artifacts=manifest.artifacts + artifacts)
 
 
 def start_project_run(

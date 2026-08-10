@@ -26,7 +26,7 @@ STAGE_NAMES_2D: tuple[str, ...] = (
     "save",
 )
 
-SOLVE_STAGE_NAMES_2D: tuple[str, ...] = STAGE_NAMES_2D + ("analyze",)
+SOLVE_STAGE_NAMES_2D: tuple[str, ...] = STAGE_NAMES_2D + ("analyze", "results")
 
 
 @dataclass(frozen=True, slots=True)

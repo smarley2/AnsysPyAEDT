@@ -8,6 +8,10 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
     FemmWindingResult,
 )
+from inductor_designer.simulation.raw_results import (
+    RawScalarResults,
+    RawWindingResult,
+)
 from inductor_designer.simulation.run_control import (
     StagePhase,
     emit_stage_event,
@@ -67,6 +71,23 @@ class RecordingFemmSolver:
             fem_path=fem_path,
             analyzed=analyzed,
             results=results,
+            raw_results=(
+                None
+                if results is None
+                else RawScalarResults(
+                    windings=tuple(
+                        RawWindingResult(
+                            winding_id=name,
+                            resistance_ohm=winding.resistance_ohm,
+                            inductance_h=winding.inductance_h,
+                            impedance=complex(winding.resistance_ohm, 0.079),
+                        )
+                        for name, winding in results.items()
+                    ),
+                    copper_loss_w=0.4,
+                    solver_status="recording-fake analyzed",
+                )
+            ),
             messages=tuple(messages),
             adapter_version="recording-fake",
             solver_version=None,

@@ -271,7 +271,7 @@ def test_generate_2d_analyze_true_runs_a_femm_solve(
     document: dict[str, object],
     tmp_path: Path,
 ) -> None:
-    """M8a lets the MCP FEMM path solve; it still normalizes no result."""
+    """The MCP FEMM path solves and returns the normalized scalar results."""
     target = tmp_path / "saved.inductor.json"
     _save(context, document, target)
 
@@ -283,7 +283,8 @@ def test_generate_2d_analyze_true_runs_a_femm_solve(
         "generate",
         "analyze",
     ]
-    assert result["results"] is None
+    assert result["results"] is not None
+    assert result["results"]["quantities"]  # type: ignore[index,call-overload]
 
 
 def test_generate_maxwell3d_writes_into_the_project_run_directory(
