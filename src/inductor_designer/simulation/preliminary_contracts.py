@@ -64,16 +64,23 @@ class DiagnosticCode:
 
 @dataclass(frozen=True, slots=True)
 class CoreMagneticProperties:
-    """The two core properties the estimator reads, and how they were obtained.
+    """The core properties the estimator reads, and how they were obtained.
 
     A catalog core supplies the manufacturer's effective values. A Manual core
     has no record, so the caller computes them from the entered dimensions and
     says so in `notes`. Keeping this separate from `CoreRecord` means no caller
     ever has to fabricate manufacturer provenance to get an estimate.
+
+    `al_value_nh` is None exactly when the core has no manufacturer inductance
+    factor, which is the Manual-core case. Neither it nor the effective area
+    has a default: a default would let a caller silently omit the area and get
+    an Unavailable A_L instead of a construction error.
     """
 
     path_length_m: float
     volume_m3: float
+    effective_area_m2: float
+    al_value_nh: float | None
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 

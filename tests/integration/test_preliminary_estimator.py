@@ -123,6 +123,8 @@ def _real_project_request(tmp_path: Path) -> PreliminaryRequest:
         core=CoreMagneticProperties(
             path_length_m=core_record.path_length_m,
             volume_m3=core_record.volume_m3,
+            effective_area_m2=core_record.effective_area_m2,
+            al_value_nh=core_record.al_value_nh,
         ),
         conductors_by_winding={winding_id: conductor for winding_id in winding_ids},
         packings_by_winding={

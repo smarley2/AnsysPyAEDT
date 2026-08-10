@@ -50,12 +50,18 @@ def core_magnetic_properties(
         return CoreMagneticProperties(
             path_length_m=path_length_m,
             volume_m3=effective_area_m2 * path_length_m,
+            effective_area_m2=effective_area_m2,
+            # A Manual core has no manufacturer inductance factor, so the A_L
+            # check has no reference and reports itself unavailable.
+            al_value_nh=None,
             notes=(MANUAL_CORE_PATH_NOTE,),
         )
     assert isinstance(core, CatalogCoreSelection)
     return CoreMagneticProperties(
         path_length_m=core.snapshot.path_length_m,
         volume_m3=core.snapshot.volume_m3,
+        effective_area_m2=core.snapshot.effective_area_m2,
+        al_value_nh=core.snapshot.al_value_nh,
         notes=(CATALOG_OVERRIDE_NOTE,) if core.overrides else (),
     )
 

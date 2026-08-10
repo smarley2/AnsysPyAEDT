@@ -33,7 +33,44 @@ def test_catalog_core_uses_the_manufacturer_effective_values() -> None:
     assert properties is not None
     assert properties.path_length_m == record.path_length_m
     assert properties.volume_m3 == record.volume_m3
+    assert properties.effective_area_m2 == record.effective_area_m2
+    assert properties.al_value_nh == record.al_value_nh
     assert properties.notes == ()
+
+
+def test_manual_core_computes_its_area_and_has_no_catalog_al() -> None:
+    """A Manual core has no manufacturer inductance factor, so the A_L check
+    has no reference. The area is the same rectangular cross-section already
+    described by MANUAL_CORE_PATH_NOTE.
+    """
+    selection = ManualCoreSelection(
+        outer_diameter_m=0.0272,
+        inner_diameter_m=0.0138,
+        height_m=0.0112,
+        corner_radius_m=0.0,
+    )
+
+    properties = core_magnetic_properties(selection)
+
+    assert properties is not None
+    assert properties.effective_area_m2 == ((0.0272 - 0.0138) / 2.0) * 0.0112
+    assert properties.al_value_nh is None
+
+
+def test_catalog_core_with_dimension_overrides_keeps_the_catalog_area_and_al() -> None:
+    record = make_core()
+    selection = CatalogCoreSelection(
+        record.part_number,
+        record,
+        (CoreOverride("outer_diameter_m", 0.03, "measured"),),
+    )
+
+    properties = core_magnetic_properties(selection)
+
+    assert properties is not None
+    assert properties.effective_area_m2 == record.effective_area_m2
+    assert properties.al_value_nh == record.al_value_nh
+    assert properties.notes == (CATALOG_OVERRIDE_NOTE,)
 
 
 def test_catalog_core_with_dimension_overrides_says_so() -> None:
