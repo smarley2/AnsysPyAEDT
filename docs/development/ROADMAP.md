@@ -799,9 +799,31 @@ evidence record is
 
 ### Milestone 8b: Scalar normalized results
 
-Not yet planned. Resistance, inductance, impedance, supported matrices,
-copper/core/total loss, magnetic energy, convergence and solver status, JSON
-and CSV export, and the Review result display.
+Planned, not yet implemented:
+[2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md).
+Resistance, inductance and complex impedance per winding, supported matrices,
+copper/core/total loss, magnetic energy, convergence history and solver
+status, exported as JSON and CSV, and shown on the Review screen.
+
+Decisions taken with Fabio Posser on 2026-08-10:
+
+1. Export is automatic. Every solve run writes `results.json` and
+   `results.csv` into its own `results/` directory beside `solve-log.txt`;
+   there is no export button and no chosen path.
+2. Results are a section on the existing Review screen, not a sixth Guided
+   Studio step, so the approved five-screen flow is unchanged and the FEM
+   numbers sit beside the M7a analytical estimates.
+3. A total loss the backend does not report is derived as copper loss plus
+   core loss, carrying an approximation note that names it a sum of the two
+   reported parts and a `derived` provenance. It is never presented as a
+   solver-reported value.
+
+Known risk recorded in the plan: the Maxwell report-quantity names
+(`SolidLoss`, `CoreLoss`, `Total_Energy`) and the convergence source cannot be
+proven without AEDT. They are isolated behind one pure expression table and
+one adapter method, so the live run corrects them without touching
+normalization, export or the UI. A name AEDT does not recognize yields an
+`unavailable` quantity with a reason, never a wrong number.
 
 ### Milestone 8c: Field results
 

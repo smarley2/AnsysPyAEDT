@@ -86,10 +86,15 @@ before the next plan freezes assumptions that depend on it.
     cancellation between stages, a durable `running` manifest, failed-stage
     diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
     `RunManifest.results` stays `None` through the whole slice.
-  - **M8b**, not yet planned: scalar normalized results (resistance,
-    inductance, impedance, supported matrices, copper/core/total loss,
-    magnetic energy, convergence and solver status), JSON and CSV export, and
-    the Review result display.
+  - **M8b is planned**, not yet implemented:
+    [2026-08-10 M8b scalar results](2026-08-10-m8b-scalar-results.md) — scalar
+    normalized results (resistance, inductance, impedance, supported matrices,
+    copper/core/total loss, magnetic energy, convergence and solver status),
+    automatic `results.json` and `results.csv` beside the solve log, and a
+    Results section on the Review screen. Decisions taken with Fabio Posser on
+    2026-08-10: export is automatic per run, results are a Review section
+    rather than a sixth step, and a total loss the backend does not report is
+    derived from its parts with a visible label and a `derived` provenance.
   - **M8c**, not yet planned: field results, implementing the approved
     [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md)
     — feature-anchored core planes, skin-depth-gated conductor discs,
