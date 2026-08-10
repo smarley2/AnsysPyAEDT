@@ -54,6 +54,8 @@ class DiagnosticCode:
     STORED_ENERGY_NON_POSITIVE_VOLUME = "stored_energy.non_positive_volume"
     STORED_ENERGY_NON_FINITE_VOLUME = "stored_energy.non_finite_volume"
     STORED_ENERGY_NOT_FINITE = "stored_energy.not_finite"
+    STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE = "stored_energy.flux_outside_bh_range"
+    STORED_ENERGY_NON_MONOTONIC_BH = "stored_energy.non_monotonic_bh"
 
     # The effective-geometry echo is reported independently of flux density, so
     # it needs its own reasons rather than borrowing the flux-density or

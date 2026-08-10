@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from inductor_designer.materials.records import PointSeries
 from inductor_designer.simulation.magnetic_estimate import (
     MU_0,
     FieldStrengths,
@@ -38,14 +39,25 @@ ZERO_RIPPLE_NOTE = (
     "DC bias instead of the incremental slope. The secant runs above the "
     "incremental permeability under DC bias, so this inductance is optimistic"
 )
-STORED_ENERGY_NOTE = (
-    "stored energy is the effective-core-volume estimate "
-    "0.5 * B_peak * H_peak * V_e, which assumes a linear medium from the origin "
-    "to the peak; for a saturating core it is an upper bound on the true "
-    "integral of H dB, so this estimate is optimistic. It is NOT "
-    "0.5 * L * I_peak^2 evaluated from the reported incremental inductance, "
-    "which describes a different permeability and reads lower under DC bias. "
-    "Energy stored in the winding window and in leakage paths is excluded"
+STORED_ENERGY_INTEGRATED_NOTE = (
+    "stored energy is V_e * integral of H dB along the recorded B-H curve from "
+    "the origin to the peak flux density, so core saturation is accounted for. "
+    "It is not 0.5 * L * I_peak^2 taken from the reported incremental "
+    "inductance, which measures the energy of a small ripple about the bias "
+    "rather than the total. Energy stored in the winding window and in leakage "
+    "paths is excluded"
+)
+STORED_ENERGY_LINEAR_NOTE = (
+    "stored energy is 0.5 * B_peak * H_peak * V_e, which is exact for the "
+    "linear-permeability model these flux densities came from, and equals "
+    "0.5 * L * I_peak^2 for that same model. The model itself excludes "
+    "saturation, as its own note says. Energy stored in the winding window and "
+    "in leakage paths is excluded"
+)
+STORED_ENERGY_ORIGIN_NOTE = (
+    "the recorded B-H curve does not start at the origin, so the first "
+    "integration segment assumes a straight line from (0 A/m, 0 T) to the "
+    "lowest recorded point"
 )
 
 
@@ -240,10 +252,10 @@ def stored_energy_j(
 ) -> PreliminaryValue:
     """Peak energy stored in the effective core volume.
 
-    Needs no permeability, so it stays available where inductance is refused
-    for want of excitation: at zero excitation the stored energy really is
-    zero. `B` and `H` are both taken at their peak magnitude so the two factors
-    describe the same instant of the cycle.
+    Integrated along the recorded B-H curve when there is one, which is what a
+    saturating core actually stores; otherwise the exact linear-model form. Needs
+    no permeability either way, so it stays available where inductance is refused
+    for want of excitation: at zero excitation the stored energy really is zero.
     """
     if not math.isfinite(core.volume_m3):
         return unavailable(
@@ -257,12 +269,89 @@ def stored_energy_j(
             f"Core effective volume must be positive; got {core.volume_m3:g} "
             "m^3. Stored energy is not reported.",
         )
-    h_peak_a_per_m = max(abs(fields.h_min_a_per_m), abs(fields.h_max_a_per_m))
-    energy_j = 0.5 * densities.b_peak_magnitude_t * h_peak_a_per_m * core.volume_m3
+    if densities.bh_series is not None:
+        density = _energy_density_j_per_m3(
+            densities.bh_series, densities.b_peak_magnitude_t
+        )
+        if isinstance(density, PreliminaryValue):
+            return density
+        energy_density_j_per_m3, notes = density
+    else:
+        # No recorded curve means these flux densities came from the linear
+        # permeability approximation, and for B = mu * H the area to the left of
+        # the curve is exactly 0.5 * B * H -- the same number the integral would
+        # return, without needing points to walk.
+        h_peak_a_per_m = max(abs(fields.h_min_a_per_m), abs(fields.h_max_a_per_m))
+        energy_density_j_per_m3 = 0.5 * densities.b_peak_magnitude_t * h_peak_a_per_m
+        notes = (STORED_ENERGY_LINEAR_NOTE,)
+
+    energy_j = energy_density_j_per_m3 * core.volume_m3
     if not math.isfinite(energy_j):
         return unavailable(
             DiagnosticCode.STORED_ENERGY_NOT_FINITE,
-            "The product of peak flux density, peak field strength, and core "
-            "volume overflows, so stored energy is not reported.",
+            "The stored-energy product of energy density and core volume "
+            "overflows, so stored energy is not reported.",
         )
-    return estimated(energy_j, (STORED_ENERGY_NOTE,))
+    return estimated(energy_j, notes)
+
+
+def _energy_density_j_per_m3(
+    series: PointSeries, b_peak_t: float
+) -> tuple[float, tuple[str, ...]] | PreliminaryValue:
+    """`integral of H dB` from the origin to `b_peak_t`, in J/m^3.
+
+    The area to the LEFT of the B-H curve, which is the energy a saturating core
+    actually stores -- unlike 0.5 * B * H, the area of the triangle under a
+    straight line to the same point, which over-counts once the curve bends.
+
+    The curve is piecewise linear between recorded points, so each segment's
+    contribution is the exact trapezoid `(H1 + H2) / 2 * (B2 - B1)`; the segment
+    containing the peak is cut at the peak. Nothing is extrapolated: a peak above
+    the recorded curve is refused.
+    """
+    curve = sorted(
+        ((abs(point.x), abs(point.y)) for point in series.points), key=lambda p: p[0]
+    )
+    if not curve:
+        return unavailable(
+            DiagnosticCode.STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE,
+            f"Series {series.series_id} records no points, so the stored-energy "
+            "integral has no curve to follow.",
+        )
+    notes: tuple[str, ...] = (STORED_ENERGY_INTEGRATED_NOTE,)
+    if curve[0] != (0.0, 0.0):
+        curve.insert(0, (0.0, 0.0))
+        notes = (*notes, STORED_ENERGY_ORIGIN_NOTE)
+
+    peak_t = abs(b_peak_t)
+    density = 0.0
+    for (h_low, b_low), (h_high, b_high) in zip(curve, curve[1:], strict=False):
+        if b_high < b_low:
+            return unavailable(
+                DiagnosticCode.STORED_ENERGY_NON_MONOTONIC_BH,
+                f"Series {series.series_id} records a flux density that falls "
+                f"from {b_low:g} T to {b_high:g} T as field strength rises, so "
+                "the area to the left of the curve is ambiguous and stored "
+                "energy cannot be integrated.",
+            )
+        if peak_t <= b_low:
+            break
+        if peak_t >= b_high:
+            density += (h_low + h_high) / 2.0 * (b_high - b_low)
+            continue
+        # The peak falls inside this segment: cut it there, taking H at the peak
+        # from the same straight line the segment already assumes.
+        span_t = b_high - b_low
+        fraction = (peak_t - b_low) / span_t if span_t > 0.0 else 0.0
+        h_at_peak = h_low + fraction * (h_high - h_low)
+        density += (h_low + h_at_peak) / 2.0 * (peak_t - b_low)
+        return density, notes
+
+    if peak_t > curve[-1][1]:
+        return unavailable(
+            DiagnosticCode.STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE,
+            f"Peak flux density {peak_t:g} T is above the highest value recorded "
+            f"by series {series.series_id} ({curve[-1][1]:g} T); the "
+            "stored-energy integral is not extrapolated.",
+        )
+    return density, notes

@@ -8,7 +8,7 @@ import pytest
 from inductor_designer.domain.project import ManualCoreSelection
 from inductor_designer.simulation.inductance_estimate import (
     INDUCTANCE_EXCLUSION_NOTE,
-    STORED_ENERGY_NOTE,
+    STORED_ENERGY_INTEGRATED_NOTE,
 )
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,
@@ -268,7 +268,8 @@ def test_the_core_reports_its_inductance_factor_and_stored_energy(
     assert result.core.stored_energy.state is ResultState.ESTIMATED
     assert result.core.al_deviation.state is ResultState.ESTIMATED
     assert INDUCTANCE_EXCLUSION_NOTE in result.notes
-    assert STORED_ENERGY_NOTE in result.notes
+    # The fixture records a B-H series, so energy follows the integrated path.
+    assert STORED_ENERGY_INTEGRATED_NOTE in result.notes
 
 
 def test_every_winding_inductance_is_its_turns_squared_times_the_core_factor(

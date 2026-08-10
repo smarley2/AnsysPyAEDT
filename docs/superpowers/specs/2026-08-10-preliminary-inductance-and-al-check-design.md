@@ -103,23 +103,44 @@ is today: a fallback B-H model, never a reference for this check.
 
 ### 3.4 Stored energy
 
+Stored energy is the area to the **left** of the B-H curve — `integral of H dB`
+— times the effective volume, which is what a saturating core actually stores:
+
 ```
-W = 0.5 * B_peak_magnitude * H_peak * V_e           [shown in mJ]
+W = V_e * integral from 0 to B_peak of H dB          [shown in mJ]
 ```
 
-where `H_peak = max(|H_min|, |H_max|)`, chosen to pair with the existing
-`b_peak_magnitude_t` so the two factors describe the same instant of the cycle.
+The curve is the recorded B-H series, piecewise linear between its points, so
+each segment contributes the exact trapezoid `(H1 + H2) / 2 * (B2 - B1)` and the
+segment containing the peak is cut at the peak. Nothing is extrapolated: a peak
+above the recorded curve is refused, as is a curve whose flux density falls with
+rising field strength anywhere below the peak. A curve that misbehaves only
+*above* the peak still integrates, because the integration path never reaches
+it. When the recorded curve does not start at the origin, a straight line from
+`(0, 0)` to its lowest point is assumed and the result says so.
 
-This is the energy of a linear medium taken from the origin to the peak, and it
-is an upper bound on the true `V_e * integral of H dB` for any saturating
-curve. It is therefore **not** `0.5 * L * I_peak^2` computed from the reported
-incremental inductance: on a biased powder core the two differ by roughly the
-ratio of the secant to the incremental permeability, measured at 2.6 on a
-representative ferrite point. Both numbers appear on the same screen, so the
-stored-energy note states which permeability it assumes and in which direction
-it errs. Integrating the recorded B-H series instead would remove the
-discrepancy and is the open improvement here; it needs the series itself passed
-into the estimator, which this design does not do.
+When there is no recorded curve — the linear-permeability fallback — the same
+integral has a closed form, and it is used directly:
+
+```
+W = 0.5 * B_peak_magnitude * H_peak * V_e
+```
+
+with `H_peak = max(|H_min|, |H_max|)`. For `B = mu * H` this is exact, and it is
+also exactly `0.5 * L * I_peak^2` for that same model, so the two quantities on
+screen agree there.
+
+With a recorded curve they do not agree, and neither is wrong: `W` is the total
+energy stored at the peak, while `0.5 * L * I_peak^2` built from the incremental
+inductance describes the energy of a small ripple about the bias. Each branch's
+note names the model it came from. Measured on a representative saturating curve
+the integral runs about 21 % below the linear form it replaced, and the gap
+widens with bias — which is why the linear form is no longer used when a curve
+is available.
+
+`FluxDensities` therefore carries the B-H series it was built from. The
+alternative, re-selecting the series inside the energy calculation, risks
+choosing a different series than the one the flux densities came from.
 
 ## 4. Diagnostics
 
@@ -136,7 +157,9 @@ New stable codes, added to `DiagnosticCode` and never reused:
 | `stored_energy.no_flux_density` | Flux density is unavailable, so stored energy cannot be evaluated. |
 | `stored_energy.non_positive_volume` | The core's effective volume is not positive. |
 | `stored_energy.non_finite_volume` | The core's effective volume is not a finite number. |
-| `stored_energy.not_finite` | The product of peak flux density, peak field strength, and volume overflows. |
+| `stored_energy.not_finite` | The product of energy density and core volume overflows. |
+| `stored_energy.flux_outside_bh_range` | The peak flux density is above the highest value the recorded B-H series contains, or the series records no points. The integral is not extrapolated. |
+| `stored_energy.non_monotonic_bh` | The recorded B-H series doubles back below the peak, so the area to the left of the curve is ambiguous. |
 | `inductance.not_finite` | The permeability slope, or the inductance factor derived from it, overflows. Prevents a non-finite estimate from becoming a screen-level failure. |
 | `core_geometry.non_positive` | An echoed effective dimension is not positive. |
 | `core_geometry.not_finite` | An echoed effective dimension is not a finite number. |
@@ -219,8 +242,9 @@ The Preliminary screen's assumptions list gains:
   leakage inductance, and winding self-capacitance are excluded;
 - the catalog inductance factor is a low-signal value, so the reported deviation
   mixes bias roll-off with catalog tolerance and cannot separate them;
-- stored energy is the effective-core-volume estimate; energy stored in the
-  winding window and in leakage paths is excluded.
+- stored energy is integrated along the recorded B-H curve (or, without one,
+  taken from the linear-permeability model in closed form); energy stored in the
+  winding window and in leakage paths is excluded either way.
 
 The zero-ripple secant note is attached to the affected values only, not to the
 permanent list.

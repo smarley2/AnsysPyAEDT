@@ -12,7 +12,9 @@ import pytest
 from inductor_designer.simulation.inductance_estimate import (
     AL_TOLERANCE_NOTE,
     INDUCTANCE_EXCLUSION_NOTE,
-    STORED_ENERGY_NOTE,
+    STORED_ENERGY_INTEGRATED_NOTE,
+    STORED_ENERGY_LINEAR_NOTE,
+    STORED_ENERGY_ORIGIN_NOTE,
     ZERO_RIPPLE_NOTE,
     CoreInductance,
     core_inductance,
@@ -29,6 +31,7 @@ from inductor_designer.simulation.preliminary_contracts import (
     PreliminaryValue,
     ResultState,
 )
+from tests.unit.simulation.test_magnetic_estimate import make_bh_series
 
 # 100 A/m of ripple on a 200 A/m bias: the excursion runs 100 to 300 A/m.
 BIASED_FIELDS = FieldStrengths(
@@ -341,12 +344,179 @@ def test_an_overflowing_slope_is_refused_not_reported() -> None:
 
 
 def test_stored_energy_pairs_peak_flux_with_peak_field_over_the_volume() -> None:
+    """With no recorded curve the permeability model is linear, and 0.5*B*H*V is
+    that model's exact energy -- and exactly 0.5*L*I_peak^2 for the same model.
+    """
     result = stored_energy_j(BIASED_FIELDS, BIASED_DENSITIES, CORE)
 
     assert result.state is ResultState.ESTIMATED
     # 0.5 * 0.5 T * 300 A/m * 1e-5 m^3
     assert result.value == pytest.approx(7.5e-4)
-    assert STORED_ENERGY_NOTE in result.notes
+    assert STORED_ENERGY_LINEAR_NOTE in result.notes
+
+
+def _densities(
+    b_peak_t: float, points: tuple[tuple[float, float], ...]
+) -> FluxDensities:
+    """Flux densities carrying a recorded B-H curve, peaking at `b_peak_t`."""
+    return FluxDensities(
+        b_dc_t=b_peak_t,
+        b_min_t=0.0,
+        b_max_t=b_peak_t,
+        b_ac_peak_t=b_peak_t / 2.0,
+        b_peak_magnitude_t=b_peak_t,
+        notes=(),
+        bh_series=make_bh_series(points=points),
+    )
+
+
+def test_stored_energy_integrates_the_recorded_curve_when_one_is_available() -> None:
+    """Energy density is the area to the LEFT of the B-H curve, integral H dB.
+
+    Curve (0,0) -> (100 A/m, 0.5 T) -> (200 A/m, 0.8 T), taken to 0.8 T:
+    (0+100)/2 * 0.5 = 25, plus (100+200)/2 * 0.3 = 45, so 70 J/m^3.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+
+    densities = _densities(0.8, ((0.0, 0.0), (100.0, 0.5), (200.0, 0.8)))
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    assert result.state is ResultState.ESTIMATED
+    assert result.value == pytest.approx(70.0 * CORE.volume_m3)
+    assert STORED_ENERGY_INTEGRATED_NOTE in result.notes
+    assert STORED_ENERGY_LINEAR_NOTE not in result.notes
+
+
+def test_the_integral_is_below_the_linear_form_it_replaces() -> None:
+    """The saturating curve is the whole point: 0.5*B*H over-counts by 14 % here,
+    and the gap widens with bias. Same inputs, both formulas, one assertion.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+    densities = _densities(0.8, ((0.0, 0.0), (100.0, 0.5), (200.0, 0.8)))
+
+    integrated = stored_energy_j(fields, densities, CORE).value
+    linear_form = 0.5 * 0.8 * 200.0 * CORE.volume_m3
+
+    assert integrated is not None
+    assert integrated < linear_form
+    assert integrated == pytest.approx(70.0 / 80.0 * linear_form)
+
+
+def test_a_straight_curve_integrates_to_exactly_the_linear_form() -> None:
+    """Sanity check on the integrator: for B = mu*H the two must coincide."""
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=50.0,
+        h_dc_a_per_m=50.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=100.0,
+    )
+
+    result = stored_energy_j(fields, _densities(0.6, ((0.0, 0.0), (100.0, 0.6))), CORE)
+
+    assert result.value == pytest.approx(0.5 * 0.6 * 100.0 * CORE.volume_m3)
+
+
+def test_the_integral_stops_partway_through_the_bracketing_segment() -> None:
+    """Peak 0.65 T sits halfway up the second segment, where H is 150 A/m:
+    25 + (100+150)/2 * 0.15 = 43.75 J/m^3.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=75.0,
+        h_dc_a_per_m=75.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=150.0,
+    )
+
+    densities = _densities(0.65, ((0.0, 0.0), (100.0, 0.5), (200.0, 0.8)))
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    assert result.value == pytest.approx(43.75 * CORE.volume_m3)
+
+
+def test_a_curve_not_recorded_from_the_origin_says_it_assumed_one() -> None:
+    """Anhysteretic B-H data usually starts at the origin; when it does not, the
+    first segment has to come from somewhere, and the assumption is stated.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=50.0,
+        h_dc_a_per_m=50.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=100.0,
+    )
+
+    result = stored_energy_j(fields, _densities(0.5, ((50.0, 0.3), (100.0, 0.5))), CORE)
+
+    # (0+50)/2 * 0.3 = 7.5, plus (50+100)/2 * 0.2 = 15
+    assert result.value == pytest.approx(22.5 * CORE.volume_m3)
+    assert STORED_ENERGY_ORIGIN_NOTE in result.notes
+
+
+def test_a_peak_above_the_recorded_curve_is_refused_not_extrapolated() -> None:
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+
+    result = stored_energy_j(fields, _densities(0.95, ((0.0, 0.0), (200.0, 0.8))), CORE)
+
+    assert result.state is ResultState.UNAVAILABLE
+    assert result.code == DiagnosticCode.STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE
+
+
+def test_a_curve_that_doubles_back_below_the_peak_is_refused() -> None:
+    """A B that falls with rising H makes the area to the left of the curve
+    ambiguous, and the same corrupt data already refuses permeability.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+
+    result = stored_energy_j(
+        fields,
+        _densities(0.9, ((0.0, 0.0), (100.0, 0.8), (150.0, 0.6), (200.0, 0.9))),
+        CORE,
+    )
+
+    assert result.state is ResultState.UNAVAILABLE
+    assert result.code == DiagnosticCode.STORED_ENERGY_NON_MONOTONIC_BH
+
+
+def test_a_curve_that_doubles_back_above_the_peak_still_integrates() -> None:
+    """Only the path actually walked has to be well behaved. Refusing because of
+    a defect the integral never reaches would withhold a sound number.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+
+    result = stored_energy_j(
+        fields, _densities(0.7, ((0.0, 0.0), (100.0, 0.8), (200.0, 0.6))), CORE
+    )
+
+    assert result.state is ResultState.ESTIMATED
+    # The peak sits at 7/8 of the first segment, where H is 87.5 A/m:
+    # (0 + 87.5) / 2 * 0.7 = 30.625 J/m^3.
+    assert result.value == pytest.approx(30.625 * CORE.volume_m3)
 
 
 def test_stored_energy_uses_the_larger_field_magnitude_of_the_excursion() -> None:
@@ -446,16 +616,16 @@ def test_an_overflowing_energy_product_is_refused_not_reported() -> None:
     assert result.code == DiagnosticCode.STORED_ENERGY_NOT_FINITE
 
 
-def test_the_stored_energy_note_discloses_that_it_is_not_half_l_i_squared() -> None:
-    """The screen shows this next to an incremental-permeability inductance.
-
-    The two describe different permeabilities -- on a biased powder core the
-    linear-medium form runs about 2.6 times 0.5 * L * I_peak^2 -- so the note
-    has to say which one this is and in which direction it errs.
+def test_each_stored_energy_note_names_the_model_it_came_from() -> None:
+    """Two branches, two honest statements. The integral is the real stored
+    energy of the recorded curve; the linear form is exact for the linear
+    permeability model that produced it -- and for that model it also equals
+    0.5 * L * I_peak^2, so neither note claims to be optimistic.
     """
-    assert "linear medium" in STORED_ENERGY_NOTE
-    assert "optimistic" in STORED_ENERGY_NOTE
-    assert "0.5 * L * I_peak^2" in STORED_ENERGY_NOTE
+    assert "integral of H dB" in STORED_ENERGY_INTEGRATED_NOTE
+    assert "recorded B-H" in STORED_ENERGY_INTEGRATED_NOTE
+    assert "linear-permeability" in STORED_ENERGY_LINEAR_NOTE
+    assert "exact" in STORED_ENERGY_LINEAR_NOTE
 
 
 def test_the_zero_ripple_note_discloses_the_direction_of_its_error() -> None:
