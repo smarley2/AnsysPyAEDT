@@ -117,6 +117,72 @@ def test_core_material_panel_exposes_both_selectors_and_manual_dimensions() -> N
         assert root.findChild(QObject, name) is not None, name
 
 
+STEP_NAMES = (
+    "coreMaterialStep",
+    "windingsStep",
+    "preliminaryStep",
+    "simulationStep",
+    "reviewStep",
+)
+
+
+def _step_label(step: QObject) -> QObject:
+    """The `Label` `contentItem` of a step delegate.
+
+    PySide cannot marshal the `contentItem` property itself (it is a bare
+    `QQuickItem*`, which has no registered converter), so this finds the
+    same object by walking the delegate's QObject children instead --
+    `contentItem` is still a real child of the delegate either way.
+    """
+    for child in step.children():
+        if "Label" in child.metaObject().className():
+            return child
+    raise AssertionError(f"{step.objectName()} has no Label content item")
+
+
+def test_step_rail_labels_render_visibly_in_both_states() -> None:
+    """Regression test for Fabio's screenshots: the highlighted step showed
+    no label at all (the native style's built-in label painted highlighted
+    text in a colour invisible against the `#e9efff` highlight background),
+    and "Core & Material" rendered as "Core _Material" (native mnemonic
+    processing treating "&" as an accelerator marker). Each delegate now
+    has its own `contentItem: Label`, which performs no mnemonic processing
+    and renders `text` in an explicit colour in every state.
+    """
+    app = QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+    engine = create_engine(guided_studio_controller=controller)
+    root = engine.rootObjects()[0]
+    steps = root.findChild(QObject, "guidedStepList")
+    app.processEvents()
+
+    # Every delegate is highlighted at exactly one of these two indices and
+    # not-highlighted at the other, so this covers both states for all five
+    # without needing five separate passes.
+    for index in (0, 1):
+        steps.setProperty("currentIndex", index)
+        app.processEvents()
+        for name in STEP_NAMES:
+            step = root.findChild(QObject, name)
+            label = _step_label(step)
+            highlighted = step.property("highlighted")
+            background_color = "#e9efff" if highlighted else "#fbfaf8"
+
+            assert label.property("visible") is True, (name, index)
+            # Equal to the delegate's own `text` (not merely "close to
+            # it") rules out a mnemonic-processed rendering: Qt turns
+            # "Core & Material" into "Core _Material" for a mnemonic-aware
+            # label, which would fail this exact comparison.
+            assert label.property("text") == step.property("text"), (name, index)
+            label_color = label.property("color").name()
+            assert label_color.lower() != background_color.lower(), (
+                name,
+                index,
+                "label colour matches the background it sits on",
+            )
+
+
 def test_manual_core_fields_reject_letters_natively() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
     engine = create_engine()

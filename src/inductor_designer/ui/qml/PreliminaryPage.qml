@@ -12,24 +12,37 @@ Pane {
     }
 
     ScrollView {
+        id: preliminaryScrollView
+        objectName: "preliminaryScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: preliminaryPage.width - 24
+            width: preliminaryScrollView.width - preliminaryScrollView.leftPadding
+                - preliminaryScrollView.scrollBarReserve
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Preliminary")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Preliminary estimates")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -69,12 +82,16 @@ Pane {
                     spacing: 8
                     Label {
                         Layout.preferredWidth: 220
+                        Layout.minimumWidth: 0
                         text: modelData.label
+                        elide: Text.ElideRight
                         color: "#6d7a7e"
                     }
                     Label {
                         Layout.preferredWidth: 140
+                        Layout.minimumWidth: 0
                         text: modelData.text
+                        elide: Text.ElideRight
                         font.bold: true
                         color: preliminaryPage.stateColor(modelData.state)
                         Accessible.name: qsTr("%1 is %2").arg(modelData.label).arg(modelData.text)
@@ -92,17 +109,30 @@ Pane {
 
             Label { text: qsTr("Windings"); font.bold: true; color: "#1e2b32" }
 
+            // Fixed-width column headers: same idiom as the table rows
+            // below them. None of the eight columns has `Layout.fillWidth`
+            // -- each is pinned at its own `Layout.preferredWidth` so the
+            // table's columns never scale with the window (Fabio: "it is
+            // moving the width according to the width of the screen"). The
+            // `RowLayout` itself still gets `Layout.fillWidth: true` so it
+            // spans the available row width, but with no fillWidth child to
+            // stretch into that space, any leftover space simply sits empty
+            // to the right of the last column instead of widening the
+            // columns -- the table stays left-aligned. At a window narrower
+            // than the sum of the eight preferred widths, elide still keeps
+            // each column's own text from forcing the row wider.
             RowLayout {
+                objectName: "preliminaryWindingTableHeader"
                 Layout.fillWidth: true
                 spacing: 8
-                Label { Layout.preferredWidth: 70; text: qsTr("Winding"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("Copper area"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("Wire length"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("Resistance"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("J AC RMS"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("J AC peak"); color: "#6d7a7e" }
-                Label { Layout.preferredWidth: 110; text: qsTr("J DC"); color: "#6d7a7e" }
-                Label { Layout.fillWidth: true; text: qsTr("Wire loss"); color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 70; text: qsTr("Winding"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("Copper area"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("Wire length"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("Resistance"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("J AC RMS"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("J AC peak"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("J DC"); elide: Text.ElideRight; color: "#6d7a7e" }
+                Label { Layout.preferredWidth: 110; text: qsTr("Wire loss"); elide: Text.ElideRight; color: "#6d7a7e" }
             }
 
             ListView {
@@ -122,40 +152,47 @@ Pane {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Label { Layout.preferredWidth: 70; text: modelData.windingId; font.bold: true }
+                        Label { Layout.preferredWidth: 70; text: modelData.windingId; elide: Text.ElideRight; font.bold: true }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.conductorArea.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.conductorArea.state)
                         }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.wireLength.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.wireLength.state)
                         }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.resistance.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.resistance.state)
                         }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.jAcRms.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.jAcRms.state)
                         }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.jAcPeak.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.jAcPeak.state)
                         }
                         Label {
                             Layout.preferredWidth: 110
                             text: modelData.jDc.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.jDc.state)
                         }
                         Label {
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: 110
                             text: modelData.wireLoss.text
+                            elide: Text.ElideRight
                             color: preliminaryPage.stateColor(modelData.wireLoss.state)
                         }
                     }
@@ -189,10 +226,12 @@ Pane {
                     width: ListView.view.width
                     height: 40
                     spacing: 8
-                    Label { Layout.preferredWidth: 220; text: modelData.label; color: "#6d7a7e" }
+                    Label { Layout.preferredWidth: 220; Layout.minimumWidth: 0; text: modelData.label; elide: Text.ElideRight; color: "#6d7a7e" }
                     Label {
                         Layout.preferredWidth: 140
+                        Layout.minimumWidth: 0
                         text: modelData.text
+                        elide: Text.ElideRight
                         font.bold: true
                         color: preliminaryPage.stateColor(modelData.state)
                     }

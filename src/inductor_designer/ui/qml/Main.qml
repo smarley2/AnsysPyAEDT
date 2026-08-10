@@ -98,6 +98,19 @@ ApplicationWindow {
                 color: coreMaterialStep.highlighted ? "#e9efff" : "transparent"
                 border.color: coreMaterialStep.highlighted ? "#2e65e7" : "transparent"
             }
+            // The native style's built-in label (1) paints highlighted text
+            // in a colour this app never chose, which vanishes against the
+            // `#e9efff` highlight background above, and (2) treats "&" as a
+            // mnemonic marker and draws "Core _Material" instead of
+            // "Core & Material". A plain `Label` does neither: it takes an
+            // explicit, always-visible colour, and performs no mnemonic
+            // processing at all.
+            contentItem: Label {
+                text: coreMaterialStep.text
+                color: coreMaterialStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
         ItemDelegate {
             id: windingsStep
@@ -116,6 +129,12 @@ ApplicationWindow {
                 radius: 8
                 color: windingsStep.highlighted ? "#e9efff" : "transparent"
                 border.color: windingsStep.highlighted ? "#2e65e7" : "transparent"
+            }
+            contentItem: Label {
+                text: windingsStep.text
+                color: windingsStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
         ItemDelegate {
@@ -136,6 +155,12 @@ ApplicationWindow {
                 color: preliminaryStep.highlighted ? "#e9efff" : "transparent"
                 border.color: preliminaryStep.highlighted ? "#2e65e7" : "transparent"
             }
+            contentItem: Label {
+                text: preliminaryStep.text
+                color: preliminaryStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
         ItemDelegate {
             id: simulationStep
@@ -155,6 +180,12 @@ ApplicationWindow {
                 color: simulationStep.highlighted ? "#e9efff" : "transparent"
                 border.color: simulationStep.highlighted ? "#2e65e7" : "transparent"
             }
+            contentItem: Label {
+                text: simulationStep.text
+                color: simulationStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
         ItemDelegate {
             id: reviewStep
@@ -173,6 +204,12 @@ ApplicationWindow {
                 radius: 8
                 color: reviewStep.highlighted ? "#e9efff" : "transparent"
                 border.color: reviewStep.highlighted ? "#2e65e7" : "transparent"
+            }
+            contentItem: Label {
+                text: reviewStep.text
+                color: reviewStep.highlighted ? "#2e65e7" : "#1e2b32"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
         }
     }
@@ -276,19 +313,33 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        // A plain Item, not a RowLayout: `contextPanel` below needs both its
+        // `width` and whether it stretches to the full workspace width to
+        // flip together, in the same tick, whenever `window.wideStep`
+        // toggles (Preliminary/Review vs. the other three screens). Qt
+        // Quick Layouts was observed to sometimes miss re-arranging a
+        // `RowLayout` child when two of its `Layout.*` attached properties
+        // (`Layout.fillWidth` and `Layout.preferredWidth`) change in the
+        // same evaluation -- `contextPanel` could then stay latched at its
+        // narrow width even though `wideStep` had already flipped true.
+        // Plain `width` bindings (not `Layout.*` attached properties) do
+        // not go through that codepath and were never observed to go
+        // stale, so both children size themselves directly instead of
+        // relying on a `RowLayout` to arrange them.
+        Item {
             id: workspace
             objectName: "workspace"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
 
             Rectangle {
                 id: canvasCard
                 objectName: "canvasCard"
                 visible: !window.wideStep
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: window.wideStep ? 0 : parent.width - contextPanel.width - 10
                 color: "#fbfaf8"
                 radius: 10
                 border.color: "#d8d4cd"
@@ -352,20 +403,36 @@ ApplicationWindow {
             Rectangle {
                 id: contextPanel
                 objectName: "contextPanel"
-                Layout.fillWidth: window.wideStep
-                Layout.preferredWidth: window.wideStep
-                    ? window.width
-                    : Math.max(330, Math.min(410, window.width * 0.29))
-                Layout.minimumWidth: 300
-                Layout.fillHeight: true
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: Math.max(300, window.wideStep
+                    ? parent.width
+                    : Math.max(330, Math.min(410, window.width * 0.29)))
                 color: "#fbfaf8"
                 radius: 10
                 border.color: "#d8d4cd"
 
-                StackLayout {
+                // A plain Item, not a `StackLayout`: `StackLayout` (and,
+                // through it, each screen's own nested `ColumnLayout`s and
+                // `GridLayout`s) was observed to sometimes leave a
+                // non-current screen latched at a *previous* size -- most
+                // clearly, failing to shrink a screen's `Layout.fillWidth`
+                // fields back down after `contextPanel` had been widened for
+                // Preliminary/Review and then narrowed again for one of the
+                // other three screens, even though the screen's own
+                // top-level `width` (an ordinary property, not something a
+                // Layout's internal arrange-on-dependency-change bookkeeping
+                // touches) read back correctly the whole time. Every screen
+                // stays permanently `visible: true` (never `false`, which is
+                // when Qt Quick Layouts was seen skipping the re-arrange
+                // that would have caught the size change) and is instead
+                // shown or hidden with `opacity`/`enabled`.
+                Item {
+                    id: stepPagesHost
+                    objectName: "stepPagesHost"
                     anchors.fill: parent
                     anchors.margins: 4
-                    currentIndex: guidedStepList.currentIndex
 
                     CoreMaterialPanel {
                         // Deviation from the task brief: the brief's Main.qml
@@ -380,23 +447,38 @@ ApplicationWindow {
                         // findChild. No test references
                         // "coreMaterialPanelHost", so the override is simply
                         // omitted.
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 0 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 0
                         controller: coreMaterialController
                     }
 
                     WindingPanel {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 1 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 1
                         controller: guidedStudioController
                     }
 
                     PreliminaryPage {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 2 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 2
                         controller: preliminaryController
                     }
 
                     SimulationPanel {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 3 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 3
                         controller: simulationController
                         generation: generationController
                     }
 
                     ReviewPage {
+                        anchors.fill: parent
+                        opacity: guidedStepList.currentIndex === 4 ? 1 : 0
+                        enabled: guidedStepList.currentIndex === 4
                         controller: reviewController
                     }
                 }

@@ -28,24 +28,37 @@ Pane {
     Component.onCompleted: refreshManualFields()
 
     ScrollView {
+        id: coreMaterialScrollView
+        objectName: "coreMaterialScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: coreMaterialPanel.width - 24
+            width: coreMaterialScrollView.width - coreMaterialScrollView.leftPadding
+                - coreMaterialScrollView.scrollBarReserve
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Core & Material")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Pair a core with an exact material revision")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -195,18 +208,41 @@ Pane {
                 }
             }
 
-            CheckBox {
-                id: manualCompatibilityCheckBox
-                objectName: "manualCompatibilityCheckBox"
+            // A native style (this app sets none explicitly, so it is
+            // whatever Qt Quick Controls resolves to on the host platform)
+            // refuses to let a `CheckBox` customize its `contentItem` --
+            // overriding it to wrap this long acknowledgement text produced
+            // a `QML Label: The current style does not support
+            // customization of this control` warning and, on a style that
+            // truly ignores the override, would silently not wrap at all.
+            // A plain `CheckBox` also cannot wrap its own built-in label.
+            // Splitting the checkbox itself (indicator only, text left
+            // empty) from an ordinary wrapping `Label` beside it sidesteps
+            // both problems without touching CheckBox's internals.
+            RowLayout {
+                id: manualCompatibilityRow
+                objectName: "manualCompatibilityRow"
                 Layout.fillWidth: true
                 visible: coreMaterialPanel.controller !== null
                     && coreMaterialPanel.controller.acknowledgementRequired
-                checked: coreMaterialPanel.controller !== null
-                    && coreMaterialPanel.controller.acknowledged
-                activeFocusOnTab: true
-                text: qsTr("I accept that core and material compatibility is my assumption for this manual core")
-                Accessible.name: text
-                onToggled: coreMaterialPanel.controller.setAcknowledged(checked)
+                spacing: 8
+
+                CheckBox {
+                    id: manualCompatibilityCheckBox
+                    objectName: "manualCompatibilityCheckBox"
+                    Layout.alignment: Qt.AlignTop
+                    checked: coreMaterialPanel.controller !== null
+                        && coreMaterialPanel.controller.acknowledged
+                    activeFocusOnTab: true
+                    Accessible.name: qsTr("I accept that core and material compatibility is my assumption for this manual core")
+                    onToggled: coreMaterialPanel.controller.setAcknowledged(checked)
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("I accept that core and material compatibility is my assumption for this manual core")
+                    wrapMode: Text.WordWrap
+                    color: "#1e2b32"
+                }
             }
 
             Button {

@@ -34,24 +34,37 @@ Pane {
     Component.onCompleted: refreshFields()
 
     ScrollView {
+        id: simulationScrollView
+        objectName: "simulationScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: simulationPanel.width - 24
+            width: simulationScrollView.width - simulationScrollView.leftPadding
+                - simulationScrollView.scrollBarReserve
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Simulation")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Configure a run")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -96,13 +109,24 @@ Pane {
                 onActivated: simulationPanel.controller.setMeshIntent(currentText)
             }
 
+            // `width: parent.width`, not `Layout.fillWidth: true`: matches
+            // `WindingPanel.qml`'s nested `GridLayout`s -- an ordinary
+            // property binding tracks the `ColumnLayout`'s width reliably
+            // even after it shrinks, where `Layout.fillWidth`'s internal
+            // re-arrange was observed not to (see `WindingPanel.qml` for the
+            // feedback-loop staleness this avoids). Both labels also get
+            // `Layout.fillWidth: true` / `Layout.minimumWidth: 0` /
+            // `wrapMode: Text.WordWrap`, the same idiom `WindingPanel.qml`
+            // uses for every label beside a shrinkable field, so a longer
+            // label added here later shares the row with its field instead
+            // of claiming it outright.
             GridLayout {
-                Layout.fillWidth: true
+                width: parent.width
                 columns: 2
                 columnSpacing: 10
                 rowSpacing: 8
 
-                Label { text: qsTr("Maximum passes") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Maximum passes") }
                 TextField {
                     id: passesField
                     objectName: "simulationMaximumPassesField"
@@ -118,7 +142,7 @@ Pane {
                         }
                     }
                 }
-                Label { text: qsTr("Percent error") }
+                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Percent error") }
                 TextField {
                     id: percentErrorField
                     objectName: "simulationPercentErrorField"

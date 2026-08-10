@@ -8,24 +8,37 @@ Pane {
     property var controller: null
 
     ScrollView {
+        id: reviewScrollView
+        objectName: "reviewScrollView"
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
+        // Reserve the vertical scrollbar's own fixed width unconditionally
+        // instead of binding to `availableWidth`: `availableWidth` reserves
+        // for the scrollbar based on content height, which here depends on
+        // this column's own width (wrapping `Label`s) -- see
+        // `WindingPanel.qml` for the feedback-loop staleness this avoids.
+        property real scrollBarReserve: ScrollBar.vertical ? ScrollBar.vertical.width : 0
 
         ColumnLayout {
-            width: reviewPage.width - 24
+            width: reviewScrollView.width - reviewScrollView.leftPadding
+                - reviewScrollView.scrollBarReserve
             spacing: 12
 
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Design / Review")
                 font.pixelSize: 11
                 font.letterSpacing: 1.2
+                wrapMode: Text.WordWrap
                 color: "#6d7a7e"
             }
             Label {
+                Layout.fillWidth: true
                 text: qsTr("Review before generation")
                 font.pixelSize: 24
                 font.bold: true
+                wrapMode: Text.WordWrap
                 color: "#1e2b32"
             }
             Label {
@@ -63,6 +76,7 @@ Pane {
                             spacing: 8
                             Label {
                                 Layout.preferredWidth: 240
+                                Layout.minimumWidth: 0
                                 text: modelData.label
                                 color: "#6d7a7e"
                                 wrapMode: Text.WordWrap
