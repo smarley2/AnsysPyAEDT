@@ -78,7 +78,9 @@ before the next plan freezes assumptions that depend on it.
 - **Milestone 8 is split into three plans**, for the same reason M7 was: its
   approved scope covers three independently testable subsystems, each with its
   own failure modes and its own live evidence.
-  - **M8a is the active plan**, not yet implemented:
+  - **M8a implementation is complete and awaiting Fabio Posser's live
+    verification** (only he accepts a milestone); the evidence record is
+    [m8a-live-solve-evidence.md](../../development/m8a-live-solve-evidence.md):
     [2026-08-10 M8a solve execution](2026-08-10-m8a-solve-execution.md) —
     solve execution on all three backends, stage progress, cooperative
     cancellation between stages, a durable `running` manifest, failed-stage
