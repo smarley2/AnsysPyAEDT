@@ -54,8 +54,11 @@ before the next plan freezes assumptions that depend on it.
     still owns every screen, including the `Show solver window` choice and the
     `Open generated file` / `Open run folder` buttons, and M8 still owns
     `results/` population.
-  - **M7c implementation is complete and awaiting Fabio Posser's
-    verification** (only he accepts a milestone):
+  - **M7c, accepted by Fabio Posser on 2026-08-10** and merged to `main` as
+    `c9d980f` after his visual walkthrough of the wired Windows application
+    (step rail order, the separate Material Studio window, the full-width
+    `Preliminary`/`Review` layout, and the disabled-until-saved `Generate`
+    button):
     [2026-07-30 M7c guided-studio-flow](2026-07-30-m7c-guided-studio-flow.md)
     — the five-screen Guided Studio flow, `Core & Material`, `Windings`,
     `Preliminary`, `Simulation`, `Review`, with bidirectional core/material

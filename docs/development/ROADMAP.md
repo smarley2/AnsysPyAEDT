@@ -708,8 +708,22 @@ and `results/` population to M8.
 
 ### Current state
 
-Milestone 7c implementation is **complete and awaiting Fabio Posser's
-verification** (only he accepts a milestone). `main.py` now constructs and
+**Milestone 7c was accepted by Fabio Posser on 2026-08-10**, after he ran the
+visual walkthrough of the wired Windows application that was the last
+outstanding item: the step rail order, the separate Material Studio window,
+the full-width `Preliminary` and `Review` layout, and the
+disabled-until-saved `Generate` button. The accepted code is on `main` as
+merge commit `c9d980f` (pull request #5), which carries the Guided Studio
+flow merged as `b0f1584` (pull request #4) plus the panel-containment fix,
+the `File`/`Help` menus, and AC-only generation for Maxwell 2D and FEMM.
+
+The non-live gate on the accepted tree was clean: Ruff clean, strict mypy
+clean across 124 source files, `tools.check_architecture` clean, and
+`pytest -n 8 -m "not aedt and not femm"` reporting 1161 passed in 25.41 s.
+No live AEDT or FEMM claim is added by this acceptance; the last live
+evidence remains the M7b and M5a runs already recorded above.
+
+`main.py` now constructs and
 shares one `ProjectSession`, one `SqliteCatalogRepository`, and one
 `FileOverlayMaterialRepository` across all five controllers, so a material
 imported in the Material Studio window is visible to the Core & Material
@@ -727,13 +741,9 @@ plan deleted Material Studio's `Select for simulation` writer, so the Core &
 Material screen pins into the session and the top-bar `Save` persists it —
 which is also what the run gate above requires.
 
-Still outstanding: the visual walkthrough of the wired application (launch
-the Windows UI, check the step rail order, the Material Studio window, the
-full-width Preliminary/Review layout, and the disabled-until-saved Generate
-button) has not been performed in this headless environment and remains for
-Fabio Posser to confirm.
-
-M7a, M7b, and M7c together complete Milestone 7.
+M7a, M7b, and M7c are all accepted, so **Milestone 7 is complete as of
+2026-08-10**. Milestone 8 is the next milestone and needs its detailed plan
+before implementation.
 
 ## Milestone 8: Simulation and Results
 
