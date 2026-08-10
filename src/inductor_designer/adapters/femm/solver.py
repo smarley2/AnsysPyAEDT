@@ -11,6 +11,15 @@ from inductor_designer.application.ports.femm_solver import (
     FemmSolveResult,
     FemmWindingResult,
 )
+from inductor_designer.simulation.run_control import (
+    StagePhase,
+)
+from inductor_designer.simulation.run_control import (
+    emit_stage_event as _emit,
+)
+from inductor_designer.simulation.run_control import (
+    is_cancelled as _cancelled,
+)
 
 _NONE_CIRCUIT = "<None>"
 _AIR_MATERIAL = "Air"
@@ -107,8 +116,10 @@ class PyfemmSolver:
         messages: list[str] = []
         results: dict[str, FemmWindingResult] | None = None
 
+        analyzed = False
         femm = self._factory.create()
         try:
+            _emit(request.progress, "generate", StagePhase.STARTED, None)
             # pyfemm takes the *hide* flag: 1 hides the window, 0 shows it.
             femm.openfemm(0 if request.show_window else 1)
             femm.newdocument(0)
@@ -174,8 +185,16 @@ class PyfemmSolver:
             if not fem_path.exists():
                 raise RuntimeError(f"mi_saveas did not create {fem_path}")
             messages.append(f"Saved {fem_path}.")
+            _emit(request.progress, "generate", StagePhase.SUCCEEDED, messages[-1])
 
-            if request.analyze:
+            if request.analyze and _cancelled(request.cancellation):
+                messages.append("Run cancelled before the FEMM analysis.")
+                _emit(
+                    request.progress, "analyze", StagePhase.CANCELLED, messages[-1]
+                )
+            elif request.analyze:
+                _emit(request.progress, "analyze", StagePhase.STARTED, None)
+                analyzed = True
                 femm.mi_analyze(1)
                 femm.mi_loadsolution()
                 results = {}
@@ -209,12 +228,13 @@ class PyfemmSolver:
                         flux_linkage_wb=(flux.real, flux.imag),
                     )
                 messages.append(f"Analyzed; {len(results)} circuit(s) extracted.")
+                _emit(request.progress, "analyze", StagePhase.SUCCEEDED, messages[-1])
         finally:
             femm.closefemm()
 
         return FemmSolveResult(
             fem_path=fem_path,
-            analyzed=request.analyze,
+            analyzed=analyzed,
             results=results,
             messages=tuple(messages),
             adapter_version=self._observed_version("adapter_version"),

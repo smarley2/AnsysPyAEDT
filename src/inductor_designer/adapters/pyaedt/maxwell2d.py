@@ -7,12 +7,6 @@ from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
 )
 from inductor_designer.adapters.pyaedt.stage_progress import (
-    cancelled as _cancelled,
-)
-from inductor_designer.adapters.pyaedt.stage_progress import (
-    emit as _emit,
-)
-from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
 from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExportRequest
@@ -25,7 +19,15 @@ from inductor_designer.simulation.maxwell_plan import (
     COPPER_MATERIAL,
     INITIAL_MESH_SLIDER_LEVEL,
 )
-from inductor_designer.simulation.run_control import StagePhase
+from inductor_designer.simulation.run_control import (
+    StagePhase,
+)
+from inductor_designer.simulation.run_control import (
+    emit_stage_event as _emit,
+)
+from inductor_designer.simulation.run_control import (
+    is_cancelled as _cancelled,
+)
 
 
 class Maxwell2dApp(Protocol):

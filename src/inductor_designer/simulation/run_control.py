@@ -59,3 +59,17 @@ class StageEvent:
 
 class ProgressSink(Protocol):
     def emit(self, event: StageEvent) -> None: ...
+
+
+def emit_stage_event(
+    progress: ProgressSink | None,
+    stage_name: str,
+    phase: StagePhase,
+    message: str | None,
+) -> None:
+    if progress is not None:
+        progress.emit(StageEvent(stage_name=stage_name, phase=phase, message=message))
+
+
+def is_cancelled(token: CancellationToken | None) -> bool:
+    return token is not None and token.cancelled
