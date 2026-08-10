@@ -228,7 +228,8 @@ In 2D, `A` is the evaluated core or conductor region. In 3D, `A` is a
 Representative Cross Section. M8 must define a deterministic section-selection
 algorithm before implementation, record every section in the Run Manifest,
 report each section mean, and report the worst section mean. A volume average
-does not satisfy this requirement.
+does not satisfy this requirement. That algorithm is defined in the approved
+[2026-08-10 Representative Cross Sections design](2026-08-10-representative-cross-sections-design.md).
 
 For a sinusoidal AC component, RMS field values are derived from peak values
 only when that relationship is physically valid for the extracted quantity and
