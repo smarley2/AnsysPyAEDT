@@ -103,12 +103,53 @@ def test_maxwell2d_solve_mode_reaches_analyze(tmp_path: Path) -> None:
     ]
 
 
-def test_solve_mode_manifest_carries_no_results_in_m8a(tmp_path: Path) -> None:
-    result = solve_run(tmp_path)
+def test_a_solved_run_populates_the_manifest_results(tmp_path: Path) -> None:
+    result = solve_run(tmp_path, RunBackend.FEMM)
+
+    assert result.outcome.manifest.results is not None
+    document = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert document["results"]["quantities"]
+
+
+def test_a_generate_only_run_still_has_no_results(tmp_path: Path) -> None:
+    result = start_project_run(
+        project_for_runs(),
+        saved_project(tmp_path),
+        RunRequest(RunBackend.FEMM, RunMode.GENERATE_ONLY),
+        CATALOG,
+        CAPABILITIES,
+        maxwell3d_exporter=RecordingMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        application_version="0.7.0-test",
+        now=MOMENT,
+    )
 
     assert result.outcome.manifest.results is None
+    assert not (result.location.results_directory / "results.json").exists()
+
+
+def test_the_export_files_land_beside_the_solve_log(tmp_path: Path) -> None:
+    result = solve_run(tmp_path, RunBackend.FEMM)
+
+    directory = result.location.results_directory
+    assert (directory / "results.json").is_file()
+    assert (directory / "results.csv").is_file()
     document = json.loads(result.manifest_path.read_text(encoding="utf-8"))
-    assert document["results"] is None
+    kinds = {artifact["kind"] for artifact in document["artifacts"]}
+    assert {"results-json", "results-csv", "solve-log"} <= kinds
+
+
+def test_a_cancelled_run_writes_no_result_files(tmp_path: Path) -> None:
+    token = CancellationToken()
+    token.cancel()
+
+    with pytest.raises(ProjectRunCancelled) as cancelled:
+        solve_run(tmp_path, RunBackend.FEMM, cancellation=token)
+
+    directory = cancelled.value.location.results_directory
+    assert not (directory / "results.json").exists()
+    assert (directory / "solve-log.txt").is_file()
 
 
 def test_generate_only_still_never_asks_for_a_solve(tmp_path: Path) -> None:

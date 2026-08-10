@@ -196,7 +196,12 @@ def test_generate_and_solve_reaches_the_adapter_asking_for_a_solve(
     )
 
     assert outcome.manifest.status is RunStatus.SUCCEEDED
-    assert outcome.manifest.results is None, "M8a normalizes nothing"
+    if backend is RunBackend.FEMM:
+        # Only the FEMM fake reports raw values; the Maxwell fakes do not, and
+        # a backend that reported nothing must not invent a result set.
+        assert outcome.manifest.results is not None
+    else:
+        assert outcome.manifest.results is None
     if backend is RunBackend.MAXWELL_3D:
         assert maxwell3d.requests[0].solve is True
     elif backend is RunBackend.MAXWELL_2D:
