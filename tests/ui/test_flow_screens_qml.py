@@ -138,7 +138,7 @@ def _winding_table_geometry(root: QObject, width: int) -> list[tuple[float, floa
     assert header is not None
     header_cells = list(header.childItems())
     row_cells = _winding_table_row_cells(root)
-    assert len(header_cells) == len(row_cells) == 8
+    assert len(header_cells) == len(row_cells) == 9
 
     geometry: list[tuple[float, float]] = []
     for header_cell, row_cell in zip(header_cells, row_cells, strict=True):
@@ -173,7 +173,7 @@ def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
     }
 
     for width, geometry in geometry_by_width.items():
-        for column in range(8):
+        for column in range(9):
             header_geom = geometry[2 * column]
             data_geom = geometry[2 * column + 1]
             assert header_geom == data_geom, (
@@ -181,8 +181,8 @@ def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
                 f"header (x, width)={header_geom} data (x, width)={data_geom}"
             )
 
-    narrow_widths = [geometry_by_width[1000][2 * c][1] for c in range(8)]
-    wide_widths = [geometry_by_width[1786][2 * c][1] for c in range(8)]
+    narrow_widths = [geometry_by_width[1000][2 * c][1] for c in range(9)]
+    wide_widths = [geometry_by_width[1786][2 * c][1] for c in range(9)]
     assert narrow_widths == wide_widths, (
         f"column widths must not scale with the window: "
         f"at 1000px={narrow_widths}, at 1786px={wide_widths}"
@@ -201,7 +201,7 @@ def test_preliminary_page_shows_core_winding_totals_and_assumptions() -> None:
         "preliminaryMaterialLabel",
     ):
         assert root.findChild(QObject, name) is not None, name
-    assert root.findChild(QObject, "preliminaryCoreTable").property("count") == 6
+    assert root.findChild(QObject, "preliminaryCoreTable").property("count") == 15
     assert root.findChild(QObject, "preliminaryTotalsTable").property("count") == 3
     assert (
         make_material_record().revision_id
