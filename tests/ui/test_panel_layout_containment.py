@@ -60,6 +60,7 @@ from __future__ import annotations
 import gc
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -212,20 +213,86 @@ def _build_engine() -> tuple[QGuiApplication, QObject, QObject]:
     return app, root, steps
 
 
-def _settle(app: QGuiApplication, root: QObject, count: int = 10) -> None:
-    for _ in range(count):
+def _walk_items(item: QObject) -> Iterator[QObject]:
+    """Every `QQuickItem` under `item`, depth first."""
+    for child in item.childItems():
+        yield child
+        yield from _walk_items(child)
+
+
+def _stop_highlight_animations(root: QObject) -> None:
+    """Make every `ListView`'s highlight follow its current item instantly.
+
+    A `ListView` moves and resizes its `highlightItem` with a
+    `SmoothedAnimation` (`highlightMoveVelocity`/`highlightResizeVelocity`,
+    400px/s by default), so after a screen's tables have been laid out at one
+    width and then re-laid out narrower, the highlight spends a few hundred
+    *milliseconds of wall-clock time* gliding down to the new row width --
+    overhanging `availableWidth` the whole way. That is what this test used to
+    catch intermittently under `pytest -n 8` (`right_edge=287.6 >
+    available_width=281.0`): not a layout that had not finished, but an
+    animation driven by the clock, whose progress at assertion time depended
+    on how much wall time the fixed `processEvents()` count happened to burn
+    on a loaded machine. Zeroing the durations makes the highlight land on its
+    final geometry within the same polish pass as the layout it follows, so
+    the window converges to a single fixed state that `_settle` can detect --
+    and the highlight is still measured, so one that really does overhang
+    still fails.
+    """
+    for item in _walk_items(root.property("contentItem")):
+        if "ListView" in item.metaObject().className():
+            item.setProperty("highlightMoveDuration", 0)
+            item.setProperty("highlightResizeDuration", 0)
+
+
+def _geometry_signature(root: QObject) -> tuple[tuple[float, float, float], ...]:
+    """Position and size of every item in the window, as a comparable value.
+
+    Geometry only: the screens are shown and hidden with `opacity` (see the
+    module docstring), and a signature that included opacity would keep
+    changing while a fade the layout does not depend on is still running.
+    """
+    return tuple(
+        (item.property("x"), item.property("width"), item.property("height"))
+        for item in _walk_items(root.property("contentItem"))
+    )
+
+
+def _settle(app: QGuiApplication, root: QObject, max_rounds: int = 40) -> None:
+    """Drive the window until its geometry stops changing.
+
+    The offscreen QPA platform has no screen to repaint, so nothing guarantees
+    `QQuickWindow`'s polish-and-sync pass (which is what actually runs a dirty
+    `ColumnLayout`'s re-arrange) ever runs just from draining the event queue
+    -- `grabWindow()` forces exactly that pass synchronously. One pass is not
+    always enough: a re-arrange can dirty a parent or a child that only
+    re-arranges on the next pass, and how far that cascade had got by
+    assertion time is not something a fixed number of passes can pin down.
+    Pump until the whole window's geometry comes out identical twice in a row
+    instead, which is what "the layout has settled" actually means.
+
+    Two consecutive matches rather than one: a single match is also what a
+    *clock*-driven change looks like when the animation driver has not ticked
+    between two quick rounds. `_stop_highlight_animations` removes the
+    clock-driven changes this window actually has, and the extra round is the
+    cheap guard against reading a not-yet-ticked animation as settled.
+    """
+    _stop_highlight_animations(root)
+    previous: tuple[tuple[float, float, float], ...] | None = None
+    unchanged = 0
+    for _ in range(max_rounds):
         app.processEvents()
-    # The offscreen QPA platform has no screen to repaint, so nothing
-    # guarantees `QQuickWindow`'s polish-and-sync pass (which is what
-    # actually runs a dirty `ColumnLayout`'s re-arrange) ever runs just from
-    # draining the event queue -- `grabWindow()` forces exactly that pass
-    # synchronously. Without this, whether a Layout's pending re-arrange had
-    # actually been applied by the time the test asserts depended on
-    # incidental scheduling from *other* windows/timers in the process,
-    # which is what made this test flaky before this call was added.
-    root.grabWindow()
-    for _ in range(count):
+        root.grabWindow()
         app.processEvents()
+        current = _geometry_signature(root)
+        unchanged = unchanged + 1 if current == previous else 0
+        if unchanged == 2:
+            return
+        previous = current
+    raise AssertionError(
+        f"window geometry was still changing after {max_rounds} polish passes: "
+        "the layout does not converge, which is a real bug and not a slow test"
+    )
 
 
 def _go_to(app: QGuiApplication, steps: QObject, root: QObject, index: int) -> None:
@@ -303,8 +370,7 @@ def test_screen_content_fits_the_scroll_view_when_visited_first(
     scroll_view = _scroll_view_of(panel)
     violations = _overflowing_descendants(scroll_view)
     assert not violations, (
-        f"{STEP_NAMES[index]} at width={width}, height={height}, visited first: "
-        f"{violations}"
+        f"{STEP_NAMES[index]} at width={width}, height={height}, visited first: {violations}"
     )
 
 
@@ -327,6 +393,5 @@ def test_screen_content_fits_the_scroll_view_after_visiting_others(
     scroll_view = _scroll_view_of(panel)
     violations = _overflowing_descendants(scroll_view)
     assert not violations, (
-        f"{STEP_NAMES[index]} at width={width}, height={height}, "
-        f"visited after others: {violations}"
+        f"{STEP_NAMES[index]} at width={width}, height={height}, visited after others: {violations}"
     )
