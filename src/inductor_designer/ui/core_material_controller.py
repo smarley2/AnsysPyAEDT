@@ -274,6 +274,18 @@ class CoreMaterialController(QObject):
         self.materialStudioRequested.emit()
 
     @Slot()
+    def refresh(self) -> None:
+        """Re-read the pinned core/material after the session project itself
+        was replaced wholesale (Open), rather than edited through this
+        controller."""
+        self._acknowledged = (
+            self._session.project.design.manual_material_compatibility_acknowledged
+        )
+        self._set_message("")
+        self.optionsChanged.emit()
+        self.selectionChanged.emit()
+
+    @Slot()
     def refreshLibrary(self) -> None:
         """Re-read the library after the Material Studio window closed."""
         try:

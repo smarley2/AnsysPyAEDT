@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,6 +9,7 @@ if TYPE_CHECKING:
     from PySide6.QtQml import QQmlApplicationEngine
 
     from inductor_designer.domain.project import InductorProject
+    from inductor_designer.ui.app_info_controller import AppInfoController
     from inductor_designer.ui.core_material_controller import CoreMaterialController
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.guided_studio_controller import GuidedStudioController
@@ -42,6 +42,7 @@ def create_engine(
     preliminary_controller: PreliminaryController | None = None,
     simulation_controller: SimulationController | None = None,
     review_controller: ReviewController | None = None,
+    app_info_controller: AppInfoController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -61,6 +62,7 @@ def create_engine(
     engine.rootContext().setContextProperty("preliminaryController", preliminary_controller)
     engine.rootContext().setContextProperty("simulationController", simulation_controller)
     engine.rootContext().setContextProperty("reviewController", review_controller)
+    engine.rootContext().setContextProperty("appInfo", app_info_controller)
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -93,7 +95,6 @@ def _build_generation_controller(
     session: ProjectSession,
     catalog_path: Path,
     matrix_path: Path,
-    project_document_path: Path,
 ) -> GenerationController:
     from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
     from inductor_designer.adapters.compatibility.matrix_repository import (
@@ -121,6 +122,13 @@ def _build_generation_controller(
 
     def runner(backend_label: str, show_solver_window: bool) -> GenerationResult:
         project = session.project
+        # Read the path live rather than capturing it at construction: Open
+        # and Save As can move it after this controller was built, and
+        # `SimulationController`'s run gate already refuses to call here at
+        # all while it is unset.
+        document_path = session.document_path
+        if document_path is None:
+            raise RuntimeError("The project has no document path to generate into.")
         capabilities = matrix.snapshot_for(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
@@ -129,7 +137,7 @@ def _build_generation_controller(
         return run_generation(
             backend,
             project,
-            project_document_path,
+            document_path,
             catalog,
             capabilities,
             maxwell3d_exporter=maxwell3d_exporter,
@@ -201,30 +209,30 @@ def main() -> int:
     from inductor_designer.adapters.materials import FileOverlayMaterialRepository
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
 
-    project_save_callback: Callable[[InductorProject], None] | None = None
-    if project is not None and args.project is not None:
+    session: ProjectSession | None = None
+    if project is not None:
         from inductor_designer.adapters.persistence.project_repository import (
             ProjectRepository,
         )
         from inductor_designer.adapters.persistence.schema_repository import (
             SchemaRepository,
         )
-
-        project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
-
-        def save_project(updated_project: InductorProject) -> None:
-            project_repository.save(updated_project, args.project)
-
-        project_save_callback = save_project
-
-    session: ProjectSession | None = None
-    if project is not None:
         from inductor_designer.ui.project_session import ProjectSession
 
-        session = ProjectSession(project, args.project, project_save_callback)
-        generation_controller = _build_generation_controller(
-            session, args.catalog, args.matrix, args.project
-        )
+        project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
+        session = ProjectSession(project, args.project, open_callback=_load_project)
+
+        def save_project(updated_project: InductorProject) -> None:
+            # Reads the session's *current* document path, not `args.project`:
+            # Open and Save As can move it after startup, and Save must always
+            # follow, never keep writing to where the app happened to start.
+            document_path = session.document_path
+            if document_path is None:
+                raise RuntimeError("The project has no document path to save into.")
+            project_repository.save(updated_project, document_path)
+
+        session.set_save_callback(save_project)
+        generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
 
     material_repository = FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY)
     material_studio_controller = MaterialStudioController(
@@ -285,7 +293,15 @@ def main() -> int:
         # constructor, so it is deliberately not connected again here.
         session.projectChanged.connect(preliminary_controller.refresh)
         session.projectChanged.connect(guided_studio_controller.refresh)
+        session.projectChanged.connect(core_material_controller.refresh)
 
+    from inductor_designer.ui.app_info_controller import AppInfoController
+
+    # Assigned to a name, not passed inline: a QObject with no Qt-parent and
+    # no surviving Python reference is garbage collected out from under
+    # `setContextProperty`, and `main()`'s own stack frame (alive until
+    # `app.exec()` returns) is what keeps this one alive.
+    app_info_controller = AppInfoController()
     engine = create_engine(
         preview_entries,
         simulation_summary,
@@ -298,6 +314,7 @@ def main() -> int:
         preliminary_controller,
         simulation_controller,
         review_controller,
+        app_info_controller,
     )
     roots = engine.rootObjects()
     if not roots:

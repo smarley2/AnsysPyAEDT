@@ -10,7 +10,7 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QObject  # noqa: E402
-from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtGui import QAccessible, QGuiApplication  # noqa: E402
 
 from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
     GuidedStudioController,
@@ -80,12 +80,21 @@ def test_every_specified_winding_and_operating_point_input_is_present() -> None:
 
 
 def test_numeric_fields_carry_a_native_validator_and_an_accessible_name() -> None:
+    """`field.property("Accessible.name")` cannot see the attached
+    `Accessible.name` property at all -- it always returns `None` -- and
+    `field.property("text") is not None` is always `True` for a `TextField`
+    (even an empty one reads back `""`, never `None`), so the original `or`
+    assertion passed regardless of whether `Accessible.name` was set. Query
+    the real accessibility bridge instead.
+    """
     _, root, _ = open_windings()
 
     for name in NUMERIC_FIELDS:
         field = root.findChild(QObject, name)
         assert field.property("validator") is not None, name
-        assert field.property("Accessible.name") or field.property("text") is not None
+        interface = QAccessible.queryAccessibleInterface(field)
+        assert interface is not None, name
+        assert interface.text(QAccessible.Name) != "", name
 
 
 def test_turns_accept_only_integers() -> None:

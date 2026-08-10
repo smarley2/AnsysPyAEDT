@@ -51,6 +51,10 @@ class SimulationController(QObject):
         self._backend = GenerationBackend.MAXWELL_3D
         self._show_solver_window = False
         session.dirtyChanged.connect(self.gateChanged)
+        # `documentPath` changes on Open/Save As without necessarily also
+        # changing `dirty` (a freshly opened project is clean both before and
+        # after), so the gate needs its own hook on that signal too.
+        session.documentPathChanged.connect(self.gateChanged)
         generation.busyChanged.connect(self.gateChanged)
 
     def _get_backend_options(self) -> list[str]:

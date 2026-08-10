@@ -529,6 +529,15 @@ class GuidedStudioController(QObject):
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )
+        # A whole different project (Open) almost certainly does not contain
+        # the previously-selected winding id; a core edit to the same project
+        # (the other caller of `refresh`) never removes a winding, so this is
+        # a no-op there.
+        if self._selected_winding_id not in {item["windingId"] for item in self._windings}:
+            self._selected_winding_id = (
+                project.design.windings[0].winding_id if project.design.windings else ""
+            )
+            self.selectedWindingIdChanged.emit()
         self.windingsChanged.emit()
         self.previewEntriesChanged.emit()
         self.operatingPointChanged.emit()
