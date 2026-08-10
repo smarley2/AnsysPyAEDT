@@ -37,6 +37,23 @@ class RawConvergence:
 
 
 @dataclass(frozen=True, slots=True)
+class RawFieldSection:
+    """One evaluated area: a 3D cross section, or a 2D region.
+
+    ``mean`` is the area-weighted mean of the field magnitude over ``area_m2``;
+    a volume average never appears here. ``None`` with a ``diagnostic`` means
+    this one area failed to evaluate while its neighbours may have succeeded.
+    """
+
+    section_id: str
+    scope: str
+    area_m2: float
+    mean: float | None
+    maximum: float | None
+    diagnostic: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RawScalarResults:
     windings: tuple[RawWindingResult, ...] = ()
     matrices: tuple[RawMatrix, ...] = ()
@@ -47,3 +64,5 @@ class RawScalarResults:
     convergence: RawConvergence | None = None
     solver_status: str | None = None
     diagnostics: tuple[str, ...] = ()
+    flux_density_sections: tuple[RawFieldSection, ...] = ()
+    current_density_sections: tuple[RawFieldSection, ...] = ()

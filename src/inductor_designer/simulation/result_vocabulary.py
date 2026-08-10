@@ -24,6 +24,12 @@ SCALAR_QUANTITIES: tuple[RequestedOutput, ...] = (
     RequestedOutput.CONVERGENCE,
 )
 
+# The field half, owned by M8c: reported per section, never per device.
+FIELD_QUANTITIES: tuple[RequestedOutput, ...] = (
+    RequestedOutput.FLUX_DENSITY,
+    RequestedOutput.CURRENT_DENSITY,
+)
+
 # Quantities reported once per winding rather than once per device.
 PER_WINDING_QUANTITIES: tuple[RequestedOutput, ...] = (
     RequestedOutput.RESISTANCE,
@@ -41,6 +47,8 @@ _UNITS: dict[RequestedOutput, str] = {
     RequestedOutput.TOTAL_LOSS: "W",
     RequestedOutput.MAGNETIC_ENERGY: "J",
     RequestedOutput.CONVERGENCE: "percent",
+    RequestedOutput.FLUX_DENSITY: "T",
+    RequestedOutput.CURRENT_DENSITY: "A/m^2",
 }
 
 # A loss is the mean power over one cycle, so it belongs to the RMS current
@@ -58,6 +66,10 @@ _CONVENTIONS: dict[RequestedOutput, CurrentConvention] = {
     RequestedOutput.TOTAL_LOSS: CurrentConvention.AC_RMS,
     RequestedOutput.MAGNETIC_ENERGY: CurrentConvention.AC_PEAK,
     RequestedOutput.CONVERGENCE: CurrentConvention.NOT_APPLICABLE,
+    # A field value follows the excitation, which is peak (ADR 0006). A
+    # DC-biased run overrides this to COMBINED at normalization time.
+    RequestedOutput.FLUX_DENSITY: CurrentConvention.AC_PEAK,
+    RequestedOutput.CURRENT_DENSITY: CurrentConvention.AC_PEAK,
 }
 
 NOT_EXPOSED = "not_exposed"
@@ -75,6 +87,14 @@ def convention_for(quantity: RequestedOutput) -> CurrentConvention:
 
 def winding_scope(winding_id: str) -> str:
     return f"winding.{winding_id}"
+
+
+def core_section_scope(section_id: str) -> str:
+    return f"core.section.{section_id}"
+
+
+def conductor_section_scope(winding_id: str, section_id: str) -> str:
+    return f"winding.{winding_id}.section.{section_id}"
 
 
 def reason_code(quantity: RequestedOutput, reason: str) -> str:
