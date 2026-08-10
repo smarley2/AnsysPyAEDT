@@ -85,6 +85,17 @@ Pane {
                 onActivated: simulationPanel.controller.setBackend(currentText)
             }
 
+            Label { text: qsTr("Run mode") }
+            ComboBox {
+                id: modeCombo
+                objectName: "simulationModeCombo"
+                Layout.fillWidth: true
+                activeFocusOnTab: true
+                model: simulationPanel.controller !== null ? simulationPanel.controller.modeOptions : []
+                Accessible.name: qsTr("Run mode")
+                onActivated: simulationPanel.controller.setMode(currentText)
+            }
+
             Label {
                 objectName: "simulationModeLabel"
                 Layout.fillWidth: true
@@ -234,6 +245,18 @@ Pane {
                         dcBiasConfirmDialog.open()
                     }
                 }
+            }
+
+            Button {
+                objectName: "simulationCancelButton"
+                Layout.fillWidth: true
+                activeFocusOnTab: true
+                text: qsTr("Cancel run")
+                // A run stops at its next stage boundary, never mid-call, so
+                // this stays enabled for as long as the run is in flight.
+                enabled: simulationPanel.generation !== null && simulationPanel.generation.busy
+                Accessible.name: qsTr("Cancel the running solver job")
+                onClicked: simulationPanel.controller.cancel()
             }
 
             Label {

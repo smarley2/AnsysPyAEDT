@@ -194,7 +194,7 @@ def _build_engine() -> tuple[QGuiApplication, QObject, QObject]:
     guided = GuidedStudioController(session, CATALOG)
     core_material = CoreMaterialController(session, CATALOG, material_repository)
     preliminary = PreliminaryController(session, CATALOG)
-    generation = GenerationController(lambda label, show: ("done",))
+    generation = GenerationController(lambda _request: ("done",))
     simulation = SimulationController(session, generation, SUPPORTED)
     review = ReviewController(session, preliminary, generation, CATALOG, _RecordingOpener())
     engine = create_engine(

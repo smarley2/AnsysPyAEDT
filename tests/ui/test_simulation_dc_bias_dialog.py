@@ -32,6 +32,7 @@ from inductor_designer.simulation.capabilities import (  # noqa: E402
     CapabilitySnapshot,
 )
 from inductor_designer.ui.generation_controller import GenerationController  # noqa: E402
+from inductor_designer.ui.generation_lines import UiRunRequest  # noqa: E402
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
 from inductor_designer.ui.simulation_controller import SimulationController  # noqa: E402
@@ -76,8 +77,8 @@ def open_simulation_step(
     session = ProjectSession(project, Path("boost.inductor.json"), lambda p: None)
     calls: list[tuple[str, bool]] = []
 
-    def runner(backend_label: str, show_solver_window: bool) -> tuple[str, ...]:
-        calls.append((backend_label, show_solver_window))
+    def runner(request: UiRunRequest) -> tuple[str, ...]:
+        calls.append((request.backend_label, request.show_solver_window))
         return ("done",)
 
     generation = GenerationController(runner)

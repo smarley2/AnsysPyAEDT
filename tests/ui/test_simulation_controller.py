@@ -20,6 +20,7 @@ from inductor_designer.simulation.capabilities import (  # noqa: E402
     CapabilitySnapshot,
 )
 from inductor_designer.ui.generation_controller import GenerationController  # noqa: E402
+from inductor_designer.ui.generation_lines import UiRunRequest  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
 from inductor_designer.ui.simulation_controller import (  # noqa: E402
     SimulationController,
@@ -53,8 +54,8 @@ def build(
     QGuiApplication.instance() or QGuiApplication([])
     calls: list[tuple[str, bool]] = []
 
-    def runner(backend_label: str, show_solver_window: bool) -> tuple[str, ...]:
-        calls.append((backend_label, show_solver_window))
+    def runner(request: UiRunRequest) -> tuple[str, ...]:
+        calls.append((request.backend_label, request.show_solver_window))
         return ("done",)
 
     # make_project()'s default winding already carries 5 A DC; dc_current_a
@@ -122,11 +123,15 @@ def test_requested_outputs_toggle_into_the_recipe() -> None:
     assert session.project.simulation_recipe.requested_outputs == (RequestedOutput.RESISTANCE,)
 
 
-def test_the_run_mode_is_generate_only_with_a_stated_reason() -> None:
+def test_the_run_mode_defaults_to_generate_only_with_a_stated_reason() -> None:
     _, _, _, controller = build()
 
     assert controller.modeLabel == "generate-only"
-    assert "M8" in controller.modeNote or "solve" in controller.modeNote.casefold()
+    assert controller.modeOptions == ["generate-only", "generate-and-solve"]
+    assert "solve" in controller.modeNote.casefold()
+
+    assert controller.setMode("generate-and-solve") is True
+    assert "normalized results" in controller.modeNote.casefold()
 
 
 def test_visible_window_support_follows_the_backend() -> None:
@@ -149,7 +154,7 @@ def test_an_unsupported_visible_window_is_disabled_with_a_reason() -> None:
     )
     session = ProjectSession(make_project(), Path("boost.inductor.json"), lambda p: None)
     controller = SimulationController(
-        session, GenerationController(lambda label, show: ("done",)), unsupported
+        session, GenerationController(lambda _request: ("done",)), unsupported
     )
 
     assert controller.setBackend("Maxwell 3D") is True
@@ -178,7 +183,7 @@ def test_generation_is_blocked_without_a_document_path() -> None:
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project())
     controller = SimulationController(
-        session, GenerationController(lambda label, show: ("done",)), SUPPORTED
+        session, GenerationController(lambda _request: ("done",)), SUPPORTED
     )
 
     assert controller.canGenerate is False

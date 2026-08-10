@@ -34,6 +34,7 @@ from inductor_designer.simulation.run_contracts import (  # noqa: E402
 from inductor_designer.ui.generation_controller import (  # noqa: E402
     GenerationController,
 )
+from inductor_designer.ui.generation_lines import UiRunRequest  # noqa: E402
 from inductor_designer.ui.main import _build_generation_controller  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
 from tests.fakes.femm_solver import RecordingFemmSolver  # noqa: E402
@@ -52,7 +53,7 @@ pytestmark = pytest.mark.ui
 
 def test_generate_runs_stub_runner_and_reports_lines() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
-    controller = GenerationController(lambda backend_label, show_solver_window: ("a", "b"))
+    controller = GenerationController(lambda _request: ("a", "b"))
 
     assert controller.lines == []
     assert controller.busy is False
@@ -68,8 +69,8 @@ def test_generate_forwards_the_visible_window_choice() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
     seen: list[bool] = []
 
-    def runner(backend_label: str, show_solver_window: bool) -> tuple[str, ...]:
-        seen.append(show_solver_window)
+    def runner(request: UiRunRequest) -> tuple[str, ...]:
+        seen.append(request.show_solver_window)
         return ("done",)
 
     controller = GenerationController(runner)
@@ -84,8 +85,8 @@ def test_generate_ignores_calls_while_busy() -> None:
     calls: list[str] = []
     release = threading.Event()
 
-    def runner(backend_label: str, show_solver_window: bool) -> tuple[str, ...]:
-        calls.append(backend_label)
+    def runner(request: UiRunRequest) -> tuple[str, ...]:
+        calls.append(request.backend_label)
         release.wait(timeout=5.0)
         return ("done",)
 
@@ -102,7 +103,7 @@ def test_generate_ignores_calls_while_busy() -> None:
 def test_generate_handles_runner_exception() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
 
-    def failing_runner(backend_label: str, show_solver_window: bool) -> tuple[str, ...]:
+    def failing_runner(request: UiRunRequest) -> tuple[str, ...]:
         raise ValueError("test error from runner")
 
     controller = GenerationController(failing_runner)
@@ -146,7 +147,7 @@ def test_generate_retains_failed_manifest_from_runner_result(tmp_path: Path) -> 
             return iter(self.lines)
 
     controller = GenerationController(
-        lambda _backend, _show: _FailedResult()  # type: ignore[arg-type]
+        lambda _request: _FailedResult()  # type: ignore[arg-type]
     )
     controller.generate("Maxwell 3D")
     wait_until_idle(app, controller)
@@ -171,7 +172,7 @@ def test_generate_captures_project_run_failed_raised_by_runner(tmp_path: Path) -
     project_document = tmp_path / "boost.inductor.json"
     project_document.write_text("{}", encoding="utf-8")
 
-    def failing_runner(_backend_label: str, _show_solver_window: bool) -> tuple[str, ...]:
+    def failing_runner(_request: UiRunRequest) -> tuple[str, ...]:
         start_project_run(
             project_for_runs(),
             project_document,
@@ -216,7 +217,7 @@ def test_generate_captures_run_directory_and_generated_file(tmp_path: Path) -> N
     ]
     call_count: list[int] = [0]
 
-    def runner(backend_label: str, show_solver_window: bool) -> GenerationResult:
+    def runner(request: UiRunRequest) -> GenerationResult:
         result = results[call_count[0]]
         call_count[0] += 1
         return result

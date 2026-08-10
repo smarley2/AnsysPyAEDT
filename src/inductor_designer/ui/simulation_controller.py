@@ -30,10 +30,17 @@ if TYPE_CHECKING:
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.project_session import ProjectSession
 
-_MODE_NOTE = (
-    "Guided Studio generates the solver project without solving it. Generate "
-    "and Solve arrives with the M8 result artifacts."
-)
+_MODE_NOTES = {
+    RunMode.GENERATE_ONLY: (
+        "Generate Only writes the solver project and stops; open it in the "
+        "solver to run it yourself."
+    ),
+    RunMode.GENERATE_AND_SOLVE: (
+        "Generate and Solve runs the solve and reports its stages. Normalized "
+        "results arrive with M8b and M8c; this run writes the solver's own "
+        "output plus a stage log."
+    ),
+}
 
 
 class SimulationController(QObject):
@@ -53,6 +60,7 @@ class SimulationController(QObject):
         self._generation = generation
         self._capabilities = capabilities
         self._backend = GenerationBackend.MAXWELL_3D
+        self._mode = RunMode.GENERATE_ONLY
         self._show_solver_window = False
         # Set when generate() refuses because DC bias would be ignored, so
         # proceedAcOnly() can verify the confirmation the caller obtained
@@ -79,15 +87,42 @@ class SimulationController(QObject):
 
     backend = Property(str, _get_backend, notify=configurationChanged)
 
-    def _get_mode_label(self) -> str:
-        return RunMode.GENERATE_ONLY.value
+    def _get_mode_options(self) -> list[str]:
+        return [item.value for item in RunMode]
 
-    modeLabel = Property(str, _get_mode_label, constant=True)
+    modeOptions = Property(list, _get_mode_options, constant=True)
+
+    def _get_mode(self) -> str:
+        return self._mode.value
+
+    mode = Property(str, _get_mode, notify=configurationChanged)
+
+    def _get_mode_label(self) -> str:
+        return self._mode.value
+
+    modeLabel = Property(str, _get_mode_label, notify=configurationChanged)
 
     def _get_mode_note(self) -> str:
-        return _MODE_NOTE
+        return _MODE_NOTES[self._mode]
 
-    modeNote = Property(str, _get_mode_note, constant=True)
+    modeNote = Property(str, _get_mode_note, notify=configurationChanged)
+
+    @Slot(str, result=bool)
+    def setMode(self, mode_label: str) -> bool:  # noqa: N802 - Qt slot naming
+        try:
+            mode = RunMode(mode_label)
+        except ValueError:
+            self._session.set_status(f"Unknown run mode: {mode_label}")
+            return False
+        if mode is not self._mode:
+            self._mode = mode
+            self.configurationChanged.emit()
+        return True
+
+    @Slot(result=bool)
+    def cancel(self) -> bool:
+        """Ask the running backend to stop at its next stage boundary."""
+        return self._generation.cancel()
 
     def _get_mesh_intent_options(self) -> list[str]:
         return [item.value for item in MeshIntent]
@@ -300,7 +335,11 @@ class SimulationController(QObject):
         # Either this run needed no confirmation, or it is about to consume
         # one -- either way, nothing should stay pending afterwards.
         self._pending_ac_only_backend = None
-        self._generation.generate(self._backend.value, self._show_solver_window)
+        self._generation.generate(
+            self._backend.value,
+            self._show_solver_window,
+            self._mode is RunMode.GENERATE_AND_SOLVE,
+        )
         return True
 
     @Slot(result=bool)

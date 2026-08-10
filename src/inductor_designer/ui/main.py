@@ -111,6 +111,7 @@ def _build_generation_controller(
     from inductor_designer.ui.generation_lines import (
         GenerationBackend,
         GenerationResult,
+        UiRunRequest,
         run_generation,
     )
 
@@ -120,7 +121,7 @@ def _build_generation_controller(
     maxwell2d_exporter = PyaedtMaxwell2dExporter()
     femm_solver = PyfemmSolver()
 
-    def runner(backend_label: str, show_solver_window: bool) -> GenerationResult:
+    def runner(request: UiRunRequest) -> GenerationResult:
         project = session.project
         # Read the path live rather than capturing it at construction: Open
         # and Save As can move it after this controller was built, and
@@ -133,7 +134,7 @@ def _build_generation_controller(
             SUPPORTED_AEDT_RELEASE,
             SUPPORTED_AEDT_EDITION,
         )
-        backend = GenerationBackend(backend_label)
+        backend = GenerationBackend(request.backend_label)
         return run_generation(
             backend,
             project,
@@ -143,7 +144,10 @@ def _build_generation_controller(
             maxwell3d_exporter=maxwell3d_exporter,
             maxwell2d_exporter=maxwell2d_exporter,
             femm_solver=femm_solver,
-            show_solver_window=show_solver_window,
+            show_solver_window=request.show_solver_window,
+            solve=request.solve,
+            progress=request.progress,
+            cancellation=request.cancellation,
         )
 
     return GenerationController(runner)

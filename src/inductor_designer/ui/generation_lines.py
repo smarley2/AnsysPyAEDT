@@ -14,6 +14,7 @@ from inductor_designer.application.ports.maxwell_exporter import (
 )
 from inductor_designer.application.services.maxwell_export import MaxwellExportBlocked
 from inductor_designer.application.services.project_run import (
+    ProjectRunCancelled,
     ProjectRunFailed,
     start_project_run,
 )
@@ -25,6 +26,7 @@ from inductor_designer.simulation.run_contracts import (
     RunMode,
     RunRequest,
 )
+from inductor_designer.simulation.run_control import CancellationToken, ProgressSink
 
 if TYPE_CHECKING:
     from inductor_designer.application.ports.catalog import CatalogRepository
@@ -51,6 +53,21 @@ _RUN_BACKENDS = {
 def run_backend_for(backend: GenerationBackend) -> RunBackend:
     """The run-contract backend behind a UI backend label."""
     return _RUN_BACKENDS[backend]
+
+
+@dataclass(frozen=True, slots=True)
+class UiRunRequest:
+    """One run as the Simulation screen asks for it.
+
+    Carrying the request as one value keeps the controller's runner seam at a
+    single argument, so adding a run option never re-shapes every call site.
+    """
+
+    backend_label: str
+    show_solver_window: bool
+    solve: bool
+    progress: ProgressSink
+    cancellation: CancellationToken
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,13 +110,19 @@ def run_generation(
     maxwell2d_exporter: Maxwell2dExporter,
     femm_solver: FemmSolver,
     show_solver_window: bool = False,
+    solve: bool = False,
+    progress: ProgressSink | None = None,
+    cancellation: CancellationToken | None = None,
 ) -> GenerationResult:
     """Run one backend into the project's run directory. Never raises."""
     try:
         result = start_project_run(
             project,
             project_document_path,
-            RunRequest(_RUN_BACKENDS[backend], RunMode.GENERATE_ONLY),
+            RunRequest(
+                _RUN_BACKENDS[backend],
+                RunMode.GENERATE_AND_SOLVE if solve else RunMode.GENERATE_ONLY,
+            ),
             catalog,
             capabilities,
             maxwell3d_exporter=maxwell3d_exporter,
@@ -107,6 +130,8 @@ def run_generation(
             femm_solver=femm_solver,
             application_version=__version__,
             show_solver_window=show_solver_window,
+            progress=progress,
+            cancellation=cancellation,
         )
         adapter_result = result.outcome.adapter_result
         lines: list[str] = []
@@ -137,6 +162,13 @@ def run_generation(
             tuple(lines),
             run_directory=result.location.directory,
             generated_file=generated_file,
+        )
+    except ProjectRunCancelled as cancelled:
+        return GenerationResult(
+            ("Run cancelled.",)
+            + tuple(cancelled.manifest.diagnostics)
+            + (f"run folder: {cancelled.location.directory}",),
+            run_directory=cancelled.location.directory,
         )
     except ProjectRunFailed as error:
         return GenerationResult(
