@@ -152,6 +152,13 @@ class _FakeODesign:
         )
 
 
+@dataclass
+class _FakeSheet:
+    name: str
+    non_model: bool
+    kind: str
+
+
 class FakeMaxwell3dApp:
     """Duck-typed Maxwell3d recorder. ``raise_on`` maps a method name to an error."""
 
@@ -165,8 +172,18 @@ class FakeMaxwell3dApp:
         self.raise_on = raise_on
         self.falsy_on = falsy_on
         self.analyzed_setups: tuple[str, ...] = ()
+        self.analyze_blocking: list[Any] = []
         self.fail_analyze = False
+        # What the desktop reports on each `are_there_simulations_running`
+        # poll; an exhausted list reads as idle, so a plain fake solves
+        # instantly. `on_poll` lets a test cancel mid-solve.
+        self.running_polls: list[float] = []
+        self.polls = 0
+        self.stopped: list[bool] = []
+        self.on_poll: Callable[[], None] | None = None
         self.fail_solution_values = False
+        self.fail_field_value_for: str | None = None
+        self.created_sheets: list[_FakeSheet] = []
         # Lets a test act (cancel a run, for example) exactly when the design
         # reaches a named call, without patching the adapter.
         self.on_call: dict[str, Callable[[], None]] = {}
@@ -229,13 +246,25 @@ class FakeMaxwell3dApp:
         self.calls.append(("validate_simple", {}))
         return 1
 
-    def analyze_setup(self, name: str) -> bool:
+    def analyze_setup(self, name: str, *, blocking: bool = True) -> bool:
         self._hook("analyze_setup")
         if self.fail_analyze:
             raise RuntimeError("Solver returned a nonzero exit code.")
         self.analyzed_setups += (name,)
-        self.calls.append(("analyze_setup", {"name": name}))
+        self.analyze_blocking.append(blocking)
+        self.calls.append(("analyze_setup", {"name": name, "blocking": blocking}))
         return True
+
+    @property
+    def are_there_simulations_running(self) -> float:
+        self.polls += 1
+        if self.on_poll is not None:
+            self.on_poll()
+        return self.running_polls.pop(0) if self.running_polls else 0.0
+
+    def stop_simulations(self, clean_stop: bool = True) -> str:
+        self.stopped.append(clean_stop)
+        return "stopped"
 
     def setup_convergence(self, name: str) -> str:
         return "3 passes, 0.42% error"
@@ -257,6 +286,39 @@ class FakeMaxwell3dApp:
 
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
         return ((1, 12.5), (2, 0.8))
+
+    def create_section_rectangle(
+        self,
+        name: str,
+        azimuth_deg: float,
+        r_inner_m: float,
+        r_outer_m: float,
+        half_height_m: float,
+    ) -> str:
+        self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="rectangle"))
+        return name
+
+    def create_section_disc(
+        self,
+        name: str,
+        center_m: tuple[float, float, float],
+        normal: tuple[float, float, float],
+        radius_m: float,
+    ) -> str:
+        self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="disc"))
+        return name
+
+    def field_value(
+        self,
+        quantity: str,
+        scalar_function: str,
+        object_name: str,
+        object_type: str,
+    ) -> float:
+        if self.fail_field_value_for and self.fail_field_value_for in object_name:
+            raise RuntimeError(f"no field data on {object_name}")
+        # Integral over the sheet, and a point maximum above the mean.
+        return 1e-5 if scalar_function == "Integrate" else 0.42
 
     def save_project(self, path: str) -> bool:
         self._hook("save_project")

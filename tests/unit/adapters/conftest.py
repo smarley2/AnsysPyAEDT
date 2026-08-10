@@ -7,6 +7,14 @@ from types import ModuleType
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _instant_solve_polls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Adapter unit tests must not pay the real solve poll interval."""
+    from inductor_designer.adapters.pyaedt import solve_watch
+
+    monkeypatch.setattr(solve_watch, "_POLL_SECONDS", 0.0)
+
+
 @pytest.fixture()
 def fake_maxwell_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide the optional PyAEDT matrix schemas to adapter unit tests."""

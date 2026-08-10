@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.field_reader import (
+    CURRENT_DENSITY_QUANTITY,
+    FLUX_DENSITY_QUANTITY,
+    EvaluatedArea,
+    read_field_areas,
+)
+from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
 )
 from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
+from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
 from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
@@ -22,6 +31,8 @@ from inductor_designer.simulation.maxwell_plan import (
 )
 from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_control import (
+    CancellationToken,
+    RunCancelled,
     StagePhase,
 )
 from inductor_designer.simulation.run_control import (
@@ -66,11 +77,23 @@ class Maxwell2dApp(Protocol):
 
     def validate_simple(self, log_file: str | None = None) -> int: ...
 
-    def analyze_setup(self, name: str) -> bool: ...
+    def analyze_setup(self, name: str, *, blocking: bool = True) -> bool: ...
+
+    are_there_simulations_running: Any
+
+    def stop_simulations(self, clean_stop: bool = True) -> Any: ...
 
     def setup_convergence(self, name: str) -> str: ...
 
     def solution_values(self, expressions: tuple[str, ...]) -> Any: ...
+
+    def field_value(
+        self,
+        quantity: str,
+        scalar_function: str,
+        object_name: str,
+        object_type: str,
+    ) -> float: ...
 
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]: ...
 
@@ -96,7 +119,7 @@ class DefaultMaxwell2dAppFactory:
     def create(self, **kwargs: object) -> Maxwell2dApp:
         from ansys.aedt.core import Maxwell2d
 
-        return cast(Maxwell2dApp, Maxwell2d(**kwargs))
+        return cast(Maxwell2dApp, LiveAppExtraction(Maxwell2d(**kwargs)))
 
 
 def _stage_units(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
@@ -252,9 +275,12 @@ def _stage_validate(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     return "Design validation passed."
 
 
-def _stage_analyze(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
-    if not app.analyze_setup(plan.setup.name):
-        raise RuntimeError(f"Setup {plan.setup.name} did not solve.")
+def _stage_analyze(
+    app: Maxwell2dApp,
+    plan: Maxwell2dDesignPlan,
+    cancellation: CancellationToken | None = None,
+) -> str:
+    analyze_watched(app, plan.setup.name, cancellation=cancellation)
     return f"Solved {plan.setup.name}: {app.setup_convergence(plan.setup.name)}."
 
 
@@ -272,6 +298,50 @@ _STAGES_2D: tuple[tuple[str, Any], ...] = (
     ("reports", _stage_reports),
     ("validate", _stage_validate),
 )
+
+
+
+def _with_field_regions(
+    app: Maxwell2dApp,
+    plan: Maxwell2dDesignPlan,
+    raw: RawScalarResults,
+) -> RawScalarResults:
+    """2D integrates the evaluated regions directly: no cut planes, no sheets.
+
+    The design forbids sections here, because in 2D the evaluated area is the
+    region itself. Areas come from the plan geometry, so no extra solver call
+    is needed to know what the mean divides by.
+    """
+    from dataclasses import replace
+
+    core_area = math.pi * (plan.core.r_outer_m**2 - plan.core.r_inner_m**2)
+    core_regions = (
+        EvaluatedArea(
+            name=plan.core.name,
+            section_id="core.region",
+            scope="core.region",
+            area_m2=core_area,
+        ),
+    )
+    conductor_regions = tuple(
+        EvaluatedArea(
+            name=conductor.name,
+            section_id=f"{group.winding_id}.region",
+            scope=f"winding.{group.winding_id}.region",
+            area_m2=math.pi * conductor.radius_m**2,
+        )
+        for group in plan.windings
+        for conductor in group.conductors[:1]
+    )
+    return replace(
+        raw,
+        flux_density_sections=read_field_areas(
+            app, core_regions, FLUX_DENSITY_QUANTITY
+        ),
+        current_density_sections=read_field_areas(
+            app, conductor_regions, CURRENT_DENSITY_QUANTITY
+        ),
+    )
 
 
 class PyaedtMaxwell2dExporter:
@@ -371,34 +441,45 @@ class PyaedtMaxwell2dExporter:
                 else:
                     _emit(request.progress, "analyze", StagePhase.STARTED, None)
                     try:
-                        message = _stage_analyze(app, plan)
+                        message = _stage_analyze(app, plan, request.cancellation)
+                    except RunCancelled:
+                        # The solve itself was stopped, so there is nothing to
+                        # read; the run ends cancelled, not failed.
+                        cancelled_before = "analyze"
                     except Exception as error:  # noqa: BLE001 - stage boundary
                         stages.append(
                             StageRecord(name="analyze", succeeded=False, message=str(error))
                         )
                         _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
                         return result()
-                    stages.append(
-                        StageRecord(name="analyze", succeeded=True, message=message)
-                    )
-                    _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
-                    # Extraction never fails a solved run: a read error rides
-                    # along as a diagnostic and normalizes to unavailable.
-                    _emit(request.progress, "results", StagePhase.STARTED, None)
-                    raw_results = read_scalar_results(
-                        app,
-                        matrix_name=plan.matrix_name,
-                        winding_names=tuple(group.name for group in plan.windings),
-                        setup_name=plan.setup.name,
-                        frequency_hz=plan.setup.frequency_hz,
-                    )
-                    results_message = _results_message(raw_results)
-                    stages.append(
-                        StageRecord(name="results", succeeded=True, message=results_message)
-                    )
-                    _emit(
-                        request.progress, "results", StagePhase.SUCCEEDED, results_message
-                    )
+                    else:
+                        stages.append(
+                            StageRecord(name="analyze", succeeded=True, message=message)
+                        )
+                        _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
+                        # Extraction never fails a solved run: a read error rides
+                        # along as a diagnostic and normalizes to unavailable.
+                        _emit(request.progress, "results", StagePhase.STARTED, None)
+                        raw_results = read_scalar_results(
+                            app,
+                            matrix_name=plan.matrix_name,
+                            winding_names=tuple(group.name for group in plan.windings),
+                            setup_name=plan.setup.name,
+                            frequency_hz=plan.setup.frequency_hz,
+                        )
+                        raw_results = _with_field_regions(app, plan, raw_results)
+                        results_message = _results_message(raw_results)
+                        stages.append(
+                            StageRecord(
+                                name="results", succeeded=True, message=results_message
+                            )
+                        )
+                        _emit(
+                            request.progress,
+                            "results",
+                            StagePhase.SUCCEEDED,
+                            results_message,
+                        )
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:

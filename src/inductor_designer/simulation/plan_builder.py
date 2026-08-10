@@ -43,6 +43,11 @@ from inductor_designer.simulation.maxwell_plan import (
     material_spec_from_material_record,
 )
 from inductor_designer.simulation.run_contracts import EffectiveWindingInput
+from inductor_designer.simulation.section_selection import (
+    select_conductor_sections,
+    select_core_sections,
+)
+from inductor_designer.simulation.sections import ConductorSection
 
 
 def _polarity(
@@ -88,6 +93,7 @@ def build_maxwell3d_plan(
     dc_bias_decision: DcBiasDecision | None = None,
     material_record: MaterialRecord,
     material_bh_series_id: str | None,
+    winding_temperature_c: float,
 ) -> Maxwell3dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -193,12 +199,38 @@ def build_maxwell3d_plan(
     )
     solution_type = SOLUTION_TYPE_DC if native_dc else SOLUTION_TYPE
 
+    conductor_sections: list[ConductorSection] = []
+    for packing in packings:
+        if not packing.layers or not packing.layers[0].station_deg:
+            continue
+        layer = packing.layers[0]
+        conductor_sections.extend(
+            select_conductor_sections(
+                core=core,
+                winding_id=packing.winding_id,
+                turn_count=sum(len(item.station_deg) for item in packing.layers),
+                wire_radius_m=bare_diameter_m[packing.winding_id] / 2.0,
+                insulated_diameter_m=packing.insulated_diameter_m,
+                layer=layer.index,
+                station_deg=layer.station_deg[len(layer.station_deg) // 2],
+                frequency_hz=frequency_hz,
+                winding_temperature_c=winding_temperature_c,
+            )
+        )
+
     width = core.r_outer_m - core.r_inner_m
     height = 2.0 * core.half_height_m
     return Maxwell3dDesignPlan(
         design_name=DESIGN_NAME,
         solution_type=solution_type,
-        core=CorePlan(name=core_name(), profile=build_core_profile(core), material=material),
+        core=CorePlan(
+            name=core_name(),
+            profile=build_core_profile(core),
+            material=material,
+            r_inner_m=core.r_inner_m,
+            r_outer_m=core.r_outer_m,
+            half_height_m=core.half_height_m,
+        ),
         windings=tuple(groups),
         region=RegionPlan(padding_percent=REGION_PADDING_PERCENT),
         mesh=MeshPlan(
@@ -215,6 +247,8 @@ def build_maxwell3d_plan(
         reports=tuple(reports),
         notes=tuple(notes),
         dc_bias=dc_bias_decision,
+        core_sections=select_core_sections(windings),
+        conductor_sections=tuple(conductor_sections),
     )
 
 

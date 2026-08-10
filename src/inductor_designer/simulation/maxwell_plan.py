@@ -16,6 +16,7 @@ from inductor_designer.materials.records import (
 )
 from inductor_designer.materials.validation import IssueSeverity, validate_record
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
+from inductor_designer.simulation.sections import ConductorSection, CoreSection
 
 SOLUTION_TYPE = "EddyCurrent"
 SOLUTION_TYPE_DC = "AC Magnetic with DC"
@@ -87,6 +88,11 @@ class CorePlan:
     name: str
     profile: tuple[PathSegment, ...]
     material: MaterialSpec
+    # Finished dimensions, so a section sheet can span the cross section
+    # without the adapter re-deriving them from the profile.
+    r_inner_m: float = 0.0
+    r_outer_m: float = 0.0
+    half_height_m: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +133,10 @@ class Maxwell3dDesignPlan:
     reports: tuple[ReportPlan, ...]
     notes: tuple[str, ...]
     dc_bias: DcBiasDecision | None = None
+    # Representative cross sections (2026-08-10 design). Chosen by pure
+    # selection so the adapter evaluates a section list it did not pick.
+    core_sections: tuple[CoreSection, ...] = ()
+    conductor_sections: tuple[ConductorSection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

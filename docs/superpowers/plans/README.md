@@ -97,7 +97,9 @@ before the next plan freezes assumptions that depend on it.
     2026-08-10: export is automatic per run, results are a Review section
     rather than a sixth step, and a total loss the backend does not report is
     derived from its parts with a visible label and a `derived` provenance.
-  - **M8c is planned**, not yet implemented:
+  - **M8c implementation is complete and awaiting Fabio Posser's live
+    verification**; the evidence record is
+    [m8c-field-evidence.md](../../development/m8c-field-evidence.md):
     [2026-08-10 M8c field results](2026-08-10-m8c-field-results.md) — field
     results implementing the approved
     [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md):
