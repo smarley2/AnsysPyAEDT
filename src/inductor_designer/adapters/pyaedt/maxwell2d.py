@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.field_reader import (
+    CURRENT_DENSITY_QUANTITY,
+    FLUX_DENSITY_QUANTITY,
+    EvaluatedArea,
+    read_field_areas,
+)
 from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
@@ -283,6 +290,50 @@ _STAGES_2D: tuple[tuple[str, Any], ...] = (
 )
 
 
+
+def _with_field_regions(
+    app: Maxwell2dApp,
+    plan: Maxwell2dDesignPlan,
+    raw: RawScalarResults,
+) -> RawScalarResults:
+    """2D integrates the evaluated regions directly: no cut planes, no sheets.
+
+    The design forbids sections here, because in 2D the evaluated area is the
+    region itself. Areas come from the plan geometry, so no extra solver call
+    is needed to know what the mean divides by.
+    """
+    from dataclasses import replace
+
+    core_area = math.pi * (plan.core.r_outer_m**2 - plan.core.r_inner_m**2)
+    core_regions = (
+        EvaluatedArea(
+            name=plan.core.name,
+            section_id="core.region",
+            scope="core.region",
+            area_m2=core_area,
+        ),
+    )
+    conductor_regions = tuple(
+        EvaluatedArea(
+            name=conductor.name,
+            section_id=f"{group.winding_id}.region",
+            scope=f"winding.{group.winding_id}.region",
+            area_m2=math.pi * conductor.radius_m**2,
+        )
+        for group in plan.windings
+        for conductor in group.conductors[:1]
+    )
+    return replace(
+        raw,
+        flux_density_sections=read_field_areas(
+            app, core_regions, FLUX_DENSITY_QUANTITY
+        ),
+        current_density_sections=read_field_areas(
+            app, conductor_regions, CURRENT_DENSITY_QUANTITY
+        ),
+    )
+
+
 class PyaedtMaxwell2dExporter:
     """Executes a Maxwell2dDesignPlan as named stages; never reports a partial design."""
 
@@ -401,6 +452,7 @@ class PyaedtMaxwell2dExporter:
                         setup_name=plan.setup.name,
                         frequency_hz=plan.setup.frequency_hz,
                     )
+                    raw_results = _with_field_regions(app, plan, raw_results)
                     results_message = _results_message(raw_results)
                     stages.append(
                         StageRecord(name="results", succeeded=True, message=results_message)
