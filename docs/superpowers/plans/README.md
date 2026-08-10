@@ -97,10 +97,17 @@ before the next plan freezes assumptions that depend on it.
     2026-08-10: export is automatic per run, results are a Review section
     rather than a sixth step, and a total loss the backend does not report is
     derived from its parts with a visible label and a `derived` provenance.
-  - **M8c**, not yet planned: field results, implementing the approved
-    [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md)
-    — feature-anchored core planes, skin-depth-gated conductor discs,
+  - **M8c is planned**, not yet implemented:
+    [2026-08-10 M8c field results](2026-08-10-m8c-field-results.md) — field
+    results implementing the approved
+    [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md):
+    feature-anchored core planes, skin-depth-gated conductor discs,
     per-section evidence, worst-section mean and across-section average.
+    Decisions taken with Fabio Posser on 2026-08-10: FEMM reports no field
+    value at all, because its block integrals expose the components rather
+    than the magnitude and those components cancel around a toroid; and a
+    DC-biased run reports the combined field with a label, with the AC-only
+    entries unavailable, because one nonlinear solve cannot separate them.
 
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`

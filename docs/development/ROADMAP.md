@@ -829,11 +829,26 @@ normalization, export or the UI. A name AEDT does not recognize yields an
 
 ### Milestone 8c: Field results
 
-Not yet planned. Implements the approved
+Planned, not yet implemented:
+[2026-08-10 M8c field results](../superpowers/plans/2026-08-10-m8c-field-results.md),
+implementing the approved
 [Representative Cross Sections design](../superpowers/specs/2026-08-10-representative-cross-sections-design.md):
 feature-anchored core planes, skin-depth-gated conductor discs, per-section
 evidence, and the worst-section mean alongside the across-section
 area-weighted average.
+
+Decisions taken with Fabio Posser on 2026-08-10:
+
+1. FEMM reports no field value. `mo_blockintegral` integrates the core block
+   happily, but its integral types expose the field components rather than the
+   magnitude, and around a toroid those components cancel — a component mean
+   would read near zero at full working flux. FEMM therefore reports
+   `flux-density.not_exposed` and `current-density.not_exposed` with that
+   reason; Maxwell 3D and 2D report theirs in full.
+2. A DC-biased run reports the combined field, labelled, with the AC-peak-only
+   and AC-RMS-only entries unavailable: one nonlinear solve cannot separate
+   them, and running two solves is not valid where the B-H curve is nonlinear.
+
 
 ## Milestone 9: Reliability
 
