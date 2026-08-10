@@ -89,6 +89,28 @@ def test_cancellation_between_stages_stops_before_analyze(tmp_path: Path) -> Non
     assert app.analyzed_setups == ()
 
 
+def test_the_solve_is_started_without_blocking_the_process(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp()
+
+    export(tmp_path, app, solve=True)
+
+    assert app.analyze_blocking == [False]
+
+
+def test_cancellation_during_analyze_stops_the_solver(tmp_path: Path) -> None:
+    token = CancellationToken()
+    app = FakeMaxwell2dApp()
+    app.running_polls = [1] * 5
+    app.on_poll = token.cancel
+
+    names, result = export(tmp_path, app, solve=True, cancellation=token)
+
+    assert app.stopped == [True]
+    assert names[-1] == "cancelled"
+    assert "results" not in names
+    assert result.succeeded(SOLVE_STAGE_NAMES_2D) is False  # type: ignore[attr-defined]
+
+
 def test_failed_analyze_is_recorded_as_a_failed_stage(tmp_path: Path) -> None:
     app = FakeMaxwell2dApp()
     app.fail_analyze = True

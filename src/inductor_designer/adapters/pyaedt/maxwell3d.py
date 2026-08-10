@@ -19,6 +19,7 @@ from inductor_designer.adapters.pyaedt.section_sheets import (
     create_conductor_section_sheets,
     create_core_section_sheets,
 )
+from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
 from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
@@ -40,6 +41,8 @@ from inductor_designer.simulation.maxwell_plan import (
 )
 from inductor_designer.simulation.raw_results import RawScalarResults
 from inductor_designer.simulation.run_control import (
+    CancellationToken,
+    RunCancelled,
     StagePhase,
 )
 from inductor_designer.simulation.run_control import (
@@ -82,7 +85,11 @@ class Maxwell3dApp(Protocol):
 
     def validate_simple(self, log_file: str | None = None) -> int: ...
 
-    def analyze_setup(self, name: str) -> bool: ...
+    def analyze_setup(self, name: str, *, blocking: bool = True) -> bool: ...
+
+    are_there_simulations_running: Any
+
+    def stop_simulations(self, clean_stop: bool = True) -> Any: ...
 
     def setup_convergence(self, name: str) -> str: ...
 
@@ -401,9 +408,12 @@ def _stage_validate(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     return "Design validation passed."
 
 
-def _stage_analyze(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
-    if not app.analyze_setup(plan.setup.name):
-        raise RuntimeError(f"Setup {plan.setup.name} did not solve.")
+def _stage_analyze(
+    app: Maxwell3dApp,
+    plan: Maxwell3dDesignPlan,
+    cancellation: CancellationToken | None = None,
+) -> str:
+    analyze_watched(app, plan.setup.name, cancellation=cancellation)
     return f"Solved {plan.setup.name}: {app.setup_convergence(plan.setup.name)}."
 
 
@@ -563,35 +573,45 @@ class PyaedtMaxwell3dExporter:
                 else:
                     _emit(request.progress, "analyze", StagePhase.STARTED, None)
                     try:
-                        message = _stage_analyze(app, plan)
+                        message = _stage_analyze(app, plan, request.cancellation)
+                    except RunCancelled:
+                        # The solve itself was stopped, so there is nothing to
+                        # read; the run ends cancelled, not failed.
+                        cancelled_before = "analyze"
                     except Exception as error:  # noqa: BLE001 - stage boundary
                         stages.append(
                             StageRecord(name="analyze", succeeded=False, message=str(error))
                         )
                         _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
                         return result()
-                    stages.append(
-                        StageRecord(name="analyze", succeeded=True, message=message)
-                    )
-                    _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
-                    # Extraction never fails a solved run: a read error rides
-                    # along as a diagnostic and normalizes to unavailable.
-                    _emit(request.progress, "results", StagePhase.STARTED, None)
-                    raw_results = read_scalar_results(
-                        app,
-                        matrix_name=plan.matrix_name,
-                        winding_names=tuple(group.name for group in plan.windings),
-                        setup_name=plan.setup.name,
-                        frequency_hz=plan.setup.frequency_hz,
-                    )
-                    raw_results = _with_field_sections(app, plan, raw_results)
-                    results_message = _results_message(raw_results)
-                    stages.append(
-                        StageRecord(name="results", succeeded=True, message=results_message)
-                    )
-                    _emit(
-                        request.progress, "results", StagePhase.SUCCEEDED, results_message
-                    )
+                    else:
+                        stages.append(
+                            StageRecord(name="analyze", succeeded=True, message=message)
+                        )
+                        _emit(request.progress, "analyze", StagePhase.SUCCEEDED, message)
+                        # Extraction never fails a solved run: a read error rides
+                        # along as a diagnostic and normalizes to unavailable.
+                        _emit(request.progress, "results", StagePhase.STARTED, None)
+                        raw_results = read_scalar_results(
+                            app,
+                            matrix_name=plan.matrix_name,
+                            winding_names=tuple(group.name for group in plan.windings),
+                            setup_name=plan.setup.name,
+                            frequency_hz=plan.setup.frequency_hz,
+                        )
+                        raw_results = _with_field_sections(app, plan, raw_results)
+                        results_message = _results_message(raw_results)
+                        stages.append(
+                            StageRecord(
+                                name="results", succeeded=True, message=results_message
+                            )
+                        )
+                        _emit(
+                            request.progress,
+                            "results",
+                            StagePhase.SUCCEEDED,
+                            results_message,
+                        )
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:

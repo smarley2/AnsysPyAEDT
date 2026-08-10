@@ -172,7 +172,15 @@ class FakeMaxwell3dApp:
         self.raise_on = raise_on
         self.falsy_on = falsy_on
         self.analyzed_setups: tuple[str, ...] = ()
+        self.analyze_blocking: list[Any] = []
         self.fail_analyze = False
+        # What the desktop reports on each `are_there_simulations_running`
+        # poll; an exhausted list reads as idle, so a plain fake solves
+        # instantly. `on_poll` lets a test cancel mid-solve.
+        self.running_polls: list[float] = []
+        self.polls = 0
+        self.stopped: list[bool] = []
+        self.on_poll: Callable[[], None] | None = None
         self.fail_solution_values = False
         self.fail_field_value_for: str | None = None
         self.created_sheets: list[_FakeSheet] = []
@@ -238,13 +246,25 @@ class FakeMaxwell3dApp:
         self.calls.append(("validate_simple", {}))
         return 1
 
-    def analyze_setup(self, name: str) -> bool:
+    def analyze_setup(self, name: str, *, blocking: bool = True) -> bool:
         self._hook("analyze_setup")
         if self.fail_analyze:
             raise RuntimeError("Solver returned a nonzero exit code.")
         self.analyzed_setups += (name,)
-        self.calls.append(("analyze_setup", {"name": name}))
+        self.analyze_blocking.append(blocking)
+        self.calls.append(("analyze_setup", {"name": name, "blocking": blocking}))
         return True
+
+    @property
+    def are_there_simulations_running(self) -> float:
+        self.polls += 1
+        if self.on_poll is not None:
+            self.on_poll()
+        return self.running_polls.pop(0) if self.running_polls else 0.0
+
+    def stop_simulations(self, clean_stop: bool = True) -> str:
+        self.stopped.append(clean_stop)
+        return "stopped"
 
     def setup_convergence(self, name: str) -> str:
         return "3 passes, 0.42% error"

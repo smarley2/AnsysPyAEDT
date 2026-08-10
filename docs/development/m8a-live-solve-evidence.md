@@ -96,5 +96,7 @@ Record here, once run:
   that finds `"status": "running"` is looking at a run whose process died.
 - Cancellation is cooperative and takes effect only at a stage boundary. A
   long `analyze` call runs to completion before the run stops; the UI says so
-  with `Cancelling after the current stage...`.
+  with `Cancelling after the current stage...`. Superseded: `analyze` is now
+  interruptible, see
+  [ui-freeze-during-solve.md](ui-freeze-during-solve.md).
 - No result value of any kind is extracted, normalized or exported in M8a.

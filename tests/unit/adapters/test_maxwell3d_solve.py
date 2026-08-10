@@ -122,6 +122,26 @@ def test_cancellation_emits_a_cancelled_event(tmp_path: Path) -> None:
     assert cancelled[0].stage_name == "matrix"
 
 
+def test_the_solve_is_started_without_blocking_the_process(tmp_path: Path) -> None:
+    app, _, _ = export(tmp_path, FakeMaxwell3dApp(), solve=True)
+
+    assert app.analyze_blocking == [False]
+
+
+def test_cancellation_during_analyze_stops_the_solver(tmp_path: Path) -> None:
+    token = CancellationToken()
+    app = FakeMaxwell3dApp()
+    app.running_polls = [1] * 5
+    app.on_poll = token.cancel
+
+    _, names, result = export(tmp_path, app, solve=True, cancellation=token)
+
+    assert app.stopped == [True]
+    assert names[-1] == "cancelled"
+    assert "results" not in names, "an interrupted solve has nothing to read"
+    assert result.succeeded(SOLVE_STAGE_NAMES) is False  # type: ignore[attr-defined]
+
+
 def test_failed_analyze_is_recorded_as_a_failed_stage(tmp_path: Path) -> None:
     app = FakeMaxwell3dApp()
     app.fail_analyze = True
