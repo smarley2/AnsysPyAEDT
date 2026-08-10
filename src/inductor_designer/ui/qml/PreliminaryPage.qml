@@ -210,12 +210,19 @@ Pane {
                             color: preliminaryPage.stateColor(modelData.inductance.state)
                         }
                     }
+                    // Inductance is checked here as well as wire loss and
+                    // current density: it can be refused on its own (the core
+                    // failed while the copper resolved), and without this the
+                    // row would read Unavailable with no reason beside it.
                     Label {
                         Layout.fillWidth: true
                         visible: modelData.wireLoss.message !== "" || modelData.jAcRms.message !== ""
+                            || modelData.inductance.message !== ""
                         text: modelData.wireLoss.message !== ""
                             ? qsTr("%1 — %2").arg(modelData.wireLoss.code).arg(modelData.wireLoss.message)
-                            : qsTr("%1 — %2").arg(modelData.jAcRms.code).arg(modelData.jAcRms.message)
+                            : modelData.jAcRms.message !== ""
+                            ? qsTr("%1 — %2").arg(modelData.jAcRms.code).arg(modelData.jAcRms.message)
+                            : qsTr("%1 — %2").arg(modelData.inductance.code).arg(modelData.inductance.message)
                         wrapMode: Text.WordWrap
                         color: "#a45528"
                         font.pixelSize: 11

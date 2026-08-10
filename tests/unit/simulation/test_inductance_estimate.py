@@ -7,10 +7,11 @@ permeability rules testable without a B-H series, a material record, or a whole
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from inductor_designer.simulation.inductance_estimate import (
-    AL_TOLERANCE_NOTE,
     INDUCTANCE_EXCLUSION_NOTE,
     STORED_ENERGY_INTEGRATED_NOTE,
     STORED_ENERGY_LINEAR_NOTE,
@@ -87,7 +88,9 @@ def test_the_catalog_check_reports_the_roll_off_against_the_manufacturer_value()
     assert result.catalog.mu_r_initial == pytest.approx(
         1.25e-6 * CORE.path_length_m / (MU_0 * CORE.effective_area_m2)
     )
-    assert AL_TOLERANCE_NOTE in result.notes
+    # The catalog-tolerance caveat is attached by the caller, to the
+    # catalog-derived values only -- see test_preliminary.py.
+    assert INDUCTANCE_EXCLUSION_NOTE in result.notes
 
 
 def test_an_effective_factor_above_catalog_reports_a_positive_deviation() -> None:
@@ -160,7 +163,6 @@ def test_a_manual_core_has_no_reference_to_check_against() -> None:
     assert isinstance(result, CoreInductance)
     assert result.catalog is None
     assert result.al_effective_h == pytest.approx(1e-6)
-    assert AL_TOLERANCE_NOTE not in result.notes
 
 
 def test_a_decreasing_excursion_is_refused_not_reported_as_negative() -> None:
@@ -517,6 +519,102 @@ def test_a_curve_that_doubles_back_above_the_peak_still_integrates() -> None:
     # The peak sits at 7/8 of the first segment, where H is 87.5 A/m:
     # (0 + 87.5) / 2 * 0.7 = 30.625 J/m^3.
     assert result.value == pytest.approx(30.625 * CORE.volume_m3)
+
+
+def test_a_peak_exactly_at_the_turning_point_still_integrates() -> None:
+    """Boundary of the case above, and the one that catches a monotonicity check
+    that runs one segment too far: at peak 0.8 the walk is complete when the
+    fold is reached, so the fold must never be examined. A 1 % change in peak
+    flux must not flip a number into a refusal.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+    densities = _densities(0.8, ((0.0, 0.0), (100.0, 0.8), (200.0, 0.6)))
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    assert result.state is ResultState.ESTIMATED
+    assert result.value == pytest.approx(40.0 * CORE.volume_m3)
+
+
+def test_a_plateau_at_the_peak_is_not_mistaken_for_an_out_of_range_peak() -> None:
+    """The tail after a plateau is never walked, so the highest recorded B
+    cannot be read off the last point: this series records 0.8 T twice and then
+    falls to 0.6 T, and 0.8 T is emphatically within range.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+    densities = _densities(
+        0.8, ((0.0, 0.0), (100.0, 0.8), (150.0, 0.8), (200.0, 0.6))
+    )
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    assert result.state is ResultState.ESTIMATED
+    assert result.value == pytest.approx(40.0 * CORE.volume_m3)
+
+
+def test_the_integral_does_not_care_what_order_the_points_arrive_in() -> None:
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+    shuffled = _densities(0.8, ((200.0, 0.8), (0.0, 0.0), (100.0, 0.5)))
+
+    result = stored_energy_j(fields, shuffled, CORE)
+
+    assert result.value == pytest.approx(70.0 * CORE.volume_m3)
+
+
+def test_a_negative_peak_folds_onto_the_first_quadrant_curve() -> None:
+    """Odd symmetry: a peak reached in the third quadrant stores the same energy
+    as its positive mirror, and the recorded curve is first-quadrant only.
+    """
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=200.0,
+        h_dc_a_per_m=-100.0,
+        h_min_a_per_m=-200.0,
+        h_max_a_per_m=0.0,
+    )
+    densities = replace(
+        _densities(0.8, ((0.0, 0.0), (100.0, 0.5), (200.0, 0.8))),
+        b_min_t=-0.8,
+        b_max_t=0.0,
+        b_peak_magnitude_t=0.8,
+    )
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    assert result.value == pytest.approx(70.0 * CORE.volume_m3)
+
+
+def test_a_vertical_segment_contributes_no_area() -> None:
+    """Duplicate H values are a vertical jump in B: zero width, zero area."""
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=100.0,
+        h_dc_a_per_m=100.0,
+        h_min_a_per_m=0.0,
+        h_max_a_per_m=200.0,
+    )
+    densities = _densities(
+        0.8, ((0.0, 0.0), (100.0, 0.5), (100.0, 0.6), (200.0, 0.8))
+    )
+
+    result = stored_energy_j(fields, densities, CORE)
+
+    # (0+100)/2 * 0.5 = 25, then (100+100)/2 * 0.1 = 10, then
+    # (100+200)/2 * 0.2 = 30.
+    assert result.value == pytest.approx(65.0 * CORE.volume_m3)
 
 
 def test_stored_energy_uses_the_larger_field_magnitude_of_the_excursion() -> None:

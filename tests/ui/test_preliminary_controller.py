@@ -62,6 +62,8 @@ def test_every_winding_row_reports_an_inductance_and_the_permeability_used() -> 
     assert controller.windingRows[0]["inductance"]["state"] == (
         ResultState.ESTIMATED.value
     )
+    # 20 turns on a core whose A_L works out to 77.65 nH: 400 * 77.65 nH.
+    assert controller.windingRows[0]["inductance"]["text"] == "31.062 µH"
     assert controller.coreRows[9]["label"] == "Effective relative permeability"
     assert controller.coreRows[9]["text"] == "60.0"
 

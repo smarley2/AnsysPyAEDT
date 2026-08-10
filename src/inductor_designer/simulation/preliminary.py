@@ -16,6 +16,7 @@ from inductor_designer.domain.project import InductorProject, ManualCoreSelectio
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.inductance_estimate import (
+    AL_TOLERANCE_NOTE,
     CoreInductance,
     core_inductance,
     stored_energy_j,
@@ -145,10 +146,18 @@ def _geometry_echo(core: CoreMagneticProperties) -> _GeometryEcho:
     )
 
 
-def _no_geometry(reason: PreliminaryValue) -> _GeometryEcho:
-    """With no core there are no dimensions to echo, and the reason is exactly
-    the one flux density reports: no core is selected.
+def _no_geometry() -> _GeometryEcho:
+    """With no core selected there are no dimensions to echo.
+
+    Its own code, not the flux-density one: a run manifest triaged on
+    `core_geometry.*` must find every reason the geometry echo was withheld,
+    including this one.
     """
+    reason = unavailable(
+        DiagnosticCode.CORE_GEOMETRY_NO_CORE_SELECTED,
+        "No core is selected, so it has no effective area, magnetic path "
+        "length, or volume to report.",
+    )
     return _GeometryEcho(effective_area=reason, path_length=reason, volume=reason)
 
 
@@ -235,9 +244,12 @@ def _core_estimates(
             al_deviation = no_reference
             mu_r_initial = no_reference
         else:
-            al_catalog = estimated(inductance.catalog.al_catalog_h, inductance_notes)
-            al_deviation = estimated(inductance.catalog.al_deviation, inductance_notes)
-            mu_r_initial = estimated(inductance.catalog.mu_r_initial, inductance_notes)
+            # The tolerance caveat belongs to the values that reference the
+            # catalog, not to the inductance quantities above.
+            catalog_notes = (*inductance_notes, AL_TOLERANCE_NOTE)
+            al_catalog = estimated(inductance.catalog.al_catalog_h, catalog_notes)
+            al_deviation = estimated(inductance.catalog.al_deviation, catalog_notes)
+            mu_r_initial = estimated(inductance.catalog.mu_r_initial, catalog_notes)
     else:
         mu_r_effective = inductance
         al_effective = inductance
@@ -410,12 +422,14 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
     material = design.core_material
 
     if request.core is None:
-        reason = unavailable(
-            DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED,
-            "No core is selected, so core flux density and core loss cannot "
-            "be estimated.",
+        core = _core_all(
+            unavailable(
+                DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED,
+                "No core is selected, so core flux density and core loss cannot "
+                "be estimated.",
+            ),
+            _no_geometry(),
         )
-        core = _core_all(reason, _no_geometry(reason))
     elif material is None:
         core = _core_all(
             unavailable(
@@ -485,7 +499,11 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
     for value in (
         core.b_dc,
         core.core_loss,
+        # The geometry echo carries how A_e, l_e and V_e were obtained, and it
+        # is the only carrier of that provenance when flux density is refused.
+        core.effective_area,
         core.al_effective,
+        core.al_deviation,
         core.stored_energy,
         *(row.wire_loss for row in windings),
     ):

@@ -203,19 +203,14 @@ def core_inductance(
         )
     notes = (INDUCTANCE_EXCLUSION_NOTE, *notes)
 
-    catalog = _al_check(core.al_value_nh, al_effective_h, ratio)
-    if catalog is None:
-        return CoreInductance(
-            mu_r_effective=mu_r_effective,
-            al_effective_h=al_effective_h,
-            catalog=None,
-            notes=notes,
-        )
+    # `AL_TOLERANCE_NOTE` is deliberately NOT added here: it describes what the
+    # deviation mixes together, and the caller attaches it to the catalog-derived
+    # values only. An inductance does not depend on the catalog value.
     return CoreInductance(
         mu_r_effective=mu_r_effective,
         al_effective_h=al_effective_h,
-        catalog=catalog,
-        notes=(*notes, AL_TOLERANCE_NOTE),
+        catalog=_al_check(core.al_value_nh, al_effective_h, ratio),
+        notes=notes,
     )
 
 
@@ -326,27 +321,35 @@ def _energy_density_j_per_m3(
     peak_t = abs(b_peak_t)
     density = 0.0
     for (h_low, b_low), (h_high, b_high) in zip(curve, curve[1:], strict=False):
+        # The walk stops the moment the peak is behind it, BEFORE this segment
+        # is examined at all. Testing anything about a segment above the peak
+        # would let a defect the integral never reaches refuse a complete
+        # answer -- and made a 1 % change in peak flux flip a number into a
+        # refusal, since a fold or a plateau just past the peak is common in
+        # recorded data.
+        if peak_t <= b_low:
+            return density, notes
         if b_high < b_low:
             return unavailable(
                 DiagnosticCode.STORED_ENERGY_NON_MONOTONIC_BH,
                 f"Series {series.series_id} records a flux density that falls "
-                f"from {b_low:g} T to {b_high:g} T as field strength rises, so "
-                "the area to the left of the curve is ambiguous and stored "
-                "energy cannot be integrated.",
+                f"from {b_low:g} T to {b_high:g} T as field strength rises "
+                "below the peak, so the area to the left of the curve is "
+                "ambiguous and stored energy cannot be integrated.",
             )
-        if peak_t <= b_low:
-            break
         if peak_t >= b_high:
             density += (h_low + h_high) / 2.0 * (b_high - b_low)
             continue
-        # The peak falls inside this segment: cut it there, taking H at the peak
-        # from the same straight line the segment already assumes.
-        span_t = b_high - b_low
-        fraction = (peak_t - b_low) / span_t if span_t > 0.0 else 0.0
+        # The peak falls strictly inside this segment, so `b_high - b_low` is
+        # positive: cut the segment at the peak, taking H there from the same
+        # straight line the segment already assumes.
+        fraction = (peak_t - b_low) / (b_high - b_low)
         h_at_peak = h_low + fraction * (h_high - h_low)
         density += (h_low + h_at_peak) / 2.0 * (peak_t - b_low)
         return density, notes
 
+    # Reached only when every segment was consumed, so the walk covered the
+    # whole curve and its last point really does hold the highest recorded B.
     if peak_t > curve[-1][1]:
         return unavailable(
             DiagnosticCode.STORED_ENERGY_FLUX_OUTSIDE_BH_RANGE,

@@ -83,8 +83,12 @@ def test_review_reports_each_winding_inductance() -> None:
         for row in section["rows"]
     ]
 
-    assert any(row["label"] == "w1 inductance" for row in rows)
-    assert any(row["label"] == "Effective A_L" for row in rows)
+    # The text, not just the label: asserting the label alone passes even when
+    # every value reads "Unavailable".
+    inductance = next(row for row in rows if row["label"] == "w1 inductance")
+    al_effective = next(row for row in rows if row["label"] == "Effective A_L")
+    assert inductance["text"].endswith(" µH")
+    assert al_effective["text"].endswith(" nH/N²")
 
 
 def test_review_lists_validation_findings() -> None:

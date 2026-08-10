@@ -62,6 +62,7 @@ class DiagnosticCode:
     # core-loss ones.
     CORE_GEOMETRY_NON_POSITIVE = "core_geometry.non_positive"
     CORE_GEOMETRY_NOT_FINITE = "core_geometry.not_finite"
+    CORE_GEOMETRY_NO_CORE_SELECTED = "core_geometry.no_core_selected"
 
     WIRE_LOSS_NO_GEOMETRY = "wire_loss.no_geometry"
     WIRE_LOSS_TEMPERATURE_OUT_OF_RANGE = "wire_loss.temperature_out_of_range"

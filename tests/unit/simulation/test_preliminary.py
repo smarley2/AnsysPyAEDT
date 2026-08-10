@@ -7,6 +7,7 @@ import pytest
 
 from inductor_designer.domain.project import ManualCoreSelection
 from inductor_designer.simulation.inductance_estimate import (
+    AL_TOLERANCE_NOTE,
     INDUCTANCE_EXCLUSION_NOTE,
     STORED_ENERGY_INTEGRATED_NOTE,
 )
@@ -320,13 +321,58 @@ def test_a_missing_bh_series_does_not_hide_the_core_geometry(
     )
 
 
+def test_how_the_effective_area_was_obtained_reaches_the_assumptions(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The A_e provenance note (Manual-core formula, or catalog overrides) rides
+    on `CoreMagneticProperties.notes`. It used to reach the screen only through
+    `b_dc`, which carries no notes when flux density is refused -- exactly when
+    the geometry rows are the only core numbers left.
+    """
+    core = sample_request.core
+    assert core is not None
+    request = replace(
+        sample_request, core=replace(core, notes=("HOW-A_e-WAS-OBTAINED",))
+    )
+    project = replace(
+        request.project,
+        operating_point=replace(request.project.operating_point, core_temperature_c=85.0),
+    )
+
+    result = estimate_preliminary(replace(request, project=project))
+
+    assert result.core.b_dc.state is ResultState.UNAVAILABLE
+    assert result.core.effective_area.state is ResultState.ESTIMATED
+    assert "HOW-A_e-WAS-OBTAINED" in result.notes
+
+
+def test_the_catalog_tolerance_caveat_stays_off_the_inductance_values(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """That caveat is about the DEVIATION mixing roll-off with catalog
+    tolerance. An inductance does not depend on the catalog value at all, so
+    claiming the caveat applies to it would misdescribe the number.
+    """
+    result = estimate_preliminary(sample_request)
+
+    assert AL_TOLERANCE_NOTE in result.core.al_deviation.notes
+    assert AL_TOLERANCE_NOTE in result.core.al_catalog.notes
+    assert AL_TOLERANCE_NOTE in result.core.mu_r_initial.notes
+    assert AL_TOLERANCE_NOTE not in result.core.al_effective.notes
+    assert AL_TOLERANCE_NOTE not in result.core.mu_r_effective.notes
+    assert AL_TOLERANCE_NOTE not in result.windings[0].inductance.notes
+
+
 def test_no_core_leaves_the_geometry_echo_unavailable(
     sample_request: PreliminaryRequest,
 ) -> None:
     result = estimate_preliminary(replace(sample_request, core=None))
 
+    # Its own code, not the flux-density one, so triaging a manifest on
+    # `core_geometry.*` finds this case too.
     assert (
-        result.core.effective_area.code == DiagnosticCode.FLUX_DENSITY_NO_CORE_SELECTED
+        result.core.effective_area.code
+        == DiagnosticCode.CORE_GEOMETRY_NO_CORE_SELECTED
     )
     assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_FLUX_DENSITY
     assert result.windings[0].inductance.code == (

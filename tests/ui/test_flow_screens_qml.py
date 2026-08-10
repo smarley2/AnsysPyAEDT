@@ -189,6 +189,36 @@ def test_preliminary_winding_table_columns_are_fixed_and_aligned() -> None:
     )
 
 
+def test_each_winding_column_renders_the_quantity_its_heading_names() -> None:
+    """The geometry test above pins column widths and positions but not which
+    quantity lands in which column: swapping two data cells passes it, and
+    passes `test_winding_rows_cover_every_specified_winding_quantity` too, which
+    checks each dict key independently of order. This ties the rendered cell
+    texts, in column order, to the row keys in heading order.
+    """
+    _, root, _ = open_flow(2)
+    controller = _ENGINES[-1][1]
+
+    row = controller.windingRows[0]
+    expected = [
+        row["windingId"],
+        row["conductorArea"]["text"],
+        row["wireLength"]["text"],
+        row["resistance"]["text"],
+        row["jAcRms"]["text"],
+        row["jAcPeak"]["text"],
+        row["jDc"]["text"],
+        row["wireLoss"]["text"],
+        row["inductance"]["text"],
+    ]
+
+    rendered = [cell.property("text") for cell in _winding_table_row_cells(root)]
+
+    assert rendered == expected
+    # Every value distinct, or a swap of two equal texts would slip through.
+    assert len(set(rendered)) == len(rendered)
+
+
 def test_preliminary_page_shows_core_winding_totals_and_assumptions() -> None:
     _, root, _ = open_flow(2)
 

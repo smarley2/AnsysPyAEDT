@@ -163,6 +163,7 @@ New stable codes, added to `DiagnosticCode` and never reused:
 | `inductance.not_finite` | The permeability slope, or the inductance factor derived from it, overflows. Prevents a non-finite estimate from becoming a screen-level failure. |
 | `core_geometry.non_positive` | An echoed effective dimension is not positive. |
 | `core_geometry.not_finite` | An echoed effective dimension is not a finite number. |
+| `core_geometry.no_core_selected` | No core is selected, so there are no dimensions to echo. Its own code rather than the flux-density one, so triaging a run manifest on `core_geometry.*` finds every reason the echo was withheld. |
 
 Each dependent quantity reports its own code rather than borrowing the
 flux-density code, following the rule already established for
@@ -246,8 +247,21 @@ The Preliminary screen's assumptions list gains:
   taken from the linear-permeability model in closed form); energy stored in the
   winding window and in leakage paths is excluded either way.
 
-The zero-ripple secant note is attached to the affected values only, not to the
-permanent list.
+The zero-ripple secant note is attached to the affected values, and through them
+reaches the assumptions list whenever the operating point actually has no AC
+ripple. That matches how the existing linear-permeability note already behaves:
+the list states the assumptions in force for the current operating point, not a
+fixed set of sentences. A caveat that only sometimes applies is worth more on
+screen when it applies than absent for consistency.
+
+The catalog-tolerance caveat is attached to the catalog `A_L`, the derived
+initial permeability, and the deviation — not to the effective `A_L`, the
+effective permeability, or any winding inductance. Those do not reference the
+catalog value, so the caveat would misdescribe them.
+
+The `A_e` provenance note travels on the geometry echo as well as on the flux
+densities. When flux density is refused the echo is the only core row left with
+a number, and it must still say how that number was obtained.
 
 ## 7. Verification
 
