@@ -455,6 +455,9 @@ def _normalized_results(
         backend=planned_run.request.backend,
         requested_outputs=project.simulation_recipe.requested_outputs,
         provenance=provenance,
+        dc_biased=any(
+            winding.dc_current_a != 0.0 for winding in planned_run.effective_inputs
+        ),
     )
 
 

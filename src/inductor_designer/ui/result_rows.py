@@ -17,9 +17,11 @@ from inductor_designer.simulation.run_contracts import (
     ResultAvailability,
 )
 from inductor_designer.ui.preliminary_rows import (
+    AMPERE_PER_SQUARE_MILLIMETRE,
     MICROHENRY,
     MILLIJOULE,
     MILLIOHM,
+    MILLITESLA,
     WATT,
     DisplayUnit,
 )
@@ -35,6 +37,8 @@ _UNITS: dict[RequestedOutput, DisplayUnit] = {
     RequestedOutput.TOTAL_LOSS: WATT,
     RequestedOutput.MAGNETIC_ENERGY: MILLIJOULE,
     RequestedOutput.CONVERGENCE: PERCENT_POINTS,
+    RequestedOutput.FLUX_DENSITY: MILLITESLA,
+    RequestedOutput.CURRENT_DENSITY: AMPERE_PER_SQUARE_MILLIMETRE,
 }
 
 _LABELS: dict[RequestedOutput, str] = {
@@ -47,6 +51,8 @@ _LABELS: dict[RequestedOutput, str] = {
     RequestedOutput.TOTAL_LOSS: "Total loss",
     RequestedOutput.MAGNETIC_ENERGY: "Magnetic energy",
     RequestedOutput.CONVERGENCE: "Convergence",
+    RequestedOutput.FLUX_DENSITY: "Flux density",
+    RequestedOutput.CURRENT_DENSITY: "Current density",
 }
 
 
@@ -55,7 +61,14 @@ def _scope_suffix(scope: str) -> str:
         return f" ({scope.removeprefix('winding.')})"
     if scope.startswith("device."):
         return f" ({scope.removeprefix('device.')})"
+    if scope.startswith("core."):
+        return f" ({scope.removeprefix('core.')})"
     return ""
+
+
+def is_section_row(quantity: NormalizedQuantity) -> bool:
+    """A per-section entry, as opposed to one of the three aggregates."""
+    return ".section." in quantity.scope
 
 
 def label_for(quantity: NormalizedQuantity) -> str:
@@ -85,7 +98,22 @@ def text_for(quantity: NormalizedQuantity) -> str:
 
 
 def result_rows(results: NormalizedResultSet) -> list[dict[str, str]]:
-    return [
+    """Aggregates on screen; the per-section detail lives in the exports.
+
+    A solved run can carry a dozen sections, and Review summarizes. Every
+    section is still recorded, exported and traceable - just not here.
+    """
+    rows = [
         {"label": label_for(quantity), "text": text_for(quantity)}
         for quantity in results.quantities
+        if not is_section_row(quantity)
     ]
+    sections = sum(1 for quantity in results.quantities if is_section_row(quantity))
+    if sections:
+        rows.append(
+            {
+                "label": "Per-section detail",
+                "text": f"{sections} evaluated sections in results.json and results.csv",
+            }
+        )
+    return rows

@@ -168,12 +168,21 @@ def test_a_quantity_the_user_did_not_request_is_absent() -> None:
     )
 
 
-def test_field_quantities_are_never_produced_here() -> None:
+def test_field_quantities_now_report_through_the_field_normalizer() -> None:
+    """M8b produced nothing here; M8c routes fields through their own path."""
     result_set = normalize(
         RawScalarResults(), outputs=(RequestedOutput.FLUX_DENSITY,)
     )
 
-    assert result_set.quantities == ()
+    assert result_set.quantities
+    assert all(
+        entry.quantity is RequestedOutput.FLUX_DENSITY
+        for entry in result_set.quantities
+    )
+    assert all(
+        entry.availability is ResultAvailability.UNAVAILABLE
+        for entry in result_set.quantities
+    ), "a backend that evaluated no area reports nothing, with a reason"
 
 
 def test_normalization_never_invents_a_scope_without_a_winding() -> None:

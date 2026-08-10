@@ -7,10 +7,14 @@ reason. Nothing is estimated, and nothing is silently omitted.
 
 from __future__ import annotations
 
+from inductor_designer.application.services.field_normalization import (
+    normalize_field_results,
+)
 from inductor_designer.domain.project import RequestedOutput
-from inductor_designer.simulation.raw_results import RawScalarResults
+from inductor_designer.simulation.raw_results import RawFieldSection, RawScalarResults
 from inductor_designer.simulation.result_vocabulary import (
     DEVICE_SCOPE,
+    FIELD_QUANTITIES,
     NOT_EXPOSED,
     NOT_REPORTED,
     PER_WINDING_QUANTITIES,
@@ -28,6 +32,12 @@ from inductor_designer.simulation.run_contracts import (
     NormalizedValue,
     ResultAvailability,
     RunBackend,
+)
+
+FEMM_FIELD_REASON = (
+    "FEMM's block integrals expose the field components, not the magnitude, "
+    "and around a toroid those components cancel; a magnitude mean cannot be "
+    "obtained without misrepresentation."
 )
 
 DERIVED_TOTAL_LOSS_NOTE = (
@@ -224,6 +234,55 @@ def _convergence(raw: RawScalarResults, provenance: str) -> NormalizedQuantity:
     )
 
 
+def _field_entries(
+    quantity: RequestedOutput,
+    raw: RawScalarResults,
+    backend: RunBackend,
+    provenance: str,
+    dc_biased: bool,
+) -> tuple[NormalizedQuantity, ...]:
+    if backend is RunBackend.FEMM:
+        return (
+            _unavailable(
+                quantity,
+                DEVICE_SCOPE,
+                f"{reason_code(quantity, NOT_EXPOSED)}: {FEMM_FIELD_REASON}",
+            ),
+        )
+    if quantity is RequestedOutput.FLUX_DENSITY:
+        return normalize_field_results(
+            quantity,
+            raw.flux_density_sections,
+            scope="core",
+            provenance=provenance,
+            dc_biased=dc_biased,
+        )
+    entries: list[NormalizedQuantity] = []
+    by_winding: dict[str, list[RawFieldSection]] = {}
+    for section in raw.current_density_sections:
+        winding_id = section.scope.split(".")[1] if "." in section.scope else "unknown"
+        by_winding.setdefault(winding_id, []).append(section)
+    if not by_winding:
+        return normalize_field_results(
+            quantity,
+            (),
+            scope=DEVICE_SCOPE,
+            provenance=provenance,
+            dc_biased=dc_biased,
+        )
+    for winding_id, sections in by_winding.items():
+        entries.extend(
+            normalize_field_results(
+                quantity,
+                tuple(sections),
+                scope=winding_scope(winding_id),
+                provenance=provenance,
+                dc_biased=dc_biased,
+            )
+        )
+    return tuple(entries)
+
+
 def normalize_scalar_results(
     raw: RawScalarResults,
     *,
@@ -231,12 +290,17 @@ def normalize_scalar_results(
     backend: RunBackend,
     requested_outputs: tuple[RequestedOutput, ...],
     provenance: str,
+    dc_biased: bool = False,
 ) -> NormalizedResultSet:
     """One entry per requested scalar quantity per scope, never a silent gap."""
     quantities: list[NormalizedQuantity] = []
     for quantity in requested_outputs:
+        if quantity in FIELD_QUANTITIES:
+            quantities.extend(
+                _field_entries(quantity, raw, backend, provenance, dc_biased)
+            )
+            continue
         if quantity not in SCALAR_QUANTITIES:
-            # Field quantities belong to M8c; this service never invents them.
             continue
         if quantity in PER_WINDING_QUANTITIES:
             quantities.extend(_winding_entries(quantity, raw, provenance))
