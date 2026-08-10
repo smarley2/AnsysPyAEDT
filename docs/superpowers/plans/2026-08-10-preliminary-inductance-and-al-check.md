@@ -1,6 +1,6 @@
 # Preliminary Inductance and A_L Check Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Report inductance, effective `A_L`, the catalog `A_L` check, effective
 permeability, stored energy, and the effective-core-geometry echo on the
@@ -69,7 +69,7 @@ producing an Unavailable row.
   notes: tuple[str, ...] = ())`. `al_value_nh is None` means "this core has no
   manufacturer inductance factor" and is the Manual-core case.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/unit/simulation/test_preliminary_contracts.py`, replace the body of
 `test_core_magnetic_properties_allow_every_number_including_non_finite` with:
@@ -139,7 +139,7 @@ def test_catalog_core_with_dimension_overrides_keeps_the_catalog_area_and_al() -
     assert properties.notes == (CATALOG_OVERRIDE_NOTE,)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 $PY -m pytest tests/unit/simulation/test_preliminary_contracts.py tests/unit/application/test_preliminary_inputs.py -q
@@ -148,7 +148,7 @@ $PY -m pytest tests/unit/simulation/test_preliminary_contracts.py tests/unit/app
 Expected: FAIL — `TypeError: CoreMagneticProperties.__init__() got an
 unexpected keyword argument 'effective_area_m2'`.
 
-- [ ] **Step 3: Extend the contract**
+- [x] **Step 3: Extend the contract**
 
 In `src/inductor_designer/simulation/preliminary_contracts.py`, replace the
 `CoreMagneticProperties` docstring and fields with:
@@ -176,7 +176,7 @@ class CoreMagneticProperties:
     notes: tuple[str, ...] = field(default_factory=tuple)
 ```
 
-- [ ] **Step 4: Fill both fields in the service**
+- [x] **Step 4: Fill both fields in the service**
 
 In `src/inductor_designer/application/services/preliminary_inputs.py`, replace
 the body of `core_magnetic_properties` after the `None` check with:
@@ -206,7 +206,7 @@ the body of `core_magnetic_properties` after the `None` check with:
     )
 ```
 
-- [ ] **Step 5: Update the two remaining construction sites**
+- [x] **Step 5: Update the two remaining construction sites**
 
 In `tests/unit/simulation/conftest.py`, replace the `core=` argument:
 
@@ -222,7 +222,7 @@ In `tests/unit/simulation/conftest.py`, replace the `core=` argument:
 In `tests/integration/test_preliminary_estimator.py`, replace the `core=`
 argument with exactly the same four lines.
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 ```bash
 $PY -m pytest -n 8 -q
@@ -230,7 +230,7 @@ $PY -m pytest -n 8 -q
 
 Expected: PASS — 1161 passed (plus the 2 new tests), 7 skipped.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/inductor_designer/simulation/preliminary_contracts.py src/inductor_designer/application/services/preliminary_inputs.py tests/unit/simulation/test_preliminary_contracts.py tests/unit/application/test_preliminary_inputs.py tests/unit/simulation/conftest.py tests/integration/test_preliminary_estimator.py
@@ -275,7 +275,7 @@ permeability, and the deviation are either all present or all absent, so they
 travel as one object instead of three independently-optional floats that every
 consumer would have to re-check.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/simulation/test_inductance_estimate.py`:
 
@@ -545,7 +545,7 @@ def test_an_unusable_volume_refuses_stored_energy(volume: float) -> None:
     assert result.code == DiagnosticCode.STORED_ENERGY_NON_POSITIVE_VOLUME
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 $PY -m pytest tests/unit/simulation/test_inductance_estimate.py -q
@@ -554,7 +554,7 @@ $PY -m pytest tests/unit/simulation/test_inductance_estimate.py -q
 Expected: FAIL — `ModuleNotFoundError: No module named
 'inductor_designer.simulation.inductance_estimate'`.
 
-- [ ] **Step 3: Add the diagnostic codes**
+- [x] **Step 3: Add the diagnostic codes**
 
 In `src/inductor_designer/simulation/preliminary_contracts.py`, insert after the
 `CURRENT_DENSITY_NO_CONDUCTOR` line:
@@ -577,7 +577,7 @@ In `src/inductor_designer/simulation/preliminary_contracts.py`, insert after the
     CORE_GEOMETRY_NOT_FINITE = "core_geometry.not_finite"
 ```
 
-- [ ] **Step 4: Write the module**
+- [x] **Step 4: Write the module**
 
 Create `src/inductor_designer/simulation/inductance_estimate.py`:
 
@@ -759,7 +759,7 @@ def stored_energy_j(
     )
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 ```bash
 $PY -m pytest tests/unit/simulation/test_inductance_estimate.py tests/unit/simulation/test_preliminary_contracts.py -q
@@ -768,7 +768,7 @@ $PY -m pytest tests/unit/simulation/test_inductance_estimate.py tests/unit/simul
 Expected: PASS. `test_preliminary_contracts.py` includes a code-uniqueness
 check that now covers the nine new codes.
 
-- [ ] **Step 6: Amend the design's diagnostic table**
+- [x] **Step 6: Amend the design's diagnostic table**
 
 Three codes were not enumerated in the design. In
 `docs/superpowers/specs/2026-08-10-preliminary-inductance-and-al-check-design.md`,
@@ -788,7 +788,7 @@ and append this paragraph to section 5.3:
 > temperature must not make the core's effective area read Unavailable, which
 > is why the echo carries its own `core_geometry.*` reasons.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/inductor_designer/simulation/inductance_estimate.py src/inductor_designer/simulation/preliminary_contracts.py tests/unit/simulation/test_inductance_estimate.py docs/superpowers/specs/2026-08-10-preliminary-inductance-and-al-check-design.md
@@ -814,7 +814,7 @@ git commit -m "feat(simulation): estimate inductance factor, permeability, and s
   - `WindingPreliminary` gains `inductance: PreliminaryValue`, after
     `wire_loss`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/simulation/test_preliminary.py`:
 
@@ -952,7 +952,7 @@ from inductor_designer.simulation.inductance_estimate import (
 `replace`, `estimate_preliminary`, `PreliminaryRequest`, `ResultState`, and
 `DiagnosticCode` are already imported there; confirm before adding duplicates.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 $PY -m pytest tests/unit/simulation/test_preliminary.py -q
@@ -961,7 +961,7 @@ $PY -m pytest tests/unit/simulation/test_preliminary.py -q
 Expected: FAIL — `AttributeError: 'CorePreliminary' object has no attribute
 'al_effective'`.
 
-- [ ] **Step 3: Extend the result dataclasses**
+- [x] **Step 3: Extend the result dataclasses**
 
 In `src/inductor_designer/simulation/preliminary.py`, add to the imports:
 
@@ -995,7 +995,7 @@ Append to `CorePreliminary`:
     stored_energy: PreliminaryValue
 ```
 
-- [ ] **Step 4: Build the geometry echo and widen `_core_all`**
+- [x] **Step 4: Build the geometry echo and widen `_core_all`**
 
 Insert above `_core_all`:
 
@@ -1097,7 +1097,7 @@ def _core_all(
     )
 ```
 
-- [ ] **Step 5: Compute the estimates in `_core_estimates`**
+- [x] **Step 5: Compute the estimates in `_core_estimates`**
 
 Replace `_core_estimates` with:
 
@@ -1167,7 +1167,7 @@ def _core_estimates(
     )
 ```
 
-- [ ] **Step 6: Give each winding its inductance**
+- [x] **Step 6: Give each winding its inductance**
 
 Insert above `_winding_row`:
 
@@ -1208,7 +1208,7 @@ In `estimate_preliminary`, replace the `windings = tuple(...)` expression with:
     )
 ```
 
-- [ ] **Step 7: Pass the geometry echo through `estimate_preliminary`**
+- [x] **Step 7: Pass the geometry echo through `estimate_preliminary`**
 
 Replace the core branches of `estimate_preliminary` with the following. Only
 the `_core_all` / `_core_estimates` call sites change: every diagnostic
@@ -1285,7 +1285,7 @@ every other branch uses `_geometry_echo(request.core)` — a core is selected, s
 its dimensions are known and must stay visible even when flux density is
 refused.
 
-- [ ] **Step 8: Carry the new notes into the assumptions list**
+- [x] **Step 8: Carry the new notes into the assumptions list**
 
 In `estimate_preliminary`, replace the notes-aggregation loop's tuple with:
 
@@ -1299,7 +1299,7 @@ In `estimate_preliminary`, replace the notes-aggregation loop's tuple with:
     ):
 ```
 
-- [ ] **Step 9: Run the tests to verify they pass**
+- [x] **Step 9: Run the tests to verify they pass**
 
 ```bash
 $PY -m pytest tests/unit/simulation tests/integration/test_preliminary_estimator.py -q
@@ -1309,7 +1309,7 @@ Expected: PASS. Any `TypeError: CorePreliminary.__init__() missing ...`
 failure in another test module means a fixture there also builds
 `CorePreliminary` — fix it in Task 4, which owns that fixture.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/inductor_designer/simulation/preliminary.py tests/unit/simulation/test_preliminary.py
@@ -1330,7 +1330,7 @@ git commit -m "feat(simulation): report inductance, A_L check, and stored energy
   order (existing tests index `coreRows[5]` for core loss). `winding_rows`
   dicts gain the key `inductance`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/unit/ui/test_preliminary_rows.py`, extend `make_result()`'s
 `CorePreliminary(...)` with:
@@ -1402,7 +1402,7 @@ Add `"inductance"` coverage to the winding test:
 
 Extend the imports in that file with `DIMENSIONLESS`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 $PY -m pytest tests/unit/ui/test_preliminary_rows.py -q
@@ -1410,7 +1410,7 @@ $PY -m pytest tests/unit/ui/test_preliminary_rows.py -q
 
 Expected: FAIL — `ImportError: cannot import name 'DIMENSIONLESS'`.
 
-- [ ] **Step 3: Add the units and rows**
+- [x] **Step 3: Add the units and rows**
 
 In `src/inductor_designer/ui/preliminary_rows.py`, add after `WATT`:
 
@@ -1458,7 +1458,7 @@ Add to each dict `winding_rows` builds:
             "inductance": cell(row.inductance, MICROHENRY),
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 $PY -m pytest tests/unit/ui/test_preliminary_rows.py -q
@@ -1468,7 +1468,7 @@ Expected: PASS. If a rounding assertion is off by one digit, trust the
 computed value and fix the expected string — the units, not the physics, are
 under test here.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/inductor_designer/ui/preliminary_rows.py tests/unit/ui/test_preliminary_rows.py
@@ -1494,7 +1494,7 @@ their positions, and the core rows are appended after `Core loss` so
   (Task 4). The controller needs no change — it already forwards whatever
   `core_rows` and `winding_rows` return.
 
-- [ ] **Step 1: Update the failing expectations**
+- [x] **Step 1: Update the failing expectations**
 
 In `tests/ui/test_flow_screens_qml.py`:
 
@@ -1527,7 +1527,7 @@ def test_every_winding_row_reports_an_inductance_and_the_permeability_used() -> 
     assert controller.coreRows[9]["text"] == "60.0"
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 $PY -m pytest tests/ui/test_flow_screens_qml.py tests/ui/test_preliminary_controller.py -q
@@ -1536,7 +1536,7 @@ $PY -m pytest tests/ui/test_flow_screens_qml.py tests/ui/test_preliminary_contro
 Expected: FAIL — `assert 8 == 9` on the header/row cell count, and
 `assert 6 == 15` on the core table count.
 
-- [ ] **Step 3: Add the column**
+- [x] **Step 3: Add the column**
 
 In `src/inductor_designer/ui/qml/PreliminaryPage.qml`, add as the last child
 of the `preliminaryWindingTableHeader` `RowLayout`:
@@ -1560,7 +1560,7 @@ loss `Label`):
 No `Layout.fillWidth` on either, matching the fixed-width column rule the
 surrounding comment documents.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 $PY -m pytest tests/ui -q
@@ -1568,7 +1568,7 @@ $PY -m pytest tests/ui -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/inductor_designer/ui/qml/PreliminaryPage.qml tests/ui/test_flow_screens_qml.py tests/ui/test_preliminary_controller.py
@@ -1586,7 +1586,7 @@ git commit -m "feat(ui): show inductance and the A_L check on the Preliminary sc
 Review already maps `coreRows` generically, so the nine new core rows appear
 without any change. Only the per-winding line needs adding.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/ui/test_review_controller.py`:
 
@@ -1609,7 +1609,7 @@ Use the file's existing controller-construction helper (see
 `test_review_shows_the_paired_core_material_operating_point_and_estimates`)
 rather than a new one; if it builds the controller inline, copy that block.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 $PY -m pytest tests/ui/test_review_controller.py -q
@@ -1617,7 +1617,7 @@ $PY -m pytest tests/ui/test_review_controller.py -q
 
 Expected: FAIL — no row labelled `w1 inductance`.
 
-- [ ] **Step 3: Add the line**
+- [x] **Step 3: Add the line**
 
 In `src/inductor_designer/ui/review_controller.py`, after the existing
 current-density `rows.extend(...)` block, add:
@@ -1632,7 +1632,7 @@ current-density `rows.extend(...)` block, add:
         )
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 $PY -m pytest tests/ui/test_review_controller.py -q
@@ -1640,7 +1640,7 @@ $PY -m pytest tests/ui/test_review_controller.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/inductor_designer/ui/review_controller.py tests/ui/test_review_controller.py
@@ -1651,7 +1651,7 @@ git commit -m "feat(ui): list per-winding inductance on the Review screen"
 
 ### Task 7: Full verification
 
-- [ ] **Step 1: Run the whole suite**
+- [x] **Step 1: Run the whole suite**
 
 ```bash
 $PY -m pytest -n 8 -q
@@ -1660,7 +1660,7 @@ $PY -m pytest -n 8 -q
 Expected: PASS, 0 failures. Baseline was 1161 passed, 7 skipped; the count
 grows by the new tests and the skip count must not change.
 
-- [ ] **Step 2: Lint and type-check**
+- [x] **Step 2: Lint and type-check**
 
 ```bash
 $PY -m ruff check src tests && $PY -m ruff format --check src tests && $PY -m mypy src
@@ -1669,7 +1669,7 @@ $PY -m ruff check src tests && $PY -m ruff format --check src tests && $PY -m my
 Expected: no findings. Fix any line over 100 characters in the new module by
 wrapping, not by widening the limit.
 
-- [ ] **Step 3: Confirm the dependency boundary held**
+- [x] **Step 3: Confirm the dependency boundary held**
 
 ```bash
 grep -rn "PySide6\|pyaedt\|sqlite3" src/inductor_designer/simulation/
@@ -1677,7 +1677,7 @@ grep -rn "PySide6\|pyaedt\|sqlite3" src/inductor_designer/simulation/
 
 Expected: no output. `simulation` must import no Qt, PyAEDT, or SQLite.
 
-- [ ] **Step 4: Look at the screen**
+- [x] **Step 4: Look at the screen**
 
 Launch the application, open a project with a catalog core, and check the
 Preliminary screen: the Core summary shows the nine new rows and the winding
@@ -1685,7 +1685,7 @@ table shows an `Inductance` column. Confirm the `A_L` deviation is a plausible
 roll-off (a powder core under bias reads negative), not a 900 % number that
 would mean the area or the path length is being applied in the wrong place.
 
-- [ ] **Step 5: Commit any fixes and report**
+- [x] **Step 5: Commit any fixes and report**
 
 ```bash
 git add -A && git commit -m "test: verify preliminary inductance across the suite"
