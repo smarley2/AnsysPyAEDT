@@ -75,6 +75,24 @@ before the next plan freezes assumptions that depend on it.
     specification section 11 acceptance walk against the real catalog and
     material overlay.
 
+- **Milestone 8 is split into three plans**, for the same reason M7 was: its
+  approved scope covers three independently testable subsystems, each with its
+  own failure modes and its own live evidence.
+  - **M8a is the active plan**, not yet implemented:
+    [2026-08-10 M8a solve execution](2026-08-10-m8a-solve-execution.md) —
+    solve execution on all three backends, stage progress, cooperative
+    cancellation between stages, a durable `running` manifest, failed-stage
+    diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
+    `RunManifest.results` stays `None` through the whole slice.
+  - **M8b**, not yet planned: scalar normalized results (resistance,
+    inductance, impedance, supported matrices, copper/core/total loss,
+    magnetic energy, convergence and solver status), JSON and CSV export, and
+    the Review result display.
+  - **M8c**, not yet planned: field results, implementing the approved
+    [2026-08-10 Representative Cross Sections design](../specs/2026-08-10-representative-cross-sections-design.md)
+    — feature-anchored core planes, skin-depth-gated conductor discs,
+    per-section evidence, worst-section mean and across-section average.
+
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`
   sorts chronologically; diagnostic codes are lowercase dotted
