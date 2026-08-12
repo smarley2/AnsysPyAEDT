@@ -6,11 +6,12 @@ import math
 from dataclasses import replace
 
 from inductor_designer.application.services.geometry_model import build_geometry_model
+from inductor_designer.domain.project import WindingOperatingPoint
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.ui.cut_plane_view import build_cut_plane_drawing
-from inductor_designer.ui.preview_geometry import PALETTE
+from inductor_designer.ui.preview_geometry import build_preview_entries
 from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.domain.test_project import make_project
+from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
 
 
 def test_every_planar_conductor_becomes_one_circle_in_millimetres() -> None:
@@ -73,22 +74,58 @@ def test_the_two_legs_of_a_turn_carry_opposite_glyphs() -> None:
 
 
 def test_winding_colour_matches_the_three_d_preview_order() -> None:
-    project = make_project()
+    """The 2D drawing and the 3D preview must colour each winding alike.
+
+    `build_preview_entries` colours winding i by its index in
+    `sorted(model.packings, key=winding_id)`; `build_cut_plane_drawing` must
+    use that same order over `planar.windings`. A single-winding project
+    can't tell the two orders apart -- index 0 either way -- so this builds
+    two windings, "w2" declared before "w1", whose winding_id order is the
+    reverse of their declaration order. That mismatch is what makes a
+    missing (or divergent) sort observable.
+    """
+    project = make_project(
+        design=replace(
+            make_project().design,
+            windings=(
+                make_winding(winding_id="w2", start_angle_deg=0.0, sector_deg=150.0),
+                make_winding(winding_id="w1", start_angle_deg=180.0, sector_deg=150.0),
+            ),
+        ),
+        operating_point=make_operating_point(
+            WindingOperatingPoint(
+                winding_id="w2",
+                ac_rms_current_a=2.0,
+                ac_phase_deg=0.0,
+                dc_current_a=5.0,
+                current_direction=CurrentDirection.FORWARD,
+            ),
+            WindingOperatingPoint(
+                winding_id="w1",
+                ac_rms_current_a=2.0,
+                ac_phase_deg=0.0,
+                dc_current_a=5.0,
+                current_direction=CurrentDirection.FORWARD,
+            ),
+        ),
+    )
     model = build_geometry_model(project, CATALOG)
 
     drawing = build_cut_plane_drawing(model, project)
+    # entries[0] is the core; entries[1:] follow sorted(model.packings, key=winding_id).
+    preview_entries = build_preview_entries(model)
 
-    first_id = sorted(w.winding_id for w in model.planar.windings)[0]
-    first_circles = [
-        c
-        for c in drawing.circles
-        if c.color == PALETTE[0]
-    ]
-    assert first_circles
-    expected = len(
-        next(w for w in model.planar.windings if w.winding_id == first_id).conductors
-    )
-    assert len(first_circles) == expected
+    by_position = {(round(c.x_mm, 6), round(c.y_mm, 6)): c for c in drawing.circles}
+    sorted_ids = sorted(w.winding_id for w in model.planar.windings)
+    assert sorted_ids == ["w1", "w2"]  # declaration order was "w2", "w1"
+
+    for index, winding_id in enumerate(sorted_ids):
+        expected_color = preview_entries[1 + index].color
+        planar_winding = next(w for w in model.planar.windings if w.winding_id == winding_id)
+        assert planar_winding.conductors
+        for conductor in planar_winding.conductors:
+            key = (round(conductor.x_m * 1000.0, 6), round(conductor.y_m * 1000.0, 6))
+            assert by_position[key].color == expected_color
 
 
 def test_a_winding_wound_the_other_way_flips_its_own_glyphs() -> None:
