@@ -67,3 +67,16 @@ and artifacts. A partial design is never reported as successful.
   verification. The adapter uses `create_region` for the 2D air region, assigns
   an explicit balloon boundary, sets `model_depth` after geometry exists, and
   mirrors the verified calls in recording fakes and `aedt`-marked tests.
+- TAU's 2D surface mesher fails outright (`TAU: Surface Mesh Generation
+  Failed.`, in under a second, before the setup solves) once a model feature
+  falls under its working tolerance while `model_units` is meter — e.g. a
+  47 um conductor-to-core clearance is `4.7e-5` in meter units. The adapter
+  switches `model_units` to `mm` once geometry and mesh length operations are
+  built, which only changes the mesher's working tolerance and does not
+  rescale the model: existing geometry is already stored with an explicit
+  `meter` suffix. Verified live on AEDT 2025.2, 2026-08-12; see GitHub issue
+  #14.
+- `Setup1` requires a minimum of 3 adaptive passes, not AEDT's default of 1:
+  a single pass gives no evidence the mesh has converged, and 2D has none of
+  the DC-bias mesh-mapping fragility that keeps Maxwell 3D pinned to one pass
+  (see `docs/development/dc-bias-solve-limitation.md`).

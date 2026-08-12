@@ -187,3 +187,34 @@ def test_initial_mesh_uses_the_slider_only(tmp_path: Path) -> None:
     initial_mesh = [k for n, k in app.calls if n == "mesh.assign_initial_mesh_from_slider"]
     assert len(initial_mesh) == 1
     assert initial_mesh[0] == {"level": 6}
+
+
+def test_model_units_switch_to_mm_after_mesh_ops(tmp_path: Path) -> None:
+    """TAU's 2D surface mesher fails at meter model units once a feature (the
+    conductor-to-core clearance) drops to tens of microns; see GitHub issue #14.
+    All geometry and mesh lengths must already be set (in meter units) before
+    the switch, so this must land after 'CoreLength', not before."""
+    app = FakeMaxwell2dApp()
+    result = run(tmp_path, app)
+    assert result.succeeded(STAGE_NAMES_2D)  # type: ignore[attr-defined]
+
+    names = [name for name, _ in app.calls]
+    unit_sets = [k["value"] for n, k in app.calls if n == "modeler.set.model_units"]
+    assert unit_sets == ["meter", "mm"]
+    length_mesh_positions = [i for i, n in enumerate(names) if n == "mesh.assign_length_mesh"]
+    mm_position = names.index("modeler.set.model_units", length_mesh_positions[0] + 1)
+    assert max(length_mesh_positions) < mm_position < names.index("create_setup")
+
+
+def test_setup_requires_at_least_three_passes(tmp_path: Path) -> None:
+    """A single converged pass is not enough evidence that the 2D solve has
+    settled; Maxwell 2D has none of the DC-bias mesh-mapping fragility that
+    keeps Maxwell 3D pinned to one adaptive pass (see
+    docs/development/dc-bias-solve-limitation.md), so raising the floor here
+    carries no regression risk for 3D."""
+    app = FakeMaxwell2dApp()
+    result = run(tmp_path, app)
+    assert result.succeeded(STAGE_NAMES_2D)  # type: ignore[attr-defined]
+
+    setup_updates = [k for n, k in app.calls if n == "setup.update"]
+    assert setup_updates[0]["props"]["MinimumPasses"] == 3
