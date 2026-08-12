@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import math
-from dataclasses import replace
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -17,6 +17,7 @@ from inductor_designer.domain.winding import (
     CurrentDirection,
     WindingDirection,
 )
+from inductor_designer.ui.cut_plane_view import CutPlaneDrawing, build_cut_plane_drawing
 from inductor_designer.ui.preview_geometry import PreviewEntry, build_preview_entries
 
 if TYPE_CHECKING:
@@ -27,6 +28,18 @@ if TYPE_CHECKING:
 
 
 _COLORS = ("#e77b49", "#2e65e7", "#157a61", "#8a5cf6")
+
+
+@dataclass(frozen=True, slots=True)
+class _PreviewState:
+    """The 3D entries and the 2D drawing, always rebuilt together.
+
+    They come from one `build_geometry_model` call, so the two views can never
+    show different geometry.
+    """
+
+    entries: list[PreviewEntry]
+    drawing: CutPlaneDrawing
 
 
 class GuidedStudioController(QObject):
@@ -64,7 +77,7 @@ class GuidedStudioController(QObject):
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )
-        self._preview_entries = self._build_preview(project)
+        self._preview = self._build_preview(project)
         # Set around every `self._session.apply(...)` call below: `apply`
         # emits `projectChanged` synchronously, which `main.py` wires back to
         # `refresh()` on this same controller. Without the guard, one accepted
@@ -73,9 +86,12 @@ class GuidedStudioController(QObject):
         # already applied the very state `refresh()` would recompute.
         self._applying = False
 
-    def _build_preview(self, project: InductorProject) -> list[PreviewEntry]:
+    def _build_preview(self, project: InductorProject) -> _PreviewState:
         model = build_geometry_model(project, self._catalog)
-        return build_preview_entries(model)
+        return _PreviewState(
+            entries=build_preview_entries(model),
+            drawing=build_cut_plane_drawing(model, project),
+        )
 
     def _next_winding_id(self) -> str:
         taken = {winding.winding_id for winding in self._session.project.design.windings}
@@ -136,9 +152,16 @@ class GuidedStudioController(QObject):
     windings = Property(list, _get_windings, notify=windingsChanged)
 
     def _get_preview_entries(self) -> list[PreviewEntry]:
-        return self._preview_entries
+        return self._preview.entries
 
     previewEntries = Property(list, _get_preview_entries, notify=previewEntriesChanged)
+
+    def _get_cut_plane_drawing(self) -> dict[str, object]:
+        return asdict(self._preview.drawing)
+
+    cutPlaneDrawing = Property(
+        dict, _get_cut_plane_drawing, notify=previewEntriesChanged
+    )
 
     def _get_selected_winding_id(self) -> str:
         return self._selected_winding_id
@@ -308,11 +331,11 @@ class GuidedStudioController(QObject):
                 )
                 return False
             updated_project = replace(project, operating_point=updated_point)
-            preview_entries = self._build_preview(updated_project)
+            preview_state = self._build_preview(updated_project)
         except (GeometryModelError, ValueError) as error:
             self._session.set_status(f"Unable to apply change: {error}")
             return False
-        self._preview_entries = preview_entries
+        self._preview = preview_state
         self._applying = True
         try:
             self._session.apply(updated_project)
@@ -369,7 +392,7 @@ class GuidedStudioController(QObject):
                         windings=tuple(updated_windings),
                     ),
                 )
-            preview_entries = self._build_preview(updated_project)
+            preview_state = self._build_preview(updated_project)
         except (GeometryModelError, StopIteration, ValueError) as error:
             self._session.set_status(f"Unable to apply change: {error}")
             return False
@@ -383,7 +406,7 @@ class GuidedStudioController(QObject):
             updated_project.design.windings,
             updated_project.operating_point.windings,
         )
-        self._preview_entries = preview_entries
+        self._preview = preview_state
         self._session.set_status(f"Updated {winding_id}")
         self.windingsChanged.emit()
         self.previewEntriesChanged.emit()
@@ -434,11 +457,11 @@ class GuidedStudioController(QObject):
             ),
         )
         try:
-            preview_entries = self._build_preview(updated_project)
+            preview_state = self._build_preview(updated_project)
         except GeometryModelError as error:
             self._session.set_status(f"Unable to add a winding: {error}")
             return False
-        self._preview_entries = preview_entries
+        self._preview = preview_state
         self._applying = True
         try:
             self._session.apply(updated_project)
@@ -486,11 +509,11 @@ class GuidedStudioController(QObject):
             ),
         )
         try:
-            preview_entries = self._build_preview(updated_project)
+            preview_state = self._build_preview(updated_project)
         except GeometryModelError as error:
             self._session.set_status(f"Unable to remove {winding_id}: {error}")
             return False
-        self._preview_entries = preview_entries
+        self._preview = preview_state
         self._applying = True
         try:
             self._session.apply(updated_project)
@@ -525,7 +548,7 @@ class GuidedStudioController(QObject):
         # reported by its own controller, and a blank canvas would hide the
         # windings the user is about to fix.
         with contextlib.suppress(GeometryModelError):
-            self._preview_entries = self._build_preview(project)
+            self._preview = self._build_preview(project)
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )
