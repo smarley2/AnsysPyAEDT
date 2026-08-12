@@ -204,3 +204,17 @@ def test_model_units_switch_to_mm_after_mesh_ops(tmp_path: Path) -> None:
     length_mesh_positions = [i for i, n in enumerate(names) if n == "mesh.assign_length_mesh"]
     mm_position = names.index("modeler.set.model_units", length_mesh_positions[0] + 1)
     assert max(length_mesh_positions) < mm_position < names.index("create_setup")
+
+
+def test_setup_requires_at_least_three_passes(tmp_path: Path) -> None:
+    """A single converged pass is not enough evidence that the 2D solve has
+    settled; Maxwell 2D has none of the DC-bias mesh-mapping fragility that
+    keeps Maxwell 3D pinned to one adaptive pass (see
+    docs/development/dc-bias-solve-limitation.md), so raising the floor here
+    carries no regression risk for 3D."""
+    app = FakeMaxwell2dApp()
+    result = run(tmp_path, app)
+    assert result.succeeded(STAGE_NAMES_2D)  # type: ignore[attr-defined]
+
+    setup_updates = [k for n, k in app.calls if n == "setup.update"]
+    assert setup_updates[0]["props"]["MinimumPasses"] == 3

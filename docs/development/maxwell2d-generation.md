@@ -76,3 +76,7 @@ and artifacts. A partial design is never reported as successful.
   rescale the model: existing geometry is already stored with an explicit
   `meter` suffix. Verified live on AEDT 2025.2, 2026-08-12; see GitHub issue
   #14.
+- `Setup1` requires a minimum of 3 adaptive passes, not AEDT's default of 1:
+  a single pass gives no evidence the mesh has converged, and 2D has none of
+  the DC-bias mesh-mapping fragility that keeps Maxwell 3D pinned to one pass
+  (see `docs/development/dc-bias-solve-limitation.md`).

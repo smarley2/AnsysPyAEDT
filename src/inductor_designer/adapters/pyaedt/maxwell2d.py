@@ -246,6 +246,14 @@ def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     return "Length-based mesh restrictions assigned; model units set to mm for TAU meshing."
 
 
+# AEDT's own default (1) accepts the first pass as converged even if nothing
+# has been refined yet. 2D carries none of the DC-bias mesh-mapping fragility
+# that keeps Maxwell 3D pinned to one adaptive pass (see
+# docs/development/dc-bias-solve-limitation.md), so there is no regression
+# risk in raising the floor here.
+MINIMUM_PASSES_2D = 3
+
+
 def _stage_setup(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     # Non-graphical AEDT rejects design-settings writes (model_depth) on an
     # empty design, so depth is set here, once geometry/region/boundary exist.
@@ -253,6 +261,7 @@ def _stage_setup(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     setup = app.create_setup(name=plan.setup.name)
     setup.props["Frequency"] = f"{plan.setup.frequency_hz:g}Hz"
     setup.props["MaximumPasses"] = plan.setup.maximum_passes
+    setup.props["MinimumPasses"] = MINIMUM_PASSES_2D
     setup.props["PercentError"] = plan.setup.percent_error
     setup.update()
     return (
