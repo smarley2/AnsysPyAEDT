@@ -6,9 +6,7 @@ from collections.abc import Mapping, Sequence
 from inductor_designer.domain.project import RequestedOutput, SimulationRecipe
 from inductor_designer.domain.winding import (
     ConductorMode,
-    CurrentDirection,
     WindingDefinition,
-    WindingDirection,
 )
 from inductor_designer.geometry.core_profile import build_core_profile
 from inductor_designer.geometry.core_solid import FinishedCore
@@ -32,7 +30,6 @@ from inductor_designer.simulation.maxwell_plan import (
     Maxwell3dDesignPlan,
     MeshPlan,
     PlanBuildError,
-    Polarity,
     RegionPlan,
     ReportPlan,
     SetupPlan,
@@ -41,6 +38,7 @@ from inductor_designer.simulation.maxwell_plan import (
     WindingGroupPlan,
     dc_bias_notes,
     material_spec_from_material_record,
+    winding_polarity,
 )
 from inductor_designer.simulation.run_contracts import EffectiveWindingInput
 from inductor_designer.simulation.section_selection import (
@@ -48,16 +46,6 @@ from inductor_designer.simulation.section_selection import (
     select_core_sections,
 )
 from inductor_designer.simulation.sections import ConductorSection
-
-
-def _polarity(
-    definition: WindingDefinition,
-    current_direction: CurrentDirection,
-) -> Polarity:
-    positive = (current_direction is CurrentDirection.FORWARD) == (
-        definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
-    )
-    return Polarity.POSITIVE if positive else Polarity.NEGATIVE
 
 
 def _effective_inputs_by_id(
@@ -123,7 +111,7 @@ def build_maxwell3d_plan(
         base = identifiers[packing.winding_id]
         bare = bare_diameter_m[packing.winding_id]
         max_bare = max(max_bare, bare)
-        polarity = _polarity(definition, effective.current_direction)
+        polarity = winding_polarity(definition, effective.current_direction)
         turns: list[TurnPlan] = []
         counter = 1
         for layer in packing.layers:

@@ -5,9 +5,7 @@ from collections.abc import Mapping, Sequence
 from inductor_designer.domain.project import RequestedOutput, SimulationRecipe
 from inductor_designer.domain.winding import (
     ConductorMode,
-    CurrentDirection,
     WindingDefinition,
-    WindingDirection,
 )
 from inductor_designer.geometry.naming import core_name, unique_identifiers
 from inductor_designer.geometry.planar import PlanarModel
@@ -27,12 +25,13 @@ from inductor_designer.simulation.maxwell_plan import (
     SOLUTION_TYPE,
     MeshPlan,
     PlanBuildError,
-    Polarity,
     RegionPlan,
     ReportPlan,
     SetupPlan,
     dc_bias_notes,
+    invert_polarity,
     material_spec_from_material_record,
+    winding_polarity,
 )
 from inductor_designer.simulation.plan_builder import _effective_inputs_by_id
 from inductor_designer.simulation.run_contracts import EffectiveWindingInput
@@ -42,20 +41,6 @@ _TWO_D_NOTE = (
     "polarity are represented through coil and winding assignments, and model depth "
     "derives from the core height."
 )
-
-
-def _base_polarity(
-    definition: WindingDefinition,
-    current_direction: CurrentDirection,
-) -> Polarity:
-    positive = (current_direction is CurrentDirection.FORWARD) == (
-        definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
-    )
-    return Polarity.POSITIVE if positive else Polarity.NEGATIVE
-
-
-def _invert(polarity: Polarity) -> Polarity:
-    return Polarity.NEGATIVE if polarity is Polarity.POSITIVE else Polarity.POSITIVE
 
 
 def build_maxwell2d_plan(
@@ -98,7 +83,7 @@ def build_maxwell2d_plan(
         base = identifiers[planar_winding.winding_id]
         bare = bare_diameter_m[planar_winding.winding_id]
         max_bare = max(max_bare, bare)
-        base_polarity = _base_polarity(definition, effective.current_direction)
+        base_polarity = winding_polarity(definition, effective.current_direction)
         conductors = tuple(
             Conductor2dPlan(
                 name=f"{base}_C{index:03d}",
@@ -106,7 +91,9 @@ def build_maxwell2d_plan(
                 y_m=conductor.y_m,
                 radius_m=conductor.radius_m,
                 polarity=(
-                    base_polarity if conductor.polarity > 0 else _invert(base_polarity)
+                    base_polarity
+                    if conductor.polarity > 0
+                    else invert_polarity(base_polarity)
                 ),
             )
             for index, conductor in enumerate(planar_winding.conductors, start=1)
