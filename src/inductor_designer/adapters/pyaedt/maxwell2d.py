@@ -233,7 +233,17 @@ def _stage_mesh(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     app.mesh.assign_length_mesh(
         [plan.core.name], maximum_length=plan.mesh.core_max_length_m, name="CoreLength"
     )
-    return "Length-based mesh restrictions assigned."
+    # TAU's 2D surface mesher refuses to mesh at all in meter model units once a
+    # feature (here, the conductor-to-core clearance) drops to tens of microns
+    # -- e.g. 4.7e-5 in meter units is below its working tolerance, and it fails
+    # in under a second, before producing a single element. The same geometry
+    # meshes cleanly once the *model units* read millimeter, because all prior
+    # geometry and mesh lengths were already stored with an explicit 'meter'
+    # suffix (set while app.modeler.model_units was "meter" in _stage_units), so
+    # this only changes the mesher's tolerance, not the model's physical size.
+    # Verified live on AEDT 2025.2, 2026-08-12; see GitHub issue #14.
+    app.modeler.model_units = "mm"
+    return "Length-based mesh restrictions assigned; model units set to mm for TAU meshing."
 
 
 def _stage_setup(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
