@@ -1,4 +1,4 @@
-# 2D Cut Plane Preview and Override Design
+# 2D Cut Plane Preview Design
 
 - Status: Approved in collaborative design review
 - Date: 2026-08-12
@@ -9,234 +9,189 @@
 
 ## 1. Purpose
 
-Let the user verify, before generating anything, which plane the application
-reduces the choke to for a 2D run. The application draws that plane in the 3D
-preview, draws the resulting 2D model exactly as it will be exported, and lets
-the user select a different plane when the automatic choice is wrong.
+Show the user the 2D model the application will hand to FEMM or Maxwell 2D,
+and show the plane it was cut on, before any run starts.
 
-Today no cut-plane decision exists. `build_planar_model` in
-`geometry/planar.py` always builds the equatorial XY model, and both 2D
-backends consume it directly. This design makes the plane an explicit,
-inspectable, overridable value without changing the geometry that a toroid
-already produces.
+Solver work is background and non-graphical by default (ADR 0007). The user
+never sees the FEMM or Maxwell 2D window, so today the first look at the 2D
+model comes after a run, in a generated file. This design puts that look in
+the application, where a wrong reduction is caught before it costs a solve.
+
+Read-only. The application draws what it will build. It does not offer a way to
+change the plane.
 
 ## 2. Problem statement
 
 The current 2D reduction is correct for a toroid: flux runs azimuthally and
 lies in the XY plane, conductor legs run out of plane, and the out-of-plane
-depth is the core height. Nothing is wrong today.
+depth is the core height. Nothing about it needs fixing.
 
-Two gaps remain:
-
-1. The user cannot see the 2D model before it reaches FEMM or Maxwell 2D, so a
-   wrong reduction would surface only after a run.
-2. The plane is implicit. When the application supports core shapes other than
-   the toroid, the correct plane stops being a single obvious answer, and there
-   is no place to record the decision, explain it, or correct it.
-
-This design closes both gaps and creates the extension point for the second,
-without building support for core shapes that do not exist yet.
+What is missing is visibility. `build_planar_model` in `geometry/planar.py`
+produces the model, `build_maxwell2d_plan` consumes it, and FEMM translates it,
+all without ever showing the user a picture. A headless run therefore gives no
+opportunity to notice that the conductors, the polarities, or the depth are not
+what the design intended.
 
 ## 3. Confirmed product decisions
 
-- The cut plane is an explicit named value carried by the geometry model.
-- One resolution feeds both the preview and the export. The drawing the user
-  checks is the drawing that ships.
-- A toroid offers two candidates: the XY equatorial plane, which generates, and
-  the r-z azimuthal plane, which does not.
-- The r-z candidate is listed with the reason it cannot generate. It is not
-  hidden, and it is not silently replaced by the XY plane.
-- Selecting a candidate that cannot generate is allowed and persists. Generate
-  refuses with that candidate's own reason.
-- The 2D drawing renders in the existing preview pane behind a `3D / 2D cut`
-  toggle. The toggle is view state and is never saved to the project.
-- The override is stored in the Project document, so a corrected plane survives
-  save and reopen.
-- Absence of a stored override means automatic selection.
+- The 2D preview is read-only. There is no plane selector and no override.
+- The preview renders `GeometryModel.planar`, the same object
+  `build_maxwell2d_plan` iterates. It is not a second construction of the
+  geometry.
+- The preview is available on every Guided Studio step, not only Simulation. A
+  wrong reduction is usually a winding problem, and the user is looking at
+  windings when they cause it.
+- The cut plane is drawn in the 3D preview as a translucent rectangle, so the
+  relationship between the solid and the flat drawing is visible.
+- The 3D and 2D views share the existing preview pane through a toggle. The
+  toggle and the plane checkbox are view state and are never saved to the
+  project.
+- The XY equatorial plane is a constant of this design. When the application
+  gains a core shape whose correct 2D plane is not obvious, that constant
+  becomes a selection, and this design is superseded rather than extended.
 
 ## 4. Architecture
 
-Dependencies keep pointing inward. `geometry` and `domain` gain no imports.
-The UI converts; QML receives numbers only.
+No change to `domain`, `geometry`, `materials`, the adapters, or the Project
+schema. The feature is a new read path in `ui` over data the application
+already computes.
 
-### 4.1 New module: `geometry/cut_plane.py`
+`simulation` changes only by losing a duplicate. The rule that turns a winding
+direction and a current direction into a polarity is written twice today,
+identically, as `_polarity` in `plan_builder.py` and `_base_polarity` in
+`plan_builder2d.py`. The preview needs the same rule, and copying it a third
+time into `ui` would put a physical convention in the UI layer. One
+`winding_polarity`, with its `invert_polarity` companion, moves to
+`simulation/maxwell_plan.py` beside the `Polarity` it returns, and both plan
+builders call it. Net effect on `simulation`: one function instead of two, and
+the preview shares it.
 
-Solver-independent. No Qt, no PyAEDT, no FEMM, no SQLite.
+`GeometryModel` already carries `planar: PlanarModel`, built once in
+`application/services/geometry_model.py` and consumed by the 2D plan builder.
+The preview reads that field. Architecture rule 3 — previews and solver exports
+originate from the same solver-independent geometry model — is satisfied by
+construction, not by agreement.
+
+### 4.1 New module: `ui/cut_plane_view.py`
+
+A pure converter from `GeometryModel` to plain data for QML, mirroring the role
+of `ui/preview_geometry.py`. It performs no geometry construction and contains
+no physics: it reads `PlanarModel`, converts metres to millimetres, and assigns
+each conductor a glyph and a colour.
 
 ```python
-class CutPlaneKind(str, Enum):
-    XY_EQUATORIAL = "xy-equatorial"
-    RZ_AZIMUTHAL = "rz-azimuthal"
+@dataclass(frozen=True, slots=True)
+class CutPlaneCircle:
+    x_mm: float
+    y_mm: float
+    radius_mm: float
+    color: str
+    into_plane: bool   # True draws a cross, False draws a dot
 
 
 @dataclass(frozen=True, slots=True)
-class CutPlaneCandidate:
-    kind: CutPlaneKind
-    azimuth_deg: float   # 0.0 for XY; the section angle for r-z
-    generates: bool      # a 2D adapter can export this plane today
-    reason: str          # why it was chosen, or why it cannot generate
+class CutPlaneDrawing:
+    r_inner_mm: float
+    r_outer_mm: float
+    depth_mm: float
+    extent_mm: float           # half-width of the drawn area, for the canvas
+    circles: tuple[CutPlaneCircle, ...]
+    note: str                  # depth derivation, or why the drawing is empty
 
 
-@dataclass(frozen=True, slots=True)
-class CutPlane:
-    selected: CutPlaneKind
-    azimuth_deg: float
-    overridden: bool     # True when the project overrode the automatic pick
-    candidates: tuple[CutPlaneCandidate, ...]
-
-
-def propose_cut_planes(
-    core: FinishedCore,
-) -> tuple[CutPlaneCandidate, ...]: ...
-
-
-def resolve_cut_plane(
-    candidates: Sequence[CutPlaneCandidate],
-    override: CutPlaneKind | None,
-) -> CutPlane: ...
+def build_cut_plane_drawing(
+    model: GeometryModel,
+    project: InductorProject,
+) -> CutPlaneDrawing: ...
 ```
 
-`CutPlaneKind` subclasses `(str, Enum)` rather than `StrEnum`, matching
-`MeshIntent` and `RequestedOutput` and the project's Python 3.10 floor.
+The project is a parameter because polarity depends on
+`WindingDefinition.winding_direction` and
+`WindingOperatingPoint.current_direction`, neither of which `GeometryModel`
+carries. `current_direction` passes through `EffectiveWindingInput` unchanged,
+so the value the preview reads is the value the exporter uses.
 
-`propose_cut_planes` takes only the core. Candidate planes for a toroid do not
-depend on the windings, and the parameter is added when a core shape needs it.
+Winding colours come from the palette `ui/preview_geometry.py` already uses,
+indexed in the same winding-id order, so a winding is the same colour in both
+views.
 
-`propose_cut_planes` returns a deterministic, ranked tuple. For a toroid it
-returns the XY candidate with `generates=True` and the r-z candidate with
-`generates=False`, whose reason names the missing axisymmetric mode in both 2D
-adapters.
+### 4.2 Controller
 
-`resolve_cut_plane` picks the first generating candidate when the override is
-`None`, and otherwise honors the override and sets `overridden=True`. An
-override naming a kind that the candidate list does not contain raises
-`ValueError`.
+`GuidedStudioController` already owns the preview, rebuilds it after every
+accepted edit, and keeps the last valid one when an edit fails. The 2D drawing
+is part of the preview and follows it rather than duplicating those five
+rebuild sites in a second controller.
 
-A future core shape changes `propose_cut_planes` and nothing else.
+`_build_preview` returns a small frozen `PreviewState` holding both the 3D
+entries and the drawing. Each existing assignment site stores that one value.
+A `cutPlaneDrawing` property exposes the drawing, notified by the existing
+`previewEntriesChanged` signal, so no new emit sites appear.
 
-### 4.2 Geometry model
+### 4.3 QML
 
-`GeometryModel` gains `cut_plane: CutPlane`, resolved once in
-`application/services/geometry_model.py` where the model is already assembled.
-The UI preview and the 2D plan builder both read that one value. Architecture
-rule 3 already requires previews and solver exports to originate from the same
-solver-independent geometry model; the cut plane joins that guarantee.
+`ui/qml/CutPlaneView.qml` paints the drawing with `Canvas`, following the
+pattern already proven in `MaterialCurveEditor.qml`. It receives numbers and
+draws them; it computes nothing.
 
-### 4.3 Domain and persistence
+`PreviewPane.qml` gains a `3D / 2D cut` toggle and a `Show cut plane` checkbox.
+The 2D canvas fills the same pane slot when selected, so the shell layout is
+unchanged.
 
-`SimulationRecipe` gains `cut_plane_override: CutPlaneKind | None = None`. The
-recipe already holds backend-independent intent, and this field states how to
-reduce the design to 2D regardless of which 2D backend a Run Request selects.
+## 5. What the drawing shows
 
-The Project document gains an optional `cutPlaneOverride` key under
-`simulationRecipe` in `schemas/project/v5.schema.json`, constrained to the
-`CutPlaneKind` values. It is not added to `required`, so existing v5 documents
-keep validating and the schema version stays 5. An absent key means automatic
-selection. An unrecognized value fails schema validation; the repository never
-coerces it to automatic.
+The exported model at 1:1, viewed along the toroid axis:
 
-### 4.4 Simulation and adapters
-
-`build_maxwell2d_plan` accepts the resolved `CutPlane`, records it on
-`Maxwell2dDesignPlan`, and reports it in the Run Manifest alongside the existing
-2D approximation note.
-
-When the selected candidate has `generates=False`, the builder raises
-`PlanBuildError` carrying that candidate's own reason. No fallback to the XY
-plane is invented, consistent with architecture rule 8.
-
-`femm_problem_from_plan` reads the plan's cut plane and refuses any plane other
-than XY equatorial with the same explicit reason.
-
-No adapter gains an axisymmetric mode in this design.
-
-## 5. User interface
-
-### 5.1 What the 2D drawing shows
-
-The drawing is the exported model at 1:1, derived from the same `PlanarModel`
-that `build_maxwell2d_plan` iterates:
-
-- The core annulus, gray fill, from `r_inner` to `r_outer`.
+- The core annulus, grey fill, from `r_inner` to `r_outer`.
 - Two circles per winding turn station at the bare conductor radius: the inner
   leg at `r_inner - radial_build`, the outer leg at `r_outer + radial_build`,
-  in the winding's palette color.
+  in the winding's palette colour.
 - Polarity by the standard convention: a dot for current out of the plane, a
-  cross for current into the plane.
-- An annotation line giving the model depth in millimetres, its derivation
-  (`2 x half_height`), the selected plane, and whether it was automatic.
-- Millimetre scales on both axes.
+  cross for current into the plane. This is what the user scans to catch a bad
+  reduction. The glyph follows the winding direction and the current direction
+  through the shared `winding_polarity`, so a winding wound the wrong way is
+  visible here.
+- An annotation line giving the model depth in millimetres and its derivation
+  (`2 x half_height`).
+- A millimetre scale bar spanning the outer diameter, labelled with its length.
+  A labelled bar carries the size information a tick-labelled pair of axes
+  would, for much less canvas code.
 
-The drawing introduces no physics. It renders values the geometry model
-already produces.
-
-### 5.2 Components
-
-- `ui/cut_plane_view.py` converts `GeometryModel` into plain dictionaries for
-  QML, mirroring `ui/preview_geometry.py`.
-- `ui/cut_plane_controller.py` exposes `drawing`, `candidates`,
-  `selectedPlane`, `overridden`, and `blockedReason`, plus a `setCutPlane`
-  slot that writes through `ProjectSession` like the existing controllers.
-- `ui/qml/CutPlaneView.qml` paints the drawing with `Canvas`, following the
-  pattern already proven in `MaterialCurveEditor.qml`.
-
-### 5.3 Placement
-
-`PreviewPane.qml` gains a `3D / 2D cut` toggle in a corner. The 2D canvas fills
-the same pane slot when selected, so the shell layout is unchanged.
-
-The plane appears in the 3D view as one built-in `#Rectangle` model at the
-origin, sized to roughly 2.2 times `r_outer`, semi-transparent, double-sided,
-with depth writing disabled so it never occludes the core. The toroid axis is
-z, so the XY equatorial plane needs no rotation; the r-z candidate is the same
-rectangle rotated to the vertical plane at its azimuth. A `Show cut plane`
-checkbox in the preview pane controls the rectangle's visibility. The checkbox
-is checked automatically when the toggle moves to 2D, and the user may then
-uncheck it or check it while the toggle is on 3D.
-
-The override control sits in `SimulationPanel.qml` next to the backend choice.
-It lists every candidate with its reason. Choosing a candidate that cannot
-generate persists the choice and displays the block reason; Generate then
-refuses with that same text.
+The plane in the 3D view is one built-in `#Rectangle` model at the origin,
+sized to roughly 2.2 times `r_outer`, semi-transparent, double-sided, with
+depth writing disabled so it never occludes the core. The toroid axis is z, so
+the XY equatorial plane needs no rotation.
 
 ## 6. Error handling
 
-- An unrecognized stored override fails schema validation and the document is
-  rejected, like any other invalid document.
-- A selected plane that cannot generate produces a `PlanBuildError` carrying
-  the candidate's reason. The Simulation panel shows that text and Generate
-  refuses. The selection is not discarded.
-- A geometry error during an edit leaves the last valid drawing in place, using
-  the same guard `GuidedStudioController.refresh` already applies. Architecture
-  rule 12 continues to hold.
-- A design with no windings renders the annulus with an explicit note that the
-  model has no conductors, rather than a blank canvas.
+- A geometry error during an edit leaves the last valid drawing in place,
+  through the same guard `GuidedStudioController.refresh` already applies.
+  Architecture rule 12 continues to hold: a failed edit never blanks the
+  preview.
+- A design with no windings renders the annulus and states in `note` that the
+  model has no conductors, rather than showing an empty canvas.
+- The converter raises nothing. Any failure to build the geometry model is
+  already reported by the existing preview path before the drawing is reached.
 
 ## 7. Testing
 
 Tests are written before the implementation, as `AGENTS.md` requires.
 
-- `geometry/cut_plane`: a toroid yields a generating XY candidate and a
-  non-generating r-z candidate with a reason; `resolve_cut_plane` honors an
-  override, picks the single generating candidate when the override is `None`,
-  and rejects an override that is not among the candidates; output is
-  deterministic.
-- Domain: `SimulationRecipe` accepts `None` and both kinds.
-- Persistence: round trip with and without the key; a v5 document lacking the
-  key loads as automatic; an invalid value is rejected; emitted JSON stays
-  deterministic.
-- `plan_builder2d`: the plan and the Run Manifest carry the cut plane; a
-  non-generating selection raises `PlanBuildError` naming the reason; existing
-  2D plan tests continue to pass.
-- FEMM: `femm_problem_from_plan` refuses a non-XY plane with an explicit
-  reason.
-- `ui/cut_plane_view`: the drawing's circles match the `PlanarModel` one for
-  one in count, coordinates, and polarity-to-glyph mapping. This test is what
-  prevents the preview from drifting away from the export.
-- Controller: `setCutPlane` persists the choice and marks the session dirty;
-  the failure path keeps the last valid drawing and sets the status message.
-- QML: the toggle and the canvas resolve by `objectName`, matching the existing
-  panel tests.
+- `simulation/maxwell_plan`: `winding_polarity` returns the expected value for
+  all four winding-direction and current-direction pairs, and `invert_polarity`
+  swaps both values. The existing plan-builder tests are the regression gate
+  for the two deleted duplicates.
+- `ui/cut_plane_view`: the drawing's circles match `GeometryModel.planar` one
+  for one in count, coordinates, radius, and polarity-to-glyph mapping; metres
+  convert to millimetres exactly; a winding's colour matches the colour
+  `build_preview_entries` gives it. This is the test that keeps the preview
+  from drifting away from the export.
+- Empty design: no windings yields an annulus, no circles, and an explanatory
+  note.
+- Controller: `cutPlaneDrawing` updates after an accepted winding edit; a
+  rejected edit leaves the previous drawing in place and sets the status
+  message.
+- QML: the toggle, the checkbox, and the canvas resolve by `objectName`,
+  matching the existing panel tests.
 
 ## 8. Verification
 
@@ -248,8 +203,10 @@ mypy
 
 ## 9. Out of scope
 
+- Any way to change the cut plane. Considered and dropped: on a toroid the XY
+  equatorial plane is the only reduction the 2D adapters build, so a selector
+  could only ever refuse.
 - Axisymmetric r-z generation in Maxwell 2D or FEMM.
 - Core shapes other than the toroid.
-- Any change to the physics of the existing XY reduction. The plane a toroid
-  resolves to, and the model it produces, are identical before and after this
-  design.
+- Any change to the 2D model itself. The geometry a toroid produces is
+  identical before and after this design.
