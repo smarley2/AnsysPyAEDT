@@ -9,7 +9,7 @@ from PySide6.QtQuick3D import QQuick3DGeometry
 from inductor_designer.application.services.geometry_model import GeometryModel
 from inductor_designer.geometry.tessellation import Mesh, tessellate_core, tessellate_winding
 
-_PALETTE = ("#e07a5f", "#3d9970", "#3f88c5", "#f2bb05", "#9656a1", "#2a9d8f")
+PALETTE = ("#e07a5f", "#3d9970", "#3f88c5", "#f2bb05", "#9656a1", "#2a9d8f")
 
 
 class MeshGeometry(QQuick3DGeometry):
@@ -73,5 +73,5 @@ def build_preview_entries(model: GeometryModel) -> list[PreviewEntry]:
     entries = [PreviewEntry(MeshGeometry(tessellate_core(model.core)), "#8a8a8a", 0.35)]
     for i, packing in enumerate(sorted(model.packings, key=lambda p: p.winding_id)):
         mesh = tessellate_winding(model.core, packing)
-        entries.append(PreviewEntry(MeshGeometry(mesh), _PALETTE[i % len(_PALETTE)], 1.0))
+        entries.append(PreviewEntry(MeshGeometry(mesh), PALETTE[i % len(PALETTE)], 1.0))
     return entries

@@ -444,10 +444,6 @@ ApplicationWindow {
                             font.pixelSize: 11
                             font.letterSpacing: 1.1
                         }
-                        Item { Layout.fillWidth: true }
-                        Button { text: qsTr("Fit") }
-                        Button { text: qsTr("3D"); highlighted: true }
-                        Button { text: qsTr("Section"); enabled: false; ToolTip.text: qsTr("Section preview follows the geometry slice.") }
                     }
 
                     Label {

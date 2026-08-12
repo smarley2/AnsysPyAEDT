@@ -337,3 +337,39 @@ def test_an_edit_applied_by_a_different_writer_still_refreshes_this_controller()
 
     assert len(windings_emits) == 1
     assert controller.windings[0]["turns"] == 42
+
+
+def test_cut_plane_drawing_follows_an_accepted_winding_edit() -> None:
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+    winding_id = controller.windings[0]["windingId"]
+    before = len(controller.cutPlaneDrawing["circles"])
+
+    assert controller.setWindingField(winding_id, "turns", "3") is True
+
+    after = controller.cutPlaneDrawing["circles"]
+    assert len(after) != before
+    assert all("into_plane" in circle for circle in after)
+    assert controller.cutPlaneDrawing["depth_mm"] > 0.0
+
+
+def test_a_rejected_edit_keeps_the_previous_cut_plane_drawing() -> None:
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+    winding_id = controller.windings[0]["windingId"]
+    before = controller.cutPlaneDrawing
+
+    assert controller.setWindingField(winding_id, "turns", "not a number") is False
+
+    assert controller.cutPlaneDrawing == before
+    assert "Unable to apply change" in controller.statusMessage
+
+
+def test_the_drawing_and_the_three_d_entries_describe_the_same_windings() -> None:
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+
+    colors = {circle["color"] for circle in controller.cutPlaneDrawing["circles"]}
+    entry_colors = {entry.color for entry in controller.previewEntries[1:]}
+
+    assert colors == entry_colors

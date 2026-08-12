@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from inductor_designer.domain.winding import (
+    CurrentDirection,
+    WindingDefinition,
+    WindingDirection,
+)
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
 from inductor_designer.geometry.terminals import TerminalDisk
@@ -40,6 +45,26 @@ class PlanBuildError(ValueError):
 class Polarity(str, Enum):
     POSITIVE = "Positive"
     NEGATIVE = "Negative"
+
+
+def winding_polarity(
+    definition: WindingDefinition,
+    current_direction: CurrentDirection,
+) -> Polarity:
+    """Sign of a winding's go leg for the given current direction.
+
+    Shared by the Maxwell 3D and Maxwell 2D plan builders and by the 2D cut
+    plane preview, so the drawn polarity and the exported polarity cannot
+    disagree.
+    """
+    positive = (current_direction is CurrentDirection.FORWARD) == (
+        definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
+    )
+    return Polarity.POSITIVE if positive else Polarity.NEGATIVE
+
+
+def invert_polarity(polarity: Polarity) -> Polarity:
+    return Polarity.NEGATIVE if polarity is Polarity.POSITIVE else Polarity.POSITIVE
 
 
 @dataclass(frozen=True, slots=True)
