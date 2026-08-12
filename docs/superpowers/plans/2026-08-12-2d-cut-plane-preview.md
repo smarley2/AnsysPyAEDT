@@ -1053,9 +1053,13 @@ git commit -m "feat(ui): draw the 2D cut plane and show its plane in the 3D prev
 
 ## Manual check before calling it done
 
-Offscreen tests prove the objects exist and the numbers arrive. They do not prove the drawing is legible. Render the pane once and look at it:
+Offscreen tests prove the objects exist and the numbers arrive. They do not prove the drawing is legible. Render the pane once and look at it.
 
-- Open the application, go to the Windings step, and switch the preview to `2D cut`.
+Use a near-full-circumference winding, not the default sector. A real choke is wound over most of the core, and that is the only case where the drawing fills the canvas and the translucent plane meets conductors all the way round -- the default 90-degree sector shows neither.
+
+- Open the application, go to the Windings step, and set the winding to a 355-degree sector with 40 turns.
+- Switch the preview to `2D cut`.
 - Confirm the annulus, the inner and outer conductor rings, and that inner and outer legs carry opposite glyphs.
-- Switch back to `3D` and confirm the translucent plane sits at the core's mid height without hiding the core.
-- Reverse one winding's current direction on the Windings step and confirm every glyph in that winding swaps.
+- Confirm the scale bar and its millimetre label sit clear of the bottom conductor glyphs, and that the bar spans the outer diameter.
+- Switch back to `3D` and confirm the translucent plane sits at the core's mid height without hiding the core or the conductors it now crosses.
+- Reverse the winding's current direction on the Windings step and confirm every glyph in that winding swaps.

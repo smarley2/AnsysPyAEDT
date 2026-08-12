@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from inductor_designer.domain.winding import (
@@ -28,8 +30,6 @@ def test_winding_polarity_covers_every_direction_pair(
     current_direction: CurrentDirection,
     expected: Polarity,
 ) -> None:
-    from dataclasses import replace
-
     definition = replace(make_winding(), winding_direction=winding_direction)
 
     assert winding_polarity(definition, current_direction) is expected

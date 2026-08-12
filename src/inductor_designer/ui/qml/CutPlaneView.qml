@@ -35,10 +35,15 @@ Item {
             var ctx = getContext("2d")
             ctx.reset()
 
+            // The bottom 24 px are the scale bar's own band: the model is
+            // scaled and centred inside what is left, so a winding covering
+            // nearly the whole circumference still cannot reach the bar.
+            var barBand = 24
+            var usable = height - barBand
             var extent = Math.max(root.drawing.extent_mm, 1e-6)
-            var scale = Math.min(width, height) / (2 * extent * 1.06)
+            var scale = Math.min(width, usable) / (2 * extent * 1.06)
             var cx = width / 2
-            var cy = height / 2
+            var cy = usable / 2
 
             function px(mm) { return cx + mm * scale }
             function py(mm) { return cy - mm * scale }
@@ -86,10 +91,11 @@ Item {
                 }
             }
 
-            // Scale bar: the outer radius, drawn under the model.
-            var barMm = root.drawing.r_outer_mm
+            // Scale bar: the outer diameter, drawn in the reserved band. It is
+            // never wider than the model it sits under, so it always fits.
+            var barMm = 2 * root.drawing.r_outer_mm
             var barPx = barMm * scale
-            var barY = height - 10
+            var barY = usable + barBand - 5
             ctx.strokeStyle = "#5b5852"
             ctx.lineWidth = 1
             ctx.beginPath()

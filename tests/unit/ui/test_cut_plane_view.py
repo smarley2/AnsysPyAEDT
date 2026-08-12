@@ -1,17 +1,36 @@
-"""No Qt import: the converter is testable without a QGuiApplication."""
+"""No QGuiApplication: the converter is testable without a running Qt app.
+
+The PySide6 extra is still needed at import time -- the palette lives in
+`ui.preview_geometry`, which is a Qt module -- so the import is guarded and
+these tests skip rather than fail collection on an install without the extra.
+"""
 
 from __future__ import annotations
 
 import math
 from dataclasses import replace
 
-from inductor_designer.application.services.geometry_model import build_geometry_model
-from inductor_designer.domain.project import WindingOperatingPoint
-from inductor_designer.domain.winding import CurrentDirection, WindingDirection
-from inductor_designer.ui.cut_plane_view import build_cut_plane_drawing
-from inductor_designer.ui.preview_geometry import build_preview_entries
-from tests.unit.application.test_geometry_model import CATALOG
-from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
+import pytest
+
+pytest.importorskip("PySide6")
+
+from inductor_designer.application.services.geometry_model import (  # noqa: E402
+    build_geometry_model,
+)
+from inductor_designer.domain.project import WindingOperatingPoint  # noqa: E402
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection  # noqa: E402
+from inductor_designer.simulation.maxwell_plan import Polarity  # noqa: E402
+from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan  # noqa: E402
+from inductor_designer.simulation.run_contracts import effective_winding_inputs  # noqa: E402
+from inductor_designer.ui.cut_plane_view import build_cut_plane_drawing  # noqa: E402
+from inductor_designer.ui.preview_geometry import build_preview_entries  # noqa: E402
+from tests.unit.application.test_geometry_model import CATALOG  # noqa: E402
+from tests.unit.domain.test_project import (  # noqa: E402
+    make_material_record,
+    make_operating_point,
+    make_project,
+    make_winding,
+)
 
 
 def test_every_planar_conductor_becomes_one_circle_in_millimetres() -> None:
@@ -176,6 +195,48 @@ def test_a_design_without_conductors_still_draws_the_annulus() -> None:
     assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
     assert drawing.extent_mm == drawing.r_outer_mm
     assert "no conductors" in drawing.note
+
+
+def test_the_drawing_and_the_two_d_export_describe_the_same_conductors() -> None:
+    """The invariant the whole preview exists to protect.
+
+    The drawing reads `operating_point.windings[].current_direction`; the
+    export reads `EffectiveWindingInput.current_direction`. They agree only
+    because `effective_winding_inputs` copies that field verbatim. Should it
+    ever derive the value instead, the picture and the exported model would
+    part ways in silence -- this is the test that would notice.
+    """
+    project = make_project()
+    model = build_geometry_model(project, CATALOG)
+
+    drawing = build_cut_plane_drawing(model, project)
+    plan = build_maxwell2d_plan(
+        model.planar,
+        project.design.windings,
+        effective_winding_inputs(project.operating_point),
+        model.bare_diameter_m,
+        frequency_hz=project.operating_point.frequency_hz,
+        recipe=project.simulation_recipe,
+        material_record=make_material_record(),
+        material_bh_series_id=None,
+    )
+
+    drawn = sorted(
+        (circle.x_mm, circle.y_mm, circle.radius_mm, circle.into_plane)
+        for circle in drawing.circles
+    )
+    exported = sorted(
+        (
+            conductor.x_m * 1000.0,
+            conductor.y_m * 1000.0,
+            conductor.radius_m * 1000.0,
+            conductor.polarity is Polarity.NEGATIVE,
+        )
+        for group in plan.windings
+        for conductor in group.conductors
+    )
+    assert drawn
+    assert drawn == exported
 
 
 def test_the_note_states_where_the_depth_comes_from() -> None:

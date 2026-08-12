@@ -38,9 +38,11 @@ what the design intended.
 - The preview renders `GeometryModel.planar`, the same object
   `build_maxwell2d_plan` iterates. It is not a second construction of the
   geometry.
-- The preview is available on every Guided Studio step, not only Simulation. A
-  wrong reduction is usually a winding problem, and the user is looking at
-  windings when they cause it.
+- The preview is available on every Guided Studio step that shows the preview
+  card, not only Simulation. That is Core & Material, Windings and Simulation;
+  the shell already hides the card on the wide Preliminary and Review steps,
+  and this design does not change that layout. A wrong reduction is usually a
+  winding problem, and the user is looking at windings when they cause it.
 - The cut plane is drawn in the 3D preview as a translucent rectangle, so the
   relationship between the solid and the flat drawing is visible.
 - The 3D and 2D views share the existing preview pane through a toggle. The
