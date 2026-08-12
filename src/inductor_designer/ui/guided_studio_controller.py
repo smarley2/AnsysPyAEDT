@@ -157,7 +157,15 @@ class GuidedStudioController(QObject):
     previewEntries = Property(list, _get_preview_entries, notify=previewEntriesChanged)
 
     def _get_cut_plane_drawing(self) -> dict[str, object]:
-        return asdict(self._preview.drawing)
+        drawing = asdict(self._preview.drawing)
+        # A tuple crosses into QML as an opaque object: `.length` reads back
+        # `undefined`, so the paint loop in `CutPlaneView.qml` runs zero times
+        # and drops every conductor without raising anything. A list marshals
+        # to a QVariantList, which QML can measure and index. (It is still not
+        # a true JS array -- `Array.isArray` is false for `previewEntries`
+        # too -- so do not reach for that when testing this.)
+        drawing["circles"] = list(drawing["circles"])
+        return drawing
 
     cutPlaneDrawing = Property(
         dict, _get_cut_plane_drawing, notify=previewEntriesChanged
