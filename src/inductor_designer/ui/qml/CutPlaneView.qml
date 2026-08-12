@@ -103,7 +103,7 @@ Item {
             ctx.fillStyle = "#5b5852"
             ctx.font = "11px sans-serif"
             ctx.textAlign = "center"
-            ctx.fillText(barMm.toFixed(2) + " mm", cx, barY - 8)
+            ctx.fillText(qsTr("%1 mm").arg(barMm.toFixed(2)), cx, barY - 8)
         }
     }
 

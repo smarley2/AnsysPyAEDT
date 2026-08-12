@@ -9,9 +9,10 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QObject  # noqa: E402
+from PySide6.QtCore import QObject, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlEngine, QQmlExpression  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 
 from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
     GuidedStudioController,
@@ -67,7 +68,46 @@ def test_the_two_d_view_is_hidden_until_the_toggle_selects_it() -> None:
     assert view.property("visible") is True
 
 
-def test_selecting_two_d_also_shows_the_plane_in_the_three_d_scene() -> None:
+def _click_center(app: QGuiApplication, window: QObject, button: QObject) -> None:
+    """Drive a real mouse click through the button's own centre.
+
+    `setProperty("checked", ...)` writes the property directly and never
+    touches the mouse-press/release path that `ButtonGroup` relies on to
+    enforce exclusivity, so this is the only way to exercise that guarantee.
+    """
+    width = button.property("width")
+    height = button.property("height")
+    center = button.mapToScene(QPointF(width / 2, height / 2)).toPoint()
+    QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, center)
+    app.processEvents()
+
+
+def test_the_mode_toggle_stays_exclusive_across_real_clicks() -> None:
+    app, root = open_preview()
+    pane = root.findChild(QObject, "previewPane")
+    button_3d = root.findChild(QObject, "previewMode3DButton")
+    button_2d = root.findChild(QObject, "previewMode2DButton")
+
+    def assert_state(*, two_d_active: bool) -> None:
+        assert button_3d.property("checked") is not two_d_active
+        assert button_2d.property("checked") is two_d_active
+        assert pane.property("showTwoD") is two_d_active
+
+    # Start on 3D.
+    assert_state(two_d_active=False)
+
+    _click_center(app, root, button_2d)
+    assert_state(two_d_active=True)
+
+    # Clicking the already-active button changes nothing.
+    _click_center(app, root, button_2d)
+    assert_state(two_d_active=True)
+
+    _click_center(app, root, button_3d)
+    assert_state(two_d_active=False)
+
+
+def test_selecting_two_d_arms_the_show_cut_plane_checkbox_and_its_visibility_binding() -> None:
     app, root = open_preview()
 
     root.findChild(QObject, "previewMode2DButton").setProperty("checked", True)
