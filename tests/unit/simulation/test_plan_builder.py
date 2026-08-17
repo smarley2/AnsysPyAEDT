@@ -322,3 +322,27 @@ def test_geometry_only_plan_carries_paths_and_diameters_only() -> None:
         "segments",
         "bare_diameter_m",
     }
+
+
+def test_a_multi_winding_nonlinear_3d_plan_warns_that_the_matrix_will_be_empty() -> None:
+    """Measured on AEDT 2025.2: every entry of a two-winding matrix comes back
+    NaN with a nonlinear core, while the same design with a linear permeability
+    returns L11 = 11.238 uH and M = 8.076 uH. A matrix superposes one source at
+    a time, which a nonlinear material does not support, so the plan says so
+    before the solve instead of leaving an unexplained gap after it.
+    """
+    definitions = (
+        make_definition(winding_id="w1", start_angle_deg=0.0, sector_deg=100.0),
+        make_definition(winding_id="w2", start_angle_deg=180.0, sector_deg=100.0),
+    )
+
+    plan = build(definitions)
+
+    assert plan.core.material.bh_curve
+    assert any("does not evaluate a winding matrix" in note for note in plan.notes)
+
+
+def test_a_single_winding_nonlinear_3d_plan_carries_no_matrix_warning() -> None:
+    plan = build((make_definition(),))
+
+    assert not any("does not evaluate a winding matrix" in note for note in plan.notes)

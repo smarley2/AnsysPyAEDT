@@ -77,6 +77,78 @@ def test_a_missing_quantity_is_unavailable_with_a_dotted_reason() -> None:
     assert entry.reason.startswith("inductance.not_reported")
 
 
+def test_each_backend_states_which_inductance_it_reports() -> None:
+    """FEMM reports apparent inductance, Maxwell the matrix self term.
+
+    Measured on one pair of 10-turn windings: FEMM 18.147 uH aiding and
+    1.414 uH opposing, half-sum 9.78 uH, against Maxwell 2D's 9.819 uH self
+    term. Both were published under the same unqualified label.
+    """
+    raw = RawScalarResults(
+        windings=(RawWindingResult(winding_id="w1", inductance_h=1e-5),)
+    )
+
+    for backend, expected in (
+        (RunBackend.FEMM, "Apparent inductance"),
+        (RunBackend.MAXWELL_2D, "Self-inductance"),
+        (RunBackend.MAXWELL_3D, "Self-inductance"),
+    ):
+        result = normalize_scalar_results(
+            raw,
+            run_id="20260814-120000",
+            backend=backend,
+            requested_outputs=(RequestedOutput.INDUCTANCE, RequestedOutput.RESISTANCE),
+            provenance="solution data",
+        )
+        entry = find(result, RequestedOutput.INDUCTANCE, "winding.w1")
+        assert entry.approximation is not None
+        assert entry.approximation.startswith(expected)
+        # The convention belongs to inductance alone.
+        assert find(result, RequestedOutput.RESISTANCE, "winding.w1") is not None
+
+
+def test_a_non_finite_value_is_unavailable_rather_than_available() -> None:
+    """AEDT answers a report it cannot evaluate with NaN instead of an error.
+
+    A Maxwell 3D matrix over two windings does exactly that, and the run
+    reported "available: nan H" for every winding.
+    """
+    raw = RawScalarResults(
+        windings=(
+            RawWindingResult(
+                winding_id="w1", resistance_ohm=float("nan"), inductance_h=float("inf")
+            ),
+        )
+    )
+
+    result = normalize(raw)
+
+    for quantity in (RequestedOutput.RESISTANCE, RequestedOutput.INDUCTANCE):
+        entry = find(result, quantity, "winding.w1")
+        assert entry.availability is ResultAvailability.UNAVAILABLE
+        assert entry.value is None
+        assert entry.reason is not None
+        assert "non-finite" in entry.reason
+
+
+def test_a_matrix_holding_one_non_finite_entry_is_unavailable() -> None:
+    raw = RawScalarResults(
+        matrices=(
+            RawMatrix(
+                kind="inductance",
+                labels=("w1", "w2"),
+                values=((1e-5, float("nan")), (float("nan"), 1e-5)),
+            ),
+        )
+    )
+
+    entry = find(normalize(raw), RequestedOutput.MATRICES, "device.inductance")
+
+    assert entry.availability is ResultAvailability.UNAVAILABLE
+    assert entry.reason is not None
+    assert "non-finite" in entry.reason
+
+
 def test_an_impedance_is_reported_as_a_complex_value() -> None:
     raw = RawScalarResults(
         windings=(RawWindingResult(winding_id="w1", impedance=complex(0.1, 3.2)),)

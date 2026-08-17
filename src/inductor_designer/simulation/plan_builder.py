@@ -177,6 +177,21 @@ def build_maxwell3d_plan(
             f"Core material {material.name} derives from a draft catalog record; "
             "verify against the manufacturer catalog before trusting results."
         )
+    if len(groups) > 1 and material.bh_curve:
+        # Measured on AEDT 2025.2, 2026-08-14: every entry of a two-winding
+        # matrix came back NaN with a nonlinear core, while the same design
+        # with a linear permeability returned L11 = 11.238 uH, M = 8.076 uH,
+        # and a single winding returned its diagonal even nonlinear. A matrix
+        # is a superposition of one source at a time, which a nonlinear
+        # material does not support. Said here so the manifest carries it
+        # before the solve rather than leaving an unexplained gap after it.
+        notes.append(
+            f"Maxwell 3D does not evaluate a winding matrix over {len(groups)} "
+            "sources with a nonlinear B-H core: every matrix entry returns as "
+            "unavailable. Winding losses and stored energy are unaffected. Use "
+            "Maxwell 2D or FEMM for inductance on this design, or a linear "
+            "permeability if the matrix itself is what you need."
+        )
     dc_requested = any(group.dc_current_a != 0.0 for group in groups)
     notes.extend(
         dc_bias_notes(

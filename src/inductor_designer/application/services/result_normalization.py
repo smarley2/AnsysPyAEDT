@@ -7,6 +7,8 @@ reason. Nothing is estimated, and nothing is silently omitted.
 
 from __future__ import annotations
 
+import math
+
 from inductor_designer.application.services.field_normalization import (
     normalize_field_results,
 )
@@ -46,6 +48,15 @@ DERIVED_TOTAL_LOSS_NOTE = (
 )
 
 
+def _finite(value: NormalizedValue) -> bool:
+    """Whether every number inside a scalar, complex or matrix value is finite."""
+    if isinstance(value, MatrixValue):
+        return all(_finite(cell) for row in value.values for cell in row)
+    if isinstance(value, ComplexValue):
+        return math.isfinite(value.real) and math.isfinite(value.imaginary)
+    return math.isfinite(value)
+
+
 def _available(
     quantity: RequestedOutput,
     scope: str,
@@ -54,6 +65,17 @@ def _available(
     *,
     approximation: str | None = None,
 ) -> NormalizedQuantity:
+    if not _finite(value):
+        # AEDT answers a report request it cannot evaluate with NaN rather than
+        # with an error -- a Maxwell 3D matrix over two windings does exactly
+        # that -- and "available: nan H" is a wrong number wearing the label of
+        # a right one. Observed live on AEDT 2025.2, 2026-08-14.
+        return _unavailable(
+            quantity,
+            scope,
+            f"{reason_code(quantity, NOT_REPORTED)}: The backend returned a "
+            "non-finite value, so the quantity was not evaluated.",
+        )
     return NormalizedQuantity(
         quantity=quantity,
         scope=scope,
@@ -96,8 +118,40 @@ def _missing(
     return _unavailable(quantity, scope, f"{reason_code(quantity, code)}: {detail}{suffix}")
 
 
+SELF_INDUCTANCE_NOTE = (
+    "Self-inductance: the diagonal of the solver's winding matrix, which "
+    "excludes the other windings' currents. It is not what a meter reads with "
+    "every winding energised."
+)
+APPARENT_INDUCTANCE_NOTE = (
+    "Apparent inductance at this operating point: flux linkage over current "
+    "with every winding energised, so it carries the mutual term. Two aiding "
+    "windings read L + M here and two opposing ones read L - M, where the "
+    "Maxwell backends report the self term L instead."
+)
+
+
+def _inductance_convention(backend: RunBackend) -> str:
+    """Which inductance the backend reports, in its own words.
+
+    FEMM's circuit result is the apparent inductance and Maxwell's matrix
+    diagonal is the self inductance. Measured 2026-08-14 on one pair of 10-turn
+    windings: FEMM read 18.147 uH aiding and 1.414 uH opposing, whose half-sum
+    9.78 uH matches Maxwell 2D's 9.819 uH self term. Same physics, two
+    definitions, and they used to be published under one unqualified label.
+    """
+    return (
+        APPARENT_INDUCTANCE_NOTE
+        if backend is RunBackend.FEMM
+        else SELF_INDUCTANCE_NOTE
+    )
+
+
 def _winding_entries(
-    quantity: RequestedOutput, raw: RawScalarResults, provenance: str
+    quantity: RequestedOutput,
+    raw: RawScalarResults,
+    provenance: str,
+    backend: RunBackend,
 ) -> tuple[NormalizedQuantity, ...]:
     if not raw.windings:
         return (
@@ -109,6 +163,11 @@ def _winding_entries(
             ),
         )
     entries: list[NormalizedQuantity] = []
+    convention = (
+        _inductance_convention(backend)
+        if quantity is RequestedOutput.INDUCTANCE
+        else None
+    )
     for winding in raw.windings:
         scope = winding_scope(winding.winding_id)
         if quantity is RequestedOutput.RESISTANCE:
@@ -134,10 +193,15 @@ def _winding_entries(
                     scope,
                     ComplexValue(real=value.real, imaginary=value.imag),
                     provenance,
+                    approximation=convention,
                 )
             )
         else:
-            entries.append(_available(quantity, scope, value, provenance))
+            entries.append(
+                _available(
+                    quantity, scope, value, provenance, approximation=convention
+                )
+            )
     return tuple(entries)
 
 
@@ -303,7 +367,7 @@ def normalize_scalar_results(
         if quantity not in SCALAR_QUANTITIES:
             continue
         if quantity in PER_WINDING_QUANTITIES:
-            quantities.extend(_winding_entries(quantity, raw, provenance))
+            quantities.extend(_winding_entries(quantity, raw, provenance, backend))
         elif quantity is RequestedOutput.MATRICES:
             quantities.extend(_matrix_entries(raw, provenance))
         elif quantity is RequestedOutput.TOTAL_LOSS:
