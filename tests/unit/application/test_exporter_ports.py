@@ -17,8 +17,23 @@ from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
 
 
 def test_solve_stage_names_append_analyze_and_results() -> None:
-    assert SOLVE_STAGE_NAMES == STAGE_NAMES + ("analyze", "results")
+    assert SOLVE_STAGE_NAMES[-2:] == ("analyze", "results")
     assert SOLVE_STAGE_NAMES_2D == STAGE_NAMES_2D + ("analyze", "results")
+
+
+def test_only_a_3d_solve_carries_the_section_sheet_stage() -> None:
+    """The non-model sheets B and J are read on are created before the solve,
+    so adding geometry does not invalidate the solution they are read against. A
+    Generate Only run reads no fields and creates none; 2D integrates its
+    evaluated regions directly and needs no sheets at all.
+    """
+    assert "sections" not in STAGE_NAMES
+    assert "sections" not in STAGE_NAMES_2D
+    assert "sections" not in SOLVE_STAGE_NAMES_2D
+    assert SOLVE_STAGE_NAMES.index("sections") < SOLVE_STAGE_NAMES.index("setup")
+    assert [name for name in SOLVE_STAGE_NAMES if name != "sections"] == list(
+        STAGE_NAMES + ("analyze", "results")
+    )
 
 
 def test_generate_sequences_still_end_with_save() -> None:

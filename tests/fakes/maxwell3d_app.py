@@ -302,6 +302,11 @@ class FakeMaxwell3dApp:
         r_outer_m: float,
         half_height_m: float,
     ) -> str:
+        # Honours `raise_on` like every other call, so a test can reproduce the
+        # live modeler refusal (`GrpcApiError ... CreateRectangle`).
+        self._hook("create_section_rectangle")
+        if self.raise_on == "create_section_rectangle":
+            raise RuntimeError("boom in create_section_rectangle")
         self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="rectangle"))
         return name
 
@@ -312,6 +317,9 @@ class FakeMaxwell3dApp:
         normal: tuple[float, float, float],
         radius_m: float,
     ) -> str:
+        self._hook("create_section_disc")
+        if self.raise_on == "create_section_disc":
+            raise RuntimeError("boom in create_section_disc")
         self.created_sheets.append(_FakeSheet(name=name, non_model=True, kind="disc"))
         return name
 

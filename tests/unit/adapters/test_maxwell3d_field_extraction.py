@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -109,3 +110,54 @@ def test_a_generate_only_run_creates_no_sheets(tmp_path: Path) -> None:
     export(tmp_path, app, solve=False)
 
     assert app.created_sheets == []
+
+
+def test_the_sheets_exist_before_the_solve_starts(tmp_path: Path) -> None:
+    """Adding geometry to a solved design invalidates the solution the sheets
+    exist to be read against, so they are created before the solve. Being
+    non-model, they are excluded from the mesh and change nothing about it.
+    """
+    app = FakeMaxwell3dApp()
+    sheet_counts: list[int] = []
+    app.on_call["analyze_setup"] = lambda: sheet_counts.append(len(app.created_sheets))
+
+    result = export(tmp_path, app)
+
+    assert result.raw_results is not None
+    assert sheet_counts and sheet_counts[0] == len(app.created_sheets)
+    assert sheet_counts[0] > 0
+
+
+def test_a_sheet_failure_is_diagnosed_without_failing_the_run(tmp_path: Path) -> None:
+    """Sheets serve field extraction only, so losing them costs the fields and
+    nothing else: the solve and its scalar results still stand."""
+    app = FakeMaxwell3dApp(raise_on="create_section_rectangle")
+
+    result = export(tmp_path, app)
+
+    sections = next(stage for stage in result.stages if stage.name == "sections")
+    assert sections.succeeded
+    assert "No field section sheets" in sections.message
+    raw = result.raw_results
+    assert raw is not None
+    assert raw.flux_density_sections == ()
+    assert any("create_section_rectangle" in item for item in raw.diagnostics)
+    assert raw.windings
+
+
+def test_sheet_names_carry_nothing_aedt_refuses_in_an_object_name(
+    tmp_path: Path,
+) -> None:
+    """Section ids read `core.00.span-start`, and AEDT rejects a hyphen in an
+    object name: `CreateRectangle` failed and took the design handle with it, so
+    the next stage died on `'NoneType' object has no attribute 'InsertSetup'`.
+    Replacing only the dots left the hyphen in place.
+    """
+    app = FakeMaxwell3dApp()
+
+    export(tmp_path, app)
+
+    assert app.created_sheets
+    for sheet in app.created_sheets:
+        assert sheet.name.startswith("Sec_")
+        assert re.fullmatch(r"[A-Za-z0-9_]+", sheet.name), sheet.name
