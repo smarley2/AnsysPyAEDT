@@ -62,10 +62,17 @@ def test_no_registry_is_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     assert release_orphaned_desktops() == 0
 
 
+class _Desktop:
+    def __init__(self, process_id: int | None) -> None:
+        if process_id is not None:
+            self.aedt_process_id = process_id
+
+
 class _App:
-    def __init__(self, fails: bool = False) -> None:
+    def __init__(self, fails: bool = False, process_id: int | None = None) -> None:
         self.calls: list[tuple[bool, bool]] = []
         self.fails = fails
+        self.desktop_class = _Desktop(process_id)
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None:
         if self.fails:
@@ -100,3 +107,48 @@ def test_a_failed_release_falls_back_instead_of_leaking_the_seat(
     assert "release_desktop failed" in diagnostic
     assert "released 1 registered session(s)" in diagnostic
     assert registry["55001"].released
+
+
+def test_a_desktop_that_outlives_its_release_is_terminated(
+    monkeypatch: pytest.MonkeyPatch, registry: dict[str, _Session]
+) -> None:
+    """`release_desktop` reporting success is not proof the seat came back.
+
+    On 2026-08-17 two runs called it, PyAEDT reported the desktop released, and
+    both `ansysedt.exe` processes stayed up holding their licence seats until
+    they were killed by hand. The launch asks for `close_on_exit=False`, so
+    nothing else was ever going to close them.
+    """
+    killed: list[tuple[int, int]] = []
+
+    def fake_kill(process_id: int, sig: int) -> None:
+        if sig == 0:
+            return  # signal 0 only probes; the process is alive
+        killed.append((process_id, sig))
+
+    monkeypatch.setattr("inductor_designer.adapters.pyaedt.desktop_cleanup.os.kill", fake_kill)
+    app = _App(process_id=4242)
+
+    diagnostic = release_live_app(app)
+
+    assert app.calls == [(True, True)]
+    assert killed and killed[0][0] == 4242
+    assert diagnostic is not None
+    assert "survived release_desktop and was terminated" in diagnostic
+
+
+def test_a_desktop_that_exits_on_release_is_left_alone(
+    monkeypatch: pytest.MonkeyPatch, registry: dict[str, _Session]
+) -> None:
+    def fake_kill(process_id: int, sig: int) -> None:
+        raise OSError("no such process")
+
+    monkeypatch.setattr("inductor_designer.adapters.pyaedt.desktop_cleanup.os.kill", fake_kill)
+
+    assert release_live_app(_App(process_id=4242)) is None
+
+
+def test_an_app_that_names_no_process_is_released_without_a_kill(
+    registry: dict[str, _Session],
+) -> None:
+    assert release_live_app(_App()) is None
