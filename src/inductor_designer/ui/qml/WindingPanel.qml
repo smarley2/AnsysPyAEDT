@@ -445,8 +445,10 @@ Pane {
                     color: "#6d7a7e"
                     font.pixelSize: 11
                     text: qsTr("Direction shows in the preview: the 3D turns lean the way "
-                        + "the wire advances, and the 2D cut view flips the conductor "
-                        + "dot/cross polarity.")
+                        + "the wire advances, the arrow follows the current (sense and "
+                        + "current direction together), the bead marks where the winding "
+                        + "starts, and the 2D cut view flips the conductor dot/cross "
+                        + "polarity.")
                 }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Terminal intent") }
                 TextField {

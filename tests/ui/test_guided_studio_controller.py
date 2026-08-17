@@ -215,7 +215,8 @@ def test_adding_a_winding_allocates_a_definition_and_an_excitation() -> None:
     assert excitations[1].ac_rms_current_a == 0.0
     assert excitations[1].dc_current_a == 0.0
     assert controller.selectedWindingId == "w2"
-    assert len(controller.previewEntries) == 3
+    # Core, then each winding's wire, its current arrow and its start bead.
+    assert len(controller.previewEntries) == 7
 
 
 def test_a_new_winding_does_not_overlap_an_existing_sector() -> None:

@@ -35,9 +35,12 @@ def test_preview_entries_built_offscreen(catalog_index: Path) -> None:
     project = repo.load(ROOT / "tests" / "fixtures" / "sample_geometry_project.inductor.json")
     model = build_geometry_model(project, SqliteCatalogRepository(catalog_index))
     entries = build_preview_entries(model)
-    assert len(entries) == 3  # core + 2 windings
+    # Core, then three per winding: its wire, its current arrow, its start bead.
+    assert len(entries) == 7
     assert entries[0].opacity < 1.0
-    assert entries[1].color != entries[2].color
+    # A winding and its markers share a colour; the next winding takes the next.
+    assert entries[1].color == entries[2].color == entries[3].color
+    assert entries[1].color != entries[4].color
     assert entries[1].geometry is not None
 
 

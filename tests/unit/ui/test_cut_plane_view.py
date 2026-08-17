@@ -131,7 +131,9 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
     model = build_geometry_model(project, CATALOG)
 
     drawing = build_cut_plane_drawing(model, project)
-    # entries[0] is the core; entries[1:] follow sorted(model.packings, key=winding_id).
+    # entries[0] is the core; then three entries per winding -- its wire, its
+    # current arrow and its start bead, sharing one colour -- in
+    # sorted(packings, key=winding_id).
     preview_entries = build_preview_entries(model)
 
     by_position = {(round(c.x_mm, 6), round(c.y_mm, 6)): c for c in drawing.circles}
@@ -139,7 +141,7 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
     assert sorted_ids == ["w1", "w2"]  # declaration order was "w2", "w1"
 
     for index, winding_id in enumerate(sorted_ids):
-        expected_color = preview_entries[1 + index].color
+        expected_color = preview_entries[1 + 3 * index].color
         planar_winding = next(w for w in model.planar.windings if w.winding_id == winding_id)
         assert planar_winding.conductors
         for conductor in planar_winding.conductors:

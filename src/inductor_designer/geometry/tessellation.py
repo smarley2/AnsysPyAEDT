@@ -4,10 +4,10 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from inductor_designer.domain.winding import WindingDirection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection, mmf_sign
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import PackedLayer, PackedWinding
-from inductor_designer.geometry.primitives import Vec3, sample_path
+from inductor_designer.geometry.primitives import Vec3, half_plane_point, sample_path
 from inductor_designer.geometry.turn_path import build_turn_loop
 
 
@@ -164,6 +164,173 @@ def tube(points: Sequence[Vec3], radius: float, sides: int = 12) -> Mesh:
     return Mesh(tuple(positions), tuple(normals))
 
 
+def _cone(base: Vec3, tip: Vec3, radius: float, sides: int = 12) -> Mesh:
+    """Solid cone from a disc at `base` to `tip`, for an arrow head."""
+    axis = tip - base
+    if axis.norm() == 0.0:
+        raise ValueError("cone needs a non-zero axis")
+    tangent = axis.normalized()
+    seed = Vec3(0.0, 0.0, 1.0)
+    if abs(tangent.dot(seed)) > 0.9:
+        seed = Vec3(1.0, 0.0, 0.0)
+    normal = (seed - tangent.scaled(tangent.dot(seed))).normalized()
+    binormal = tangent.cross(normal)
+    rim: list[tuple[Vec3, Vec3]] = []
+    for s in range(sides):
+        phi = 2.0 * math.pi * s / sides
+        radial = normal.scaled(math.cos(phi)) + binormal.scaled(math.sin(phi))
+        rim.append((base + radial.scaled(radius), radial))
+    positions: list[float] = []
+    normals: list[float] = []
+    back = tangent.scaled(-1.0)
+    for s in range(sides):
+        (first, first_n), (second, second_n) = rim[s], rim[(s + 1) % sides]
+        for vertex, vertex_n in (
+            (first, first_n),
+            (second, second_n),
+            (tip, tangent),
+            # Cap, so the head reads solid rather than hollow from behind.
+            (first, back),
+            (base, back),
+            (second, back),
+        ):
+            positions.extend((vertex.x, vertex.y, vertex.z))
+            normals.extend((vertex_n.x, vertex_n.y, vertex_n.z))
+    return Mesh(tuple(positions), tuple(normals))
+
+
+def _rounded_corner(
+    previous: Vec3, corner: Vec3, following: Vec3, fillet: float, samples: int = 6
+) -> list[Vec3]:
+    """Quadratic Bezier easing a right-angle turn, so the tube does not pinch."""
+    start = corner + (previous - corner).normalized().scaled(fillet)
+    end = corner + (following - corner).normalized().scaled(fillet)
+    points: list[Vec3] = []
+    for index in range(samples + 1):
+        t = index / samples
+        points.append(
+            start.scaled((1 - t) ** 2)
+            + corner.scaled(2 * (1 - t) * t)
+            + end.scaled(t**2)
+        )
+    return points
+
+
+def wrap_arrow_path(
+    core: FinishedCore,
+    packing: PackedWinding,
+    sense: WindingDirection,
+    current: CurrentDirection,
+) -> tuple[Vec3, Vec3, Vec3]:
+    """`(tail, corner, tip)` of the current-flow arrow, in metres.
+
+    Kept separate from the mesh so the direction it states can be asserted as
+    three points rather than dug back out of a triangle soup.
+    """
+    layer = packing.layers[0]
+    station = layer.station_deg[len(layer.station_deg) // 2]
+    d = packing.insulated_diameter_m
+    # Wide clearance, not a hair's worth: at three wire diameters the arrow read
+    # as one more turn in the fan. It has to float outside and above the wire.
+    clearance = 4.5 * d
+    r_outer = core.r_outer_m + layer.radial_build_m + clearance
+    r_inner = core.r_inner_m - layer.radial_build_m - 1.5 * d
+    z_top = core.half_height_m + layer.radial_build_m + clearance
+    z_side = -0.35 * core.half_height_m
+    legs = (
+        ((r_outer, z_side), (r_outer, z_top), (r_inner, z_top))
+        if mmf_sign(sense, current) > 0.0
+        else ((r_inner, z_top), (r_outer, z_top), (r_outer, z_side))
+    )
+    tail, corner, tip = (half_plane_point(station, r, z) for r, z in legs)
+    return (tail, corner, tip)
+
+
+def wrap_arrow(
+    core: FinishedCore,
+    packing: PackedWinding,
+    sense: WindingDirection,
+    current: CurrentDirection,
+    tube_sides: int = 12,
+) -> Mesh:
+    """One arrow beside the winding, along the way the current actually flows.
+
+    Sense and current direction are two independent choices whose product is
+    what drives the core (`domain.winding.mmf_sign`), so neither alone tells the
+    reader where the current goes. This follows the product: positive
+    ampere-turns climb the outer wall and cross the top face inward, negative
+    ones cross the top outward and drop down the outer wall. Reverse the current
+    on a counter-clockwise winding and the arrow turns round, exactly as the
+    coil polarity handed to the solver does.
+
+    Bent over the outer corner rather than drawn flat, so it reads as a
+    direction from any camera angle instead of foreshortening into a blob, and
+    it sits a few wire diameters clear of the turns at the middle station of the
+    first layer.
+    """
+    d = packing.insulated_diameter_m
+    tail, corner, tip = wrap_arrow_path(core, packing, sense, current)
+    # Stop the shaft short of the tip and hand the rest to the head.
+    toward_corner = (corner - tip).normalized()
+    shaft_end = tip + toward_corner.scaled(4.5 * d)
+    path = [tail, *_rounded_corner(tail, corner, shaft_end, 3.5 * d), shaft_end]
+    shaft = tube(path, radius=0.6 * d, sides=tube_sides)
+    point = _cone(shaft_end, tip, radius=1.9 * d, sides=tube_sides)
+    return _merge((shaft, point))
+
+
+def _sphere(center: Vec3, radius: float, segments: int = 12) -> Mesh:
+    """Latitude-longitude ball, for a marker bead."""
+    rings: list[list[Vec3]] = []
+    for row in range(segments // 2 + 1):
+        theta = math.pi * row / (segments // 2)
+        ring = [
+            Vec3(
+                math.sin(theta) * math.cos(2.0 * math.pi * column / segments),
+                math.sin(theta) * math.sin(2.0 * math.pi * column / segments),
+                math.cos(theta),
+            )
+            for column in range(segments)
+        ]
+        rings.append(ring)
+    positions: list[float] = []
+    normals: list[float] = []
+    for row in range(len(rings) - 1):
+        for column in range(segments):
+            following = (column + 1) % segments
+            a, b = rings[row][column], rings[row][following]
+            c, d = rings[row + 1][following], rings[row + 1][column]
+            _emit_quad(
+                positions,
+                normals,
+                center + a.scaled(radius),
+                center + b.scaled(radius),
+                center + c.scaled(radius),
+                center + d.scaled(radius),
+                a,
+                b,
+                c,
+                d,
+            )
+    return Mesh(tuple(positions), tuple(normals))
+
+
+def start_bead(
+    core: FinishedCore, packing: PackedWinding, segments: int = 12
+) -> Mesh:
+    """A bead where the winding starts: its first turn, on the outer wall.
+
+    Sector, lean and arrow all leave the two ends of a winding looking alike,
+    so this says which end the wire was started from -- the lead-in the packing
+    reserves at `lead_in_deg`, before the first turn's station.
+    """
+    d = packing.insulated_diameter_m
+    layer = packing.layers[0]
+    radius = core.r_outer_m + layer.radial_build_m + 2.0 * d
+    center = half_plane_point(packing.lead_in_deg, radius, 0.0)
+    return _sphere(center, 1.6 * d, segments)
+
+
 def _lean_deg(layer: PackedLayer) -> float:
     """Azimuth the wire gains between the bottom face and the top face.
 
@@ -209,7 +376,10 @@ def tessellate_winding(
     sense: WindingDirection,
     tube_sides: int = 12,
 ) -> Mesh:
-    """Draw one winding, leaning each turn the way `sense` winds it.
+    """Draw one winding's turns, leaning each the way `sense` winds it.
+
+    `wrap_arrow` draws the marker that names that direction outright; it stays a
+    separate mesh so this one holds nothing but wire.
 
     The lean is the preview's alone: the exported solver geometry keeps its
     turns coplanar, because the section discs B and J are integrated over are

@@ -4,11 +4,19 @@ import math
 
 import pytest
 
-from inductor_designer.domain.winding import WindingDirection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.primitives import Vec3
-from inductor_designer.geometry.tessellation import Mesh, tessellate_core, tessellate_winding, tube
+from inductor_designer.geometry.tessellation import (
+    Mesh,
+    start_bead,
+    tessellate_core,
+    tessellate_winding,
+    tube,
+    wrap_arrow,
+    wrap_arrow_path,
+)
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -111,6 +119,94 @@ def test_the_two_winding_senses_lean_the_turns_opposite_ways() -> None:
     # approaches that from below.
     lean = packing.layers[0].pitch_deg / 2.0
     assert 0.5 * lean < ccw_lean <= lean
+
+
+FORWARD = CurrentDirection.FORWARD
+REVERSE = CurrentDirection.REVERSE
+
+
+def test_the_arrow_follows_the_current_not_just_the_wound_sense() -> None:
+    """The two choices multiply into one flow direction (`mmf_sign`), so the
+    arrow has to read the product: reversing either one turns it round, and
+    reversing both leaves it alone."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+
+    def tip(sense: WindingDirection, current: CurrentDirection) -> Vec3:
+        return wrap_arrow_path(CORE, packing, sense, current)[2]
+
+    aiding = tip(CCW, FORWARD)
+    assert tip(CW, REVERSE).z == aiding.z  # both reversed: unchanged
+    assert tip(CCW, REVERSE).z != aiding.z  # current reversed: turned round
+    assert tip(CW, FORWARD).z != aiding.z  # sense reversed: turned round
+    assert tip(CCW, REVERSE).z == tip(CW, FORWARD).z
+
+
+def test_the_wrap_arrow_follows_the_way_the_wire_is_wound() -> None:
+    """Counter-clockwise at forward current -- positive ampere-turns -- climbs
+    the outer wall and ends pointing inward over the top; the opposite flow ends
+    pointing down the outer wall. So the marker agrees with the coil polarity the
+    solver is given."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+
+    ccw_tail, ccw_corner, ccw_tip = wrap_arrow_path(CORE, packing, CCW, FORWARD)
+    cw_tail, cw_corner, cw_tip = wrap_arrow_path(CORE, packing, CW, FORWARD)
+
+    # Same bracket, walked the other way: one sense's tail is the other's tip.
+    assert (cw_tail.x, cw_tail.y, cw_tail.z) == (ccw_tip.x, ccw_tip.y, ccw_tip.z)
+    assert (cw_tip.x, cw_tip.y, cw_tip.z) == (ccw_tail.x, ccw_tail.y, ccw_tail.z)
+    assert (cw_corner.x, cw_corner.y, cw_corner.z) == (
+        ccw_corner.x,
+        ccw_corner.y,
+        ccw_corner.z,
+    )
+    assert math.hypot(ccw_tip.x, ccw_tip.y) < CORE.r_inner_m  # inward over the top
+    assert ccw_tip.z > CORE.half_height_m
+    assert math.hypot(cw_tip.x, cw_tip.y) > CORE.r_outer_m  # down the outer wall
+    assert cw_tip.z < 0.0
+
+
+def test_the_wrap_arrow_stays_clear_of_the_wire() -> None:
+    """Above the turns or outside them, never buried inside one."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+    build = packing.layers[0].radial_build_m
+    turn_top = CORE.half_height_m + build + D / 2.0
+    turn_outer = CORE.r_outer_m + build + D / 2.0
+
+    for sense in (CCW, CW):
+        mesh = wrap_arrow(CORE, packing, sense, FORWARD)
+        for x, y, z in zip(
+            mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3], strict=True
+        ):
+            assert z > turn_top or math.hypot(x, y) > turn_outer
+
+
+def test_the_start_bead_sits_at_the_lead_in_end_outside_the_turns() -> None:
+    """Which end the wire started from is otherwise unreadable: sector, lean and
+    arrow all look the same at either end."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 20.0, 180.0, 0.0001, 0.001))
+    build = packing.layers[0].radial_build_m
+
+    mesh = start_bead(CORE, packing)
+    vertices = list(
+        zip(mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3], strict=True)
+    )
+    azimuths = [math.degrees(math.atan2(y, x)) for x, y, _ in vertices]
+
+    assert min(math.hypot(x, y) for x, y, _ in vertices) > CORE.r_outer_m + build
+    assert sum(azimuths) / len(azimuths) == pytest.approx(packing.lead_in_deg, abs=1.0)
+    # The lead-in is the low-azimuth end of the sector, before the first turn.
+    assert packing.start_deg <= packing.lead_in_deg < packing.layers[0].station_deg[0]
+
+
+def test_the_arrow_is_its_own_mesh_and_not_part_of_the_wire() -> None:
+    """Turns and marker stay separable, so the drawn wire can be read alone."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+
+    winding = tessellate_winding(CORE, packing, CCW)
+    arrow = wrap_arrow(CORE, packing, CCW, FORWARD)
+
+    assert triangle_count(winding) > triangle_count(arrow) > 0
+    assert max(arrow.positions[2::3]) > max(winding.positions[2::3])
 
 
 def test_leaning_keeps_the_turn_on_the_core() -> None:

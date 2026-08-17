@@ -6,7 +6,7 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.domain.validation import ValidationCategory, validate_project
-from inductor_designer.domain.winding import WindingDirection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
 from inductor_designer.geometry.core_solid import (
     CoreGeometryError,
@@ -52,6 +52,9 @@ class GeometryModel:
     # and clearance are the same either way -- but the preview draws the lean
     # it implies, so the choice is visible before a solve.
     winding_direction: dict[str, WindingDirection]
+    # The excitation's direction, for the same reason: the preview's arrow shows
+    # where the current goes, which is the product of the two choices.
+    current_direction: dict[str, CurrentDirection]
 
 
 def insulated_diameter(record: ConductorRecord) -> float:
@@ -118,6 +121,12 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         except PackingError as error:
             raise GeometryModelError((str(error),)) from error
 
+    # Validation already pairs every winding with one excitation, so a missing
+    # entry here is impossible rather than defaulted.
+    currents = {
+        point.winding_id: point.current_direction
+        for point in project.operating_point.windings
+    }
     collisions = check_clearances(core, packings, clearances)
     symmetry = propose_symmetry_plan(project.design.windings, project.operating_point.windings)
     planar = build_planar_model(
@@ -133,4 +142,5 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         insulated_diameter_m=insulated,
         bare_diameter_m=bare,
         winding_direction=senses,
+        current_direction=currents,
     )
