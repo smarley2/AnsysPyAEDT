@@ -77,6 +77,8 @@ def build_preview_entries(model: GeometryModel) -> list[PreviewEntry]:
         PreviewEntry(MeshGeometry(tessellate_core(model.magnetic_core)), "#8a8a8a", 0.35)
     ]
     for i, packing in enumerate(sorted(model.packings, key=lambda p: p.winding_id)):
-        mesh = tessellate_winding(model.core, packing)
+        mesh = tessellate_winding(
+            model.core, packing, model.winding_direction[packing.winding_id]
+        )
         entries.append(PreviewEntry(MeshGeometry(mesh), PALETTE[i % len(PALETTE)], 1.0))
     return entries

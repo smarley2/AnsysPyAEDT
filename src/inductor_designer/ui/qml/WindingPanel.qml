@@ -444,8 +444,9 @@ Pane {
                     wrapMode: Text.WordWrap
                     color: "#6d7a7e"
                     font.pixelSize: 11
-                    text: qsTr("Direction shows in the preview's 2D cut view, as the "
-                        + "conductor dot/cross polarity; the 3D turns look the same either way.")
+                    text: qsTr("Direction shows in the preview: the 3D turns lean the way "
+                        + "the wire advances, and the 2D cut view flips the conductor "
+                        + "dot/cross polarity.")
                 }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Terminal intent") }
                 TextField {

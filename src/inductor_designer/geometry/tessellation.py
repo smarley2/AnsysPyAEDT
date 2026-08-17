@@ -4,8 +4,9 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from inductor_designer.domain.winding import WindingDirection
 from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.packing import PackedLayer, PackedWinding
 from inductor_designer.geometry.primitives import Vec3, sample_path
 from inductor_designer.geometry.turn_path import build_turn_loop
 
@@ -163,22 +164,76 @@ def tube(points: Sequence[Vec3], radius: float, sides: int = 12) -> Mesh:
     return Mesh(tuple(positions), tuple(normals))
 
 
+def _lean_deg(layer: PackedLayer) -> float:
+    """Azimuth the wire gains between the bottom face and the top face.
+
+    A wound turn is not coplanar: the wire advances to the next turn's station
+    as it wraps, so bottom to top -- half the way round the cross-section --
+    covers half the turn-to-turn pitch. A single turn on a layer has no next
+    station, so its own tight-pack pitch sets the lean instead.
+    """
+    pitch = layer.pitch_deg if len(layer.station_deg) > 1 else layer.min_pitch_deg
+    return pitch / 2.0
+
+
+def _leaned(points: Sequence[Vec3], lean_deg: float, sign: float) -> list[Vec3]:
+    """Rotate each point about Z in proportion to its height.
+
+    Which way the wire leans is the only thing that distinguishes a clockwise
+    winding from a counter-clockwise one geometrically -- both wrap the same
+    cross-section and both advance the same way round the core, so drawing the
+    turns coplanar made the two senses pixel-identical, and the Windings screen
+    could not show that the choice had taken effect.
+    """
+    span = max((abs(point.z) for point in points), default=0.0)
+    if span <= 0.0 or lean_deg <= 0.0:
+        return list(points)
+    half = math.radians(sign * lean_deg) / 2.0
+    leaned: list[Vec3] = []
+    for point in points:
+        angle = half * (point.z / span)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        leaned.append(
+            Vec3(
+                point.x * cos_a - point.y * sin_a,
+                point.x * sin_a + point.y * cos_a,
+                point.z,
+            )
+        )
+    return leaned
+
+
 def tessellate_winding(
-    core: FinishedCore, packing: PackedWinding, tube_sides: int = 12
+    core: FinishedCore,
+    packing: PackedWinding,
+    sense: WindingDirection,
+    tube_sides: int = 12,
 ) -> Mesh:
+    """Draw one winding, leaning each turn the way `sense` winds it.
+
+    The lean is the preview's alone: the exported solver geometry keeps its
+    turns coplanar, because the section discs B and J are integrated over are
+    placed analytically and assume exactly that. Sense reaches the solver as
+    the coil polarity instead, where it belongs -- it changes the flux, never
+    the mesh.
+    """
     d = packing.insulated_diameter_m
     radius = d / 2.0
+    sign = 1.0 if sense is WindingDirection.COUNTERCLOCKWISE else -1.0
     meshes: list[Mesh] = []
     # Design decision (reviewed 2026-07-14): each turn is one closed loop; no
     # turn-to-turn connector is modeled or drawn. Maxwell (M3) assigns one
     # coil terminal per closed turn and groups them into the winding.
     for layer in packing.layers:
+        lean_deg = _lean_deg(layer)
         for station in layer.station_deg:
             loop = build_turn_loop(core, layer.index, d, station)
             # build_turn_loop's segments already trace a closed path, so the
             # sampled polyline's last point already coincides with its first
             # (to float precision) — appending it again would create a
             # zero-length step and blow up tangent computation in tube().
-            points = list(sample_path(loop))
+            # Leaning rotates about Z by a height-dependent angle, which keeps
+            # that coincidence: the two endpoints share a height.
+            points = _leaned(list(sample_path(loop)), lean_deg, sign)
             meshes.append(tube(points, radius, tube_sides))
     return _merge(meshes)

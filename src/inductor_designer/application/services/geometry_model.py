@@ -6,6 +6,7 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.domain.validation import ValidationCategory, validate_project
+from inductor_designer.domain.winding import WindingDirection
 from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
 from inductor_designer.geometry.core_solid import (
     CoreGeometryError,
@@ -47,6 +48,10 @@ class GeometryModel:
     planar: PlanarModel
     insulated_diameter_m: dict[str, float]
     bare_diameter_m: dict[str, float]
+    # The wound sense per winding. Geometry does not otherwise care -- packing
+    # and clearance are the same either way -- but the preview draws the lean
+    # it implies, so the choice is visible before a solve.
+    winding_direction: dict[str, WindingDirection]
 
 
 def insulated_diameter(record: ConductorRecord) -> float:
@@ -85,6 +90,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
     clearances: dict[str, float] = {}
     insulated: dict[str, float] = {}
     bare: dict[str, float] = {}
+    senses: dict[str, WindingDirection] = {}
     for winding in project.design.windings:
         try:
             record = catalog.get_conductor(winding.conductor_name)
@@ -97,6 +103,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         insulated[winding.winding_id] = d_ins
         bare[winding.winding_id] = record.bare_diameter_m
         clearances[winding.winding_id] = winding.min_clearance_m
+        senses[winding.winding_id] = winding.winding_direction
         spec = WindingSpec(
             winding_id=winding.winding_id,
             turns=winding.turns,
@@ -125,4 +132,5 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         planar=planar,
         insulated_diameter_m=insulated,
         bare_diameter_m=bare,
+        winding_direction=senses,
     )

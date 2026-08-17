@@ -4,6 +4,7 @@ import math
 
 import pytest
 
+from inductor_designer.domain.winding import WindingDirection
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.primitives import Vec3
@@ -55,16 +56,76 @@ def test_tube_rejects_degenerate() -> None:
         tube([Vec3(0.0, 0.0, 0.0)], radius=0.001)
 
 
+CCW = WindingDirection.COUNTERCLOCKWISE
+CW = WindingDirection.CLOCKWISE
+
+
 def test_winding_mesh_scales_with_turns() -> None:
     small = pack_winding(CORE, WindingSpec("w1", 3, D, 0.0, 300.0, 0.0001, 0.001))
     large = pack_winding(CORE, WindingSpec("w1", 12, D, 0.0, 300.0, 0.0001, 0.001))
-    mesh_small = tessellate_winding(CORE, small)
-    mesh_large = tessellate_winding(CORE, large)
+    mesh_small = tessellate_winding(CORE, small, CCW)
+    mesh_large = tessellate_winding(CORE, large, CCW)
     assert triangle_count(mesh_large) > triangle_count(mesh_small)
 
 
 def test_winding_mesh_stays_outside_axis() -> None:
     packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 300.0, 0.0001, 0.001))
-    mesh = tessellate_winding(CORE, packing)
+    mesh = tessellate_winding(CORE, packing, CCW)
     for x, y in zip(mesh.positions[0::3], mesh.positions[1::3], strict=True):
         assert math.hypot(x, y) > 0.001
+
+
+def _azimuths_by_height(mesh: Mesh) -> tuple[float, float]:
+    """Mean azimuth of the highest and the lowest vertices, in degrees."""
+    points = list(
+        zip(mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3], strict=True)
+    )
+    top = max(z for _, _, z in points)
+    bottom = min(z for _, _, z in points)
+    span = top - bottom
+
+    def mean_azimuth(target: float) -> float:
+        selected = [
+            math.degrees(math.atan2(y, x))
+            for x, y, z in points
+            if abs(z - target) < span / 100.0
+        ]
+        return sum(selected) / len(selected)
+
+    return mean_azimuth(top), mean_azimuth(bottom)
+
+
+def test_the_two_winding_senses_lean_the_turns_opposite_ways() -> None:
+    """Coplanar turns drew clockwise and counter-clockwise pixel-identically, so
+    the Windings screen could not show that the choice had taken effect."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+
+    ccw_top, ccw_bottom = _azimuths_by_height(tessellate_winding(CORE, packing, CCW))
+    cw_top, cw_bottom = _azimuths_by_height(tessellate_winding(CORE, packing, CW))
+
+    ccw_lean = ccw_top - ccw_bottom
+    assert cw_top - cw_bottom == pytest.approx(-ccw_lean)
+    # Half the turn-to-turn pitch, split either side of mid-height. The sampled
+    # band holds tube-surface vertices whose centerline sits below the extreme
+    # height and which therefore carry less of the lean, so the measured value
+    # approaches that from below.
+    lean = packing.layers[0].pitch_deg / 2.0
+    assert 0.5 * lean < ccw_lean <= lean
+
+
+def test_leaning_keeps_the_turn_on_the_core() -> None:
+    """The lean is a rotation about Z, so it moves no vertex in radius or height
+    -- a leaned turn still hugs the same core it was packed against."""
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+
+    def radii_and_heights(sense: WindingDirection) -> list[tuple[float, float]]:
+        mesh = tessellate_winding(CORE, packing, sense)
+        return sorted(
+            (round(math.hypot(x, y), 9), round(z, 9))
+            for x, y, z in zip(
+                mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3],
+                strict=True,
+            )
+        )
+
+    assert radii_and_heights(CW) == radii_and_heights(CCW)
