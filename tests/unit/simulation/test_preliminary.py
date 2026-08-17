@@ -472,10 +472,15 @@ def test_cancelling_windings_still_report_their_own_inductance(
     assert CANCELLED_MMF_NOTE in result.notes
 
 
-def test_mutual_and_the_two_series_modes_are_reported_for_a_pair(
+def test_mutual_and_the_aiding_series_mode_are_reported_for_a_pair(
     sample_request: PreliminaryRequest,
 ) -> None:
-    """M = N1 N2 A_L at k = 1, with the two modes either side of it."""
+    """M = N1 N2 A_L at k = 1, and only the mode M adds to carries a number.
+
+    The other mode is `L - M`, a difference this model makes exactly zero for a
+    matched pair. Reported as 0.000 uH it read as a computed cancellation when
+    it was the k = 1 assumption showing through, so it is refused instead.
+    """
     result = estimate_preliminary(sample_request)
 
     assert [(c.winding_id, c.other_winding_id) for c in result.couplings] == [
@@ -488,9 +493,39 @@ def test_mutual_and_the_two_series_modes_are_reported_for_a_pair(
     assert al is not None and self_inductance is not None
     assert coupling.mutual.value == pytest.approx(10 * 10 * al)
     assert coupling.common_mode.value == pytest.approx(self_inductance + 10 * 10 * al)
-    assert coupling.differential_mode.value == pytest.approx(0.0, abs=1e-18)
+    assert coupling.differential_mode.state is ResultState.UNAVAILABLE
+    assert (
+        coupling.differential_mode.code == DiagnosticCode.COUPLING_NO_LEAKAGE_PATH
+    )
     assert COUPLING_NOTE in coupling.mutual.notes
     assert COUPLING_NOTE in result.notes
+
+
+def test_reversing_a_current_direction_does_not_move_the_two_modes(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The modes are named for how the pair is driven, so the operating point's
+    current directions cannot decide which of them cancels -- the winding senses
+    do. Reported as numbers, both modes looked frozen at the same values."""
+    operating_point = sample_request.project.operating_point
+    reversed_second = (
+        operating_point.windings[0],
+        replace(
+            operating_point.windings[1], current_direction=CurrentDirection.REVERSE
+        ),
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=reversed_second),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    coupling = result.couplings[0]
+    assert coupling.mutual.value is not None
+    assert coupling.mutual.value > 0.0
+    assert coupling.common_mode.state is ResultState.ESTIMATED
+    assert coupling.differential_mode.state is ResultState.UNAVAILABLE
 
 
 def test_windings_wound_against_each_other_report_a_negative_mutual(
@@ -517,7 +552,8 @@ def test_windings_wound_against_each_other_report_a_negative_mutual(
     coupling = result.couplings[0]
     assert coupling.mutual.value is not None
     assert coupling.mutual.value < 0.0
-    assert coupling.common_mode.value == pytest.approx(0.0, abs=1e-18)
+    assert coupling.common_mode.state is ResultState.UNAVAILABLE
+    assert coupling.common_mode.code == DiagnosticCode.COUPLING_NO_LEAKAGE_PATH
     assert coupling.differential_mode.value == pytest.approx(
         2.0 * (result.windings[0].inductance.value or 0.0)
     )

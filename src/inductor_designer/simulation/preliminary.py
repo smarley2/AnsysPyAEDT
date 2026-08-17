@@ -417,12 +417,25 @@ def _al_for(
 COUPLING_NOTE = (
     "mutual coupling is evaluated at k = 1: the lumped effective-core model "
     "carries no leakage path, so every turn of one winding links every turn of "
-    "the other. The common-mode value is therefore an upper bound and the "
-    "differential-mode value a lower bound -- a real pair driven differentially "
-    "measures its leakage inductance, which this estimate cannot supply. The "
+    "the other. The reported mode is therefore an upper bound. The mode the "
+    "mutual subtracts from is reported unavailable rather than as a number, "
+    "because at k = 1 it is not a leakage measurement -- see its reason. The "
     "two modes are named for driving both windings' terminals forward "
     "(common) and one of them reversed (differential), whatever current "
-    "directions the operating point currently carries"
+    "directions the operating point currently carries; which of the two "
+    "cancels is set by the winding senses alone"
+)
+
+CANCELLING_MODE_MESSAGE = (
+    "The series mode the mutual subtracts from is leakage inductance, and the "
+    "lumped effective-core model has no leakage path: at k = 1 it can only "
+    "return the residual of two equal terms, which is zero whenever the two "
+    "windings carry the same number of turns. A number here would be a "
+    "modeling floor, not an estimate, so none is reported. Solve the design "
+    "with FEMM, Maxwell 2D or Maxwell 3D for this mode -- those backends carry "
+    "the air paths that make k < 1. Reversing a current direction cannot "
+    "change it: the two modes are defined by how the pair is driven, not by "
+    "the operating point, and which one cancels follows the winding senses."
 )
 
 
@@ -474,13 +487,21 @@ def _couplings(
             )
             self_inductance = first.turns**2 * al_first.value
             notes = (*al_first.notes, COUPLING_NOTE)
+            # Only the mode the mutual adds to is an estimate. The other one is
+            # the difference of two terms this model makes equal, so it reported
+            # 0.000 uH for a matched pair -- read as a computed cancellation
+            # when it was the k = 1 assumption showing through.
+            aiding = estimated(self_inductance + abs(mutual), notes)
+            cancelling = unavailable(
+                DiagnosticCode.COUPLING_NO_LEAKAGE_PATH, CANCELLING_MODE_MESSAGE
+            )
             entries.append(
                 WindingCoupling(
                     winding_id=first.winding_id,
                     other_winding_id=second.winding_id,
                     mutual=estimated(mutual, notes),
-                    common_mode=estimated(self_inductance + mutual, notes),
-                    differential_mode=estimated(self_inductance - mutual, notes),
+                    common_mode=aiding if mutual >= 0.0 else cancelling,
+                    differential_mode=cancelling if mutual >= 0.0 else aiding,
                 )
             )
     return tuple(entries)

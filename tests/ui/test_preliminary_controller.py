@@ -109,11 +109,14 @@ def test_a_second_winding_adds_mutual_and_the_two_mode_rows() -> None:
         "Differential-mode L (w2)",
     ]
     # Identical windings on one core: M equals each self-inductance, so the
-    # common mode is twice it and the differential mode cancels.
+    # common mode is twice it and the differential mode is leakage alone, which
+    # the k = 1 estimate refuses rather than reporting as a 0.000 uH reading.
     assert controller.couplingRows[0]["text"] == controller.windingRows[0][
         "inductance"
     ]["text"]
-    assert controller.couplingRows[2]["text"] == "0.000 µH"
+    assert controller.couplingRows[2]["text"] == "Unavailable"
+    assert controller.couplingRows[2]["code"] == "coupling.no_leakage_path"
+    assert "leakage" in str(controller.couplingRows[2]["message"])
 
 
 def test_editing_the_project_refreshes_the_rows() -> None:
