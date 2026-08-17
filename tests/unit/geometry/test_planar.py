@@ -14,9 +14,34 @@ D = 0.001118
 BARE_R = 0.00102362 / 2
 
 
+MAGNETIC = FinishedCore(
+    r_inner_m=0.010045, r_outer_m=0.016395, half_height_m=0.005335, corner_radius_m=0.0
+)
+
+
+def test_the_annulus_is_the_ferrite_while_conductors_keep_the_coated_radii() -> None:
+    """The wire is packed against the coating; only the wire follows it.
+
+    Meshing the coated envelope as ferrite overstated the magnetic
+    cross-section by a quarter on a small powder toroid, which is most of the
+    gap measured against FEMM and Maxwell 2D on 2026-08-14.
+    """
+    packing = pack_winding(CORE, WindingSpec("w1", 6, D, 0.0, 180.0, 0.0001, 0.001))
+
+    model = build_planar_model(CORE, MAGNETIC, [packing], {"w1": BARE_R})
+
+    assert model.r_inner_m == MAGNETIC.r_inner_m
+    assert model.r_outer_m == MAGNETIC.r_outer_m
+    assert model.depth_m == pytest.approx(2 * MAGNETIC.half_height_m)
+    inner = [c for c in model.windings[0].conductors if c.polarity == 1]
+    for conductor in inner:
+        radius = math.hypot(conductor.x_m, conductor.y_m)
+        assert radius == pytest.approx(CORE.r_inner_m - D / 2, rel=1e-6)
+
+
 def test_planar_model_projects_stations() -> None:
     packing = pack_winding(CORE, WindingSpec("w1", 6, D, 0.0, 180.0, 0.0001, 0.001))
-    model = build_planar_model(CORE, [packing], {"w1": BARE_R})
+    model = build_planar_model(CORE, CORE, [packing], {"w1": BARE_R})
     assert model.r_inner_m == CORE.r_inner_m
     assert model.r_outer_m == CORE.r_outer_m
     assert model.depth_m == pytest.approx(2 * CORE.half_height_m)
@@ -37,7 +62,7 @@ def test_planar_model_projects_stations() -> None:
 def test_second_layer_projects_deeper() -> None:
     packing = pack_winding(CORE, WindingSpec("w1", 40, D, 0.0, 300.0, 0.0001, 0.001))
     assert len(packing.layers) >= 2
-    model = build_planar_model(CORE, [packing], {"w1": BARE_R})
+    model = build_planar_model(CORE, CORE, [packing], {"w1": BARE_R})
     radii = sorted(
         round(math.hypot(c.x_m, c.y_m), 6)
         for c in model.windings[0].conductors

@@ -15,7 +15,8 @@ class CoreGeometryError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class FinishedCore:
-    """Toroid core in finished (coated) dimensions; the surface the wire sees."""
+    """One toroid body: `resolve_finished_core` builds the coated envelope the
+    wire has to clear, `resolve_magnetic_core` the nominal ferrite inside it."""
 
     r_inner_m: float
     r_outer_m: float
@@ -34,6 +35,41 @@ class FinishedCore:
             raise CoreGeometryError(
                 f"corner_radius_m must be within [0, {max_corner}]: {self.corner_radius_m!r}"
             )
+
+
+def resolve_magnetic_core(core: CoreSelection) -> FinishedCore:
+    """The ferrite body itself, at nominal dimensions -- not the coated envelope.
+
+    `resolve_finished_core` deliberately takes the worst-case coated outline,
+    because that is the surface the wire has to clear. Handing that same outline
+    to a solver as the magnetic body overstates the material: for C058083A2 the
+    coated envelope gives a 134 mm^2 cross-section against the datasheet's
+    A_e = 107 mm^2, and the solved inductance came out about 25 % high because
+    of it (measured 2026-08-14 against FEMM and Maxwell 2D).
+
+    A Manual core has no tolerance data -- the user entered one set of numbers --
+    so both resolvers return the same body for it.
+    """
+    if isinstance(core, ManualCoreSelection):
+        return resolve_finished_core(core)
+    assert isinstance(core, CatalogCoreSelection)
+    snapshot = core.snapshot
+    outer = snapshot.outer_diameter.nominal_m
+    inner = snapshot.inner_diameter.nominal_m
+    height = snapshot.height.nominal_m
+    for override in core.overrides:
+        if override.field == "outer_diameter_m":
+            outer = override.value
+        elif override.field == "inner_diameter_m":
+            inner = override.value
+        elif override.field == "height_m":
+            height = override.value
+    return FinishedCore(
+        r_inner_m=inner / 2.0,
+        r_outer_m=outer / 2.0,
+        half_height_m=height / 2.0,
+        corner_radius_m=0.0,
+    )
 
 
 def resolve_finished_core(core: CoreSelection) -> FinishedCore:

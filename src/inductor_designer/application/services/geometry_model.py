@@ -11,6 +11,7 @@ from inductor_designer.geometry.core_solid import (
     CoreGeometryError,
     FinishedCore,
     resolve_finished_core,
+    resolve_magnetic_core,
 )
 from inductor_designer.geometry.packing import (
     PackedWinding,
@@ -34,7 +35,12 @@ class GeometryModelError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class GeometryModel:
+    # `core` is the coated envelope every winding is placed against;
+    # `magnetic_core` is the ferrite body a solver meshes. They differ by the
+    # coating and the catalog tolerance band, which is a quarter of the
+    # cross-section on a small powder toroid.
     core: FinishedCore
+    magnetic_core: FinishedCore
     packings: tuple[PackedWinding, ...]
     collisions: tuple[CollisionIssue, ...]
     symmetry: SymmetryPlan | SymmetryRefusal
@@ -71,6 +77,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         raise GeometryModelError(("Project has no core selection; geometry needs one.",))
     try:
         core = resolve_finished_core(project.design.core)
+        magnetic_core = resolve_magnetic_core(project.design.core)
     except CoreGeometryError as error:
         raise GeometryModelError((str(error),)) from error
 
@@ -106,9 +113,12 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
 
     collisions = check_clearances(core, packings, clearances)
     symmetry = propose_symmetry_plan(project.design.windings, project.operating_point.windings)
-    planar = build_planar_model(core, packings, {w: b / 2.0 for w, b in bare.items()})
+    planar = build_planar_model(
+        core, magnetic_core, packings, {w: b / 2.0 for w, b in bare.items()}
+    )
     return GeometryModel(
         core=core,
+        magnetic_core=magnetic_core,
         packings=tuple(packings),
         collisions=collisions,
         symmetry=symmetry,

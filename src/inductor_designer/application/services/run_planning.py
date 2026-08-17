@@ -194,6 +194,7 @@ def plan_run(
                     winding_temperature_c=(
                         project.operating_point.winding_temperature_c
                     ),
+                    magnetic_core=model.magnetic_core,
                 )
             )
         else:

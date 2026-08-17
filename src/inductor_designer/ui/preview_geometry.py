@@ -70,7 +70,12 @@ class PreviewEntry(QObject):
 
 
 def build_preview_entries(model: GeometryModel) -> list[PreviewEntry]:
-    entries = [PreviewEntry(MeshGeometry(tessellate_core(model.core)), "#8a8a8a", 0.35)]
+    # The ferrite body, not the coated envelope: the preview shows what the
+    # solver meshes, and the wire is drawn where it was packed -- against the
+    # coating, so a hair of clearance between the two is the coating itself.
+    entries = [
+        PreviewEntry(MeshGeometry(tessellate_core(model.magnetic_core)), "#8a8a8a", 0.35)
+    ]
     for i, packing in enumerate(sorted(model.packings, key=lambda p: p.winding_id)):
         mesh = tessellate_winding(model.core, packing)
         entries.append(PreviewEntry(MeshGeometry(mesh), PALETTE[i % len(PALETTE)], 1.0))

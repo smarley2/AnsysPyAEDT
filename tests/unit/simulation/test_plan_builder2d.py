@@ -43,6 +43,7 @@ def planar_for(definitions: tuple[WindingDefinition, ...]) -> PlanarModel:
     )
     return build_planar_model(
         CORE,
+        CORE,
         packings,
         {definition.winding_id: BARE / 2.0 for definition in definitions},
     )

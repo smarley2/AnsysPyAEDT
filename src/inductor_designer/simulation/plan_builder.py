@@ -82,6 +82,10 @@ def build_maxwell3d_plan(
     material_record: MaterialRecord,
     material_bh_series_id: str | None,
     winding_temperature_c: float,
+    # The ferrite body, when it differs from the coated envelope the turns were
+    # placed against. Defaults to `core` so a caller with only one body -- a
+    # Manual core, where both are the entered dimensions -- keeps working.
+    magnetic_core: FinishedCore | None = None,
 ) -> Maxwell3dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -206,18 +210,19 @@ def build_maxwell3d_plan(
             )
         )
 
-    width = core.r_outer_m - core.r_inner_m
-    height = 2.0 * core.half_height_m
+    body = magnetic_core if magnetic_core is not None else core
+    width = body.r_outer_m - body.r_inner_m
+    height = 2.0 * body.half_height_m
     return Maxwell3dDesignPlan(
         design_name=DESIGN_NAME,
         solution_type=solution_type,
         core=CorePlan(
             name=core_name(),
-            profile=build_core_profile(core),
+            profile=build_core_profile(body),
             material=material,
-            r_inner_m=core.r_inner_m,
-            r_outer_m=core.r_outer_m,
-            half_height_m=core.half_height_m,
+            r_inner_m=body.r_inner_m,
+            r_outer_m=body.r_outer_m,
+            half_height_m=body.half_height_m,
         ),
         windings=tuple(groups),
         region=RegionPlan(padding_percent=REGION_PADDING_PERCENT),
