@@ -9,10 +9,19 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from inductor_designer.domain.catalog_records import ConductorRecord
-from inductor_designer.domain.project import InductorProject, ManualCoreSelection
+from inductor_designer.domain.project import (
+    InductorProject,
+    ManualCoreSelection,
+    MaterialRevisionSelection,
+)
+from inductor_designer.domain.winding import (
+    CurrentDirection,
+    WindingDefinition,
+    mmf_sign,
+)
 from inductor_designer.geometry.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.inductance_estimate import (
@@ -103,6 +112,22 @@ class PreliminaryTotals:
 
 
 @dataclass(frozen=True, slots=True)
+class WindingCoupling:
+    """How one winding couples to another through the shared core.
+
+    One entry per ordered pair, because with unequal turns the pair reads
+    differently from each side: `common_mode` and `differential_mode` are what
+    `winding_id` sees, `mutual` is symmetric.
+    """
+
+    winding_id: str
+    other_winding_id: str
+    mutual: PreliminaryValue
+    common_mode: PreliminaryValue
+    differential_mode: PreliminaryValue
+
+
+@dataclass(frozen=True, slots=True)
 class PreliminaryResult:
     core: CorePreliminary
     windings: tuple[WindingPreliminary, ...]
@@ -110,6 +135,7 @@ class PreliminaryResult:
     material_revision_id: str | None
     bh_series_id: str | None
     notes: tuple[str, ...] = field(default_factory=tuple)
+    couplings: tuple[WindingCoupling, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,6 +349,143 @@ def _winding_inductance(turns: int, al_effective: PreliminaryValue) -> Prelimina
     return estimated(turns**2 * al_effective.value, al_effective.notes)
 
 
+CANCELLED_MMF_NOTE = (
+    "the design's windings cancel, so this inductance is evaluated from this "
+    "winding's own ampere-turns with every other winding's current ignored. The "
+    "core itself carries no net flux at this operating point: a differentially "
+    "driven pair measures only its leakage inductance, which is lower than this "
+    "value, while a common-mode drive measures the whole of it"
+)
+
+
+def _own_mmf_al(
+    request: PreliminaryRequest,
+    definition: WindingDefinition,
+    core: CoreMagneticProperties,
+    material: MaterialRevisionSelection,
+) -> PreliminaryValue:
+    """`A_L` from one winding's ampere-turns alone.
+
+    Reached only when the windings cancel exactly, which leaves the net-MMF
+    permeability undefined (`inductance.no_excitation`) and would otherwise
+    report no inductance at all for a common-mode choke -- the design whose
+    whole point is that its windings cancel. Everything else, including every
+    core row, still comes from the net ampere-turns.
+    """
+    operating_point = request.project.operating_point
+    own = tuple(
+        item
+        for item in operating_point.windings
+        if item.winding_id == definition.winding_id
+    )
+    fields = field_strengths(
+        replace(operating_point, windings=own),
+        {definition.winding_id: definition.turns},
+        core.path_length_m,
+        {definition.winding_id: definition.winding_direction},
+    )
+    if isinstance(fields, PreliminaryValue):
+        return fields
+    densities = flux_densities(material, fields, operating_point.core_temperature_c)
+    if isinstance(densities, PreliminaryValue):
+        return densities
+    inductance = core_inductance(fields, densities, core)
+    if not isinstance(inductance, CoreInductance):
+        return inductance
+    return estimated(
+        inductance.al_effective_h,
+        (*inductance.notes, *core.notes, CANCELLED_MMF_NOTE),
+    )
+
+
+def _al_for(
+    request: PreliminaryRequest,
+    definition: WindingDefinition,
+    al_effective: PreliminaryValue,
+) -> PreliminaryValue:
+    """The inductance factor this winding's own inductance is built from."""
+    material = request.project.design.core_material
+    if (
+        al_effective.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+        and request.core is not None
+        and material is not None
+    ):
+        return _own_mmf_al(request, definition, request.core, material)
+    return al_effective
+
+
+COUPLING_NOTE = (
+    "mutual coupling is evaluated at k = 1: the lumped effective-core model "
+    "carries no leakage path, so every turn of one winding links every turn of "
+    "the other. The common-mode value is therefore an upper bound and the "
+    "differential-mode value a lower bound -- a real pair driven differentially "
+    "measures its leakage inductance, which this estimate cannot supply. The "
+    "two modes are named for driving both windings' terminals forward "
+    "(common) and one of them reversed (differential), whatever current "
+    "directions the operating point currently carries"
+)
+
+
+def _couplings(
+    windings: tuple[WindingDefinition, ...],
+    al_by_winding: Mapping[str, PreliminaryValue],
+) -> tuple[WindingCoupling, ...]:
+    """`M = s_i s_j N_i N_j sqrt(A_Li A_Lj)`, plus the two series modes.
+
+    The signs are the winding senses alone (`mmf_sign` at forward current), so
+    the pair reads the same whichever way the operating point happens to drive
+    it, and a pair wound against each other reports a negative mutual.
+    """
+    entries: list[WindingCoupling] = []
+    for first in windings:
+        for second in windings:
+            if first.winding_id == second.winding_id:
+                continue
+            al_first = al_by_winding[first.winding_id]
+            al_second = al_by_winding[second.winding_id]
+            unusable = next(
+                (
+                    value
+                    for value in (al_first, al_second)
+                    if value.state is not ResultState.ESTIMATED or value.value is None
+                ),
+                None,
+            )
+            if unusable is not None:
+                entries.append(
+                    WindingCoupling(
+                        winding_id=first.winding_id,
+                        other_winding_id=second.winding_id,
+                        mutual=unusable,
+                        common_mode=unusable,
+                        differential_mode=unusable,
+                    )
+                )
+                continue
+            assert al_first.value is not None and al_second.value is not None
+            sign = mmf_sign(
+                first.winding_direction, CurrentDirection.FORWARD
+            ) * mmf_sign(second.winding_direction, CurrentDirection.FORWARD)
+            mutual = (
+                sign
+                * first.turns
+                * second.turns
+                * math.sqrt(al_first.value * al_second.value)
+            )
+            self_inductance = first.turns**2 * al_first.value
+            notes = (*al_first.notes, COUPLING_NOTE)
+            entries.append(
+                WindingCoupling(
+                    winding_id=first.winding_id,
+                    other_winding_id=second.winding_id,
+                    mutual=estimated(mutual, notes),
+                    common_mode=estimated(self_inductance + mutual, notes),
+                    differential_mode=estimated(self_inductance - mutual, notes),
+                )
+            )
+    return tuple(entries)
+
+
 def _winding_row(
     request: PreliminaryRequest, winding_id: str, inductance: PreliminaryValue
 ) -> WindingPreliminary:
@@ -505,6 +668,10 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
             request.project.operating_point,
             turns_by_winding,
             request.core.path_length_m,
+            {
+                definition.winding_id: definition.winding_direction
+                for definition in design.windings
+            },
         )
         echo = _core_echo(request.core)
         if isinstance(fields, PreliminaryValue):
@@ -522,14 +689,21 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
                     request, fields, densities, request.core, echo
                 )
 
+    al_by_winding = {
+        definition.winding_id: _al_for(request, definition, core.al_effective)
+        for definition in design.windings
+    }
     windings = tuple(
         _winding_row(
             request,
             definition.winding_id,
-            _winding_inductance(definition.turns, core.al_effective),
+            _winding_inductance(
+                definition.turns, al_by_winding[definition.winding_id]
+            ),
         )
         for definition in design.windings
     )
+    couplings = _couplings(design.windings, al_by_winding)
 
     notes: list[str] = []
     for value in (
@@ -542,6 +716,13 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
         core.al_deviation,
         core.stored_energy,
         *(row.wire_loss for row in windings),
+        # A winding's inductance normally repeats the notes `core.al_effective`
+        # already carried, which the dedupe below drops. When the windings
+        # cancel it is the ONLY carrier of the caveat on the number reported,
+        # and dropping it would leave that number unqualified on screen.
+        *(row.inductance for row in windings),
+        # The k = 1 caveat only ever appears here.
+        *(coupling.mutual for coupling in couplings),
     ):
         for note in value.notes:
             if note not in notes:
@@ -554,4 +735,5 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
         material_revision_id=material.revision_id if material is not None else None,
         bh_series_id=material.bh_series_id if material is not None else None,
         notes=tuple(notes),
+        couplings=couplings,
     )

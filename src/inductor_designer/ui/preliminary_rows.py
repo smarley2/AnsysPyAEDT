@@ -109,6 +109,32 @@ def winding_rows(result: PreliminaryResult) -> list[dict[str, object]]:
     ]
 
 
+def coupling_rows(result: PreliminaryResult) -> list[dict[str, object]]:
+    """Mutual, common-mode and differential-mode inductance, per ordered pair.
+
+    Empty for a single-winding design, where there is nothing to couple to.
+    """
+    rows: list[dict[str, object]] = []
+    for coupling in result.couplings:
+        pair = f"{coupling.winding_id} with {coupling.other_winding_id}"
+        rows.append(_labelled(f"Mutual M ({pair})", coupling.mutual, MICROHENRY))
+        rows.append(
+            _labelled(
+                f"Common-mode L ({coupling.winding_id})",
+                coupling.common_mode,
+                MICROHENRY,
+            )
+        )
+        rows.append(
+            _labelled(
+                f"Differential-mode L ({coupling.winding_id})",
+                coupling.differential_mode,
+                MICROHENRY,
+            )
+        )
+    return rows
+
+
 def total_rows(result: PreliminaryResult) -> list[dict[str, object]]:
     totals = result.totals
     return [

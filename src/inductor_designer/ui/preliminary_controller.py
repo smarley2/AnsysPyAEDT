@@ -19,7 +19,12 @@ from inductor_designer.application.services.preliminary_inputs import (
     build_preliminary_request,
 )
 from inductor_designer.simulation.preliminary import estimate_preliminary
-from inductor_designer.ui.preliminary_rows import core_rows, total_rows, winding_rows
+from inductor_designer.ui.preliminary_rows import (
+    core_rows,
+    coupling_rows,
+    total_rows,
+    winding_rows,
+)
 
 if TYPE_CHECKING:
     from inductor_designer.application.ports.catalog import CatalogRepository
@@ -41,6 +46,7 @@ class PreliminaryController(QObject):
         self._core_rows: list[dict[str, object]] = []
         self._winding_rows: list[dict[str, object]] = []
         self._total_rows: list[dict[str, object]] = []
+        self._coupling_rows: list[dict[str, object]] = []
         self._assumptions: list[str] = []
         self._geometry_issues: list[str] = []
         self._material_revision_id = ""
@@ -61,6 +67,11 @@ class PreliminaryController(QObject):
         return self._total_rows
 
     totalRows = Property(list, _get_total_rows, notify=resultChanged)
+
+    def _get_coupling_rows(self) -> list[dict[str, object]]:
+        return self._coupling_rows
+
+    couplingRows = Property(list, _get_coupling_rows, notify=resultChanged)
 
     def _get_assumptions(self) -> list[str]:
         return self._assumptions
@@ -107,6 +118,7 @@ class PreliminaryController(QObject):
         self._core_rows = core_rows(result)
         self._winding_rows = winding_rows(result)
         self._total_rows = total_rows(result)
+        self._coupling_rows = coupling_rows(result)
         self._assumptions = list(result.notes)
         self._geometry_issues = issues
         self._material_revision_id = result.material_revision_id or ""

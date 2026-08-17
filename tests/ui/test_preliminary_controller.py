@@ -68,6 +68,54 @@ def test_every_winding_row_reports_an_inductance_and_the_permeability_used() -> 
     assert controller.coreRows[9]["text"] == "60.0"
 
 
+def test_a_single_winding_project_shows_no_coupling_rows() -> None:
+    QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project_with_material())
+    controller = PreliminaryController(session, CATALOG)
+
+    assert controller.couplingRows == []
+
+
+def test_a_second_winding_adds_mutual_and_the_two_mode_rows() -> None:
+    """Self-inductance barely moves when a winding is added -- the mutual term
+    is what changes, and it had no row at all."""
+    QGuiApplication.instance() or QGuiApplication([])
+    project = make_project_with_material()
+    design = project.design
+    operating_point = project.operating_point
+    second = replace(
+        design.windings[0], winding_id="w2", label="w2", start_angle_deg=180.0
+    )
+    second_point = replace(operating_point.windings[0], winding_id="w2")
+    session = ProjectSession(
+        replace(
+            project,
+            design=replace(design, windings=(design.windings[0], second)),
+            operating_point=replace(
+                operating_point, windings=(operating_point.windings[0], second_point)
+            ),
+        )
+    )
+
+    controller = PreliminaryController(session, CATALOG)
+
+    labels = [row["label"] for row in controller.couplingRows]
+    assert labels == [
+        "Mutual M (w1 with w2)",
+        "Common-mode L (w1)",
+        "Differential-mode L (w1)",
+        "Mutual M (w2 with w1)",
+        "Common-mode L (w2)",
+        "Differential-mode L (w2)",
+    ]
+    # Identical windings on one core: M equals each self-inductance, so the
+    # common mode is twice it and the differential mode cancels.
+    assert controller.couplingRows[0]["text"] == controller.windingRows[0][
+        "inductance"
+    ]["text"]
+    assert controller.couplingRows[2]["text"] == "0.000 µH"
+
+
 def test_editing_the_project_refreshes_the_rows() -> None:
     QGuiApplication.instance() or QGuiApplication([])
     session = ProjectSession(make_project_with_material())
