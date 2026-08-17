@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -203,3 +204,60 @@ def test_private_attributes_stay_on_the_wrapper() -> None:
     assert wrapper._app is app  # noqa: SLF001 - the wrapper's own handle
     with pytest.raises(AttributeError):
         _ = app._app  # noqa: SLF001 - must not have been forwarded
+
+
+class _Modeler:
+    """Records the circle it was asked for and any rotation applied to it."""
+
+    def __init__(self) -> None:
+        self.circles: list[dict[str, Any]] = []
+        self.rotations: list[dict[str, Any]] = []
+
+    def create_circle(self, **kwargs: Any) -> str:
+        self.circles.append(kwargs)
+        return str(kwargs["name"])
+
+    def rotate(self, assignment: str, axis: str, angle: float) -> None:
+        self.rotations.append({"assignment": assignment, "axis": axis, "angle": angle})
+
+
+def _placed_centre(modeler: _Modeler) -> tuple[float, float, float]:
+    """Where the disc ends up, applying AEDT's rotate-about-the-global-axis."""
+    x, y, z = modeler.circles[0]["origin"]
+    for rotation in modeler.rotations:
+        assert rotation["axis"] == "Z"
+        theta = math.radians(rotation["angle"])
+        x, y = x * math.cos(theta) - y * math.sin(theta), x * math.sin(theta) + y * math.cos(theta)
+    return (x, y, z)
+
+
+def test_a_radial_disc_lands_on_the_centre_it_was_asked_for() -> None:
+    """AEDT rotates about the global axis through the origin, so a disc created
+    at its true off-axis centre and then rotated is swung off the conductor. Two
+    of four conductor sections read 2.5e-11 and 3.7e-10 A/m^2 that way, integrals
+    of Mag_J over sheets sitting in air.
+    """
+    app = _App()
+    modeler = _Modeler()
+    app.modeler = modeler  # type: ignore[attr-defined]
+    centre = (0.008, 0.011, 0.004)
+    normal = (0.008 / math.hypot(0.008, 0.011), 0.011 / math.hypot(0.008, 0.011), 0.0)
+
+    LiveAppExtraction(app).create_section_disc("Sec_face", centre, normal, 0.0005)
+
+    assert modeler.circles[0]["orientation"] == "YZ"
+    placed = _placed_centre(modeler)
+    assert placed == pytest.approx(centre, abs=1e-12)
+
+
+def test_an_axial_disc_is_placed_directly_and_never_rotated() -> None:
+    app = _App()
+    modeler = _Modeler()
+    app.modeler = modeler  # type: ignore[attr-defined]
+    centre = (0.008, 0.011, 0.004)
+
+    LiveAppExtraction(app).create_section_disc("Sec_bore", centre, (0.0, 0.0, 1.0), 0.0005)
+
+    assert modeler.circles[0]["orientation"] == "XY"
+    assert modeler.circles[0]["origin"] == [0.008, 0.011, 0.004]
+    assert modeler.rotations == []

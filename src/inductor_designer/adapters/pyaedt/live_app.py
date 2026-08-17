@@ -217,18 +217,39 @@ class LiveAppExtraction:
         runs up the bore or down the outer wall, and radial, where it crosses a
         face. Both are one rotation away from an axis-aligned circle, so no
         arbitrary orientation is needed.
+
+        A radial disc is built at azimuth zero and rotated onto its azimuth,
+        because AEDT rotates about the global axis through the origin: a disc
+        created at its true off-axis centre and then rotated is swung away from
+        the conductor entirely. That is what happened until 2026-08-17 -- the
+        two axial sections read 3.48 and 3.43 MA/m^2 while the two rotated ones
+        read 2.5e-11 and 3.7e-10, integrals of `Mag_J` over sheets sitting in
+        air. Starting on the +X axis makes the same rotation carry the centre to
+        exactly where it belongs, since rotating (r, 0, z) about Z by the
+        azimuth gives (r cos, r sin, z).
         """
         axial = abs(normal[0]) < _AXIS_TOLERANCE and abs(normal[1]) < _AXIS_TOLERANCE
+        if axial:
+            disc = self._app.modeler.create_circle(
+                orientation="XY",
+                origin=list(center_m),
+                radius=radius_m,
+                name=name,
+                non_model=True,
+            )
+            return str(getattr(disc, "name", name))
+        radius_from_axis = math.hypot(center_m[0], center_m[1])
         disc = self._app.modeler.create_circle(
-            orientation="XY" if axial else "YZ",
-            origin=list(center_m),
+            orientation="YZ",
+            origin=[radius_from_axis, 0.0, center_m[2]],
             radius=radius_m,
             name=name,
             non_model=True,
         )
         created = getattr(disc, "name", name)
-        if not axial:
-            angle = math.degrees(math.atan2(normal[1], normal[0]))
-            if angle:
-                self._app.modeler.rotate(created, axis="Z", angle=angle)
+        # The centre's azimuth, not the normal's: it is the one the rotation has
+        # to reproduce, and for these sections the radial normal shares it.
+        angle = math.degrees(math.atan2(center_m[1], center_m[0]))
+        if angle:
+            self._app.modeler.rotate(created, axis="Z", angle=angle)
         return str(created)
