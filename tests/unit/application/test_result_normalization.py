@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import pytest
+
 from inductor_designer.application.services.result_normalization import (
     DERIVED_TOTAL_LOSS_NOTE,
     normalize_scalar_results,
@@ -105,6 +107,65 @@ def test_each_backend_states_which_inductance_it_reports() -> None:
         assert entry.approximation.startswith(expected)
         # The convention belongs to inductance alone.
         assert find(result, RequestedOutput.RESISTANCE, "winding.w1") is not None
+
+
+def test_a_cross_section_resistance_is_scaled_to_the_whole_turn() -> None:
+    """The XY model carries the full flux path but only part of each turn.
+
+    Each turn appears as two axial legs of the model depth, while the real turn
+    also runs radially across both core faces, so the solved resistance is short
+    by the ratio of the two lengths. The inductance is not scaled: the magnetic
+    circuit is modelled whole.
+    """
+    raw = RawScalarResults(
+        windings=(
+            RawWindingResult(
+                winding_id="w1",
+                resistance_ohm=0.010835,
+                inductance_h=8.914e-6,
+                impedance=complex(0.010835, 5.6),
+            ),
+        )
+    )
+
+    result = normalize_scalar_results(
+        raw,
+        run_id="20260817-120000",
+        backend=RunBackend.MAXWELL_2D,
+        requested_outputs=(
+            RequestedOutput.RESISTANCE,
+            RequestedOutput.INDUCTANCE,
+            RequestedOutput.IMPEDANCE,
+        ),
+        provenance="Maxwell 2D solution data",
+        # 51.7 mm of real turn against 2 x 14.48 mm modelled.
+        resistance_scale={"w1": (0.0517, 0.02896)},
+    )
+
+    factor = 0.0517 / 0.02896
+    resistance = find(result, RequestedOutput.RESISTANCE, "winding.w1")
+    assert resistance.value == pytest.approx(0.010835 * factor)
+    assert resistance.approximation is not None
+    assert "51.700 mm" in resistance.approximation
+    assert find(
+        result, RequestedOutput.INDUCTANCE, "winding.w1"
+    ).value == pytest.approx(8.914e-6)
+    impedance = find(result, RequestedOutput.IMPEDANCE, "winding.w1")
+    assert isinstance(impedance.value, ComplexValue)
+    assert impedance.value.real == pytest.approx(0.010835 * factor)
+    assert impedance.value.imaginary == pytest.approx(5.6)
+
+
+def test_without_a_scale_the_resistance_is_reported_as_solved() -> None:
+    """Maxwell 3D sweeps the real turn, so it is handed no scale at all."""
+    raw = RawScalarResults(
+        windings=(RawWindingResult(winding_id="w1", resistance_ohm=0.0175),)
+    )
+
+    entry = find(normalize(raw), RequestedOutput.RESISTANCE, "winding.w1")
+
+    assert entry.value == pytest.approx(0.0175)
+    assert entry.approximation is None
 
 
 def test_a_non_finite_value_is_unavailable_rather_than_available() -> None:

@@ -8,6 +8,7 @@ reason. Nothing is estimated, and nothing is silently omitted.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 
 from inductor_designer.application.services.field_normalization import (
     normalize_field_results,
@@ -131,6 +132,19 @@ APPARENT_INDUCTANCE_NOTE = (
 )
 
 
+def _turn_length_note(turn_length_m: float, modelled_m: float) -> str:
+    return (
+        "Scaled from the cross-section to the whole turn: the XY model carries "
+        "the complete magnetic circuit but only the two axial legs of each "
+        f"turn's copper, {modelled_m * 1000.0:.3f} mm of the "
+        f"{turn_length_m * 1000.0:.3f} mm the packing gives one turn, so the "
+        f"solved resistance is multiplied by {turn_length_m / modelled_m:.4f}. "
+        "The factor assumes the radial legs and corner arcs carry the same "
+        "current distribution as the modelled axial legs; the inductance needs "
+        "no such correction, since the flux path is modelled whole."
+    )
+
+
 def _inductance_convention(backend: RunBackend) -> str:
     """Which inductance the backend reports, in its own words.
 
@@ -152,6 +166,7 @@ def _winding_entries(
     raw: RawScalarResults,
     provenance: str,
     backend: RunBackend,
+    resistance_scale: Mapping[str, tuple[float, float]] | None = None,
 ) -> tuple[NormalizedQuantity, ...]:
     if not raw.windings:
         return (
@@ -163,19 +178,31 @@ def _winding_entries(
             ),
         )
     entries: list[NormalizedQuantity] = []
-    convention = (
-        _inductance_convention(backend)
-        if quantity is RequestedOutput.INDUCTANCE
-        else None
-    )
     for winding in raw.windings:
         scope = winding_scope(winding.winding_id)
+        convention = (
+            _inductance_convention(backend)
+            if quantity is RequestedOutput.INDUCTANCE
+            else None
+        )
+        lengths = (resistance_scale or {}).get(winding.winding_id)
         if quantity is RequestedOutput.RESISTANCE:
             value: float | complex | None = winding.resistance_ohm
+            if value is not None and lengths is not None:
+                turn_length_m, modelled_m = lengths
+                value = value * (turn_length_m / modelled_m)
+                convention = _turn_length_note(turn_length_m, modelled_m)
         elif quantity is RequestedOutput.INDUCTANCE:
             value = winding.inductance_h
         else:
             value = winding.impedance
+            if value is not None and lengths is not None:
+                # Only the resistive part is short; the reactance is complete.
+                turn_length_m, modelled_m = lengths
+                value = complex(
+                    value.real * (turn_length_m / modelled_m), value.imag
+                )
+                convention = _turn_length_note(turn_length_m, modelled_m)
         if value is None:
             entries.append(
                 _missing(
@@ -355,8 +382,14 @@ def normalize_scalar_results(
     requested_outputs: tuple[RequestedOutput, ...],
     provenance: str,
     dc_biased: bool = False,
+    resistance_scale: Mapping[str, tuple[float, float]] | None = None,
 ) -> NormalizedResultSet:
-    """One entry per requested scalar quantity per scope, never a silent gap."""
+    """One entry per requested scalar quantity per scope, never a silent gap.
+
+    `resistance_scale` maps a winding to `(real turn length, modelled length)`
+    for a cross-section backend, whose resistance covers only part of each turn.
+    Omitted for Maxwell 3D, which models the turns as they are.
+    """
     quantities: list[NormalizedQuantity] = []
     for quantity in requested_outputs:
         if quantity in FIELD_QUANTITIES:
@@ -367,7 +400,11 @@ def normalize_scalar_results(
         if quantity not in SCALAR_QUANTITIES:
             continue
         if quantity in PER_WINDING_QUANTITIES:
-            quantities.extend(_winding_entries(quantity, raw, provenance, backend))
+            quantities.extend(
+                _winding_entries(
+                    quantity, raw, provenance, backend, resistance_scale
+                )
+            )
         elif quantity is RequestedOutput.MATRICES:
             quantities.extend(_matrix_entries(raw, provenance))
         elif quantity is RequestedOutput.TOTAL_LOSS:

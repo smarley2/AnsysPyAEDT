@@ -5,6 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
 from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_live_app,
     release_orphaned_desktops,
 )
 from inductor_designer.adapters.pyaedt.field_reader import (
@@ -634,7 +635,7 @@ class PyaedtMaxwell3dExporter:
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)
         return result()
 
     def export_geometry_only(
@@ -713,5 +714,5 @@ class PyaedtMaxwell3dExporter:
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)
         return result()

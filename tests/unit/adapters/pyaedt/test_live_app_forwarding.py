@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -125,27 +126,74 @@ class _Setup:
         return self._profile
 
 
-class _Entry:
-    def __init__(self, error: float) -> None:
-        self.error = error
+TABLE = (
+    "Setup : Setup1\n"
+    "Pass|Triangles|Total Energy (J)|Energy Error (%)|Delta Energy (%)|\n"
+    "1|1832|1.204e-04|12.5|100|\n"
+    "2|2417|1.288e-04|0.83|6.98|\n"
+)
 
 
-def test_setup_convergence_summarises_the_profile() -> None:
+class _ExportingApp(_App):
+    """Writes the convergence table AEDT's ExportConvergence produces."""
+
+    def __init__(self, table: str | None = TABLE) -> None:
+        super().__init__()
+        self.setups = [_Setup("Setup1", None)]
+        self.table = table
+        self.exports: list[str] = []
+
+    def export_convergence(self, setup: str, output_file: str) -> str:
+        self.exports.append(setup)
+        if self.table is None:
+            raise RuntimeError("ExportConvergence failed")
+        Path(output_file).write_text(self.table, encoding="utf-8")
+        return output_file
+
+
+def test_convergence_rows_come_from_the_exported_table() -> None:
+    """`get_profile()` describes timing steps, not adaptive error, so walking it
+    for an `error` attribute always came back empty and manifests carried no
+    convergence data at all."""
+    app = _ExportingApp()
+
+    rows = LiveAppExtraction(app).convergence_rows("Setup1")
+
+    assert rows == ((1, 12.5), (2, 0.83))
+    assert app.exports == ["Setup1"]
+
+
+def test_setup_convergence_summarises_the_last_pass() -> None:
     """Nothing implemented this, so every live solve raised at the analyze
     stage -- after the solve had already finished."""
-    app = _App()
-    app.setups = [_Setup("Setup1", {1: _Entry(12.5), 2: _Entry(0.83)})]  # type: ignore[attr-defined]
+    assert (
+        LiveAppExtraction(_ExportingApp()).setup_convergence("Setup1")
+        == "2 passes, 0.83% error"
+    )
 
-    assert LiveAppExtraction(app).setup_convergence("Setup1") == "2 passes, 0.83% error"
 
-
-def test_setup_convergence_reports_a_missing_profile_without_raising() -> None:
-    app = _App()
-    app.setups = [_Setup("Setup1", None)]  # type: ignore[attr-defined]
-
-    summary = LiveAppExtraction(app).setup_convergence("Setup1")
+def test_setup_convergence_reports_a_failed_export_without_raising() -> None:
+    summary = LiveAppExtraction(_ExportingApp(table=None)).setup_convergence("Setup1")
 
     assert "convergence not exposed" in summary
+    assert "convergence export failed" in summary
+
+
+def test_an_unsolved_setup_reads_as_an_empty_profile_not_a_failure() -> None:
+    """AEDT writes the header for an unsolved setup, with no data rows."""
+    header = TABLE.splitlines()[1] + "\n"
+
+    summary = LiveAppExtraction(_ExportingApp(table=header)).setup_convergence("Setup1")
+
+    assert summary == "convergence profile empty"
+
+
+def test_an_unknown_setup_name_is_refused() -> None:
+    app = _ExportingApp()
+
+    with pytest.raises(RuntimeError, match="is not present"):
+        LiveAppExtraction(app).convergence_rows("Setup2")
+    assert app.exports == []
 
 
 def test_private_attributes_stay_on_the_wrapper() -> None:

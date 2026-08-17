@@ -5,6 +5,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
 from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_live_app,
     release_orphaned_desktops,
 )
 from inductor_designer.adapters.pyaedt.field_reader import (
@@ -523,5 +524,5 @@ class PyaedtMaxwell2dExporter:
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)
         return result()

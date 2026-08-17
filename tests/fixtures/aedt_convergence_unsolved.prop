@@ -1,0 +1,13 @@
+Setup : Setup1
+
+==================
+Number of Passes
+Completed : N/A
+Maximum   : 10
+Minimum   : 3
+==================
+Criterion : Energy Error/Delta Energy (%)
+Target    : (1, 1)
+Current   : N/A
+==================
+Pass|Triangles|Total Energy (J)|Energy Error (%)|Delta Energy (%)|Loss (W)|Loss Error (%)|Delta Loss (%)|

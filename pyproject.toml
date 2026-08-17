@@ -71,6 +71,7 @@ select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 # PyAEDT objects are opaque duck-typed handles; Any is the honest type at the port boundary.
+"src/inductor_designer/adapters/pyaedt/desktop_cleanup.py" = ["ANN401"]
 "src/inductor_designer/adapters/pyaedt/material_props.py" = ["ANN401"]
 "src/inductor_designer/adapters/pyaedt/maxwell3d.py" = ["ANN401"]
 "src/inductor_designer/adapters/pyaedt/maxwell2d.py" = ["ANN401"]

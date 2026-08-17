@@ -12,8 +12,11 @@ deliberate seam: nothing above this file knows how AEDT names a quantity.
 from __future__ import annotations
 
 import math
+import tempfile
+from pathlib import Path
 from typing import Any
 
+from inductor_designer.adapters.pyaedt.convergence_file import parse_convergence
 from inductor_designer.adapters.pyaedt.field_reader import SURFACE
 
 # Degrees of tolerance when deciding a disc normal is the machine axis.
@@ -124,7 +127,8 @@ class LiveAppExtraction:
         PyAEDT has no such method, and nothing implemented it here, so every
         live solve raised `'Maxwell2d' object has no attribute
         'setup_convergence'` at the analyze stage -- after the solve itself had
-        finished. Built from `convergence_rows`, which reads the same profile.
+        finished. Built from `convergence_rows`, so the message and the manifest
+        rows can never disagree.
         """
         try:
             rows = self.convergence_rows(name)
@@ -136,21 +140,30 @@ class LiveAppExtraction:
         return f"{passes} passes, {error_percent:.4g}% error"
 
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
-        setup = next(
-            (item for item in self._app.setups if item.name == name), None
-        )
+        """`(pass number, error percent)` per adaptive pass, via AEDT's export.
+
+        `setup.get_profile()` returns a `Profiles` mapping keyed by setup name
+        whose entries describe timing steps, not adaptive error, so walking it
+        for an `error` attribute -- as this did until 2026-08-17 -- always came
+        back empty and every manifest went out without convergence data.
+        `ExportConvergence` writes the pass table instead, and
+        `convergence_file` parses it.
+        """
+        setup = next((item for item in self._app.setups if item.name == name), None)
         if setup is None:
             raise RuntimeError(f"Setup {name!r} is not present in the design.")
-        profile = setup.get_profile()
-        if not profile:
-            raise RuntimeError(f"Setup {name!r} exposes no convergence profile.")
-        rows: list[tuple[int, float]] = []
-        for index, (_pass, entry) in enumerate(sorted(profile.items()), start=1):
-            error = getattr(entry, "error", None)
-            if error is None:
-                continue
-            rows.append((index, float(error)))
-        return tuple(rows)
+        with tempfile.TemporaryDirectory(prefix="inductor-convergence-") as folder:
+            target = Path(folder) / "convergence.prop"
+            try:
+                written = self._app.export_convergence(name, output_file=str(target))
+            except Exception as error:  # noqa: BLE001 - reported, never raised on
+                raise RuntimeError(f"convergence export failed: {error}") from error
+            path = Path(str(written)) if written else target
+            if not path.is_file():
+                raise RuntimeError(
+                    f"Setup {name!r} produced no convergence export at {path}."
+                )
+            return parse_convergence(path.read_text(encoding="utf-8", errors="replace"))
 
     # -- field results --------------------------------------------------
 

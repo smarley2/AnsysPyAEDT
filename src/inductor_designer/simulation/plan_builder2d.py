@@ -54,6 +54,10 @@ def build_maxwell2d_plan(
     dc_bias_decision: DcBiasDecision | None = None,
     material_record: MaterialRecord,
     material_bh_series_id: str | None,
+    # Real length of one turn per winding, from the packing. Absent for a caller
+    # that has no packing, which leaves the 2D resistance uncorrected and said
+    # to be uncorrected.
+    turn_length_m: Mapping[str, float] | None = None,
 ) -> Maxwell2dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -107,6 +111,11 @@ def build_maxwell2d_plan(
                 phase_deg=effective.phase_deg,
                 dc_current_a=effective.dc_current_a,
                 conductors=conductors,
+                turn_length_m=(
+                    0.0
+                    if turn_length_m is None
+                    else turn_length_m.get(planar_winding.winding_id, 0.0)
+                ),
             )
         )
 

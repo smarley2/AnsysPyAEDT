@@ -438,6 +438,33 @@ def _manifest_for_result(
     )
 
 
+def _resistance_scale(
+    planned_run: PlannedRun,
+) -> dict[str, tuple[float, float]] | None:
+    """`(real turn length, modelled length)` per winding, for the 2D backends.
+
+    A cross-section model carries only the two axial legs of each turn, so its
+    resistance is short by the radial runs across the core faces. Maxwell 3D
+    sweeps the whole turn and needs no correction, so it gets None.
+    """
+    plan = planned_run.solver_plan
+    if isinstance(plan, Maxwell2dDesignPlan):
+        modelled = 2.0 * plan.model_depth_m
+        windings = [(group.name, group.turn_length_m) for group in plan.windings]
+    elif isinstance(plan, FemmProblem):
+        modelled = 2.0 * plan.depth_m
+        windings = [(circuit.name, circuit.turn_length_m) for circuit in plan.circuits]
+    else:
+        return None
+    if not modelled > 0.0:
+        return None
+    return {
+        name: (turn_length, modelled)
+        for name, turn_length in windings
+        if turn_length > 0.0
+    }
+
+
 def _normalized_results(
     raw: RawScalarResults | None,
     planned_run: PlannedRun,
@@ -458,6 +485,7 @@ def _normalized_results(
         dc_biased=any(
             winding.dc_current_a != 0.0 for winding in planned_run.effective_inputs
         ),
+        resistance_scale=_resistance_scale(planned_run),
     )
 
 
