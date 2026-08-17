@@ -221,29 +221,38 @@ def wrap_arrow_path(
     packing: PackedWinding,
     sense: WindingDirection,
     current: CurrentDirection,
-) -> tuple[Vec3, Vec3, Vec3]:
-    """`(tail, corner, tip)` of the current-flow arrow, in metres.
+) -> tuple[Vec3, ...]:
+    """The current-flow arrow's corner points, in metres, tip last.
+
+    Positive ampere-turns run up through the bore, outward across the top face
+    and down the outer wall. That is the same convention
+    `simulation.maxwell_plan.winding_polarity` hands the solvers, where the bore
+    leg is the winding's positive go leg, and the same one the 2D cut view draws
+    as a dot in the bore. The first cut this arrow was built inverted, climbing
+    the outer wall on positive ampere-turns, and the cut view is what caught it.
 
     Kept separate from the mesh so the direction it states can be asserted as
-    three points rather than dug back out of a triangle soup.
+    points rather than dug back out of a triangle soup.
     """
     layer = packing.layers[0]
     station = layer.station_deg[len(layer.station_deg) // 2]
     d = packing.insulated_diameter_m
     # Wide clearance, not a hair's worth: at three wire diameters the arrow read
-    # as one more turn in the fan. It has to float outside and above the wire.
+    # as one more turn in the fan. It has to float clear of the wire.
     clearance = 4.5 * d
     r_outer = core.r_outer_m + layer.radial_build_m + clearance
-    r_inner = core.r_inner_m - layer.radial_build_m - 1.5 * d
+    r_inner = core.r_inner_m - layer.radial_build_m - 2.5 * d
     z_top = core.half_height_m + layer.radial_build_m + clearance
-    z_side = -0.35 * core.half_height_m
+    z_low = -0.35 * core.half_height_m
     legs = (
-        ((r_outer, z_side), (r_outer, z_top), (r_inner, z_top))
-        if mmf_sign(sense, current) > 0.0
-        else ((r_inner, z_top), (r_outer, z_top), (r_outer, z_side))
+        (r_inner, z_low),
+        (r_inner, z_top),
+        (r_outer, z_top),
+        (r_outer, z_low),
     )
-    tail, corner, tip = (half_plane_point(station, r, z) for r, z in legs)
-    return (tail, corner, tip)
+    if mmf_sign(sense, current) < 0.0:
+        legs = legs[::-1]
+    return tuple(half_plane_point(station, r, z) for r, z in legs)
 
 
 def wrap_arrow(
@@ -253,27 +262,32 @@ def wrap_arrow(
     current: CurrentDirection,
     tube_sides: int = 12,
 ) -> Mesh:
-    """One arrow beside the winding, along the way the current actually flows.
+    """One staple beside the winding, along the way the current actually flows.
 
     Sense and current direction are two independent choices whose product is
     what drives the core (`domain.winding.mmf_sign`), so neither alone tells the
-    reader where the current goes. This follows the product: positive
-    ampere-turns climb the outer wall and cross the top face inward, negative
-    ones cross the top outward and drop down the outer wall. Reverse the current
-    on a counter-clockwise winding and the arrow turns round, exactly as the
-    coil polarity handed to the solver does.
+    reader where the current goes. This traces the product over one turn's
+    cross-section: positive ampere-turns up through the bore, outward across the
+    top face and down the outer wall, negative ones the other way round. Reverse
+    the current on a counter-clockwise winding and the whole path turns round,
+    exactly as the coil polarity handed to the solver does.
 
-    Bent over the outer corner rather than drawn flat, so it reads as a
-    direction from any camera angle instead of foreshortening into a blob, and
-    it sits a few wire diameters clear of the turns at the middle station of the
-    first layer.
+    Drawn as the wrap it is rather than one flat radial stroke, which
+    foreshortened into a blob from the preview's camera, and offset a few wire
+    diameters clear of the turns at the middle station of the first layer.
     """
     d = packing.insulated_diameter_m
-    tail, corner, tip = wrap_arrow_path(core, packing, sense, current)
+    corners = wrap_arrow_path(core, packing, sense, current)
+    tail, first, second, tip = corners
     # Stop the shaft short of the tip and hand the rest to the head.
-    toward_corner = (corner - tip).normalized()
-    shaft_end = tip + toward_corner.scaled(4.5 * d)
-    path = [tail, *_rounded_corner(tail, corner, shaft_end, 3.5 * d), shaft_end]
+    shaft_end = tip + (second - tip).normalized().scaled(4.5 * d)
+    fillet = 3.5 * d
+    path = [
+        tail,
+        *_rounded_corner(tail, first, second, fillet),
+        *_rounded_corner(first, second, shaft_end, fillet),
+        shaft_end,
+    ]
     shaft = tube(path, radius=0.6 * d, sides=tube_sides)
     point = _cone(shaft_end, tip, radius=1.9 * d, sides=tube_sides)
     return _merge((shaft, point))

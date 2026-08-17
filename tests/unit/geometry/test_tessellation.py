@@ -17,6 +17,8 @@ from inductor_designer.geometry.tessellation import (
     wrap_arrow,
     wrap_arrow_path,
 )
+from inductor_designer.simulation.maxwell_plan import Polarity, winding_polarity
+from tests.unit.domain.test_project import make_winding
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -132,52 +134,62 @@ def test_the_arrow_follows_the_current_not_just_the_wound_sense() -> None:
     packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
 
     def tip(sense: WindingDirection, current: CurrentDirection) -> Vec3:
-        return wrap_arrow_path(CORE, packing, sense, current)[2]
+        return wrap_arrow_path(CORE, packing, sense, current)[-1]
 
-    aiding = tip(CCW, FORWARD)
-    assert tip(CW, REVERSE).z == aiding.z  # both reversed: unchanged
-    assert tip(CCW, REVERSE).z != aiding.z  # current reversed: turned round
-    assert tip(CW, FORWARD).z != aiding.z  # sense reversed: turned round
-    assert tip(CCW, REVERSE).z == tip(CW, FORWARD).z
+    def radius(sense: WindingDirection, current: CurrentDirection) -> float:
+        return math.hypot(tip(sense, current).x, tip(sense, current).y)
+
+    aiding = radius(CCW, FORWARD)
+    assert radius(CW, REVERSE) == aiding  # both reversed: unchanged
+    assert radius(CCW, REVERSE) != aiding  # current reversed: turned round
+    assert radius(CW, FORWARD) != aiding  # sense reversed: turned round
+    assert radius(CCW, REVERSE) == radius(CW, FORWARD)
 
 
-def test_the_wrap_arrow_follows_the_way_the_wire_is_wound() -> None:
-    """Counter-clockwise at forward current -- positive ampere-turns -- climbs
-    the outer wall and ends pointing inward over the top; the opposite flow ends
-    pointing down the outer wall. So the marker agrees with the coil polarity the
-    solver is given."""
+def test_the_arrow_runs_the_way_the_solver_is_told_the_current_goes() -> None:
+    """`winding_polarity` makes the bore leg the winding's positive go leg, and
+    the 2D cut view draws that as a dot in the bore. So positive ampere-turns run
+    up through the bore, out across the top and down the outer wall. This arrow
+    was built inverted -- climbing the outer wall on positive ampere-turns -- and
+    the cut view is what caught it, so the two are pinned together here.
+    """
     packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
+    definition = make_winding(winding_id="w1", winding_direction=CCW)
+    assert winding_polarity(definition, FORWARD) is Polarity.POSITIVE
 
-    ccw_tail, ccw_corner, ccw_tip = wrap_arrow_path(CORE, packing, CCW, FORWARD)
-    cw_tail, cw_corner, cw_tip = wrap_arrow_path(CORE, packing, CW, FORWARD)
+    positive = wrap_arrow_path(CORE, packing, CCW, FORWARD)
+    negative = wrap_arrow_path(CORE, packing, CW, FORWARD)
 
-    # Same bracket, walked the other way: one sense's tail is the other's tip.
-    assert (cw_tail.x, cw_tail.y, cw_tail.z) == (ccw_tip.x, ccw_tip.y, ccw_tip.z)
-    assert (cw_tip.x, cw_tip.y, cw_tip.z) == (ccw_tail.x, ccw_tail.y, ccw_tail.z)
-    assert (cw_corner.x, cw_corner.y, cw_corner.z) == (
-        ccw_corner.x,
-        ccw_corner.y,
-        ccw_corner.z,
-    )
-    assert math.hypot(ccw_tip.x, ccw_tip.y) < CORE.r_inner_m  # inward over the top
-    assert ccw_tip.z > CORE.half_height_m
-    assert math.hypot(cw_tip.x, cw_tip.y) > CORE.r_outer_m  # down the outer wall
-    assert cw_tip.z < 0.0
+    tail, up_end, across_end, tip = positive
+    assert math.hypot(tail.x, tail.y) < CORE.r_inner_m  # starts inside the bore
+    assert up_end.z > tail.z  # climbs it
+    assert math.hypot(across_end.x, across_end.y) > CORE.r_outer_m  # out over the top
+    assert across_end.z == up_end.z
+    assert tip.z < across_end.z  # then down the outer wall
+    assert math.hypot(tip.x, tip.y) > CORE.r_outer_m
+
+    # The same path walked backwards, so one flow's tail is the other's tip.
+    assert [(p.x, p.y, p.z) for p in negative] == [
+        (p.x, p.y, p.z) for p in reversed(positive)
+    ]
 
 
 def test_the_wrap_arrow_stays_clear_of_the_wire() -> None:
-    """Above the turns or outside them, never buried inside one."""
+    """Above the turns, outside them, or inside the free bore -- never buried in
+    one: the marker has to stay legible against the wire it describes."""
     packing = pack_winding(CORE, WindingSpec("w1", 8, D, 0.0, 180.0, 0.0001, 0.001))
     build = packing.layers[0].radial_build_m
     turn_top = CORE.half_height_m + build + D / 2.0
     turn_outer = CORE.r_outer_m + build + D / 2.0
+    turn_bore = CORE.r_inner_m - build - D / 2.0
 
     for sense in (CCW, CW):
         mesh = wrap_arrow(CORE, packing, sense, FORWARD)
         for x, y, z in zip(
             mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3], strict=True
         ):
-            assert z > turn_top or math.hypot(x, y) > turn_outer
+            radius = math.hypot(x, y)
+            assert z > turn_top or radius > turn_outer or radius < turn_bore
 
 
 def test_the_start_bead_sits_at_the_lead_in_end_outside_the_turns() -> None:
