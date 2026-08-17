@@ -1,10 +1,11 @@
-"""Corrections applied to material properties PyAEDT writes incorrectly."""
+"""Material handling shared by the Maxwell 2D and Maxwell 3D adapters."""
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
 from inductor_designer.materials.records import SteinmetzFit
+from inductor_designer.simulation.maxwell_plan import SOLUTION_TYPE, MaterialSpec
 
 
 class AedtMaterial(Protocol):
@@ -13,6 +14,45 @@ class AedtMaterial(Protocol):
     _props: dict[str, Any]
 
     def update(self) -> bool: ...
+
+
+class AedtCoreLossApp(Protocol):
+    """The slice of a PyAEDT Maxwell application `enable_core_loss` needs."""
+
+    def set_core_losses(
+        self, assignment: Any, core_loss_on_field: bool = ...
+    ) -> Any: ...
+
+
+def enable_core_loss(
+    app: AedtCoreLossApp,
+    object_name: str,
+    material: MaterialSpec,
+    solution_type: str,
+) -> str:
+    """Switch AEDT's per-object core loss on, and say what was done.
+
+    A core-loss definition in the material library is inert on its own: AEDT
+    keeps a separate per-object flag (Excitations > Set Core Loss, whose dialog
+    shows "Defined in Material" ticked while "Core Loss Setting" stays clear),
+    and a solve with that flag off reports 0 W of core loss. Nothing enabled it
+    until 2026-08-14.
+
+    `core_loss_on_field` stays False: the loss is reported, but it is not fed
+    back into the field solution, which is the AEDT default and what the
+    reported quantities assume.
+    """
+    if material.steinmetz is None:
+        return ""
+    if solution_type != SOLUTION_TYPE:
+        # PyAEDT raises for anything but AC Magnetic / Transient, and AEDT
+        # itself offers no core-loss switch under AC Magnetic with DC.
+        return (
+            f" Core loss not enabled: solution type {solution_type} does not "
+            "expose the per-object core-loss switch."
+        )
+    app.set_core_losses(assignment=[object_name], core_loss_on_field=False)
+    return f" Core loss enabled on {object_name}."
 
 
 def apply_steinmetz_unit_fix(material: AedtMaterial, fit: SteinmetzFit) -> None:

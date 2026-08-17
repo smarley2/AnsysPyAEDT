@@ -4,6 +4,9 @@ import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_orphaned_desktops,
+)
 from inductor_designer.adapters.pyaedt.field_reader import (
     CURRENT_DENSITY_QUANTITY,
     FLUX_DENSITY_QUANTITY,
@@ -12,6 +15,7 @@ from inductor_designer.adapters.pyaedt.field_reader import (
 from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
+    enable_core_loss,
 )
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
 from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
@@ -70,6 +74,10 @@ class Maxwell3dApp(Protocol):
     odesign: Any
 
     def assign_material(self, assignment: Any, material: str) -> Any: ...
+
+    def set_core_losses(
+        self, assignment: Any, core_loss_on_field: bool = ...
+    ) -> Any: ...
 
     def assign_coil(self, assignment: Any, **kwargs: Any) -> Any: ...
 
@@ -144,7 +152,13 @@ class DefaultMaxwell3dAppFactory:
     def create(self, **kwargs: object) -> Maxwell3dApp:
         from ansys.aedt.core import Maxwell3d
 
-        return cast(Maxwell3dApp, LiveAppExtraction(Maxwell3d(**kwargs)))
+        try:
+            return cast(Maxwell3dApp, LiveAppExtraction(Maxwell3d(**kwargs)))
+        except Exception:
+            # See `DefaultMaxwell2dAppFactory.create`: a failed launch owns a
+            # live desktop process that nothing else will close.
+            release_orphaned_desktops()
+            raise
 
 
 def _stage_units(
@@ -159,7 +173,7 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     spec = plan.core.material
     material = app.materials.add_material(spec.name)
     material.permeability = (
-        [[b, h] for b, h in spec.bh_curve]
+        [[h, b] for b, h in spec.bh_curve]
         if spec.bh_curve
         else spec.relative_permeability
     )
@@ -197,7 +211,12 @@ def _create_core_geometry(
 def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     _create_core_geometry(app, plan.core.name, plan.core.profile)
     app.assign_material(plan.core.name, plan.core.material.name)
-    return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+    return (
+        f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+        + enable_core_loss(
+            app, plan.core.name, plan.core.material, plan.solution_type
+        )
+    )
 
 
 def _stage_geometry_only_core(

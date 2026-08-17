@@ -100,11 +100,13 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
     result = exporter.export(request)
 
     assert result.succeeded(STAGE_NAMES_2D)
+    # AEDT reads each pair as (H, B): HUnit labels the first coordinate and
+    # BUnit the second. The recorded series is H = 100 A/m, B = 0.025132741 T.
     assert (
         "material.set.permeability",
         {
             "material": "Magnetics_Kool_Mu_60_r0123456789ab",
-            "value": [[0.0, 0.0], [0.025132741, 100.0]],
+            "value": [[0.0, 0.0], [100.0, 0.025132741]],
         },
     ) in app.calls
     assert (
@@ -116,6 +118,40 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
             "y": 2.3,
         },
     ) in app.calls
+
+
+def test_steinmetz_material_enables_core_loss_on_the_core_object(tmp_path: Path) -> None:
+    # A core-loss definition in the material library is inert until the object
+    # itself is switched on (AEDT's Excitations > Set Core Loss); without this
+    # the solved core loss reads 0 W.
+    app = FakeMaxwell2dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build2d(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+    exporter = PyaedtMaxwell2dExporter(app_factory=FakeMaxwell2dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert result.succeeded(STAGE_NAMES_2D)
+    assert ("set_core_losses", {"assignment": ["Core"], "core_loss_on_field": False}) in (
+        app.calls
+    )
+
+
+def test_material_without_core_loss_model_leaves_core_loss_off(tmp_path: Path) -> None:
+    app = FakeMaxwell2dApp()
+    plan = build2d((make_definition(),))
+    without_loss = replace(
+        plan, core=replace(plan.core, material=replace(plan.core.material, steinmetz=None))
+    )
+    exporter = PyaedtMaxwell2dExporter(app_factory=FakeMaxwell2dAppFactory(app))
+
+    exporter.export(replace(make_request(tmp_path), plan=without_loss))
+
+    assert not any(name == "set_core_losses" for name, _ in app.calls)
 
 
 def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:

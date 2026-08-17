@@ -19,6 +19,39 @@ from inductor_designer.adapters.pyaedt.field_reader import SURFACE
 # Degrees of tolerance when deciding a disc normal is the machine axis.
 _AXIS_TOLERANCE = 1e-9
 
+# AEDT reports each traced quantity in the report's own display unit, not in SI:
+# a 2D matrix inductance comes back in nH while its resistance comes back in
+# ohm. Everything above this file is SI, so the unit AEDT states is applied
+# here. An unrecognised unit yields no value at all rather than a number in an
+# unknown scale -- reporting 10445.18 H for 10.445 uH is exactly the failure
+# this guards.
+_SI_PREFIXES = {
+    "f": 1e-15,
+    "p": 1e-12,
+    "n": 1e-9,
+    "u": 1e-6,
+    "µ": 1e-6,
+    "m": 1e-3,
+    "k": 1e3,
+    "K": 1e3,
+    "M": 1e6,
+    "G": 1e9,
+}
+_BASE_UNITS = frozenset({"H", "ohm", "Ohm", "W", "J", "A", "V", "T", "F", "S", "Hz"})
+
+
+def si_scale(unit: str | None) -> float | None:
+    """Factor turning a value in `unit` into SI, or None when unit is unknown."""
+    if unit is None:
+        return None
+    stripped = unit.strip()
+    if not stripped or stripped in _BASE_UNITS:
+        return 1.0
+    prefix, base = stripped[0], stripped[1:]
+    if base in _BASE_UNITS and prefix in _SI_PREFIXES:
+        return _SI_PREFIXES[prefix]
+    return None
+
 
 class LiveAppExtraction:
     """Mixin-style wrapper: `__getattr__` forwards to the wrapped application."""
@@ -29,14 +62,46 @@ class LiveAppExtraction:
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401 - forwarded verbatim
         return getattr(self._app, name)
 
+    def __setattr__(self, name: str, value: Any) -> None:  # noqa: ANN401 - forwarded
+        """Forward attribute writes to the wrapped application.
+
+        `__getattr__` covers reads only. Without this, an adapter writing a
+        PyAEDT *property* through the wrapper -- `app.model_depth = "0.015meter"`
+        is the one that matters -- created a new attribute on the wrapper and
+        the setter never ran, so the design silently kept AEDT's 1 m default
+        depth and every 2D result came out scaled by 1 m / core height. Live 2D
+        projects saved between 2026-08-10 and 2026-08-14 hold
+        `ModelDepth='1meter'`; the runs before that wrapper hold the real depth.
+        """
+        if name.startswith("_"):
+            super().__setattr__(name, value)
+            return
+        setattr(self._app, name, value)
+
     # -- scalar results -------------------------------------------------
 
     def solution_values(self, expressions: tuple[str, ...]) -> dict[str, complex]:
-        data = self._app.post.get_solution_data(expressions=list(expressions))
-        if not data:
-            raise RuntimeError("Maxwell returned no solution data for the request.")
+        """One request per expression, because AEDT answers a batch all-or-nothing.
+
+        Asking for several expressions at once returns no data at all when any
+        one of them is unknown to the design -- `Total_Energy` is not a 2D AC
+        Magnetic quantity, and its presence in the list silently cost the run
+        its winding inductance, resistance and core loss too ("The backend
+        reported no per-winding results"). Verified live on AEDT 2025.2,
+        2026-08-14. Per-expression requests cost one round trip each and let a
+        missing quantity be exactly that.
+
+        Values come back in SI, converted from the display unit AEDT states per
+        trace in `units_data`.
+        """
         values: dict[str, complex] = {}
         for expression in expressions:
+            try:
+                data = self._app.post.get_solution_data(expressions=[expression])
+            except Exception:  # noqa: BLE001 - an absent quantity is not a failure
+                continue
+            if not data:
+                continue
             try:
                 _, real = data.get_expression_data(expression, "real")
                 _, imaginary = data.get_expression_data(expression, "imag")
@@ -44,9 +109,31 @@ class LiveAppExtraction:
                 continue
             if len(real) == 0:
                 continue
+            scale = si_scale(getattr(data, "units_data", {}).get(expression))
+            if scale is None:
+                continue
             imag_value = float(imaginary[-1]) if len(imaginary) else 0.0
-            values[expression] = complex(float(real[-1]), imag_value)
+            values[expression] = complex(float(real[-1]), imag_value) * scale
+        if not values:
+            raise RuntimeError("Maxwell returned no solution data for the request.")
         return values
+
+    def setup_convergence(self, name: str) -> str:
+        """One-line convergence summary for the analyze stage's message.
+
+        PyAEDT has no such method, and nothing implemented it here, so every
+        live solve raised `'Maxwell2d' object has no attribute
+        'setup_convergence'` at the analyze stage -- after the solve itself had
+        finished. Built from `convergence_rows`, which reads the same profile.
+        """
+        try:
+            rows = self.convergence_rows(name)
+        except RuntimeError as error:
+            return f"convergence not exposed ({error})"
+        if not rows:
+            return "convergence profile empty"
+        passes, error_percent = rows[-1]
+        return f"{passes} passes, {error_percent:.4g}% error"
 
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
         setup = next(

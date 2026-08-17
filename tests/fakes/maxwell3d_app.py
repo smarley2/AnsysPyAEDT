@@ -211,6 +211,13 @@ class FakeMaxwell3dApp:
     def assign_material(self, assignment: Any, material: str) -> Any:
         return self._record("assign_material", assignment=assignment, material=material)
 
+    def set_core_losses(self, assignment: Any, core_loss_on_field: bool = False) -> Any:
+        return self._record(
+            "set_core_losses",
+            assignment=assignment,
+            core_loss_on_field=core_loss_on_field,
+        )
+
     def assign_coil(self, assignment: Any, **kwargs: Any) -> Any:
         return self._record("assign_coil", assignment=assignment, **kwargs)
 

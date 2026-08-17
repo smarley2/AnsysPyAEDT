@@ -143,11 +143,13 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
     result = exporter.export(request)
 
     assert result.succeeded(STAGE_NAMES)
+    # AEDT reads each pair as (H, B): HUnit labels the first coordinate and
+    # BUnit the second. The recorded series is H = 100 A/m, B = 0.025132741 T.
     assert (
         "material.set.permeability",
         {
             "material": "Magnetics_Kool_Mu_60_r0123456789ab",
-            "value": [[0.0, 0.0], [0.025132741, 100.0]],
+            "value": [[0.0, 0.0], [100.0, 0.025132741]],
         },
     ) in app.calls
     assert (
@@ -159,6 +161,46 @@ def test_nonlinear_material_and_steinmetz_calls_have_verified_shapes(tmp_path: P
             "y": 2.3,
         },
     ) in app.calls
+
+
+def test_steinmetz_material_enables_core_loss_on_the_core_object(tmp_path: Path) -> None:
+    # A core-loss definition in the material library is inert until the object
+    # itself is switched on (AEDT's Excitations > Set Core Loss); without this
+    # the solved core loss reads 0 W.
+    from dataclasses import replace
+
+    app = FakeMaxwell3dApp()
+    request = replace(
+        make_request(tmp_path),
+        plan=build(
+            (make_definition(),), material_record=make_approved_material_record()
+        ),
+    )
+    exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
+
+    result = exporter.export(request)
+
+    assert result.succeeded(STAGE_NAMES)
+    assert ("set_core_losses", {"assignment": ["Core"], "core_loss_on_field": False}) in (
+        app.calls
+    )
+
+
+def test_dc_biased_solution_type_skips_the_unsupported_core_loss_switch(
+    tmp_path: Path,
+) -> None:
+    # AEDT offers Set Core Loss only for AC Magnetic and Transient; asking for
+    # it under AC Magnetic with DC raises, which would fail the whole core
+    # stage. The core-loss material definition stays in place either way.
+    app = FakeMaxwell3dApp()
+    exporter = PyaedtMaxwell3dExporter(app_factory=FakeMaxwell3dAppFactory(app))
+
+    result = exporter.export(native_request(tmp_path))
+
+    assert result.succeeded(STAGE_NAMES)
+    assert not any(name == "set_core_losses" for name, _ in app.calls)
+    core_stage = next(stage for stage in result.stages if stage.name == "core")
+    assert "core loss" in core_stage.message.casefold()
 
 
 def test_falsy_steinmetz_setter_fails_material_stage(tmp_path: Path) -> None:

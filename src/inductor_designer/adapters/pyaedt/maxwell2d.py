@@ -4,6 +4,9 @@ import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_orphaned_desktops,
+)
 from inductor_designer.adapters.pyaedt.field_reader import (
     CURRENT_DENSITY_QUANTITY,
     FLUX_DENSITY_QUANTITY,
@@ -13,6 +16,7 @@ from inductor_designer.adapters.pyaedt.field_reader import (
 from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
+    enable_core_loss,
 )
 from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
 from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
@@ -60,6 +64,10 @@ class Maxwell2dApp(Protocol):
     model_depth: Any
 
     def assign_material(self, assignment: Any, material: str) -> Any: ...
+
+    def set_core_losses(
+        self, assignment: Any, core_loss_on_field: bool = ...
+    ) -> Any: ...
 
     def assign_coil(self, assignment: Any, **kwargs: Any) -> Any: ...
 
@@ -119,7 +127,18 @@ class DefaultMaxwell2dAppFactory:
     def create(self, **kwargs: object) -> Maxwell2dApp:
         from ansys.aedt.core import Maxwell2d
 
-        return cast(Maxwell2dApp, LiveAppExtraction(Maxwell2d(**kwargs)))
+        try:
+            return cast(Maxwell2dApp, LiveAppExtraction(Maxwell2d(**kwargs)))
+        except Exception:
+            # The desktop is spawned before the application object finishes
+            # initialising, and `close_on_exit=False` keeps it alive, so a
+            # failure here leaves a headless ansysedt.exe behind that has no
+            # owner. The next launch then finds two gRPC sessions, attaches to
+            # the wrong one, and dies with
+            # `'NoneType' object has no attribute 'GetName'` -- which is how
+            # one orphan cost two runs on 2026-08-14.
+            release_orphaned_desktops()
+            raise
 
 
 def _stage_units(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
@@ -131,7 +150,7 @@ def _stage_materials(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     spec = plan.core.material
     material = app.materials.add_material(spec.name)
     material.permeability = (
-        [[b, h] for b, h in spec.bh_curve]
+        [[h, b] for b, h in spec.bh_curve]
         if spec.bh_curve
         else spec.relative_permeability
     )
@@ -158,7 +177,9 @@ def _stage_core(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:
     app.modeler.create_circle(origin=[0.0, 0.0, 0.0], radius=plan.core.r_inner_m, name=bore)
     app.modeler.subtract(plan.core.name, bore, keep_originals=False)
     app.assign_material(plan.core.name, plan.core.material.name)
-    return f"Annular core {plan.core.name} created."
+    return f"Annular core {plan.core.name} created." + enable_core_loss(
+        app, plan.core.name, plan.core.material, plan.solution_type
+    )
 
 
 def _stage_conductors(app: Maxwell2dApp, plan: Maxwell2dDesignPlan) -> str:

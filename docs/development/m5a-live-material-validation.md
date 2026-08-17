@@ -107,6 +107,18 @@ Manual checks against the saved project file:
 | B-H table contains exactly `bhPointCount` rows | Pass — `Points[1002: ...]` = 501 (B, H) pairs |
 | First and last B-H values match the source after unit conversion | Pass — source `0.0, 0.0` and `500.0 Oe, 1.4167755953308534 T`; canonical `0.0, 0.0` and `39788.735772974 A/m, 1.416775595 T`; AEDT identical to canonical. 500 Oe × 79.5774715459 = 39788.735772974 A/m |
 | Core-loss `cm`, `x`, `y` equal stored `k`, `alpha`, `beta` | Pass — `core_loss_cm='28.766524299...'`, `core_loss_x='1.311...'`, `core_loss_y='2.218'` |
+
+> **Correction, 2026-08-14.** The two B-H rows above checked the point *count*
+> and the point *values*, and both were right — but the pairs were written to
+> AEDT in `(B, H)` order while `HUnit='A_per_meter'` labels the first coordinate
+> and `BUnit='tesla'` the second. Every generated project therefore carried the
+> curve with its axes swapped, and the row reading "501 (B, H) pairs" recorded
+> that as a pass rather than catching it. The saved projects showed
+> `Points[1002: 0, 0, 0.008360612, 79.577471546, ...]`; they must read
+> `Points[1002: 0, 0, 79.577471546, 0.008360612, ...]`. `MaterialSpec.bh_curve`
+> keeps FEMM's `(B, H)` argument order — the FEMM evidence below stays valid —
+> and the Maxwell adapters now reverse it. Checking a curve against the source
+> is not enough on its own; the check has to name which column is which.
 | Design uses `AC Magnetic with DC` | Pass — solution type present in the saved project |
 | Both winding `DC Current` values persist | Pass — two `DC Current'='5A'` properties |
 | Design validation passes | Pass — `validate` stage reported `Design validation passed.` |
