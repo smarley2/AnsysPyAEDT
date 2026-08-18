@@ -8,9 +8,11 @@ sanitised afterwards. This module is the only place that decides what
 formatter (`adapters/system/app_logging.py`) and the bundle builder
 (`application/services/diagnostic_bundle.py`).
 
-A file extension deliberately survives. `[redacted-path].adp` is what makes an
-AEDT ``Engine Detected Error`` about a missing ``.adp`` diagnosable, and an
-extension names nobody.
+A file extension deliberately survives, but only one this application or its
+solvers actually produce. `[redacted-path].adp` is what makes an AEDT ``Engine
+Detected Error`` about a missing ``.adp`` diagnosable, and such an extension
+names nobody -- whereas the ``.doe`` of ``C:\\Users\\jane.doe`` is a surname.
+Nothing structural separates the two, so only the allowlist below is kept.
 
 Logs written inside a run directory are NOT redacted: they stay on the user's
 own machine, where the absolute path is the useful part. Redaction happens on
@@ -28,21 +30,37 @@ REDACTED_LICENSE_SERVER = "[redacted-license-server]"
 REDACTED_PATH = "[redacted-path]"
 REDACTED_USER = "[redacted-user]"
 
-# A path character is anything except a separator, a line break, or the
-# quoting/bracketing punctuation that marks where free-form text resumes.
-# Unlike the old classes, this deliberately allows spaces: "C:\Program Files"
-# and "\\host\share\sub dir\file.txt" are the common case on Windows, not an
-# edge case, so a space must not end the match early.
+# An extension is kept only if it names a file type this application, AEDT, or
+# FEMM actually produces. This allowlist exists because nothing structural
+# distinguishes a file name from a dotted personal name: "notes.txt" and
+# "jane.doe" have the same shape, so keeping "whatever follows the last dot"
+# publishes a surname. Anything not listed here is redacted with the path.
+_TECHNICAL_EXTENSIONS = frozenset(
+    {
+        "adp", "aedt", "aedtresults", "aedz", "asol", "cfg", "csv", "err", "fem",
+        "fnd", "json", "log", "ngmesh", "pjt", "profile", "prop", "py", "pyaedt",
+        "qml", "sqlite", "stats", "svg", "tab", "txt", "xlsx", "xml", "zip",
+    }
+)
+
+# An INTERIOR path character is anything except a separator, a line break, or
+# the quoting/bracketing punctuation that marks where free-form text resumes.
+# It deliberately allows spaces: "C:\Program Files" and "\\host\share\sub
+# dir\file.txt" are the common case on Windows, not an edge case, so a space
+# must not end the match early and leave a surname behind.
 _PATH_CHAR = r'[^\\/\r\n"\'<>|]'
-# A directory segment always ends in a separator, so an embedded space (a
-# surname in "Jane Doe") is unambiguous: it is followed by more path.
-_PATH_SEGMENT = _PATH_CHAR + r"+[\\/]"
-# The final segment is ambiguous between "more filename" and "free text after
-# the path". Prefer the shortest chunk ending in a recognisable extension
-# (found anywhere, not just at the very end) over swallowing the rest of the
-# line; fall back to the rest of the line only when no extension exists.
-_PATH_FINAL = r"(?:" + _PATH_CHAR + r"*?\.[A-Za-z0-9]{1,6}\b|" + _PATH_CHAR + r"*)"
-_PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _PATH_FINAL
+# A FINAL path character additionally excludes whitespace, which is what bounds
+# the match: prose after a path always begins after a space.
+_FINAL_CHAR = r'[^\\/\s"\'<>|]'
+# An interior segment always ends in a separator, so an embedded space (the
+# surname in "Jane Doe") is unambiguous: it is followed by more path. The last
+# character before the separator must not be a space, because no real path has
+# one there -- that is what stops "dump and see /home/x" from being read as a
+# single segment and swallowing the prose between two paths.
+_PATH_SEGMENT = _PATH_CHAR + r"*" + _FINAL_CHAR + r"[\\/]"
+# The final segment may not contain whitespace, so it can never swallow the
+# rest of the sentence. No extension guessing is involved in finding its end.
+_PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _FINAL_CHAR + r"*"
 
 # License server first: `1055@licsrv01.brusa.biz` also matches the e-mail
 # shape, and if e-mail runs first it mislabels a license identifier.
@@ -53,10 +71,12 @@ _LICENSE_SERVER = re.compile(r"\b\d{1,5}@[A-Za-z0-9._-]+")
 # brackets stop the e-mail pattern from matching at all.
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 # The share segment is optional: a bare `\\HOST` is still a machine identifier.
-_UNC_PATH = re.compile(r"\\\\" + _PATH_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?")
+# The host itself uses the final-segment class, so a bare host ends at the same
+# boundary as everything else instead of eating the rest of the line.
+_UNC_PATH = re.compile(r"\\\\" + _FINAL_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?")
 _DRIVE_PATH = re.compile(r"[A-Za-z]:[\\/]" + _PATH_TAIL)
 _POSIX_HOME_PATH = re.compile(r"/(?:home|Users)/" + _PATH_TAIL)
-_EXTENSION = re.compile(r"\.([A-Za-z0-9]{1,6})$")
+_EXTENSION = re.compile(r"\.([A-Za-z0-9]+)$")
 # Trailing punctuation (closing bracket/quote, sentence punctuation) is never
 # part of the path; it is trimmed off the match and reattached verbatim so it
 # is not silently swallowed by a path that turned out to have no extension.
@@ -94,8 +114,9 @@ def _path_replacement(match: re.Match[str]) -> str:
     core = raw.rstrip(_TRAILING_PUNCTUATION)
     trailing = raw[len(core) :]
     extension = _EXTENSION.search(core)
-    replacement = REDACTED_PATH if extension is None else f"{REDACTED_PATH}.{extension.group(1)}"
-    return replacement + trailing
+    if extension is None or extension.group(1).casefold() not in _TECHNICAL_EXTENSIONS:
+        return REDACTED_PATH + trailing
+    return f"{REDACTED_PATH}.{extension.group(1)}{trailing}"
 
 
 def _token_pattern(tokens: tuple[str, ...]) -> re.Pattern[str] | None:
