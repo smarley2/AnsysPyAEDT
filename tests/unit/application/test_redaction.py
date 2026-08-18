@@ -185,3 +185,62 @@ def test_suffix_outside_the_allowlist_is_redacted_with_the_path() -> None:
     """
     redacted = redact_text(r"C:\Users\jane.doe\report.docx", CONTEXT)
     assert redacted == REDACTED_PATH
+
+
+def test_two_windows_paths_on_one_line_keep_the_prose_between_them() -> None:
+    r"""A colon allowed inside a path component let "dump and see D:" read as one
+    interior segment, so both paths and the words between them became a single
+    marker.
+    """
+    redacted = redact_text(r"copied C:\temp\dump and see D:\out\file.log", CONTEXT)
+    assert redacted == f"copied {REDACTED_PATH} and see {REDACTED_PATH}.log"
+
+
+def test_extension_allowlist_comparison_ignores_case() -> None:
+    """AEDT writes upper-case names too; the allowlist is a set of lower-case
+    extensions, so the compare has to fold the case or ".ADP" is thrown away.
+    """
+    assert redact_text(r"C:\runs\MODEL.ADP", CONTEXT) == f"{REDACTED_PATH}.ADP"
+
+
+def test_windows_path_with_trailing_space_in_a_component_is_fully_redacted() -> None:
+    r"""``Path("C:/Users/Jane Doe ")/"Documents"`` really produces this string, and
+    requiring a non-space before every separator broke the segment chain there and
+    published "Doe" plus the rest of the path.
+    """
+    redacted = redact_text(r"C:\Users\Jane Doe \Documents\notes.txt", CONTEXT)
+    assert redacted == f"{REDACTED_PATH}.txt"
+
+
+def test_forward_slash_unc_path_hides_the_file_server_name() -> None:
+    """Manifest paths are written with ``Path.as_posix()``, so a share arrives as
+    "//HOST/share/..."; the UNC rule matched only backslashes and the POSIX rule
+    needs "/home/" or "/Users/", so the server name survived untouched.
+    """
+    redacted = redact_text("saved //BRUSA-FS01/share/model.aedt", CONTEXT)
+    assert redacted == f"saved {REDACTED_PATH}.aedt"
+
+
+def test_url_scheme_is_not_read_as_a_path() -> None:
+    """The drive-letter rule fired on the "p:" of "https:", turning a support link
+    into "http[redacted-path]/..." and destroying diagnostic text.
+    """
+    redacted = redact_text("see https://ansys.com/kb/12345", CONTEXT)
+    assert redacted == "see https://ansys.com/kb/12345"
+
+
+def test_file_url_keeps_its_scheme_and_still_loses_the_whole_path() -> None:
+    """The third slash of "file:///" looked like the start of a UNC host, which
+    consumed only the drive letter and left the directories -- a user name among
+    them -- behind for no later rule to catch.
+    """
+    redacted = redact_text("wrote file:///D:/work/jane.doe/notes.txt", CONTEXT)
+    assert redacted == f"wrote file:///{REDACTED_PATH}.txt"
+
+
+def test_email_with_a_dotless_internal_domain_is_removed() -> None:
+    """An internal address has no dotted TLD, and requiring one let the whole
+    address through.
+    """
+    redacted = redact_text("owner jane.doe@brusa", CONTEXT)
+    assert redacted == f"owner {REDACTED_EMAIL}"

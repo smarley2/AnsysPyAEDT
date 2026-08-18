@@ -37,9 +37,10 @@ REDACTED_USER = "[redacted-user]"
 # publishes a surname. Anything not listed here is redacted with the path.
 _TECHNICAL_EXTENSIONS = frozenset(
     {
-        "adp", "aedt", "aedtresults", "aedz", "asol", "cfg", "csv", "err", "fem",
-        "fnd", "json", "log", "ngmesh", "pjt", "profile", "prop", "py", "pyaedt",
-        "qml", "sqlite", "stats", "svg", "tab", "txt", "xlsx", "xml", "zip",
+        "adp", "aedt", "aedtresults", "aedtz", "ans", "asol", "cfg", "csv", "err",
+        "fem", "fnd", "json", "log", "ngmesh", "pjt", "profile", "prop", "py",
+        "pyaedt", "qml", "sqlite", "stats", "svg", "tab", "tmp", "txt", "xlsx",
+        "xml", "yaml", "yml", "zip",
     }
 )
 
@@ -47,17 +48,30 @@ _TECHNICAL_EXTENSIONS = frozenset(
 # the quoting/bracketing punctuation that marks where free-form text resumes.
 # It deliberately allows spaces: "C:\Program Files" and "\\host\share\sub
 # dir\file.txt" are the common case on Windows, not an edge case, so a space
-# must not end the match early and leave a surname behind.
-_PATH_CHAR = r'[^\\/\r\n"\'<>|]'
+# must not end the match early and leave a surname behind. The colon is excluded
+# because Windows forbids it inside a component, and allowing it let "dump and
+# see D:" read as one interior segment: "copied C:\temp\dump and see D:\out\f.log"
+# collapsed into a single marker and deleted the prose between the two paths.
+# `_DRIVE_PATH` supplies the one colon a path legitimately has.
+_PATH_CHAR = r'[^\\/:\r\n"\'<>|]'
 # A FINAL path character additionally excludes whitespace, which is what bounds
 # the match: prose after a path always begins after a space.
-_FINAL_CHAR = r'[^\\/\s"\'<>|]'
+_FINAL_CHAR = r'[^\\/:\s"\'<>|]'
 # An interior segment always ends in a separator, so an embedded space (the
-# surname in "Jane Doe") is unambiguous: it is followed by more path. The last
-# character before the separator must not be a space, because no real path has
-# one there -- that is what stops "dump and see /home/x" from being read as a
-# single segment and swallowing the prose between two paths.
-_PATH_SEGMENT = _PATH_CHAR + r"*" + _FINAL_CHAR + r"[\\/]"
+# surname in "Jane Doe") is unambiguous: it is followed by more path. The two
+# separators are treated differently on purpose. Before a forward slash the last
+# character must not be a space, because that is what stops "dump and see
+# /home/x" from being read as one segment and swallowing the prose between two
+# POSIX paths. Before a backslash a trailing space is tolerated, because
+# ``Path("C:/Users/Jane Doe ")/"Documents"`` really does produce
+# "C:\Users\Jane Doe \Documents" and refusing it there broke the chain and
+# published the surname; the colon excluded from both classes above is what
+# still keeps a second Windows path ("and see D:\...") out of the match. A
+# forward-slash path has no such marker, so "a/b c /d" is genuinely ambiguous
+# between one path and two: this keeps the prose and accepts that a POSIX
+# component ending in a space strands its remainder. Strip trailing whitespace
+# where such a path is written, not here.
+_PATH_SEGMENT = r"(?:" + _PATH_CHAR + r"*" + _FINAL_CHAR + r"/|" + _PATH_CHAR + r"+\\)"
 # The final segment may not contain whitespace, so it can never swallow the
 # rest of the sentence. No extension guessing is involved in finding its end.
 _PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _FINAL_CHAR + r"*"
@@ -69,12 +83,31 @@ _LICENSE_SERVER = re.compile(r"\b\d{1,5}@[A-Za-z0-9._-]+")
 # E-mail next: its local part may contain a user name, and its domain would
 # otherwise be left behind once the user token is replaced by a marker whose
 # brackets stop the e-mail pattern from matching at all.
-_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# The domain needs no dot: an internal address such as `jane.doe@brusa` is as
+# identifying as the public form, and requiring a dotted TLD let it through. Two
+# host characters are required so a stray "@" in prose is not read as an address;
+# over-redaction is the safe direction here.
+_EMAIL = re.compile(
+    r"[A-Za-z0-9._%+-]+@(?=[A-Za-z0-9.-]{2,})[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*"
+)
 # The share segment is optional: a bare `\\HOST` is still a machine identifier.
 # The host itself uses the final-segment class, so a bare host ends at the same
 # boundary as everything else instead of eating the rest of the line.
-_UNC_PATH = re.compile(r"\\\\" + _FINAL_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?")
-_DRIVE_PATH = re.compile(r"[A-Za-z]:[\\/]" + _PATH_TAIL)
+# The forward-slash form matters as much as the backslash one: this application
+# writes manifest paths with `Path.as_posix()` (`run_directory.py`,
+# `maxwell_export.py`) and the bundle carries those manifests, so `//BRUSA-FS01`
+# reaches the text too -- and no other rule can catch it, because the POSIX rule
+# below requires `/home/` or `/Users/`. The lookbehind keeps a URL out: `:` for
+# `https://`, and `/` for the third slash of `file:///C:/...`, where matching
+# "//C" would consume the drive letter and leave the rest of the path in the text
+# for no rule to catch.
+_UNC_PATH = re.compile(
+    r"(?:\\\\|(?<![:/])//)" + _FINAL_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?"
+)
+# A drive letter must not be preceded by a word character, or the `p:` of
+# `https://` is read as one and the scheme is mangled into a path marker. This
+# still matches the drive in `file:///C:/...`, where a slash precedes it.
+_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]" + _PATH_TAIL)
 _POSIX_HOME_PATH = re.compile(r"/(?:home|Users)/" + _PATH_TAIL)
 _EXTENSION = re.compile(r"\.([A-Za-z0-9]+)$")
 # Trailing punctuation (closing bracket/quote, sentence punctuation) is never
@@ -85,7 +118,12 @@ _TRAILING_PUNCTUATION = ".,;:)\u2019'\""
 # A token contained anywhere in a marker string (e.g. user name "cted" inside
 # "[redacted-path]") would re-redact the marker it just produced, so those
 # tokens are dropped rather than applied. This makes "idempotent by
-# construction" below actually true instead of true-except-for-this-case.
+# construction" below actually true instead of true-except-for-this-case. The
+# price is stated plainly: a machine or user actually named "reda", "host",
+# "path", "user" or "server" is never token-redacted. Idempotence is worth more,
+# because such a name is a common word that would corrupt ordinary prose, and
+# the path, e-mail and licence rules still cover it wherever it appears in a
+# path or an address.
 _MARKERS = (
     REDACTED_EMAIL,
     REDACTED_HOST,
