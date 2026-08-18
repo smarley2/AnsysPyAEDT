@@ -48,6 +48,10 @@ class DiagnosticCode:
     INDUCTANCE_NON_FINITE_GEOMETRY = "inductance.non_finite_geometry"
     INDUCTANCE_NOT_FINITE = "inductance.not_finite"
 
+    # The mode a pair's mutual subtracts from is leakage inductance alone, and
+    # the lumped effective-core model has no leakage path to compute it from.
+    COUPLING_NO_LEAKAGE_PATH = "coupling.no_leakage_path"
+
     AL_CHECK_NO_CATALOG_AL = "al_check.no_catalog_al"
     AL_CHECK_NOT_FINITE = "al_check.not_finite"
 

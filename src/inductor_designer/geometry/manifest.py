@@ -68,12 +68,21 @@ def build_manifest(model: GeometryModel) -> dict[str, object]:
     conductor_count = sum(len(w.conductors) for w in model.planar.windings)
     return {
         "schemaVersion": 1,
+        # Two bodies, recorded separately: `core` is the coated envelope the
+        # turns were packed against, `magneticCore` is the ferrite a solver
+        # meshes. They coincide for a Manual core.
         "core": {
             "name": core_name(),
             "rInnerM": round(model.core.r_inner_m, 9),
             "rOuterM": round(model.core.r_outer_m, 9),
             "halfHeightM": round(model.core.half_height_m, 9),
             "cornerRadiusM": round(model.core.corner_radius_m, 9),
+        },
+        "magneticCore": {
+            "rInnerM": round(model.magnetic_core.r_inner_m, 9),
+            "rOuterM": round(model.magnetic_core.r_outer_m, 9),
+            "halfHeightM": round(model.magnetic_core.half_height_m, 9),
+            "cornerRadiusM": round(model.magnetic_core.corner_radius_m, 9),
         },
         "windings": windings,
         "collisions": [

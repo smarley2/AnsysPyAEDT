@@ -7,7 +7,7 @@ from inductor_designer.domain.project import (
     OperatingPoint,
     WindingOperatingPoint,
 )
-from inductor_designer.domain.winding import CurrentDirection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     CurveConditions,
@@ -88,6 +88,68 @@ def test_in_phase_windings_add_and_reverse_direction_subtracts() -> None:
     assert isinstance(opposed, FieldStrengths)
     assert math.isclose(same.h_ac_peak_a_per_m, 2 * 10 * math.sqrt(2) / 0.1)
     assert math.isclose(opposed.h_ac_peak_a_per_m, 0.0, abs_tol=1e-9)
+
+
+def test_opposite_winding_senses_oppose_even_with_the_same_current_direction() -> None:
+    """The sign the exported coil polarity uses, applied to the estimate.
+
+    `winding_polarity` gives a cw and a ccw winding opposite polarity for the
+    same forward current, so Maxwell has them cancel. This sum ignored cw/ccw
+    entirely until 2026-08-14 and reported them adding.
+    """
+    point = make_operating_point(
+        make_winding("w1", ac_rms=1.0, dc=3.0),
+        make_winding("w2", ac_rms=1.0, dc=3.0),
+    )
+    turns = {"w1": 10, "w2": 10}
+
+    same_sense = field_strengths(
+        point,
+        turns,
+        path_length_m=0.1,
+        winding_direction_by_id={
+            "w1": WindingDirection.CLOCKWISE,
+            "w2": WindingDirection.CLOCKWISE,
+        },
+    )
+    mixed_sense = field_strengths(
+        point,
+        turns,
+        path_length_m=0.1,
+        winding_direction_by_id={
+            "w1": WindingDirection.CLOCKWISE,
+            "w2": WindingDirection.COUNTERCLOCKWISE,
+        },
+    )
+
+    assert isinstance(same_sense, FieldStrengths)
+    assert isinstance(mixed_sense, FieldStrengths)
+    assert math.isclose(same_sense.h_ac_peak_a_per_m, 2 * 10 * math.sqrt(2) / 0.1)
+    assert same_sense.h_dc_a_per_m == 2 * 10 * 3.0 / 0.1
+    assert math.isclose(mixed_sense.h_ac_peak_a_per_m, 0.0, abs_tol=1e-9)
+    assert math.isclose(mixed_sense.h_dc_a_per_m, 0.0, abs_tol=1e-9)
+
+
+def test_the_first_winding_sets_the_sign_reference() -> None:
+    """Only signs BETWEEN windings are physical, so the reference is a choice.
+
+    A lone clockwise winding on forward current must keep reporting positive
+    flux, as it did before cw/ccw entered the sum: flipping the whole design's
+    winding sense is a mirror image, not a different operating point. The DC
+    bias a loss curve is looked up with stays positive with it.
+    """
+    forward = make_operating_point(make_winding("w1", dc=5.0))
+    reverse = make_operating_point(
+        make_winding("w1", dc=5.0, direction=CurrentDirection.REVERSE)
+    )
+
+    for sense in (WindingDirection.CLOCKWISE, WindingDirection.COUNTERCLOCKWISE):
+        positive = field_strengths(forward, {"w1": 10}, 0.1, {"w1": sense})
+        negative = field_strengths(reverse, {"w1": 10}, 0.1, {"w1": sense})
+        assert isinstance(positive, FieldStrengths)
+        assert isinstance(negative, FieldStrengths)
+        assert positive.h_dc_a_per_m == 10 * 5.0 / 0.1
+        assert negative.h_dc_a_per_m == -10 * 5.0 / 0.1
 
 
 def test_quadrature_phases_combine_as_phasors_not_magnitudes() -> None:

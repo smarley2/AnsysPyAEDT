@@ -6,7 +6,7 @@ from enum import Enum
 from inductor_designer.domain.winding import (
     CurrentDirection,
     WindingDefinition,
-    WindingDirection,
+    mmf_sign,
 )
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
@@ -55,11 +55,10 @@ def winding_polarity(
 
     Shared by the Maxwell 3D and Maxwell 2D plan builders and by the 2D cut
     plane preview, so the drawn polarity and the exported polarity cannot
-    disagree.
+    disagree. The sign itself comes from `domain.winding.mmf_sign`, which the
+    preliminary estimate reads too.
     """
-    positive = (current_direction is CurrentDirection.FORWARD) == (
-        definition.winding_direction is WindingDirection.COUNTERCLOCKWISE
-    )
+    positive = mmf_sign(definition.winding_direction, current_direction) > 0.0
     return Polarity.POSITIVE if positive else Polarity.NEGATIVE
 
 
@@ -76,6 +75,11 @@ class MaterialSpec:
     conductivity_s_per_m: float
     draft: bool
     mass_density_kg_per_m3: float | None = None
+    # (B in tesla, H in A/m) per point -- FEMM's own `mi_addbhpoint(name, b, h)`
+    # argument order, which is the reverse of the recorded series (x = H,
+    # y = B) and the reverse of what AEDT stores. The Maxwell adapters must
+    # swap it back; PyAEDT's `set_non_linear` docstring example passes
+    # [[b, h]] pairs, which writes B into AEDT's H column.
     bh_curve: tuple[tuple[float, float], ...] = ()
     steinmetz: SteinmetzFit | None = None
     material_revision: str | None = None

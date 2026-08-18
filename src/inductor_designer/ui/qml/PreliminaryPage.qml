@@ -231,6 +231,49 @@ Pane {
                 }
             }
 
+            // Only a multi-winding design has anything to couple, so the
+            // section disappears for a single winding rather than showing an
+            // empty table.
+            Label {
+                text: qsTr("Winding coupling")
+                font.bold: true
+                color: "#1e2b32"
+                visible: couplingTable.count > 0
+            }
+
+            ListView {
+                id: couplingTable
+                objectName: "preliminaryCouplingTable"
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(0, count * 40)
+                visible: count > 0
+                interactive: false
+                model: preliminaryPage.controller !== null ? preliminaryPage.controller.couplingRows : []
+                Accessible.name: qsTr("Winding coupling")
+
+                delegate: RowLayout {
+                    required property var modelData
+                    width: ListView.view.width
+                    height: 40
+                    spacing: 8
+                    Label { Layout.preferredWidth: 220; Layout.minimumWidth: 0; text: modelData.label; elide: Text.ElideRight; color: "#6d7a7e" }
+                    Label {
+                        Layout.preferredWidth: 140
+                        Layout.minimumWidth: 0
+                        text: modelData.text
+                        elide: Text.ElideRight
+                        font.bold: true
+                        color: preliminaryPage.stateColor(modelData.state)
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData.code === "" ? "" : qsTr("%1 — %2").arg(modelData.code).arg(modelData.message)
+                        wrapMode: Text.WordWrap
+                        color: "#a45528"
+                    }
+                }
+            }
+
             Label { text: qsTr("Totals"); font.bold: true; color: "#1e2b32" }
 
             ListView {

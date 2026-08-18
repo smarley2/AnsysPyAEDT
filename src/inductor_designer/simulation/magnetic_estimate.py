@@ -13,7 +13,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from inductor_designer.domain.project import MaterialRevisionSelection, OperatingPoint
-from inductor_designer.domain.winding import CurrentDirection
+from inductor_designer.domain.winding import (
+    CurrentDirection,
+    WindingDirection,
+    mmf_sign,
+)
 from inductor_designer.materials.records import PointSeries, SeriesKind
 from inductor_designer.simulation.interpolation import interpolate_within_range
 from inductor_designer.simulation.preliminary_contracts import (
@@ -31,16 +35,44 @@ class FieldStrengths:
     h_max_a_per_m: float
 
 
-def _sign(direction: CurrentDirection) -> float:
-    return 1.0 if direction is CurrentDirection.FORWARD else -1.0
+def _reference_direction(
+    operating_point: OperatingPoint,
+    turns_by_winding: Mapping[str, int],
+    winding_direction_by_id: Mapping[str, WindingDirection] | None,
+) -> WindingDirection:
+    """The winding sense every other winding's sense is measured against.
+
+    The absolute sign of the flux in a closed core is a choice of reference, not
+    a physical fact -- only the signs BETWEEN windings are physical. Taking the
+    first participating winding's sense as the reference keeps a single-winding
+    design's flux positive under forward current, exactly as before cw/ccw
+    entered this sum, while making a design that mixes cw and ccw agree with the
+    coil polarity `winding_polarity` exports.
+    """
+    if winding_direction_by_id is None:
+        return WindingDirection.COUNTERCLOCKWISE
+    for winding in operating_point.windings:
+        if winding.winding_id in turns_by_winding:
+            return winding_direction_by_id.get(
+                winding.winding_id, WindingDirection.COUNTERCLOCKWISE
+            )
+    return WindingDirection.COUNTERCLOCKWISE
 
 
 def field_strengths(
     operating_point: OperatingPoint,
     turns_by_winding: Mapping[str, int],
     path_length_m: float,
+    winding_direction_by_id: Mapping[str, WindingDirection] | None = None,
 ) -> FieldStrengths | PreliminaryValue:
-    """Return field strengths, or the diagnostic explaining why they are absent."""
+    """Return field strengths, or the diagnostic explaining why they are absent.
+
+    `winding_direction_by_id` carries each winding's cw/ccw sense. Omitting it
+    treats every winding as wound the same way, which is right only for a
+    single-winding design: two windings of opposite sense carrying forward
+    current drive the core against each other, and the exported Maxwell coil
+    polarity says so whether this sum is told about it or not.
+    """
     if not math.isfinite(path_length_m):
         return unavailable(
             DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE,
@@ -54,13 +86,26 @@ def field_strengths(
             f"got {path_length_m:g} m.",
         )
 
+    reference = _reference_direction(
+        operating_point, turns_by_winding, winding_direction_by_id
+    )
     ac_phasor = 0j
     dc_ampere_turns = 0.0
     for winding in operating_point.windings:
         turns = turns_by_winding.get(winding.winding_id)
         if turns is None:
             continue
-        sign = _sign(winding.current_direction)
+        sense = (
+            reference
+            if winding_direction_by_id is None
+            else winding_direction_by_id.get(winding.winding_id, reference)
+        )
+        # Both factors are the same rule the exported coil polarity uses, so a
+        # winding wound against the reference reverses, and dividing by the
+        # reference's own sign keeps the first winding positive.
+        sign = mmf_sign(sense, winding.current_direction) * mmf_sign(
+            reference, CurrentDirection.FORWARD
+        )
         ac_phasor += (
             sign
             * turns

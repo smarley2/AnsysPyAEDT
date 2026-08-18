@@ -4,14 +4,20 @@ import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_live_app,
+    release_orphaned_desktops,
+)
 from inductor_designer.adapters.pyaedt.field_reader import (
     CURRENT_DENSITY_QUANTITY,
     FLUX_DENSITY_QUANTITY,
+    EvaluatedArea,
     read_field_areas,
 )
 from inductor_designer.adapters.pyaedt.live_app import LiveAppExtraction
 from inductor_designer.adapters.pyaedt.material_props import (
     apply_steinmetz_unit_fix,
+    enable_core_loss,
 )
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
 from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
@@ -70,6 +76,10 @@ class Maxwell3dApp(Protocol):
     odesign: Any
 
     def assign_material(self, assignment: Any, material: str) -> Any: ...
+
+    def set_core_losses(
+        self, assignment: Any, core_loss_on_field: bool = ...
+    ) -> Any: ...
 
     def assign_coil(self, assignment: Any, **kwargs: Any) -> Any: ...
 
@@ -144,7 +154,13 @@ class DefaultMaxwell3dAppFactory:
     def create(self, **kwargs: object) -> Maxwell3dApp:
         from ansys.aedt.core import Maxwell3d
 
-        return cast(Maxwell3dApp, LiveAppExtraction(Maxwell3d(**kwargs)))
+        try:
+            return cast(Maxwell3dApp, LiveAppExtraction(Maxwell3d(**kwargs)))
+        except Exception:
+            # See `DefaultMaxwell2dAppFactory.create`: a failed launch owns a
+            # live desktop process that nothing else will close.
+            release_orphaned_desktops()
+            raise
 
 
 def _stage_units(
@@ -159,7 +175,7 @@ def _stage_materials(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     spec = plan.core.material
     material = app.materials.add_material(spec.name)
     material.permeability = (
-        [[b, h] for b, h in spec.bh_curve]
+        [[h, b] for b, h in spec.bh_curve]
         if spec.bh_curve
         else spec.relative_permeability
     )
@@ -197,7 +213,12 @@ def _create_core_geometry(
 def _stage_core(app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
     _create_core_geometry(app, plan.core.name, plan.core.profile)
     app.assign_material(plan.core.name, plan.core.material.name)
-    return f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+    return (
+        f"Core {plan.core.name} revolved and assigned {plan.core.material.name}."
+        + enable_core_loss(
+            app, plan.core.name, plan.core.material, plan.solution_type
+        )
+    )
 
 
 def _stage_geometry_only_core(
@@ -434,44 +455,89 @@ _STAGES: tuple[tuple[str, Any], ...] = (
 )
 
 
+def _stages_with_sections(
+    sheets: SectionSheets, solve: bool
+) -> tuple[tuple[str, Any], ...]:
+    """`_STAGES`, with sheet creation before the solve when there will be one.
+
+    A Generate Only run reads no fields, so it creates no sheets: the design a
+    user opens afterwards carries only the model geometry.
+    """
+    if not solve:
+        return _STAGES
+    index = [name for name, _ in _STAGES].index("setup")
+    return (
+        *_STAGES[:index],
+        ("sections", sheets.create),
+        *_STAGES[index:],
+    )
+
+
+
+class SectionSheets:
+    """The non-model cut sheets B and J are read on, created before the solve.
+
+    What actually broke sheet creation was the sheet *name*: ids like
+    `core.00.span-start` reached AEDT with the hyphen intact, which it refuses in
+    an object name (see `section_sheets._sheet_name`). Creating them here rather
+    than in the results phase is a separate, smaller point -- adding geometry to
+    a design that has already solved invalidates its solution, and these sheets
+    exist to be read against that solution. They are non-model, so they are
+    excluded from the mesh and creating them early changes nothing about it.
+
+    Creation failures never fail the run: the sheets serve field extraction
+    only, so the error rides along as a diagnostic and the field quantities
+    normalize to unavailable with a reason.
+    """
+
+    def __init__(self) -> None:
+        self.core: tuple[EvaluatedArea, ...] = ()
+        self.conductors: tuple[EvaluatedArea, ...] = ()
+        self.diagnostic: str | None = None
+
+    def create(self, app: Maxwell3dApp, plan: Maxwell3dDesignPlan) -> str:
+        try:
+            self.core = create_core_section_sheets(
+                app,
+                plan.core,
+                plan.core_sections,
+                r_inner_m=plan.core.r_inner_m,
+                r_outer_m=plan.core.r_outer_m,
+                half_height_m=plan.core.half_height_m,
+            )
+            self.conductors = create_conductor_section_sheets(
+                app, plan.conductor_sections
+            )
+        except Exception as error:  # noqa: BLE001 - no sheets means no field values
+            self.diagnostic = f"{type(error).__name__}: {error}"
+            return f"No field section sheets: {self.diagnostic}"
+        return (
+            f"{len(self.core)} core and {len(self.conductors)} conductor "
+            "section sheets created as non-model."
+        )
+
 
 def _with_field_sections(
     app: Maxwell3dApp,
     plan: Maxwell3dDesignPlan,
     raw: RawScalarResults,
+    sheets: SectionSheets,
 ) -> RawScalarResults:
-    """Evaluate B and J on the plan's representative cross sections.
+    """Read B and J on the sheets the sections stage already created.
 
-    Sheet creation is guarded as a whole because a modeler failure loses every
-    section at once; each field read is guarded individually inside
-    ``read_field_areas``.
+    Each field read is guarded individually inside ``read_field_areas``.
     """
     from dataclasses import replace
 
-    try:
-        core_areas = create_core_section_sheets(
-            app,
-            plan.core,
-            plan.core_sections,
-            r_inner_m=plan.core.r_inner_m,
-            r_outer_m=plan.core.r_outer_m,
-            half_height_m=plan.core.half_height_m,
-        )
-        conductor_areas = create_conductor_section_sheets(
-            app, plan.conductor_sections
-        )
-    except Exception as error:  # noqa: BLE001 - no sheets means no field values
-        return replace(
-            raw,
-            diagnostics=raw.diagnostics + (f"{type(error).__name__}: {error}",),
-        )
+    if sheets.diagnostic is not None:
+        return replace(raw, diagnostics=raw.diagnostics + (sheets.diagnostic,))
     return replace(
         raw,
         flux_density_sections=read_field_areas(
-            app, core_areas, FLUX_DENSITY_QUANTITY
+            app, sheets.core, FLUX_DENSITY_QUANTITY
         ),
         current_density_sections=read_field_areas(
-            app, conductor_areas, CURRENT_DENSITY_QUANTITY
+            app, sheets.conductors, CURRENT_DENSITY_QUANTITY
         ),
     )
 
@@ -522,7 +588,8 @@ class PyaedtMaxwell3dExporter:
         _emit(request.progress, "launch", StagePhase.SUCCEEDED, launch_message)
         try:
             cancelled_before: str | None = None
-            for name, stage in _STAGES:
+            sheets = SectionSheets()
+            for name, stage in _stages_with_sections(sheets, request.solve):
                 if _cancelled(request.cancellation):
                     cancelled_before = name
                     break
@@ -599,7 +666,7 @@ class PyaedtMaxwell3dExporter:
                             setup_name=plan.setup.name,
                             frequency_hz=plan.setup.frequency_hz,
                         )
-                        raw_results = _with_field_sections(app, plan, raw_results)
+                        raw_results = _with_field_sections(app, plan, raw_results, sheets)
                         results_message = _results_message(raw_results)
                         stages.append(
                             StageRecord(
@@ -615,7 +682,7 @@ class PyaedtMaxwell3dExporter:
             if cancelled_before is not None:
                 _record_cancellation(stages, request.progress, cancelled_before)
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)
         return result()
 
     def export_geometry_only(
@@ -694,5 +761,5 @@ class PyaedtMaxwell3dExporter:
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)
         return result()

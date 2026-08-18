@@ -6,12 +6,15 @@ from dataclasses import replace
 import pytest
 
 from inductor_designer.domain.project import ManualCoreSelection
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.simulation.inductance_estimate import (
     AL_TOLERANCE_NOTE,
     INDUCTANCE_EXCLUSION_NOTE,
     STORED_ENERGY_INTEGRATED_NOTE,
 )
 from inductor_designer.simulation.preliminary import (
+    CANCELLED_MMF_NOTE,
+    COUPLING_NOTE,
     PreliminaryRequest,
     PreliminaryResult,
     estimate_preliminary,
@@ -430,6 +433,166 @@ def test_the_catalog_reference_survives_an_unexcited_operating_point(
     assert result.core.al_catalog.state is ResultState.ESTIMATED
     assert result.core.mu_r_initial.state is ResultState.ESTIMATED
     assert result.core.al_deviation.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+
+
+def test_cancelling_windings_still_report_their_own_inductance(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """A common-mode choke is the design whose windings cancel by construction.
+
+    The core rows must stay on the net ampere-turns -- zero flux, no net
+    permeability -- while each winding still reports the inductance its own
+    ampere-turns produce, labelled so nobody reads it as the differential-mode
+    value.
+    """
+    operating_point = sample_request.project.operating_point
+    opposed = (
+        operating_point.windings[0],
+        replace(
+            operating_point.windings[1], current_direction=CurrentDirection.REVERSE
+        ),
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=opposed),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.core.b_ac_peak.value == pytest.approx(0.0)
+    assert result.core.al_effective.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
+    for row in result.windings:
+        assert row.inductance.state is ResultState.ESTIMATED
+        assert row.inductance.value is not None
+        assert row.inductance.value > 0.0
+        assert CANCELLED_MMF_NOTE in row.inductance.notes
+    assert CANCELLED_MMF_NOTE not in result.core.b_ac_peak.notes
+    # The caveat has to reach the assumptions list the screen shows, which is
+    # built from `result.notes`.
+    assert CANCELLED_MMF_NOTE in result.notes
+
+
+def test_mutual_and_the_aiding_series_mode_are_reported_for_a_pair(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """M = N1 N2 A_L at k = 1, and only the mode M adds to carries a number.
+
+    The other mode is `L - M`, a difference this model makes exactly zero for a
+    matched pair. Reported as 0.000 uH it read as a computed cancellation when
+    it was the k = 1 assumption showing through, so it is refused instead.
+    """
+    result = estimate_preliminary(sample_request)
+
+    assert [(c.winding_id, c.other_winding_id) for c in result.couplings] == [
+        ("w1", "w2"),
+        ("w2", "w1"),
+    ]
+    coupling = result.couplings[0]
+    al = result.core.al_effective.value
+    self_inductance = result.windings[0].inductance.value
+    assert al is not None and self_inductance is not None
+    assert coupling.mutual.value == pytest.approx(10 * 10 * al)
+    assert coupling.common_mode.value == pytest.approx(self_inductance + 10 * 10 * al)
+    assert coupling.differential_mode.state is ResultState.UNAVAILABLE
+    assert (
+        coupling.differential_mode.code == DiagnosticCode.COUPLING_NO_LEAKAGE_PATH
+    )
+    assert COUPLING_NOTE in coupling.mutual.notes
+    assert COUPLING_NOTE in result.notes
+
+
+def test_reversing_a_current_direction_does_not_move_the_two_modes(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The modes are named for how the pair is driven, so the operating point's
+    current directions cannot decide which of them cancels -- the winding senses
+    do. Reported as numbers, both modes looked frozen at the same values."""
+    operating_point = sample_request.project.operating_point
+    reversed_second = (
+        operating_point.windings[0],
+        replace(
+            operating_point.windings[1], current_direction=CurrentDirection.REVERSE
+        ),
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=reversed_second),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    coupling = result.couplings[0]
+    assert coupling.mutual.value is not None
+    assert coupling.mutual.value > 0.0
+    assert coupling.common_mode.state is ResultState.ESTIMATED
+    assert coupling.differential_mode.state is ResultState.UNAVAILABLE
+
+
+def test_windings_wound_against_each_other_report_a_negative_mutual(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The sign follows the winding senses, not the current directions.
+
+    Driving both terminals forward on an opposed pair cancels, so the
+    common-mode value is the one that collapses.
+    """
+    design = sample_request.project.design
+    flipped = (
+        design.windings[0],
+        replace(
+            design.windings[1], winding_direction=WindingDirection.COUNTERCLOCKWISE
+        ),
+    )
+    project = replace(
+        sample_request.project, design=replace(design, windings=flipped)
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    coupling = result.couplings[0]
+    assert coupling.mutual.value is not None
+    assert coupling.mutual.value < 0.0
+    assert coupling.common_mode.state is ResultState.UNAVAILABLE
+    assert coupling.common_mode.code == DiagnosticCode.COUPLING_NO_LEAKAGE_PATH
+    assert coupling.differential_mode.value == pytest.approx(
+        2.0 * (result.windings[0].inductance.value or 0.0)
+    )
+
+
+def test_a_single_winding_design_reports_no_coupling(
+    sample_request: PreliminaryRequest,
+) -> None:
+    design = sample_request.project.design
+    operating_point = sample_request.project.operating_point
+    project = replace(
+        sample_request.project,
+        design=replace(design, windings=design.windings[:1]),
+        operating_point=replace(operating_point, windings=operating_point.windings[:1]),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    assert result.couplings == ()
+
+
+def test_no_current_at_all_still_reports_no_winding_inductance(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The own-ampere-turn fallback must not invent excitation that is absent."""
+    operating_point = sample_request.project.operating_point
+    unexcited = tuple(
+        replace(winding, ac_rms_current_a=0.0, dc_current_a=0.0)
+        for winding in operating_point.windings
+    )
+    project = replace(
+        sample_request.project,
+        operating_point=replace(operating_point, windings=unexcited),
+    )
+
+    result = estimate_preliminary(replace(sample_request, project=project))
+
+    for row in result.windings:
+        assert row.inductance.code == DiagnosticCode.INDUCTANCE_NO_EXCITATION
 
 
 def test_a_core_without_a_catalog_al_still_reports_inductance(

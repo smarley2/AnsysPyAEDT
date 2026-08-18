@@ -4,6 +4,10 @@ import re
 from importlib.metadata import version
 from typing import Any, Protocol, cast
 
+from inductor_designer.adapters.pyaedt.desktop_cleanup import (
+    release_live_app,
+    release_orphaned_desktops,
+)
 from inductor_designer.application.ports.aedt_gateway import (
     AedtProbeRequest,
     AedtProbeResult,
@@ -58,7 +62,15 @@ class DefaultMaxwellAppFactory:
         from ansys.aedt.core import Maxwell2d, Maxwell3d
 
         app_class = Maxwell2d if dimension == "2d" else Maxwell3d
-        return cast(MaxwellApp, app_class(**kwargs))
+        try:
+            return cast(MaxwellApp, app_class(**kwargs))
+        except Exception:
+            # The desktop is spawned before the application object finishes
+            # initialising and `close_on_exit=False` keeps it alive, so a
+            # failure here would leave a headless process holding an
+            # `electronics_desktop` seat out of a shared pool.
+            release_orphaned_desktops()
+            raise
 
 
 class PyaedtGateway:
@@ -142,4 +154,4 @@ class PyaedtGateway:
                 ),
             )
         finally:
-            app.release_desktop(close_projects=True, close_desktop=True)
+            release_live_app(app)

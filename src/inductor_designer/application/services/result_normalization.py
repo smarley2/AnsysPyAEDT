@@ -7,6 +7,9 @@ reason. Nothing is estimated, and nothing is silently omitted.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
+
 from inductor_designer.application.services.field_normalization import (
     normalize_field_results,
 )
@@ -46,6 +49,15 @@ DERIVED_TOTAL_LOSS_NOTE = (
 )
 
 
+def _finite(value: NormalizedValue) -> bool:
+    """Whether every number inside a scalar, complex or matrix value is finite."""
+    if isinstance(value, MatrixValue):
+        return all(_finite(cell) for row in value.values for cell in row)
+    if isinstance(value, ComplexValue):
+        return math.isfinite(value.real) and math.isfinite(value.imaginary)
+    return math.isfinite(value)
+
+
 def _available(
     quantity: RequestedOutput,
     scope: str,
@@ -54,6 +66,17 @@ def _available(
     *,
     approximation: str | None = None,
 ) -> NormalizedQuantity:
+    if not _finite(value):
+        # AEDT answers a report request it cannot evaluate with NaN rather than
+        # with an error -- a Maxwell 3D matrix over two windings does exactly
+        # that -- and "available: nan H" is a wrong number wearing the label of
+        # a right one. Observed live on AEDT 2025.2, 2026-08-14.
+        return _unavailable(
+            quantity,
+            scope,
+            f"{reason_code(quantity, NOT_REPORTED)}: The backend returned a "
+            "non-finite value, so the quantity was not evaluated.",
+        )
     return NormalizedQuantity(
         quantity=quantity,
         scope=scope,
@@ -96,8 +119,54 @@ def _missing(
     return _unavailable(quantity, scope, f"{reason_code(quantity, code)}: {detail}{suffix}")
 
 
+SELF_INDUCTANCE_NOTE = (
+    "Self-inductance: the diagonal of the solver's winding matrix, which "
+    "excludes the other windings' currents. It is not what a meter reads with "
+    "every winding energised."
+)
+APPARENT_INDUCTANCE_NOTE = (
+    "Apparent inductance at this operating point: flux linkage over current "
+    "with every winding energised, so it carries the mutual term. Two aiding "
+    "windings read L + M here and two opposing ones read L - M, where the "
+    "Maxwell backends report the self term L instead."
+)
+
+
+def _turn_length_note(turn_length_m: float, modelled_m: float) -> str:
+    return (
+        "Scaled from the cross-section to the whole turn: the XY model carries "
+        "the complete magnetic circuit but only the two axial legs of each "
+        f"turn's copper, {modelled_m * 1000.0:.3f} mm of the "
+        f"{turn_length_m * 1000.0:.3f} mm the packing gives one turn, so the "
+        f"solved resistance is multiplied by {turn_length_m / modelled_m:.4f}. "
+        "The factor assumes the radial legs and corner arcs carry the same "
+        "current distribution as the modelled axial legs; the inductance needs "
+        "no such correction, since the flux path is modelled whole."
+    )
+
+
+def _inductance_convention(backend: RunBackend) -> str:
+    """Which inductance the backend reports, in its own words.
+
+    FEMM's circuit result is the apparent inductance and Maxwell's matrix
+    diagonal is the self inductance. Measured 2026-08-14 on one pair of 10-turn
+    windings: FEMM read 18.147 uH aiding and 1.414 uH opposing, whose half-sum
+    9.78 uH matches Maxwell 2D's 9.819 uH self term. Same physics, two
+    definitions, and they used to be published under one unqualified label.
+    """
+    return (
+        APPARENT_INDUCTANCE_NOTE
+        if backend is RunBackend.FEMM
+        else SELF_INDUCTANCE_NOTE
+    )
+
+
 def _winding_entries(
-    quantity: RequestedOutput, raw: RawScalarResults, provenance: str
+    quantity: RequestedOutput,
+    raw: RawScalarResults,
+    provenance: str,
+    backend: RunBackend,
+    resistance_scale: Mapping[str, tuple[float, float]] | None = None,
 ) -> tuple[NormalizedQuantity, ...]:
     if not raw.windings:
         return (
@@ -111,12 +180,29 @@ def _winding_entries(
     entries: list[NormalizedQuantity] = []
     for winding in raw.windings:
         scope = winding_scope(winding.winding_id)
+        convention = (
+            _inductance_convention(backend)
+            if quantity is RequestedOutput.INDUCTANCE
+            else None
+        )
+        lengths = (resistance_scale or {}).get(winding.winding_id)
         if quantity is RequestedOutput.RESISTANCE:
             value: float | complex | None = winding.resistance_ohm
+            if value is not None and lengths is not None:
+                turn_length_m, modelled_m = lengths
+                value = value * (turn_length_m / modelled_m)
+                convention = _turn_length_note(turn_length_m, modelled_m)
         elif quantity is RequestedOutput.INDUCTANCE:
             value = winding.inductance_h
         else:
             value = winding.impedance
+            if value is not None and lengths is not None:
+                # Only the resistive part is short; the reactance is complete.
+                turn_length_m, modelled_m = lengths
+                value = complex(
+                    value.real * (turn_length_m / modelled_m), value.imag
+                )
+                convention = _turn_length_note(turn_length_m, modelled_m)
         if value is None:
             entries.append(
                 _missing(
@@ -134,10 +220,15 @@ def _winding_entries(
                     scope,
                     ComplexValue(real=value.real, imaginary=value.imag),
                     provenance,
+                    approximation=convention,
                 )
             )
         else:
-            entries.append(_available(quantity, scope, value, provenance))
+            entries.append(
+                _available(
+                    quantity, scope, value, provenance, approximation=convention
+                )
+            )
     return tuple(entries)
 
 
@@ -291,8 +382,14 @@ def normalize_scalar_results(
     requested_outputs: tuple[RequestedOutput, ...],
     provenance: str,
     dc_biased: bool = False,
+    resistance_scale: Mapping[str, tuple[float, float]] | None = None,
 ) -> NormalizedResultSet:
-    """One entry per requested scalar quantity per scope, never a silent gap."""
+    """One entry per requested scalar quantity per scope, never a silent gap.
+
+    `resistance_scale` maps a winding to `(real turn length, modelled length)`
+    for a cross-section backend, whose resistance covers only part of each turn.
+    Omitted for Maxwell 3D, which models the turns as they are.
+    """
     quantities: list[NormalizedQuantity] = []
     for quantity in requested_outputs:
         if quantity in FIELD_QUANTITIES:
@@ -303,7 +400,11 @@ def normalize_scalar_results(
         if quantity not in SCALAR_QUANTITIES:
             continue
         if quantity in PER_WINDING_QUANTITIES:
-            quantities.extend(_winding_entries(quantity, raw, provenance))
+            quantities.extend(
+                _winding_entries(
+                    quantity, raw, provenance, backend, resistance_scale
+                )
+            )
         elif quantity is RequestedOutput.MATRICES:
             quantities.extend(_matrix_entries(raw, provenance))
         elif quantity is RequestedOutput.TOTAL_LOSS:

@@ -7,11 +7,17 @@
     "rInnerM": 0.00973,
     "rOuterM": 0.01683
   },
+  "magneticCore": {
+    "cornerRadiusM": 0.0,
+    "halfHeightM": 0.005335,
+    "rInnerM": 0.010045,
+    "rOuterM": 0.016395
+  },
   "planar": {
     "conductorCount": 40,
-    "depthM": 0.01143,
-    "rInnerM": 0.00973,
-    "rOuterM": 0.01683
+    "depthM": 0.01067,
+    "rInnerM": 0.010045,
+    "rOuterM": 0.016395
   },
   "schemaVersion": 1,
   "symmetry": {

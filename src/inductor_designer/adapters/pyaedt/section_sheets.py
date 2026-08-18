@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from inductor_designer.adapters.pyaedt.field_reader import EvaluatedArea
+from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.simulation.maxwell_plan import CorePlan
 from inductor_designer.simulation.result_vocabulary import (
     conductor_section_scope,
@@ -40,7 +41,17 @@ class SheetCapableApp(Protocol):
 
 
 def _sheet_name(section_id: str) -> str:
-    return f"Sec_{section_id.replace('.', '_')}"
+    """A section id as an AEDT object name.
+
+    Replacing only the dots left the hyphen in ids like `core.00.span-start`,
+    and AEDT rejects an object name containing one: `CreateRectangle` came back
+    as `GrpcApiError: Failed to execute gRPC AEDT command: CreateRectangle` and
+    took the design handle with it, so the following stage failed with
+    `'NoneType' object has no attribute 'InsertSetup'`. Measured on AEDT 2025.2,
+    2026-08-17. `sanitize_identifier` replaces every character AEDT refuses, not
+    just the ones a given id happens to contain.
+    """
+    return f"Sec_{sanitize_identifier(section_id)}"
 
 
 def create_core_section_sheets(

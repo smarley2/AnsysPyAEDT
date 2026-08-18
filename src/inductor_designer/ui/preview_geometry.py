@@ -7,7 +7,13 @@ from PySide6.QtGui import QVector3D
 from PySide6.QtQuick3D import QQuick3DGeometry
 
 from inductor_designer.application.services.geometry_model import GeometryModel
-from inductor_designer.geometry.tessellation import Mesh, tessellate_core, tessellate_winding
+from inductor_designer.geometry.tessellation import (
+    Mesh,
+    start_bead,
+    tessellate_core,
+    tessellate_winding,
+    wrap_arrow,
+)
 
 PALETTE = ("#e07a5f", "#3d9970", "#3f88c5", "#f2bb05", "#9656a1", "#2a9d8f")
 
@@ -70,8 +76,23 @@ class PreviewEntry(QObject):
 
 
 def build_preview_entries(model: GeometryModel) -> list[PreviewEntry]:
-    entries = [PreviewEntry(MeshGeometry(tessellate_core(model.core)), "#8a8a8a", 0.35)]
+    # The ferrite body, not the coated envelope: the preview shows what the
+    # solver meshes, and the wire is drawn where it was packed -- against the
+    # coating, so a hair of clearance between the two is the coating itself.
+    entries = [
+        PreviewEntry(MeshGeometry(tessellate_core(model.magnetic_core)), "#8a8a8a", 0.35)
+    ]
     for i, packing in enumerate(sorted(model.packings, key=lambda p: p.winding_id)):
-        mesh = tessellate_winding(model.core, packing)
-        entries.append(PreviewEntry(MeshGeometry(mesh), PALETTE[i % len(PALETTE)], 1.0))
+        sense = model.winding_direction[packing.winding_id]
+        current = model.current_direction[packing.winding_id]
+        colour = PALETTE[i % len(PALETTE)]
+        mesh = tessellate_winding(model.core, packing, sense)
+        entries.append(PreviewEntry(MeshGeometry(mesh), colour, 1.0))
+        # Markers ride in their own entries, in the winding's colour, so the one
+        # wire mesh stays wire only and can be read without them: the arrow for
+        # where the current flows, the bead for which end the winding starts at.
+        arrow = wrap_arrow(model.core, packing, sense, current)
+        entries.append(PreviewEntry(MeshGeometry(arrow), colour, 1.0))
+        bead = start_bead(model.core, packing, sense)
+        entries.append(PreviewEntry(MeshGeometry(bead), colour, 1.0))
     return entries

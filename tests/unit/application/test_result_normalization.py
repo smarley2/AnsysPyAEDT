@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import pytest
+
 from inductor_designer.application.services.result_normalization import (
     DERIVED_TOTAL_LOSS_NOTE,
     normalize_scalar_results,
@@ -75,6 +77,137 @@ def test_a_missing_quantity_is_unavailable_with_a_dotted_reason() -> None:
     assert entry.value is None
     assert entry.reason is not None
     assert entry.reason.startswith("inductance.not_reported")
+
+
+def test_each_backend_states_which_inductance_it_reports() -> None:
+    """FEMM reports apparent inductance, Maxwell the matrix self term.
+
+    Measured on one pair of 10-turn windings: FEMM 18.147 uH aiding and
+    1.414 uH opposing, half-sum 9.78 uH, against Maxwell 2D's 9.819 uH self
+    term. Both were published under the same unqualified label.
+    """
+    raw = RawScalarResults(
+        windings=(RawWindingResult(winding_id="w1", inductance_h=1e-5),)
+    )
+
+    for backend, expected in (
+        (RunBackend.FEMM, "Apparent inductance"),
+        (RunBackend.MAXWELL_2D, "Self-inductance"),
+        (RunBackend.MAXWELL_3D, "Self-inductance"),
+    ):
+        result = normalize_scalar_results(
+            raw,
+            run_id="20260814-120000",
+            backend=backend,
+            requested_outputs=(RequestedOutput.INDUCTANCE, RequestedOutput.RESISTANCE),
+            provenance="solution data",
+        )
+        entry = find(result, RequestedOutput.INDUCTANCE, "winding.w1")
+        assert entry.approximation is not None
+        assert entry.approximation.startswith(expected)
+        # The convention belongs to inductance alone.
+        assert find(result, RequestedOutput.RESISTANCE, "winding.w1") is not None
+
+
+def test_a_cross_section_resistance_is_scaled_to_the_whole_turn() -> None:
+    """The XY model carries the full flux path but only part of each turn.
+
+    Each turn appears as two axial legs of the model depth, while the real turn
+    also runs radially across both core faces, so the solved resistance is short
+    by the ratio of the two lengths. The inductance is not scaled: the magnetic
+    circuit is modelled whole.
+    """
+    raw = RawScalarResults(
+        windings=(
+            RawWindingResult(
+                winding_id="w1",
+                resistance_ohm=0.010835,
+                inductance_h=8.914e-6,
+                impedance=complex(0.010835, 5.6),
+            ),
+        )
+    )
+
+    result = normalize_scalar_results(
+        raw,
+        run_id="20260817-120000",
+        backend=RunBackend.MAXWELL_2D,
+        requested_outputs=(
+            RequestedOutput.RESISTANCE,
+            RequestedOutput.INDUCTANCE,
+            RequestedOutput.IMPEDANCE,
+        ),
+        provenance="Maxwell 2D solution data",
+        # 51.7 mm of real turn against 2 x 14.48 mm modelled.
+        resistance_scale={"w1": (0.0517, 0.02896)},
+    )
+
+    factor = 0.0517 / 0.02896
+    resistance = find(result, RequestedOutput.RESISTANCE, "winding.w1")
+    assert resistance.value == pytest.approx(0.010835 * factor)
+    assert resistance.approximation is not None
+    assert "51.700 mm" in resistance.approximation
+    assert find(
+        result, RequestedOutput.INDUCTANCE, "winding.w1"
+    ).value == pytest.approx(8.914e-6)
+    impedance = find(result, RequestedOutput.IMPEDANCE, "winding.w1")
+    assert isinstance(impedance.value, ComplexValue)
+    assert impedance.value.real == pytest.approx(0.010835 * factor)
+    assert impedance.value.imaginary == pytest.approx(5.6)
+
+
+def test_without_a_scale_the_resistance_is_reported_as_solved() -> None:
+    """Maxwell 3D sweeps the real turn, so it is handed no scale at all."""
+    raw = RawScalarResults(
+        windings=(RawWindingResult(winding_id="w1", resistance_ohm=0.0175),)
+    )
+
+    entry = find(normalize(raw), RequestedOutput.RESISTANCE, "winding.w1")
+
+    assert entry.value == pytest.approx(0.0175)
+    assert entry.approximation is None
+
+
+def test_a_non_finite_value_is_unavailable_rather_than_available() -> None:
+    """AEDT answers a report it cannot evaluate with NaN instead of an error.
+
+    A Maxwell 3D matrix over two windings does exactly that, and the run
+    reported "available: nan H" for every winding.
+    """
+    raw = RawScalarResults(
+        windings=(
+            RawWindingResult(
+                winding_id="w1", resistance_ohm=float("nan"), inductance_h=float("inf")
+            ),
+        )
+    )
+
+    result = normalize(raw)
+
+    for quantity in (RequestedOutput.RESISTANCE, RequestedOutput.INDUCTANCE):
+        entry = find(result, quantity, "winding.w1")
+        assert entry.availability is ResultAvailability.UNAVAILABLE
+        assert entry.value is None
+        assert entry.reason is not None
+        assert "non-finite" in entry.reason
+
+
+def test_a_matrix_holding_one_non_finite_entry_is_unavailable() -> None:
+    raw = RawScalarResults(
+        matrices=(
+            RawMatrix(
+                kind="inductance",
+                labels=("w1", "w2"),
+                values=((1e-5, float("nan")), (float("nan"), 1e-5)),
+            ),
+        )
+    )
+
+    entry = find(normalize(raw), RequestedOutput.MATRICES, "device.inductance")
+
+    assert entry.availability is ResultAvailability.UNAVAILABLE
+    assert entry.reason is not None
+    assert "non-finite" in entry.reason
 
 
 def test_an_impedance_is_reported_as_a_complex_value() -> None:

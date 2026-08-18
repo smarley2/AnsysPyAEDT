@@ -6,11 +6,13 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.domain.validation import ValidationCategory, validate_project
+from inductor_designer.domain.winding import CurrentDirection, WindingDirection
 from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
 from inductor_designer.geometry.core_solid import (
     CoreGeometryError,
     FinishedCore,
     resolve_finished_core,
+    resolve_magnetic_core,
 )
 from inductor_designer.geometry.packing import (
     PackedWinding,
@@ -34,13 +36,25 @@ class GeometryModelError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class GeometryModel:
+    # `core` is the coated envelope every winding is placed against;
+    # `magnetic_core` is the ferrite body a solver meshes. They differ by the
+    # coating and the catalog tolerance band, which is a quarter of the
+    # cross-section on a small powder toroid.
     core: FinishedCore
+    magnetic_core: FinishedCore
     packings: tuple[PackedWinding, ...]
     collisions: tuple[CollisionIssue, ...]
     symmetry: SymmetryPlan | SymmetryRefusal
     planar: PlanarModel
     insulated_diameter_m: dict[str, float]
     bare_diameter_m: dict[str, float]
+    # The wound sense per winding. Geometry does not otherwise care -- packing
+    # and clearance are the same either way -- but the preview draws the lean
+    # it implies, so the choice is visible before a solve.
+    winding_direction: dict[str, WindingDirection]
+    # The excitation's direction, for the same reason: the preview's arrow shows
+    # where the current goes, which is the product of the two choices.
+    current_direction: dict[str, CurrentDirection]
 
 
 def insulated_diameter(record: ConductorRecord) -> float:
@@ -71,6 +85,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         raise GeometryModelError(("Project has no core selection; geometry needs one.",))
     try:
         core = resolve_finished_core(project.design.core)
+        magnetic_core = resolve_magnetic_core(project.design.core)
     except CoreGeometryError as error:
         raise GeometryModelError((str(error),)) from error
 
@@ -78,6 +93,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
     clearances: dict[str, float] = {}
     insulated: dict[str, float] = {}
     bare: dict[str, float] = {}
+    senses: dict[str, WindingDirection] = {}
     for winding in project.design.windings:
         try:
             record = catalog.get_conductor(winding.conductor_name)
@@ -90,6 +106,7 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         insulated[winding.winding_id] = d_ins
         bare[winding.winding_id] = record.bare_diameter_m
         clearances[winding.winding_id] = winding.min_clearance_m
+        senses[winding.winding_id] = winding.winding_direction
         spec = WindingSpec(
             winding_id=winding.winding_id,
             turns=winding.turns,
@@ -104,15 +121,26 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
         except PackingError as error:
             raise GeometryModelError((str(error),)) from error
 
+    # Validation already pairs every winding with one excitation, so a missing
+    # entry here is impossible rather than defaulted.
+    currents = {
+        point.winding_id: point.current_direction
+        for point in project.operating_point.windings
+    }
     collisions = check_clearances(core, packings, clearances)
     symmetry = propose_symmetry_plan(project.design.windings, project.operating_point.windings)
-    planar = build_planar_model(core, packings, {w: b / 2.0 for w, b in bare.items()})
+    planar = build_planar_model(
+        core, magnetic_core, packings, {w: b / 2.0 for w, b in bare.items()}
+    )
     return GeometryModel(
         core=core,
+        magnetic_core=magnetic_core,
         packings=tuple(packings),
         collisions=collisions,
         symmetry=symmetry,
         planar=planar,
         insulated_diameter_m=insulated,
         bare_diameter_m=bare,
+        winding_direction=senses,
+        current_direction=currents,
     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from inductor_designer.domain.winding import WindingDirection
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.turn_path import radial_build_m, turn_loop_length_m
 
@@ -129,4 +130,20 @@ def pack_winding(core: FinishedCore, spec: WindingSpec) -> PackedWinding:
         lead_in_deg=round(spec.start_deg + math.degrees(margin) / 2.0, 9),
         lead_out_deg=round(spec.start_deg + spec.sector_deg - math.degrees(margin) / 2.0, 9),
         wire_length_m=round(wire_length, 9),
+    )
+
+
+def start_azimuth_deg(packing: PackedWinding, sense: WindingDirection) -> float:
+    """Azimuth of the sector end the wire was started from.
+
+    Stations run in increasing azimuth, so a winding wound counter-clockwise
+    (seen from +z, the way both previews look at it) is fed in at the low end of
+    its sector and one wound clockwise at the high end. Shared with the 2D cut
+    view so the 3D bead and the 2D dot cannot mark different ends, and so
+    flipping the sense moves both.
+    """
+    return (
+        packing.lead_in_deg
+        if sense is WindingDirection.COUNTERCLOCKWISE
+        else packing.lead_out_deg
     )

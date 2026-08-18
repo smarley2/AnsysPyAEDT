@@ -82,6 +82,10 @@ def build_maxwell3d_plan(
     material_record: MaterialRecord,
     material_bh_series_id: str | None,
     winding_temperature_c: float,
+    # The ferrite body, when it differs from the coated envelope the turns were
+    # placed against. Defaults to `core` so a caller with only one body -- a
+    # Manual core, where both are the entered dimensions -- keeps working.
+    magnetic_core: FinishedCore | None = None,
 ) -> Maxwell3dDesignPlan:
     issues: list[str] = []
     by_id = {definition.winding_id: definition for definition in windings}
@@ -173,6 +177,14 @@ def build_maxwell3d_plan(
             f"Core material {material.name} derives from a draft catalog record; "
             "verify against the manufacturer catalog before trusting results."
         )
+    # No note about nonlinear multi-winding matrices here. One was added on
+    # 2026-08-14 after two-winding 3D runs returned NaN for every matrix entry
+    # while a linear-permeability re-solve of the same design returned numbers.
+    # That inference was wrong: on 2026-08-17 the same nonlinear design solved
+    # its matrix twice over -- 9.327 uH aiding, 13.695 uH opposing -- once the
+    # runs were serialised onto one AEDT session and the solve converged
+    # (2 and 3 passes). The NaN belonged to a contended session, not to the
+    # material, so there is nothing to warn about.
     dc_requested = any(group.dc_current_a != 0.0 for group in groups)
     notes.extend(
         dc_bias_notes(
@@ -206,18 +218,19 @@ def build_maxwell3d_plan(
             )
         )
 
-    width = core.r_outer_m - core.r_inner_m
-    height = 2.0 * core.half_height_m
+    body = magnetic_core if magnetic_core is not None else core
+    width = body.r_outer_m - body.r_inner_m
+    height = 2.0 * body.half_height_m
     return Maxwell3dDesignPlan(
         design_name=DESIGN_NAME,
         solution_type=solution_type,
         core=CorePlan(
             name=core_name(),
-            profile=build_core_profile(core),
+            profile=build_core_profile(body),
             material=material,
-            r_inner_m=core.r_inner_m,
-            r_outer_m=core.r_outer_m,
-            half_height_m=core.half_height_m,
+            r_inner_m=body.r_inner_m,
+            r_outer_m=body.r_outer_m,
+            half_height_m=body.half_height_m,
         ),
         windings=tuple(groups),
         region=RegionPlan(padding_percent=REGION_PADDING_PERCENT),

@@ -24,6 +24,10 @@ class FemmCircuit:
     name: str
     current_peak_a: float
     phase_deg: float
+    # See `Winding2dGroupPlan.turn_length_m`: FEMM solves the same XY
+    # cross-section, so its circuit resistance covers the same two axial legs
+    # per turn and needs the same correction.
+    turn_length_m: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +103,12 @@ def femm_problem_from_plan(plan: Maxwell2dDesignPlan) -> FemmProblem:
         )
 
     circuits = tuple(
-        FemmCircuit(winding.name, winding.current_peak_a, winding.phase_deg)
+        FemmCircuit(
+            winding.name,
+            winding.current_peak_a,
+            winding.phase_deg,
+            turn_length_m=winding.turn_length_m,
+        )
         for winding in plan.windings
     )
 

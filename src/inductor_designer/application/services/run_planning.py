@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.application.services.geometry_model import (
+    GeometryModel,
     GeometryModelError,
     build_geometry_model,
 )
@@ -75,6 +76,24 @@ class GeometryOnlyRunPlan:
 
 
 PlannedRun = SolveReadyRunPlan | GeometryOnlyRunPlan
+
+
+def _turn_lengths(
+    project: InductorProject, model: GeometryModel
+) -> dict[str, float]:
+    """Real length of one turn per winding, for the 2D resistance correction.
+
+    The packing's wire length excludes leads, so dividing by the turn count
+    gives the mean modelled turn loop.
+    """
+    turns = {
+        winding.winding_id: winding.turns for winding in project.design.windings
+    }
+    return {
+        packing.winding_id: packing.wire_length_m / turns[packing.winding_id]
+        for packing in model.packings
+        if turns.get(packing.winding_id, 0) > 0 and packing.wire_length_m > 0.0
+    }
 
 
 def plan_run(
@@ -194,6 +213,7 @@ def plan_run(
                     winding_temperature_c=(
                         project.operating_point.winding_temperature_c
                     ),
+                    magnetic_core=model.magnetic_core,
                 )
             )
         else:
@@ -207,6 +227,7 @@ def plan_run(
                 dc_bias_decision=dc_bias_decision,
                 material_record=material.snapshot,
                 material_bh_series_id=material.bh_series_id,
+                turn_length_m=_turn_lengths(project, model),
             )
             solver_plan = (
                 femm_problem_from_plan(maxwell2d_plan)

@@ -12,6 +12,7 @@ Item {
         "depth_mm": 0.0,
         "extent_mm": 1.0,
         "circles": [],
+        "starts": [],
         "note": ""
     })
     property color background: "#f8f7f4"
@@ -89,6 +90,23 @@ Item {
                     ctx.arc(x, y, Math.max(r * 0.32, 1), 0, 2 * Math.PI)
                     ctx.fill()
                 }
+            }
+
+            // Start markers: a ringed dot at the end each winding is fed in
+            // from, the same point the 3D preview beads. Drawn after the
+            // conductors so it is never buried under one.
+            for (var s = 0; s < root.drawing.starts.length; ++s) {
+                var m = root.drawing.starts[s]
+                var mr = Math.max(m.radius_mm * scale, 2)
+                ctx.fillStyle = m.color
+                ctx.beginPath()
+                ctx.arc(px(m.x_mm), py(m.y_mm), mr, 0, 2 * Math.PI)
+                ctx.fill()
+                ctx.strokeStyle = "#2f2c28"
+                ctx.lineWidth = Math.max(mr * 0.3, 1)
+                ctx.beginPath()
+                ctx.arc(px(m.x_mm), py(m.y_mm), mr * 1.6, 0, 2 * Math.PI)
+                ctx.stroke()
             }
 
             // Scale bar: the outer diameter, drawn in the reserved band. It is

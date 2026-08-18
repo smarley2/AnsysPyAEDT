@@ -42,8 +42,18 @@ GEOMETRY_ONLY_STAGE_NAMES: tuple[str, ...] = (
 # Generate Only manifest and a Generate and Solve manifest stay comparable
 # stage for stage.
 # A solved run also extracts its scalar results, so the sequence carries
-# one more stage than the generate sequence plus analyze.
-SOLVE_STAGE_NAMES: tuple[str, ...] = STAGE_NAMES + ("analyze", "results")
+# one more stage than the generate sequence plus analyze. It carries a
+# "sections" stage too: the non-model sheets B and J are read on are created
+# before the solve, so the solution they are read against is not invalidated
+# by adding geometry after it. Only a solve reads fields, so a Generate Only
+# run creates none.
+SOLVE_STAGE_NAMES: tuple[str, ...] = (
+    *STAGE_NAMES[: STAGE_NAMES.index("setup")],
+    "sections",
+    *STAGE_NAMES[STAGE_NAMES.index("setup") :],
+    "analyze",
+    "results",
+)
 
 
 @dataclass(frozen=True, slots=True)

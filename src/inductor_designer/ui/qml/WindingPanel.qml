@@ -431,6 +431,26 @@ Pane {
                     Accessible.name: qsTr("Winding direction")
                     onActivated: windingsPanel.applyChoice("direction", currentText)
                 }
+                // The 3D preview cannot show a winding sense: a turn is a
+                // closed loop, and cw versus ccw only reverses the current
+                // around an identical tube. The 2D cut view draws it as the
+                // conductor polarity glyphs, which is also what the exported
+                // Maxwell coil polarity carries.
+                Label {
+                    objectName: "windingDirectionHint"
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    color: "#6d7a7e"
+                    font.pixelSize: 11
+                    text: qsTr("Direction shows in the preview: the 3D turns lean the way "
+                        + "the wire advances, the arrow follows the current (sense and "
+                        + "current direction together), and the 2D cut view flips the "
+                        + "conductor dot/cross polarity. Both views mark where the "
+                        + "winding starts -- the 3D bead and the 2D ringed dot -- at "
+                        + "whichever end of the sector the sense feeds in from.")
+                }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Terminal intent") }
                 TextField {
                     id: terminalIntentField

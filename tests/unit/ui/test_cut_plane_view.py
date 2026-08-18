@@ -19,6 +19,8 @@ from inductor_designer.application.services.geometry_model import (  # noqa: E40
 )
 from inductor_designer.domain.project import WindingOperatingPoint  # noqa: E402
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection  # noqa: E402
+from inductor_designer.geometry.packing import start_azimuth_deg  # noqa: E402
+from inductor_designer.geometry.tessellation import start_bead  # noqa: E402
 from inductor_designer.simulation.maxwell_plan import Polarity  # noqa: E402
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan  # noqa: E402
 from inductor_designer.simulation.run_contracts import effective_winding_inputs  # noqa: E402
@@ -131,7 +133,9 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
     model = build_geometry_model(project, CATALOG)
 
     drawing = build_cut_plane_drawing(model, project)
-    # entries[0] is the core; entries[1:] follow sorted(model.packings, key=winding_id).
+    # entries[0] is the core; then three entries per winding -- its wire, its
+    # current arrow and its start bead, sharing one colour -- in
+    # sorted(packings, key=winding_id).
     preview_entries = build_preview_entries(model)
 
     by_position = {(round(c.x_mm, 6), round(c.y_mm, 6)): c for c in drawing.circles}
@@ -139,7 +143,7 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
     assert sorted_ids == ["w1", "w2"]  # declaration order was "w2", "w1"
 
     for index, winding_id in enumerate(sorted_ids):
-        expected_color = preview_entries[1 + index].color
+        expected_color = preview_entries[1 + 3 * index].color
         planar_winding = next(w for w in model.planar.windings if w.winding_id == winding_id)
         assert planar_winding.conductors
         for conductor in planar_winding.conductors:
@@ -169,6 +173,57 @@ def test_a_winding_wound_the_other_way_flips_its_own_glyphs() -> None:
     ]
 
 
+def test_each_winding_gets_a_start_dot_where_the_three_d_preview_beads_it() -> None:
+    """The 2D view showed the wound sense (glyphs) and the current (glyphs) but
+    not which end the wire was fed in from, which the 3D view had marked since
+    the bead landed. Both now read `packing.start_azimuth_deg`, so a sense flip
+    has to move the dot in step with the bead.
+    """
+    project = make_project()
+    model = build_geometry_model(project, CATALOG)
+
+    drawing = build_cut_plane_drawing(model, project)
+
+    assert len(drawing.starts) == len(model.packings)
+    for start, packing in zip(
+        drawing.starts, sorted(model.packings, key=lambda p: p.winding_id), strict=True
+    ):
+        sense = model.winding_direction[packing.winding_id]
+        bead = start_bead(model.core, packing, sense)
+        centre_x = sum(bead.positions[0::3]) / (len(bead.positions) // 3)
+        centre_y = sum(bead.positions[1::3]) / (len(bead.positions) // 3)
+        assert start.x_mm == pytest.approx(centre_x * 1000.0, abs=0.01)
+        assert start.y_mm == pytest.approx(centre_y * 1000.0, abs=0.01)
+        assert math.degrees(math.atan2(start.y_mm, start.x_mm)) % 360.0 == pytest.approx(
+            start_azimuth_deg(packing, sense) % 360.0
+        )
+
+
+def test_the_start_dot_follows_the_wound_sense() -> None:
+    project = make_project()
+    model = build_geometry_model(project, CATALOG)
+    flipped = replace(
+        model,
+        winding_direction={
+            winding_id: WindingDirection.CLOCKWISE
+            if sense is WindingDirection.COUNTERCLOCKWISE
+            else WindingDirection.COUNTERCLOCKWISE
+            for winding_id, sense in model.winding_direction.items()
+        },
+    )
+
+    original = build_cut_plane_drawing(model, project).starts
+    moved = build_cut_plane_drawing(flipped, project).starts
+
+    assert original and len(original) == len(moved)
+    for before, after in zip(original, moved, strict=True):
+        assert (before.x_mm, before.y_mm) != (after.x_mm, after.y_mm)
+        assert before.color == after.color
+        assert math.hypot(before.x_mm, before.y_mm) == pytest.approx(
+            math.hypot(after.x_mm, after.y_mm)
+        )
+
+
 def test_extent_covers_the_outermost_conductor_edge() -> None:
     project = make_project()
     model = build_geometry_model(project, CATALOG)
@@ -192,6 +247,7 @@ def test_a_design_without_conductors_still_draws_the_annulus() -> None:
     drawing = build_cut_plane_drawing(empty_model, project)
 
     assert drawing.circles == ()
+    assert drawing.starts == ()
     assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
     assert drawing.extent_mm == drawing.r_outer_mm
     assert "no conductors" in drawing.note

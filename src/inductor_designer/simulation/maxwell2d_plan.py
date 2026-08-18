@@ -35,6 +35,14 @@ class Winding2dGroupPlan:
     phase_deg: float
     dc_current_a: float
     conductors: tuple[Conductor2dPlan, ...]
+    # Length of one real turn, which the cross-section cannot show. The XY model
+    # represents the whole magnetic circuit -- azimuthal path, full core height
+    # as the model depth -- but only the two axial legs of each turn's copper,
+    # so its resistance covers `2 * model_depth` per turn where the real turn
+    # also runs radially across the top and bottom faces. Carried here so the
+    # result path can state, and correct for, that difference. 0.0 means the
+    # caller supplied no packing length.
+    turn_length_m: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
