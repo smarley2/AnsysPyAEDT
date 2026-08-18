@@ -154,6 +154,12 @@ def test_an_expired_licence_is_not_a_network_problem() -> None:
     )
 
 
+def test_a_non_licence_expiry_is_not_reported_as_licence_expired() -> None:
+    advice = advise("Authentication token has expired.")
+    assert advice.code != AdviceCode.LICENSE_EXPIRED
+    assert advice.code == AdviceCode.UNCLASSIFIED
+
+
 def test_exhausted_seats_are_not_a_network_problem() -> None:
     advice = advise(
         "FlexNet Licensing error:-4,132. All licenses in use: Licensed number "

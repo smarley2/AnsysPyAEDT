@@ -259,22 +259,63 @@ def test_every_failure_boundary_captures_the_channel(
     assert f"AEDT [{stage}]: {CHANNEL[0]}" in written
 
 
-def test_the_diagnostic_save_s_own_messages_are_captured_too(tmp_path: Path) -> None:
-    """The capture reads after the nested save, so what the save told AEDT counts.
+_DIAGNOSTIC_SAVE_MESSAGE = "Cannot write project: disk is full."
 
-    A read taken before that save would miss exactly the messages describing
-    why the diagnostic save also failed.
-    """
-    log_path = configure_application_logging(tmp_path / "logs", RedactionContext())
+
+def _own_messages_3d_stage(tmp_path: Path) -> str:
     app = FakeMaxwell3dApp(raise_on="AssignMatrix")
 
     def _speak_on_save() -> None:
-        app.desktop_message_lines = ("Cannot write project: disk is full.",)
+        app.desktop_message_lines = (_DIAGNOSTIC_SAVE_MESSAGE,)
 
     app.on_call = {"save_project": _speak_on_save}
-
     _export_3d(tmp_path, app)
+    return "matrix"
+
+
+def _own_messages_3d_geometry_stage(tmp_path: Path) -> str:
+    app = FakeMaxwell3dApp()
+    app.modeler = _BrokenModeler()
+
+    def _speak_on_save() -> None:
+        app.desktop_message_lines = (_DIAGNOSTIC_SAVE_MESSAGE,)
+
+    app.on_call = {"save_project": _speak_on_save}
+    _export_geometry_only(tmp_path, app)
+    return "units"
+
+
+def _own_messages_2d_stage(tmp_path: Path) -> str:
+    app = FakeMaxwell2dApp(raise_on="assign_matrix")
+
+    def _speak_on_save() -> None:
+        app.desktop_message_lines = (_DIAGNOSTIC_SAVE_MESSAGE,)
+
+    app.on_call = {"save_project": _speak_on_save}
+    _export_2d(tmp_path, app)
+    return "matrix"
+
+
+@pytest.mark.parametrize(
+    "failing_run",
+    [_own_messages_3d_stage, _own_messages_3d_geometry_stage, _own_messages_2d_stage],
+    ids=["3d-stage", "3d-geometry-stage", "2d-stage"],
+)
+def test_the_diagnostic_save_s_own_messages_are_captured_too(
+    tmp_path: Path,
+    failing_run: Callable[[Path], str],
+) -> None:
+    """The capture reads after the nested save, so what the save told AEDT counts.
+
+    A read taken before that save would miss exactly the messages describing
+    why the diagnostic save also failed. Parametrized over all three stage-loop
+    entry points that nest a diagnostic save inside a failed-stage handler: the
+    3D main loop, the 3D geometry-only loop, and the 2D main loop.
+    """
+    log_path = configure_application_logging(tmp_path / "logs", RedactionContext())
+
+    stage = failing_run(tmp_path)
 
     logging.getLogger(LOGGER_NAME).handlers[0].flush()
     written = log_path.read_text(encoding="utf-8")
-    assert "AEDT [matrix]: Cannot write project: disk is full." in written
+    assert f"AEDT [{stage}]: {_DIAGNOSTIC_SAVE_MESSAGE}" in written

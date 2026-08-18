@@ -70,7 +70,10 @@ _RULES: tuple[tuple[str, str, str], ...] = (
         "licence administrator to free one, then run again.",
     ),
     (
-        "has expired",
+        # The bare phrase "has expired" also matches an expired auth token or
+        # cached credential, neither of which is a licence problem. FlexNet's
+        # actual wording (error -10,32) is "feature has expired".
+        "feature has expired",
         AdviceCode.LICENSE_EXPIRED,
         "The Maxwell licence has expired. Ask the licence administrator for a "
         "current licence file, then run again.",
