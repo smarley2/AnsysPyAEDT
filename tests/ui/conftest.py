@@ -8,9 +8,23 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from PySide6.QtGui import QGuiApplication
 
     from inductor_designer.ui.generation_controller import GenerationController
+
+
+# `main()` calls `configure_application_logging(log_directory(), ...)`, and
+# `log_directory()` reads LOCALAPPDATA -- without this, running the UI suite
+# creates and writes to the developer's real
+# `%LOCALAPPDATA%\InductorDesigner\logs\` directory, which is product-visible
+# state pytest must not leave behind.
+@pytest.fixture(autouse=True)
+def redirect_local_appdata_to_a_temp_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
 
 
 # ponytail: the QML tests pin their engines in module-level lists, because a

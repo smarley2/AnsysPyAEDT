@@ -3,7 +3,11 @@
 Redacting in the formatter rather than at the call site is what makes the file
 shareable by construction: no caller can forget, tracebacks are covered by the
 same pass, and the log the user finds on disk is exactly the text the
-diagnostic bundle carries.
+diagnostic bundle carries. That guarantee covers every handler attached
+through this module's `RedactingFormatter`; a handler added later with a
+different formatter (Tasks 3, 6, 8 may add one to this logger) receives
+whatever `logging.Formatter.format` produces and is not redacted by this
+module.
 """
 
 from __future__ import annotations

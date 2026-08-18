@@ -32,7 +32,10 @@ def application_data_directory() -> Path:
     base = os.environ.get("LOCALAPPDATA")
     # Windows is the product platform (ADR 0004). The fallback exists only so
     # the non-solver suite runs on the Linux CI runner; it is not a supported
-    # product configuration.
+    # product configuration. `Path.home()` can raise `RuntimeError` in a fully
+    # stripped environment (no home directory resolvable); that is acceptable
+    # fail-fast behaviour for a configuration this product does not support,
+    # not a case to guard against here.
     root = Path(base) if base else Path.home() / ".local" / "share"
     return root / APPLICATION_DIRECTORY_NAME
 

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import io
 import logging
+import logging.handlers
+import sys
 from pathlib import Path
 
+import pytest
+
 from inductor_designer.adapters.system.app_logging import (
-    APP_LOG_FILENAME,
     LOGGER_NAME,
     configure_application_logging,
 )
@@ -29,34 +33,52 @@ def test_directories_are_nested_under_one_application_directory() -> None:
 def test_environment_context_reports_this_machine() -> None:
     context = environment_redaction_context()
     assert isinstance(context, RedactionContext)
-    # A machine always has at least one of the two; an empty context would
-    # silently disable token redaction.
-    assert context.user_names or context.host_names
+    # `platform.node()` is not environment-derived, so a host token is always
+    # available; an empty tuple here would silently disable host redaction.
+    assert context.host_names
+    if sys.platform == "win32":
+        # USERNAME is always set in a Windows session.
+        assert context.user_names
+
+
+def test_short_and_whitespace_tokens_are_filtered_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("USERNAME", "ab")
+    monkeypatch.setenv("COMPUTERNAME", " \t ")
+    context = environment_redaction_context()
+    for token in (*context.user_names, *context.host_names):
+        assert token == token.strip()
+        assert len(token) >= 3
 
 
 def test_log_line_is_written_redacted(tmp_path: Path) -> None:
+    directory = tmp_path / "InductorDesigner" / "logs"
     path = configure_application_logging(
-        tmp_path, RedactionContext(user_names=("jane.doe",))
+        directory, RedactionContext(user_names=("jane.doe",))
     )
-    logging.getLogger(LOGGER_NAME).warning(r"save failed: C:\Users\jane.doe\b.json")
-    logging.shutdown()
+    logger = logging.getLogger(LOGGER_NAME)
+    assert logger.handlers[0].maxBytes == 1_000_000
+    logger.info(r"save failed: C:\Users\jane.doe\b.json")
+    logger.handlers[0].flush()
 
     written = path.read_text(encoding="utf-8")
-    assert path.name == APP_LOG_FILENAME
+    assert path.name == "inductor-designer.log"
     assert "jane.doe" not in written
     assert f"{REDACTED_PATH}.json" in written
-    assert "WARNING" in written
+    assert "INFO" in written
 
 
 def test_traceback_text_is_written_redacted(tmp_path: Path) -> None:
     path = configure_application_logging(
         tmp_path, RedactionContext(user_names=("jane.doe",))
     )
+    logger = logging.getLogger(LOGGER_NAME)
     try:
         raise OSError(r"cannot open C:\Users\jane.doe\model.aedt")
     except OSError:
-        logging.getLogger(LOGGER_NAME).exception("autosave failed")
-    logging.shutdown()
+        logger.exception("autosave failed")
+    logger.handlers[0].flush()
 
     written = path.read_text(encoding="utf-8")
     assert "jane.doe" not in written
@@ -83,9 +105,29 @@ def test_rotated_log_file_is_also_redacted(tmp_path: Path) -> None:
     handler.maxBytes = 1
     for _ in range(3):
         logger.warning(r"save failed: C:\Users\jane.doe\b.json")
-    logging.shutdown()
+    handler.flush()
 
     rotated = path.with_name(f"{path.name}.1")
     assert rotated.exists()
     written = rotated.read_text(encoding="utf-8")
     assert "jane.doe" not in written
+
+
+def test_root_logger_never_receives_a_line(tmp_path: Path) -> None:
+    # `propagate = False` is the only thing stopping a line from reaching
+    # whatever handler another library (or `logging.lastResort`) has bound to
+    # the root logger, none of which run through `RedactingFormatter`.
+    configure_application_logging(
+        tmp_path, RedactionContext(user_names=("jane.doe",))
+    )
+    root = logging.getLogger()
+    sink = io.StringIO()
+    handler = logging.StreamHandler(sink)
+    root.addHandler(handler)
+    try:
+        logging.getLogger(LOGGER_NAME).warning(
+            r"save failed: C:\Users\jane.doe\b.json"
+        )
+    finally:
+        root.removeHandler(handler)
+    assert sink.getvalue() == ""
