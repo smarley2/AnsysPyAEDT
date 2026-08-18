@@ -28,21 +28,50 @@ REDACTED_LICENSE_SERVER = "[redacted-license-server]"
 REDACTED_PATH = "[redacted-path]"
 REDACTED_USER = "[redacted-user]"
 
-# E-mail first: its local part may contain a user name, and its domain would
+# A path character is anything except a separator, a line break, or the
+# quoting/bracketing punctuation that marks where free-form text resumes.
+# Unlike the old classes, this deliberately allows spaces: "C:\Program Files"
+# and "\\host\share\sub dir\file.txt" are the common case on Windows, not an
+# edge case, so a space must not end the match early.
+_PATH_CHAR = r'[^\\/\r\n"\'<>|]'
+# A directory segment always ends in a separator, so an embedded space (a
+# surname in "Jane Doe") is unambiguous: it is followed by more path.
+_PATH_SEGMENT = _PATH_CHAR + r"+[\\/]"
+# The final segment is ambiguous between "more filename" and "free text after
+# the path". Prefer the shortest chunk ending in a recognisable extension
+# (found anywhere, not just at the very end) over swallowing the rest of the
+# line; fall back to the rest of the line only when no extension exists.
+_PATH_FINAL = r"(?:" + _PATH_CHAR + r"*?\.[A-Za-z0-9]{1,6}\b|" + _PATH_CHAR + r"*)"
+_PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _PATH_FINAL
+
+# License server first: `1055@licsrv01.brusa.biz` also matches the e-mail
+# shape, and if e-mail runs first it mislabels a license identifier.
+# FlexNet identifiers are `port@host`; the host alone identifies a BRUSA server.
+_LICENSE_SERVER = re.compile(r"\b\d{1,5}@[A-Za-z0-9._-]+")
+# E-mail next: its local part may contain a user name, and its domain would
 # otherwise be left behind once the user token is replaced by a marker whose
 # brackets stop the e-mail pattern from matching at all.
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-_UNC_PATH = re.compile(r"\\\\[^\s\\/]+\\[^\s\"'<>|]*")
-_DRIVE_PATH = re.compile(r"[A-Za-z]:[\\/][^\s\"'<>|]*")
-_POSIX_HOME_PATH = re.compile(r"/(?:home|Users)/[^\s\"'<>|]*")
-# FlexNet identifiers are `port@host`; the host alone identifies a BRUSA server.
-_LICENSE_SERVER = re.compile(r"\b\d{1,5}@[A-Za-z0-9._-]+")
+# The share segment is optional: a bare `\\HOST` is still a machine identifier.
+_UNC_PATH = re.compile(r"\\\\" + _PATH_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?")
+_DRIVE_PATH = re.compile(r"[A-Za-z]:[\\/]" + _PATH_TAIL)
+_POSIX_HOME_PATH = re.compile(r"/(?:home|Users)/" + _PATH_TAIL)
 _EXTENSION = re.compile(r"\.([A-Za-z0-9]{1,6})$")
+# Trailing punctuation (closing bracket/quote, sentence punctuation) is never
+# part of the path; it is trimmed off the match and reattached verbatim so it
+# is not silently swallowed by a path that turned out to have no extension.
+_TRAILING_PUNCTUATION = ".,;:)\u2019'\""
 
-# A token equal to a word inside a marker would re-redact the marker and break
-# idempotence, so those tokens are dropped rather than applied.
-_MARKER_WORDS = frozenset(
-    {"redacted", "path", "user", "host", "email", "license", "server"}
+# A token contained anywhere in a marker string (e.g. user name "cted" inside
+# "[redacted-path]") would re-redact the marker it just produced, so those
+# tokens are dropped rather than applied. This makes "idempotent by
+# construction" below actually true instead of true-except-for-this-case.
+_MARKERS = (
+    REDACTED_EMAIL,
+    REDACTED_HOST,
+    REDACTED_LICENSE_SERVER,
+    REDACTED_PATH,
+    REDACTED_USER,
 )
 # One- and two-character tokens match inside ordinary words; a machine that
 # reports such a user name is better served by the path rules alone.
@@ -58,19 +87,23 @@ class RedactionContext:
 
 
 def _path_replacement(match: re.Match[str]) -> str:
-    # Trailing sentence punctuation is not part of the path, and would
-    # otherwise be mistaken for the extension.
-    extension = _EXTENSION.search(match.group(0).rstrip(".,;:)’'\""))
-    if extension is None:
-        return REDACTED_PATH
-    return f"{REDACTED_PATH}.{extension.group(1)}"
+    # Trailing sentence/bracket punctuation is not part of the path. Trim it
+    # off before looking for the extension, but keep it: it belongs to the
+    # surrounding text, not to the match that is being thrown away.
+    raw = match.group(0)
+    core = raw.rstrip(_TRAILING_PUNCTUATION)
+    trailing = raw[len(core) :]
+    extension = _EXTENSION.search(core)
+    replacement = REDACTED_PATH if extension is None else f"{REDACTED_PATH}.{extension.group(1)}"
+    return replacement + trailing
 
 
 def _token_pattern(tokens: tuple[str, ...]) -> re.Pattern[str] | None:
     usable = {
         token
         for token in tokens
-        if len(token) >= _MINIMUM_TOKEN_LENGTH and token.casefold() not in _MARKER_WORDS
+        if len(token) >= _MINIMUM_TOKEN_LENGTH
+        and not any(token.casefold() in marker.casefold() for marker in _MARKERS)
     }
     if not usable:
         return None
@@ -82,11 +115,11 @@ def _token_pattern(tokens: tuple[str, ...]) -> re.Pattern[str] | None:
 
 def redact_text(text: str, context: RedactionContext) -> str:
     """Remove every shareability hazard. Idempotent by construction."""
-    redacted = _EMAIL.sub(REDACTED_EMAIL, text)
+    redacted = _LICENSE_SERVER.sub(REDACTED_LICENSE_SERVER, text)
+    redacted = _EMAIL.sub(REDACTED_EMAIL, redacted)
     redacted = _UNC_PATH.sub(_path_replacement, redacted)
     redacted = _DRIVE_PATH.sub(_path_replacement, redacted)
     redacted = _POSIX_HOME_PATH.sub(_path_replacement, redacted)
-    redacted = _LICENSE_SERVER.sub(REDACTED_LICENSE_SERVER, redacted)
     hosts = _token_pattern(context.host_names)
     if hosts is not None:
         redacted = hosts.sub(REDACTED_HOST, redacted)

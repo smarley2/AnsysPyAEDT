@@ -78,3 +78,41 @@ def test_a_token_that_collides_with_a_marker_word_is_ignored() -> None:
 
 def test_text_with_nothing_to_redact_is_returned_unchanged() -> None:
     assert redact_text("analyze: succeeded", CONTEXT) == "analyze: succeeded"
+
+
+def test_drive_letter_path_with_space_in_directory_name_is_fully_redacted() -> None:
+    text = r"C:\Users\Jane Doe\Documents\notes.txt"
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == f"{REDACTED_PATH}.txt"
+
+
+def test_unc_path_with_space_in_directory_name_is_fully_redacted() -> None:
+    text = r"\\brusa-fs01\share\sub dir\file.txt"
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == f"{REDACTED_PATH}.txt"
+
+
+def test_bare_unc_host_without_share_is_redacted() -> None:
+    redacted = redact_text(r"\\BRUSA-FS01", CONTEXT)
+    assert redacted == REDACTED_PATH
+
+
+def test_license_server_with_domain_is_labelled_as_license_server_not_email() -> None:
+    redacted = redact_text("checkout failed on 1055@licsrv01.brusa.biz", CONTEXT)
+    assert redacted == f"checkout failed on {REDACTED_LICENSE_SERVER}"
+
+
+def test_user_token_matching_inside_a_marker_word_does_not_corrupt_output() -> None:
+    context = RedactionContext(user_names=("cted",))
+    redacted = redact_text(r"C:\tmp\a.adp", context)
+    assert redacted == f"{REDACTED_PATH}.adp"
+
+
+def test_closing_punctuation_after_a_path_without_extension_is_preserved() -> None:
+    redacted = redact_text(r"see (C:\temp\dump)", CONTEXT)
+    assert redacted == f"see ({REDACTED_PATH})"
+
+
+def test_longest_host_token_is_matched_before_its_shorter_prefix() -> None:
+    redacted = redact_text("session on brusa-ws42.brusa.biz started", CONTEXT)
+    assert redacted == f"session on {REDACTED_HOST} started"
