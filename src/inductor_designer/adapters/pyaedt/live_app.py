@@ -279,11 +279,12 @@ class LiveAppExtraction:
         run was recorded `succeeded` while this channel held "Unable to
         create child process: 3dedy". Session-scoped, so it must be read
         before the desktop is released.
+
+        A failure here raises rather than reading as an empty channel: the
+        caller's handler exists to log the reason, and swallowing it here would
+        make an unreachable AEDT indistinguishable from a quiet one.
         """
-        try:
-            messages = self._app.odesktop.GetMessages(
-                self._app.project_name, self._app.design_name, 0
-            )
-        except Exception:  # noqa: BLE001 - a silent channel is not a failure
-            return ()
+        messages = self._app.odesktop.GetMessages(
+            self._app.project_name, self._app.design_name, 0
+        )
         return tuple(str(line) for line in messages or ())

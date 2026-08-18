@@ -40,7 +40,7 @@ from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
-from inductor_designer.simulation.failure_advice import AdviceCode
+from inductor_designer.simulation.failure_advice import AdviceCode, advise
 from inductor_designer.simulation.raw_results import RawConvergence, RawScalarResults
 from inductor_designer.simulation.run_contracts import (
     DimensionalRepresentation,
@@ -407,7 +407,15 @@ def test_adapter_exception_carries_failed_manifest_evidence(
             diagnostic=diagnostic,
         ),
     )
-    assert manifest.diagnostics == _with_advice((diagnostic,))
+    # Pinned by literal shape rather than by the production helper: the
+    # sibling tests compare the advice half against itself, so a
+    # `_with_advice` that emitted no code, the wrong code, or a duplicated
+    # raw line would keep them all green. This one states what the pair has
+    # to look like.
+    assert manifest.diagnostics == (
+        diagnostic,
+        f"{AdviceCode.UNCLASSIFIED}: {advise(diagnostic).action}",
+    )
     assert manifest.artifacts == ()
     assert manifest.results is None
     assert manifest.windings[0].ac_rms_current_a == 2.0

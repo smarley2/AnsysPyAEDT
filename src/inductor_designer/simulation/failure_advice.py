@@ -23,13 +23,19 @@ class AdviceCode:
     INSTALLATION_FEMM_MISSING = "installation.femm_missing"
     INSTALLATION_AEDT_NOT_REACHABLE = "installation.aedt_not_reachable"
     LICENSE_UNAVAILABLE = "license.unavailable"
+    LICENSE_SEATS_EXHAUSTED = "license.seats_exhausted"
+    LICENSE_EXPIRED = "license.expired"
+    LICENSE_CONFIGURATION_UNREADABLE = "license.configuration_unreadable"
+    LICENSE_FLEXNET_ERROR = "license.flexnet_error"
     LICENSE_SERVER_UNREACHABLE = "license.server_unreachable"
     MATERIAL_REJECTED_BY_SOLVER = "material.rejected_by_solver"
     FILE_PERMISSION_DENIED = "file.permission_denied"
     FILE_LOCKED = "file.locked"
     FILE_MISSING_SOLVER_DATA = "file.missing_solver_data"
+    SOLVER_STOPPED_EARLY = "solver.stopped_early"
     CONVERGENCE_NOT_REACHED = "convergence.not_reached"
     CONVERGENCE_PASS_LIMIT = "convergence.pass_limit_reached"
+    RUN_CANCELLED = "run.cancelled"
     UNCLASSIFIED = "run.unclassified_failure"
 
 
@@ -39,26 +45,35 @@ class FailureAdvice:
     action: str
 
 
+_DENIED_ACTION = (
+    "The application was denied access to that path. Check the folder's "
+    "permissions, or choose a writable output folder, then start a new run."
+)
+
 # First match wins, so the more specific subject is listed first. A licence
 # file that cannot be opened is a licence problem, not a file problem.
 _RULES: tuple[tuple[str, str, str], ...] = (
     (
-        "license file",
-        AdviceCode.LICENSE_UNAVAILABLE,
-        "AEDT could not read its licence configuration. Open Ansys License "
-        "Settings, confirm the licence server entry, and run the design again.",
+        # A cancellation is recorded as an unsuccessful stage, so it reaches the
+        # advice table. It is not a failure and must not be reported as one.
+        "run cancelled",
+        AdviceCode.RUN_CANCELLED,
+        "The run was cancelled on request; nothing failed. Start a new run "
+        "when you are ready.",
     ),
     (
-        "license server",
-        AdviceCode.LICENSE_SERVER_UNREACHABLE,
-        "The licence server did not answer. Confirm network access to the "
-        "Ansys licence server, then run the design again.",
+        # Ansys prints "FlexNet Licensing error:" on nearly every licence
+        # failure, so the specific reasons must be read before that wrapper.
+        "licensed number of users",
+        AdviceCode.LICENSE_SEATS_EXHAUSTED,
+        "Every Maxwell licence seat is in use. Wait for a seat, or ask the "
+        "licence administrator to free one, then run again.",
     ),
     (
-        "flexnet",
-        AdviceCode.LICENSE_SERVER_UNREACHABLE,
-        "The licence server did not answer. Confirm network access to the "
-        "Ansys licence server, then run the design again.",
+        "has expired",
+        AdviceCode.LICENSE_EXPIRED,
+        "The Maxwell licence has expired. Ask the licence administrator for a "
+        "current licence file, then run again.",
     ),
     (
         "no license available",
@@ -67,29 +82,44 @@ _RULES: tuple[tuple[str, str, str], ...] = (
         "ask the licence administrator, then run the design again.",
     ),
     (
+        "license file",
+        AdviceCode.LICENSE_CONFIGURATION_UNREADABLE,
+        "AEDT could not read its licence configuration. Open the Ansys License "
+        "Management Center, confirm the licence server entry, then run the "
+        "design again.",
+    ),
+    (
+        "license server",
+        AdviceCode.LICENSE_SERVER_UNREACHABLE,
+        "The licence server did not answer. Confirm `ANSYSLMD_LICENSE_FILE` "
+        "points at the licence server and that ports 1055 and 2325 are "
+        "reachable, then run again.",
+    ),
+    (
+        "flexnet",
+        AdviceCode.LICENSE_FLEXNET_ERROR,
+        "AEDT reported a FlexNet licensing error. The error number in the text "
+        "above identifies it; check the Ansys License Management Center, View "
+        "Status, then run again.",
+    ),
+    (
         "license",
         AdviceCode.LICENSE_UNAVAILABLE,
-        "AEDT reported a licensing problem. Check the Ansys licence status, "
-        "then run the design again.",
+        "AEDT reported a licensing problem. Check the Ansys License Management "
+        "Center, then run the design again.",
     ),
     (
         "no module named 'ansys",
         AdviceCode.INSTALLATION_PYAEDT_MISSING,
         "PyAEDT is not installed in this interpreter. Install it with "
-        "`pip install pyaedt` into the same environment that runs the "
-        "application.",
+        "`.venv/Scripts/python.exe -m pip install pyaedt`, into the same "
+        "environment that runs the application.",
     ),
     (
         "no module named 'femm",
         AdviceCode.INSTALLATION_FEMM_MISSING,
         "pyFEMM is not installed, or FEMM 4.2 is not present. Install FEMM "
         "4.2 and `pip install pyfemm`, or choose a Maxwell backend.",
-    ),
-    (
-        "is not installed",
-        AdviceCode.INSTALLATION_AEDT_NOT_REACHABLE,
-        "AEDT 2025 R2 Commercial was not found. Install it, or select a "
-        "backend that does not need it.",
     ),
     (
         "failed to connect",
@@ -112,10 +142,16 @@ _RULES: tuple[tuple[str, str, str], ...] = (
         "start a new run, which gets its own directory.",
     ),
     (
+        # "Engine Detected Error" is AEDT's generic wrapper for any solver-side
+        # death, so it can only point at where the real reason was written.
         "engine detected error",
-        AdviceCode.FILE_MISSING_SOLVER_DATA,
-        "The AEDT solver engine rejected the project files. Start a new run "
-        "rather than solving this directory again.",
+        AdviceCode.SOLVER_STOPPED_EARLY,
+        "AEDT's solver stopped before finishing, so no reported value can be "
+        "trusted. Its own reason is in this run's application log, on the "
+        "`AEDT [analyze]:` lines. Common causes: a solver child process that "
+        "could not start (check the AEDT installation and any antivirus "
+        "blocking `ansysedt.exe`), an out-of-memory solve, or a licence lost "
+        "mid-solve.",
     ),
     (
         "being used",
@@ -124,16 +160,16 @@ _RULES: tuple[tuple[str, str, str], ...] = (
         "explorer that has it open, then start a new run.",
     ),
     (
+        # Reads and refused COM calls produce this too, so it cannot presume a
+        # write.
         "permission denied",
         AdviceCode.FILE_PERMISSION_DENIED,
-        "The application may not write there. Save the project into a "
-        "writable folder, then start a new run.",
+        _DENIED_ACTION,
     ),
     (
         "access is denied",
         AdviceCode.FILE_PERMISSION_DENIED,
-        "The application may not write there. Save the project into a "
-        "writable folder, then start a new run.",
+        _DENIED_ACTION,
     ),
     (
         "permeability",
@@ -143,10 +179,12 @@ _RULES: tuple[tuple[str, str, str], ...] = (
         "revision the solver accepts.",
     ),
     (
+        # Any text containing the word matches, which is not enough to claim the
+        # solver rejected anything. It can only point, not conclude.
         "material",
         AdviceCode.MATERIAL_REJECTED_BY_SOLVER,
-        "The solver rejected the pinned material. Open Material Studio and "
-        "confirm the pinned revision and its B-H series.",
+        "AEDT's message mentions a material. Check the pinned revision and its "
+        "B-H series in Material Studio.",
     ),
 )
 
@@ -194,12 +232,14 @@ def convergence_advice(
                 "the mesh intent, then run again."
             ),
         )
+    # Only a target that exists and was missed may be named: with no target the
+    # sentence would invent one, and AEDT's own "did not converge" stands alone.
+    missed = f" without meeting its {target_percent:g} percent target" if target_missed else ""
     return FailureAdvice(
         code=AdviceCode.CONVERGENCE_NOT_REACHED,
         action=(
-            f"The solve ended at {final_error_percent:g} percent error "
-            "without meeting its target. Treat the reported values as "
-            "unconverged, refine the mesh intent or relax the target, then "
-            "run again."
+            f"The solve ended at {final_error_percent:g} percent error"
+            f"{missed}. Treat the reported values as unconverged, refine the "
+            "mesh intent or relax the target, then run again."
         ),
     )

@@ -305,3 +305,49 @@ def test_an_axial_disc_is_placed_directly_and_never_rotated() -> None:
     assert modeler.circles[0]["orientation"] == "XY"
     assert modeler.circles[0]["origin"] == [0.008, 0.011, 0.004]
     assert modeler.rotations == []
+
+
+class _ODesktop:
+    """Records the GetMessages call, as AEDT's COM desktop object receives it."""
+
+    def __init__(self, messages: Any) -> None:
+        self._messages = messages
+        self.calls: list[tuple[Any, ...]] = []
+
+    def GetMessages(self, project: str, design: str, level: int) -> Any:  # noqa: N802 - AEDT's COM name
+        self.calls.append((project, design, level))
+        return self._messages
+
+
+class _MessagingApp:
+    def __init__(self, messages: Any) -> None:
+        self.odesktop = _ODesktop(messages)
+        self.project_name = "Boost_inductor"
+        self.design_name = "Boost_inductor_3D"
+
+
+def test_the_desktop_channel_is_read_for_this_project_and_design() -> None:
+    """The whole channel, oldest first, at severity 0 so nothing is filtered.
+
+    Without this, the real read had no coverage at all: the capture tests drive
+    the fake's channel, so a wrong `GetMessages` arity would have shipped.
+    """
+    app = _MessagingApp(["Unable to create child process: 3dedy", 42])
+
+    lines = LiveAppExtraction(app).desktop_messages()
+
+    assert app.odesktop.calls == [("Boost_inductor", "Boost_inductor_3D", 0)]
+    assert lines == ("Unable to create child process: 3dedy", "42")
+
+
+def test_a_channel_that_says_nothing_reads_as_an_empty_tuple() -> None:
+    assert LiveAppExtraction(_MessagingApp(None)).desktop_messages() == ()
+
+
+def test_an_unreadable_channel_raises_so_the_caller_can_log_the_reason() -> None:
+    """Swallowing it here would make an unreachable AEDT look like a quiet one."""
+    app = _MessagingApp(())
+    del app.odesktop
+
+    with pytest.raises(AttributeError):
+        LiveAppExtraction(app).desktop_messages()
