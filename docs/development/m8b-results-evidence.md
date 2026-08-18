@@ -2,8 +2,8 @@
 
 - Milestone: M8b, scalar normalized results
 - Plan: [2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md)
-- Status: implementation complete; **live solver evidence is still outstanding**
-  and only Fabio Posser can record it
+- Status: **accepted by Fabio Posser on 2026-08-18.** All three backends have
+  recorded live evidence below, along with the two defects that session found.
 
 ## What M8b changed
 
@@ -79,28 +79,78 @@ while recording its diagnostic, FEMM's per-winding scalars and cycle-mean
 copper loss, manifest population, both export files and their artifacts, and
 the Review results section.
 
-## Live evidence still to record
+## Live evidence, one run per backend, 2026-08-18
+
+One AEDT seat at a time, AEDT 2025 R2 Commercial and FEMM 4.2. The Maxwell runs
+use the M8b test design (one winding, 20 turns, 2 A RMS at 125 kHz, no DC bias);
+the FEMM run uses the two-winding project of its own live test.
+
+| Quantity | Maxwell 3D | Maxwell 2D | FEMM |
+| --- | --- | --- | --- |
+| Resistance | 0.073 144 ohm | 0.076 165 ohm, scaled to the whole turn from the 0.039 909 ohm diagonal | 15.973 / 15.978 mohm |
+| Inductance | 21.4235 uH | 16.6633 uH | 42 uH each |
+| Impedance | j16.826 ohm | j13.087 ohm | j26.343 ohm |
+| Matrices | available | available, 1x1 R and L | `matrices.not_exposed` |
+| Copper loss | 292.84 mW | 159.75 mW | 67.22 mW |
+| Core loss | 80.68 mW | 57.30 mW | `core-loss.not_reported` |
+| Total loss | derived | derived, 217.05 mW | `total-loss.not_reported` |
+| Magnetic energy | `magnetic-energy.not_exposed` | `magnetic-energy.not_exposed` | `magnetic-energy.not_reported` |
+| Convergence | 1 pass, 0.544% | 3 passes, 0.00062% | `convergence.not_exposed` |
+
+Each Maxwell reactance is its own cross-check against its own inductance at the
+run frequency: 2 pi x 125 kHz x 16.6633 uH = 13.09 ohm in 2D, and the same
+arithmetic gives 16.83 ohm in 3D. The matrix diagonal and the separately
+reported impedance are therefore two consistent readings of one solution.
+
+The magnetic-energy row is what the backend split exists for, and both halves
+are now observed live: Maxwell *cannot* report it, FEMM merely *is not asked*.
+
+The 2D matrix returning finite values on the same expressions that read NaN in
+3D is the independent confirmation that those names were never the problem --
+see the dead-solver defect below.
+
+### Commands
 
 ```bash
-.venv/Scripts/python.exe -m pytest -m aedt -q
+.venv/Scripts/python.exe -m pytest tests/integration/aedt/test_maxwell_results_live.py -m aedt -q
 ```
 
-Requires `INDUCTOR_AEDT_RELEASE=2025.2` and `INDUCTOR_AEDT_EDITION=commercial`.
-`tests/integration/aedt/test_maxwell_results_live.py` runs one Maxwell 3D and
-one Maxwell 2D solve and asserts every requested scalar quantity is accounted
-for, each one available with a unit and a provenance or unavailable with a
-dotted reason.
+with `INDUCTOR_AEDT_RELEASE=2025.2` and `INDUCTOR_AEDT_EDITION=commercial`. The
+Maxwell 2D leg reports `1 passed in 91.76s`; the 3D leg solves in about 16
+minutes on this machine.
 
 ```bash
-.venv/Scripts/python.exe -m pytest -m femm -q
+INDUCTOR_FEMM_LIVE=1 .venv/Scripts/python.exe -m pytest -m femm -q -rs
 ```
 
-Requires `INDUCTOR_FEMM_LIVE=1` with `pyfemm` installed.
+`3 passed, 1 skipped`. The skip is `tests/integration/femm/test_material_handoff.py`,
+which needs `INDUCTOR_M5A_PROJECT` and is not M8b scope.
 
-Record here, once run, the exact `results.json` from one run per backend:
-which quantities came back available with which units and provenance, and
-every unavailable quantity with its reason. That table is the M8b exit
-criterion made concrete.
+### A live test had rotted behind its marker
+
+`tests/integration/femm/test_femm_solve_live.py` still asserted
+`manifest.results is None` -- the M8a shape, with the comment "M8a normalizes
+nothing; M8b owns results" -- so it failed the first time it met M8b behaviour.
+Live tests sit behind the `aedt` and `femm` markers and the ordinary gate never
+runs them, so nothing had noticed for eight days. It now asserts the M8b
+contract: a solved run carries a result set, for the FEMM backend, covering
+exactly the requested outputs.
+
+Worth keeping in mind for M9 and beyond: a marker that keeps a test out of the
+gate also keeps it out of maintenance.
+
+### Still open after this session
+
+Maxwell 2D asks for the named expression `Mag_J`, which the 2D design does not
+define:
+
+```
+cannot find the named expression   quantity = Mag_J, object_name = w1_C001
+```
+
+The read error is tolerated as designed and no scalar result is affected, but
+M8c's 2D `current-density` cannot report until that expression is corrected.
+Not fixed here, because it is M8c's quantity and this session was M8b's.
 
 ## The report-quantity names, settled live on 2026-08-18
 

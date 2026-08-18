@@ -108,15 +108,16 @@ before the next plan freezes assumptions that depend on it.
     DC-biased run reports the combined field with a label, with the AC-only
     entries unavailable, because one nonlinear solve cannot separate them.
 
-  M8 acceptance note, 2026-08-18: the recorded live evidence is the Maxwell 3D
-  session of that day, in
-  [m8b-results-evidence.md](../../development/m8b-results-evidence.md) -- the
-  enumerated AC Magnetic report vocabulary, one completed solve's matrix, loss
-  and convergence values, and the removal of `Total_Energy`. That session also
-  found a dead solver being reported as a `succeeded` run, now refused. A
-  Maxwell 2D and a FEMM live results run are **not** recorded; M8a's and M8c's
-  own evidence records still hold only their earlier sessions. Acceptance was
-  Fabio Posser's call with that gap known.
+  M8 acceptance note, 2026-08-18: the recorded live evidence covers **one run
+  per backend** -- Maxwell 3D, Maxwell 2D and FEMM -- in
+  [m8b-results-evidence.md](../../development/m8b-results-evidence.md), together
+  with the enumerated AC Magnetic report vocabulary. That session closed both of
+  M8b's recorded risks, removed `Total_Energy` as a quantity AC Magnetic does not
+  have, and found two defects the risks had not predicted: a dead solver being
+  reported as a `succeeded` run, now refused by AEDT's own profile verdict, and a
+  live FEMM test that had rotted behind its marker. One item stays open and is
+  M8c's, not M8b's: Maxwell 2D asks for the named expression `Mag_J`, which its
+  design does not define, so 2D `current-density` cannot report.
 
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`
