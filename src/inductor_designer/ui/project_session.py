@@ -12,7 +12,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from inductor_designer.adapters.system.app_logging import LOGGER_NAME
 from inductor_designer.domain.project import InductorProject
@@ -23,6 +23,10 @@ _logger = logging.getLogger(LOGGER_NAME)
 # Deep enough to cover a working session's edits, bounded so a long session
 # cannot grow the process without limit. Each entry is one immutable project.
 UNDO_DEPTH = 50
+
+# Long enough that dragging a numeric field does not write a file per frame,
+# short enough that a crash loses at most this much work.
+AUTOSAVE_DEBOUNCE_MS = 2000
 
 
 class ProjectSession(QObject):
@@ -38,6 +42,8 @@ class ProjectSession(QObject):
         document_path: Path | None = None,
         save_callback: Callable[[InductorProject], None] | None = None,
         open_callback: Callable[[Path], InductorProject] | None = None,
+        autosave_callback: Callable[[InductorProject, Path | None], None] | None = None,
+        recovery_cleanup: Callable[[], None] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -55,6 +61,15 @@ class ProjectSession(QObject):
         self._saved_project: InductorProject | None = (
             project if document_path is not None else None
         )
+        self._autosave_callback = autosave_callback
+        self._recovery_cleanup = recovery_cleanup
+        self._autosave_pending = False
+        # Parented to self: Qt tears the timer down (and stops it) when this
+        # session is destroyed, with no separate cleanup step to remember.
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
+        self._autosave_timer.timeout.connect(self.flushAutosave)
 
     @property
     def project(self) -> InductorProject:
@@ -82,6 +97,7 @@ class ProjectSession(QObject):
         self._refresh_dirty()
         self.undoStackChanged.emit()
         self.projectChanged.emit()
+        self._schedule_autosave()
 
     def _push_undo(self, project: InductorProject) -> None:
         self._undo.append(project)
@@ -101,6 +117,7 @@ class ProjectSession(QObject):
         self.undoStackChanged.emit()
         self.projectChanged.emit()
         self.set_status("Undid the last edit")
+        self._schedule_autosave()
         return True
 
     @Slot(result=bool)
@@ -113,6 +130,7 @@ class ProjectSession(QObject):
         self.undoStackChanged.emit()
         self.projectChanged.emit()
         self.set_status("Redid the last undone edit")
+        self._schedule_autosave()
         return True
 
     def _get_can_undo(self) -> bool:
@@ -150,6 +168,37 @@ class ProjectSession(QObject):
         self._status_message = message
         self.statusMessageChanged.emit()
 
+    def _schedule_autosave(self) -> None:
+        if self._autosave_callback is None:
+            return
+        self._autosave_pending = True
+        # Restarting on every edit, not just starting once, is the coalescing
+        # behaviour itself: a timer already running is pushed back out to the
+        # full interval, so a burst of edits (e.g. dragging a numeric field)
+        # writes once, carrying whatever the LAST edit in the burst was.
+        self._autosave_timer.start()
+
+    @Slot()
+    def flushAutosave(self) -> None:
+        """Write the pending snapshot now. Never raises: a failed autosave must
+        not take the edit or the session with it."""
+        self._autosave_timer.stop()
+        if not self._autosave_pending or self._autosave_callback is None:
+            return
+        self._autosave_pending = False
+        try:
+            self._autosave_callback(self.project, self._document_path)
+        except Exception as error:  # noqa: BLE001 - autosave must never wedge the UI
+            _logger.warning("Autosave failed: %s", error)
+            self.set_status(f"Unable to autosave a recovery copy: {error}")
+
+    def _drop_recovery_snapshot(self) -> None:
+        """What is now on disk needs no recovery copy."""
+        self._autosave_pending = False
+        self._autosave_timer.stop()
+        if self._recovery_cleanup is not None:
+            self._recovery_cleanup()
+
     @Slot(result=bool)
     def saveProject(self) -> bool:
         # Guard on the persister, not on the path: production always sets both
@@ -169,6 +218,7 @@ class ProjectSession(QObject):
             return False
         self._saved_project = project
         self._refresh_dirty()
+        self._drop_recovery_snapshot()
         _logger.info("Project saved to %s.", self._document_path)
         self.set_status("Saved")
         return True
@@ -197,6 +247,7 @@ class ProjectSession(QObject):
             return False
         self._saved_project = project
         self._refresh_dirty()
+        self._drop_recovery_snapshot()
         self.documentPathChanged.emit()
         _logger.info("Project saved to %s.", path)
         self.set_status(f"Saved as {path.name}")

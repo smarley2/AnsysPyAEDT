@@ -234,13 +234,28 @@ def main() -> int:
         from inductor_designer.adapters.persistence.project_repository import (
             ProjectRepository,
         )
+        from inductor_designer.adapters.persistence.recovery_store import RecoveryStore
         from inductor_designer.adapters.persistence.schema_repository import (
             SchemaRepository,
         )
+        from inductor_designer.adapters.system.environment import recovery_directory
         from inductor_designer.ui.project_session import ProjectSession
 
         project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
-        session = ProjectSession(project, args.project, open_callback=_load_project)
+        recovery_store = RecoveryStore(recovery_directory(), project_repository)
+
+        def autosave_project(
+            updated_project: InductorProject, document_path: Path | None
+        ) -> None:
+            recovery_store.write(updated_project, document_path)
+
+        session = ProjectSession(
+            project,
+            args.project,
+            open_callback=_load_project,
+            autosave_callback=autosave_project,
+            recovery_cleanup=recovery_store.clear,
+        )
 
         def save_project(updated_project: InductorProject) -> None:
             # Reads the session's *current* document path, not `args.project`:
