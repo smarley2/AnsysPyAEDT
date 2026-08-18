@@ -93,5 +93,6 @@ def build_preview_entries(model: GeometryModel) -> list[PreviewEntry]:
         # where the current flows, the bead for which end the winding starts at.
         arrow = wrap_arrow(model.core, packing, sense, current)
         entries.append(PreviewEntry(MeshGeometry(arrow), colour, 1.0))
-        entries.append(PreviewEntry(MeshGeometry(start_bead(model.core, packing)), colour, 1.0))
+        bead = start_bead(model.core, packing, sense)
+        entries.append(PreviewEntry(MeshGeometry(bead), colour, 1.0))
     return entries

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection, mmf_sign
 from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedLayer, PackedWinding
+from inductor_designer.geometry.packing import PackedLayer, PackedWinding, start_azimuth_deg
 from inductor_designer.geometry.primitives import Vec3, half_plane_point, sample_path
 from inductor_designer.geometry.turn_path import build_turn_loop
 
@@ -330,18 +330,24 @@ def _sphere(center: Vec3, radius: float, segments: int = 12) -> Mesh:
 
 
 def start_bead(
-    core: FinishedCore, packing: PackedWinding, segments: int = 12
+    core: FinishedCore,
+    packing: PackedWinding,
+    sense: WindingDirection,
+    segments: int = 12,
 ) -> Mesh:
     """A bead where the winding starts: its first turn, on the outer wall.
 
     Sector, lean and arrow all leave the two ends of a winding looking alike,
-    so this says which end the wire was started from -- the lead-in the packing
-    reserves at `lead_in_deg`, before the first turn's station.
+    so this says which end the wire was started from -- the lead the packing
+    reserves before the first turn's station. Which of the two ends that is
+    depends on the wound sense (`packing.start_azimuth_deg`); the bead sat at
+    the low-azimuth end either way until 2026-08-18, so flipping the sense
+    leaned the turns over but left the start where it was.
     """
     d = packing.insulated_diameter_m
     layer = packing.layers[0]
     radius = core.r_outer_m + layer.radial_build_m + 2.0 * d
-    center = half_plane_point(packing.lead_in_deg, radius, 0.0)
+    center = half_plane_point(start_azimuth_deg(packing, sense), radius, 0.0)
     return _sphere(center, 1.6 * d, segments)
 
 

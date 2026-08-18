@@ -192,22 +192,45 @@ def test_the_wrap_arrow_stays_clear_of_the_wire() -> None:
             assert z > turn_top or radius > turn_outer or radius < turn_bore
 
 
+def _mean_azimuth_deg(mesh: Mesh) -> float:
+    """Mean vertex azimuth, wrapped into [0, 360) as the sector angles are."""
+    azimuths = [
+        math.degrees(math.atan2(y, x)) % 360.0
+        for x, y in zip(mesh.positions[0::3], mesh.positions[1::3], strict=True)
+    ]
+    return sum(azimuths) / len(azimuths)
+
+
 def test_the_start_bead_sits_at_the_lead_in_end_outside_the_turns() -> None:
     """Which end the wire started from is otherwise unreadable: sector, lean and
     arrow all look the same at either end."""
     packing = pack_winding(CORE, WindingSpec("w1", 8, D, 20.0, 180.0, 0.0001, 0.001))
     build = packing.layers[0].radial_build_m
 
-    mesh = start_bead(CORE, packing)
+    mesh = start_bead(CORE, packing, CCW)
     vertices = list(
         zip(mesh.positions[0::3], mesh.positions[1::3], mesh.positions[2::3], strict=True)
     )
-    azimuths = [math.degrees(math.atan2(y, x)) for x, y, _ in vertices]
 
     assert min(math.hypot(x, y) for x, y, _ in vertices) > CORE.r_outer_m + build
-    assert sum(azimuths) / len(azimuths) == pytest.approx(packing.lead_in_deg, abs=1.0)
+    assert _mean_azimuth_deg(mesh) == pytest.approx(packing.lead_in_deg, abs=1.0)
     # The lead-in is the low-azimuth end of the sector, before the first turn.
     assert packing.start_deg <= packing.lead_in_deg < packing.layers[0].station_deg[0]
+
+
+def test_the_start_bead_moves_to_the_other_end_when_the_sense_flips() -> None:
+    """Stations run up in azimuth, so a clockwise winding is fed in at the high
+    end of its sector. The bead sat at the low end whichever way the winding was
+    wound, so flipping the sense leaned the turns over and left the start put.
+    """
+    packing = pack_winding(CORE, WindingSpec("w1", 8, D, 20.0, 180.0, 0.0001, 0.001))
+
+    ccw = _mean_azimuth_deg(start_bead(CORE, packing, CCW))
+    cw = _mean_azimuth_deg(start_bead(CORE, packing, CW))
+
+    assert ccw == pytest.approx(packing.lead_in_deg, abs=1.0)
+    assert cw == pytest.approx(packing.lead_out_deg % 360.0, abs=1.0)
+    assert cw > packing.layers[0].station_deg[-1] > ccw
 
 
 def test_the_arrow_is_its_own_mesh_and_not_part_of_the_wire() -> None:

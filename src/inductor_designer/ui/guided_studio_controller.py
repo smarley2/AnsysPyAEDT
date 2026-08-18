@@ -165,6 +165,7 @@ class GuidedStudioController(QObject):
         # a true JS array -- `Array.isArray` is false for `previewEntries`
         # too -- so do not reach for that when testing this.)
         drawing["circles"] = list(drawing["circles"])
+        drawing["starts"] = list(drawing["starts"])
         return drawing
 
     cutPlaneDrawing = Property(
