@@ -8,6 +8,12 @@ through this module's `RedactingFormatter`; a handler added later with a
 different formatter (Tasks 3, 6, 8 may add one to this logger) receives
 whatever `logging.Formatter.format` produces and is not redacted by this
 module.
+
+The mechanism, because it is worth knowing before debugging a leak:
+`logging.Formatter.format` caches the formatted traceback on the shared
+`LogRecord` as `record.exc_text`, and it caches the RAW one. So a second
+handler does not merely skip redaction -- it can be handed text this module
+already computed. Attach `RedactingFormatter` to any handler on this logger.
 """
 
 from __future__ import annotations
