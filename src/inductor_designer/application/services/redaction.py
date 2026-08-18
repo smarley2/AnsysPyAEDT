@@ -13,6 +13,23 @@ Detected Error`` about a missing ``.adp`` diagnosable, and such an extension
 names nobody -- whereas the ``.doe`` of ``C:\\Users\\jane.doe`` is a surname.
 Nothing structural separates the two, so only the allowlist below is kept.
 
+One shape is knowingly beyond these rules: a path with no allowlisted extension
+whose LAST component contains a space, such as ``C:\\Users\\Jane Doe``,
+keeps the text after that space. A final segment that admitted spaces would
+instead swallow the prose after every path -- ``saved C:\\a\\b.log
+successfully`` would lose its last word -- and that trade was measured as worse.
+The token pass does NOT rescue this shape, and it would be comfortable to think
+otherwise: by the time it runs, the path rule has already consumed
+``C:\\Users\\Jane`` and left `` Doe`` alone, so a supplied token of
+``Jane Doe`` no longer matches anything. Only a token equal to the stranded word
+itself would. What limits the exposure is that a BRUSA login is a single token
+(`fpo01`, `m.signer`), so a user-profile path has no space to break on; the
+residual is a directory somebody named with a space, and the stranded text is
+its last word. Both cases are pinned by tests so this stays visible instead of
+being rediscovered as a bug, and it is recorded as an open question in the M9
+plan, because choosing between a stranded word and destroyed prose is a product
+call.
+
 Logs written inside a run directory are NOT redacted: they stay on the user's
 own machine, where the absolute path is the useful part. Redaction happens on
 the way into the bundle, not on the way onto disk.

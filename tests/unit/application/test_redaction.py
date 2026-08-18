@@ -447,3 +447,41 @@ def test_a_three_character_token_is_still_redacted() -> None:
     """
     context = RedactionContext(user_names=("fpo",))
     assert redact_text("run by fpo", context) == f"run by {REDACTED_USER}"
+
+
+def test_a_spacey_final_component_keeps_its_last_word() -> None:
+    """A measured limit, pinned so nobody rediscovers it as a bug.
+
+    A path with no allowlisted extension whose last component contains a space
+    keeps the text after that space. Do not close this by making the final
+    segment space-tolerant: that was tried, and it swallows the prose after
+    every path in ordinary diagnostics. The caller closes it instead by
+    supplying the machine's own login, which is a single token at BRUSA.
+    """
+    assert redact_text(r"opened C:\Users\Jane Doe", CONTEXT) == (
+        f"opened {REDACTED_PATH} Doe"
+    )
+
+
+def test_a_supplied_login_does_not_rescue_the_spacey_component_shape() -> None:
+    """The tempting assumption, disproved and pinned.
+
+    It reads as though the token pass is a safety net under the path rules, so
+    that anything they strand a supplied user name would still remove. It is
+    not: the path rule consumes ``C:\\Users\\Jane`` first and leaves `` Doe``,
+    which the token ``Jane Doe`` can no longer match. Only a token equal to the
+    stranded word itself would. Whoever next reasons about the guarantee needs
+    this written down rather than assumed.
+    """
+    context = RedactionContext(user_names=("Jane Doe",))
+
+    assert redact_text(r"opened C:\Users\Jane Doe", context) == (
+        f"opened {REDACTED_PATH} Doe"
+    )
+
+    # A token equal to the stranded word does remove it, which is the only
+    # configuration that closes this shape.
+    stranded = RedactionContext(user_names=("Doe",))
+    assert redact_text(r"opened C:\Users\Jane Doe", stranded) == (
+        f"opened {REDACTED_PATH} {REDACTED_USER}"
+    )

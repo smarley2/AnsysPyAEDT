@@ -3505,7 +3505,7 @@ The M9 exit criterion is *forced UI and solver failures preserve the last valid 
 
 These are product rulings, not implementation choices. Each names what the plan does until he rules and what changes when he does. None of them changes the task structure.
 
-Questions 6 and 7 were ruled on 2026-08-18 and stay here, struck through, so the reasoning lives with the question and not only in the commit that settled it. Seven remain open, all with a working default.
+Questions 6 and 7 were ruled on 2026-08-18 and stay here, struck through, so the reasoning lives with the question and not only in the commit that settled it. Question 10 was added during Task 1, from a defect the implementation surfaced. Eight remain open, all with a working default.
 
 1. **Autosave interval.** How much unsaved work may a crash cost? The plan uses a 2000 ms debounce after the last valid edit (`AUTOSAVE_DEBOUNCE_MS` in `ui/project_session.py`). A ruling changes one constant.
 2. **Recovery snapshot location.** The plan writes it to `%LOCALAPPDATA%\InductorDesigner\recovery\`, so a shareable project directory never collects stray autosave files and a read-only project directory still autosaves. The alternative is beside the project document, where the user can see it. A ruling changes `recovery_directory()` in `adapters/system/environment.py`.
@@ -3515,6 +3515,7 @@ Questions 6 and 7 were ruled on 2026-08-18 and stay here, struck through, so the
 6. ~~Whether the bundle may contain the Project document.~~ **Ruled 2026-08-18: excluded.** Reasoning in the bundle-contents decision above.
 7. ~~Whether the bundle may contain AEDT's own log files.~~ **Ruled 2026-08-18: excluded, with the desktop message channel captured through this application's own redacting logger instead.** Reasoning in the bundle-contents decision; implementation in Task 3 Step 0.
 8. **Whether reconciliation of an interrupted run is automatic.** The plan reconciles at startup and on Open, so a stale `running` manifest can never be read as a live run. The alternative is reconciling only when the user asks, which leaves an untruthful document on disk until they do.
+10. **A path whose last component contains a space, with no allowlisted extension, strands its last word.** Found while implementing Task 1 and pinned by two tests. `opened C:\Users\Jane Doe` redacts to `opened [redacted-path] Doe`. The alternative -- letting a final path segment contain spaces -- was measured and is worse: it swallows the prose after every path, so `saved C:\a\b.log successfully` loses its last word. The token pass does not rescue it, because the path rule has already split the name before the tokens are applied. Exposure is limited by BRUSA logins being single tokens, so a user-profile path has no space to break on; the residual is a directory somebody named with a space. The plan keeps the stranded word rather than destroy prose. Choosing the other way is a product call, and it is one constant plus one regex branch to change.
 9. **How long interrupted run directories are kept.** The plan never deletes one: it is the user's evidence. A retention rule (age, count) would need its own ruling and its own visible message before anything is removed.
 
 ## Known risks
