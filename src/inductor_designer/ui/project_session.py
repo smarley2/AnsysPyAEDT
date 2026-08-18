@@ -160,13 +160,14 @@ class ProjectSession(QObject):
                 "into. Start the application with --project."
             )
             return False
+        project = self.project
         try:
-            self._save_callback(self.project)
+            self._save_callback(project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
             _logger.warning("Save failed: %s", error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._saved_project = self.project
+        self._saved_project = project
         self._refresh_dirty()
         _logger.info("Project saved to %s.", self._document_path)
         self.set_status("Saved")
@@ -186,14 +187,15 @@ class ProjectSession(QObject):
         # main.py) saves to `self.document_path`, so this is what makes "save
         # under this new name" and "save" the same operation underneath.
         self._document_path = path
+        project = self.project
         try:
-            self._save_callback(self.project)
+            self._save_callback(project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
             self._document_path = previous_path
             _logger.warning("Save as %s failed: %s", path, error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._saved_project = self.project
+        self._saved_project = project
         self._refresh_dirty()
         self.documentPathChanged.emit()
         _logger.info("Project saved to %s.", path)

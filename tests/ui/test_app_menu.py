@@ -25,8 +25,15 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 pytest.importorskip("PySide6")
 
 import PySide6.QtGui as QtGui  # noqa: E402
-from PySide6.QtCore import QMetaObject, QObject, QUrl  # noqa: E402
-from PySide6.QtGui import QAccessible, QGuiApplication  # noqa: E402
+from PySide6.QtCore import (  # noqa: E402
+    QMetaObject,
+    QObject,
+    QtMsgType,
+    QUrl,
+    qInstallMessageHandler,
+)
+from PySide6.QtGui import QAccessible, QGuiApplication, QKeySequence  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 
 import inductor_designer.ui.main as main_module  # noqa: E402
 from inductor_designer import __version__  # noqa: E402
@@ -67,6 +74,21 @@ _KEEPALIVE: list[object] = []
 
 def _trigger(item: QObject) -> None:
     assert QMetaObject.invokeMethod(item, "triggered") is True
+
+
+def _capture_qml_messages() -> list[str]:
+    """Record every `qWarning`/`qCritical` message, which is how a QML
+    runtime error (e.g. an uncaught `ReferenceError`) surfaces -- this is the
+    exact mechanism `main.py`'s `_install_qml_logging()` prints to stderr.
+    Caller must restore the previous handler with `qInstallMessageHandler(None)`.
+    """
+    messages: list[str] = []
+
+    def handler(_mode: QtMsgType, _context: object, message: str) -> None:
+        messages.append(message)
+
+    qInstallMessageHandler(handler)
+    return messages
 
 
 def _accessible_text(item: QObject, part: QAccessible.Text) -> str:
@@ -176,6 +198,61 @@ def test_undo_and_redo_menu_items_reflect_and_drive_the_session_history() -> Non
     _trigger(redo_item)
     app.processEvents()
     assert session.project.description == "edited"
+
+
+def test_ctrl_z_and_ctrl_y_actually_undo_and_redo_with_no_qml_errors() -> None:
+    """The `Shortcut { onActivated: parent.triggered() }` wiring is dead:
+    `Shortcut` is a `QObject`, not an `Item`, so `parent` never resolves and
+    every keypress logs a QML `ReferenceError` instead of undoing anything.
+    `QTest.keySequence` delivers a real key event to the window, the same
+    path an actual keypress takes -- unlike calling the `Shortcut`'s
+    `activated` signal directly (`QMetaObject.invokeMethod`), which would
+    emit it unconditionally and could not tell a working shortcut from a
+    broken one, nor respect `enabled`.
+    """
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    root.requestActivate()
+    app.processEvents()
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence.Undo)
+        app.processEvents()
+
+        assert session.project.description == ""
+        assert not messages, messages
+
+        messages.clear()
+        QTest.keySequence(root, QKeySequence.Redo)
+        app.processEvents()
+
+        assert session.project.description == "edited"
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)
+
+
+def test_ctrl_z_does_nothing_when_undo_is_disabled() -> None:
+    """`Shortcut.enabled` defaults to `true` and, unless bound to the menu
+    item's own `enabled`, fires even when there is no project loaded at all
+    -- calling `projectSession.undo()` on a null `projectSession`.
+    """
+    _app, root = _bare_root()
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    assert undo_item.property("enabled") is False
+    root.requestActivate()
+    QGuiApplication.instance().processEvents()
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence.Undo)
+        QGuiApplication.instance().processEvents()
+
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)
 
 
 def test_exit_routes_through_the_same_unsaved_changes_guard_as_window_close() -> None:

@@ -80,6 +80,7 @@ ApplicationWindow {
             title: qsTr("Edit")
 
             MenuItem {
+                id: undoMenuItem
                 objectName: "undoMenuItem"
                 text: qsTr("Undo")
                 enabled: projectSession !== null && projectSession.canUndo
@@ -90,11 +91,14 @@ ApplicationWindow {
                 onTriggered: projectSession.undo()
 
                 Shortcut {
+                    objectName: "undoShortcut"
                     sequence: StandardKey.Undo
-                    onActivated: parent.triggered()
+                    enabled: undoMenuItem.enabled
+                    onActivated: undoMenuItem.triggered()
                 }
             }
             MenuItem {
+                id: redoMenuItem
                 objectName: "redoMenuItem"
                 text: qsTr("Redo")
                 enabled: projectSession !== null && projectSession.canRedo
@@ -105,8 +109,10 @@ ApplicationWindow {
                 onTriggered: projectSession.redo()
 
                 Shortcut {
+                    objectName: "redoShortcut"
                     sequence: StandardKey.Redo
-                    onActivated: parent.triggered()
+                    enabled: redoMenuItem.enabled
+                    onActivated: redoMenuItem.triggered()
                 }
             }
         }
