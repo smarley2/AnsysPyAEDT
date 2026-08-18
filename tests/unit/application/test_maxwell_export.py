@@ -26,15 +26,22 @@ from inductor_designer.application.ports.maxwell_exporter import (
 from inductor_designer.application.services.maxwell_export import (
     RunGenerationFailed,
     RunOutcome,
+    _with_advice,
     generate_run,
     run_manifest_json,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
-from inductor_designer.domain.project import InductorProject, MaterialRevisionSelection
+from inductor_designer.domain.project import (
+    InductorProject,
+    MaterialRevisionSelection,
+    RequestedOutput,
+)
 from inductor_designer.simulation.capabilities import (
     CapabilityReviewStatus,
     CapabilitySnapshot,
 )
+from inductor_designer.simulation.failure_advice import AdviceCode
+from inductor_designer.simulation.raw_results import RawConvergence, RawScalarResults
 from inductor_designer.simulation.run_contracts import (
     DimensionalRepresentation,
     ManifestStage,
@@ -210,6 +217,55 @@ def test_generate_and_solve_reaches_the_adapter_asking_for_a_solve(
         assert femm.requests[0].analyze is True
 
 
+class _ConvergedShortMaxwell3dExporter(RecordingMaxwell3dExporter):
+    """Reports a solve that used every pass without meeting its target."""
+
+    def export(self, request: Maxwell3dExportRequest) -> Maxwell3dExportResult:
+        result = super().export(request)
+        return replace(
+            result,
+            raw_results=RawScalarResults(
+                convergence=RawConvergence(passes=((1, 12.5), (2, 4.0)), converged=False)
+            ),
+        )
+
+
+def test_solved_run_carries_convergence_advice_through_to_the_manifest() -> None:
+    """M9 task 3: the recipe's own target and pass budget reach the manifest's
+    convergence quantity, not just the unit-tested `convergence_advice`."""
+    project = replace(
+        project_for_runs(),
+        simulation_recipe=replace(
+            project_for_runs().simulation_recipe,
+            maximum_passes=2,
+            percent_error=1.0,
+            requested_outputs=(RequestedOutput.CONVERGENCE,),
+        ),
+    )
+
+    outcome = generate_run(
+        project,
+        RunRequest(RunBackend.MAXWELL_3D, RunMode.GENERATE_AND_SOLVE),
+        CATALOG,
+        CAPABILITIES,
+        OUTPUT_DIRECTORY,
+        maxwell3d_exporter=_ConvergedShortMaxwell3dExporter(),
+        maxwell2d_exporter=RecordingMaxwell2dExporter(),
+        femm_solver=RecordingFemmSolver(),
+        run_id="convergence-advice",
+        application_version="0.6.0-test",
+    )
+
+    assert outcome.manifest.results is not None
+    entry = next(
+        quantity
+        for quantity in outcome.manifest.results.quantities
+        if quantity.quantity is RequestedOutput.CONVERGENCE
+    )
+    assert entry.approximation is not None
+    assert entry.approximation.startswith(f"{AdviceCode.CONVERGENCE_PASS_LIMIT}: ")
+
+
 def test_confirmed_unresolved_run_uses_geometry_only_adapter_boundary() -> None:
     project = project_for_runs()
     project = replace(
@@ -351,7 +407,7 @@ def test_adapter_exception_carries_failed_manifest_evidence(
             diagnostic=diagnostic,
         ),
     )
-    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.diagnostics == _with_advice((diagnostic,))
     assert manifest.artifacts == ()
     assert manifest.results is None
     assert manifest.windings[0].ac_rms_current_a == 2.0
@@ -469,7 +525,7 @@ def test_returned_failed_maxwell_stage_raises_with_preserved_manifest(
     stage = next(stage for stage in manifest.stages if stage.name == failed_stage)
     assert stage.status is StageStatus.FAILED
     assert stage.diagnostic == diagnostic
-    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.diagnostics == _with_advice((diagnostic,))
     assert manifest.geometry_only is geometry_only
     assert manifest.results is None
 
@@ -568,10 +624,12 @@ def test_nonconforming_maxwell_stage_sequence_is_failed_manifest(
     assert manifest.status is RunStatus.FAILED
     assert manifest.stages[-1].name == "stage-sequence"
     assert manifest.stages[-1].status is StageStatus.FAILED
-    assert manifest.diagnostics == (
-        "Maxwell adapter stage sequence mismatch: "
-        f"expected {expected_stages!r}; received "
-        f"{tuple(stage.name for stage in manifest.stages[:-1])!r}.",
+    assert manifest.diagnostics == _with_advice(
+        (
+            "Maxwell adapter stage sequence mismatch: "
+            f"expected {expected_stages!r}; received "
+            f"{tuple(stage.name for stage in manifest.stages[:-1])!r}.",
+        )
     )
 
 
@@ -652,7 +710,7 @@ def test_wrong_adapter_result_carries_failed_manifest_evidence(
             diagnostic=diagnostic,
         ),
     )
-    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.diagnostics == _with_advice((diagnostic,))
     assert manifest.artifacts == ()
     assert manifest.results is None
     assert manifest.windings[0].ac_rms_current_a == 2.0
@@ -717,7 +775,7 @@ def test_nonconforming_femm_generate_only_result_is_failed_evidence(
     assert manifest.stages[0].name == "generate"
     assert manifest.stages[0].status is StageStatus.FAILED
     assert manifest.stages[0].diagnostic == diagnostic
-    assert manifest.diagnostics == (diagnostic,)
+    assert manifest.diagnostics == _with_advice((diagnostic,))
     assert manifest.artifacts == ()
     assert manifest.results is None
     assert manifest.adapter_version == "recording-fake"

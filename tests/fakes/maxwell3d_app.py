@@ -187,6 +187,10 @@ class FakeMaxwell3dApp:
         self.fail_solution_values = False
         self.fail_field_value_for: str | None = None
         self.created_sheets: list[_FakeSheet] = []
+        # AEDT's message channel for this design. `fail_desktop_messages`
+        # lets a test prove a raising channel never masks the real failure.
+        self.desktop_message_lines: tuple[str, ...] = ()
+        self.fail_desktop_messages = False
         # Lets a test act (cancel a run, for example) exactly when the design
         # reaches a named call, without patching the adapter.
         self.on_call: dict[str, Callable[[], None]] = {}
@@ -355,6 +359,11 @@ class FakeMaxwell3dApp:
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None:
         self.released.append((close_projects, close_desktop))
+
+    def desktop_messages(self) -> tuple[str, ...]:
+        if self.fail_desktop_messages:
+            raise RuntimeError("boom in desktop_messages")
+        return self.desktop_message_lines
 
 
 class FakeMaxwell3dAppFactory:

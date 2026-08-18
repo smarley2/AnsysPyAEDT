@@ -10,6 +10,7 @@ from inductor_designer.application.services.result_normalization import (
     normalize_scalar_results,
 )
 from inductor_designer.domain.project import RequestedOutput
+from inductor_designer.simulation.failure_advice import AdviceCode
 from inductor_designer.simulation.raw_results import (
     RawConvergence,
     RawMatrix,
@@ -324,6 +325,29 @@ def test_convergence_reports_the_final_error_and_the_history() -> None:
     assert entry.provenance is not None
     assert "2 passes" in entry.provenance
     assert entry.unit == "percent"
+
+
+def test_convergence_stays_available_but_carries_advice_when_the_target_is_missed() -> None:
+    """M9 task 3: an unconverged solve reports its real number plus the
+    reading of it, never a silent gap and never a guess with no evidence."""
+    raw = RawScalarResults(
+        convergence=RawConvergence(passes=((1, 12.5), (2, 4.0)), converged=False)
+    )
+    result_set = normalize_scalar_results(
+        raw,
+        run_id="20260818-000000",
+        backend=RunBackend.MAXWELL_3D,
+        requested_outputs=(RequestedOutput.CONVERGENCE,),
+        provenance="Maxwell 3D solution data",
+        percent_error_target=1.0,
+        maximum_passes=2,
+    )
+    entry = find(result_set, RequestedOutput.CONVERGENCE, "device")
+
+    assert entry.availability is ResultAvailability.AVAILABLE
+    assert entry.value == 4.0
+    assert entry.approximation is not None
+    assert entry.approximation.startswith(f"{AdviceCode.CONVERGENCE_PASS_LIMIT}: ")
 
 
 def test_a_quantity_the_user_did_not_request_is_absent() -> None:

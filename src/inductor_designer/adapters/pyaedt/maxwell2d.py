@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Protocol, cast
@@ -24,6 +25,7 @@ from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
 from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
+from inductor_designer.adapters.system.app_logging import LOGGER_NAME
 from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExportRequest
 from inductor_designer.application.ports.maxwell_exporter import (
     MaxwellExportResult,
@@ -46,6 +48,24 @@ from inductor_designer.simulation.run_control import (
 from inductor_designer.simulation.run_control import (
     is_cancelled as _cancelled,
 )
+
+
+def _log_desktop_messages(app: Maxwell2dApp, stage: str) -> None:
+    """Record why AEDT failed, while the session that knows still exists.
+
+    The channel dies with the session at `release_live_app`, so this must run
+    from the stage-failure handler, before that release. A read that raises
+    is logged and swallowed: the run still reports its own stage error, never
+    this one.
+    """
+    logger = logging.getLogger(LOGGER_NAME)
+    try:
+        messages = app.desktop_messages()
+    except Exception as error:  # noqa: BLE001 - capture never masks the real failure
+        logger.warning("Could not read AEDT messages after %s failed: %s", stage, error)
+        return
+    for line in messages:
+        logger.error("AEDT [%s]: %s", stage, line)
 
 
 def _results_message(raw: RawScalarResults) -> str:
@@ -111,6 +131,8 @@ class Maxwell2dApp(Protocol):
     def save_project(self, path: str) -> bool: ...
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None: ...
+
+    def desktop_messages(self) -> tuple[str, ...]: ...
 
 
 class Maxwell2dAppFactory(Protocol):
@@ -443,6 +465,7 @@ class PyaedtMaxwell2dExporter:
                 except Exception as error:  # noqa: BLE001 - stage boundary
                     stages.append(StageRecord(name=name, succeeded=False, message=str(error)))
                     _emit(request.progress, name, StagePhase.FAILED, str(error))
+                    _log_desktop_messages(app, name)
                     try:
                         app.save_project(str(project_path))
                         stages.append(
@@ -477,6 +500,7 @@ class PyaedtMaxwell2dExporter:
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
                 _emit(request.progress, "save", StagePhase.FAILED, str(error))
+                _log_desktop_messages(app, "save")
                 return result()
             if cancelled_before is None and request.solve:
                 if _cancelled(request.cancellation):
@@ -494,6 +518,7 @@ class PyaedtMaxwell2dExporter:
                             StageRecord(name="analyze", succeeded=False, message=str(error))
                         )
                         _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
+                        _log_desktop_messages(app, "analyze")
                         return result()
                     else:
                         stages.append(

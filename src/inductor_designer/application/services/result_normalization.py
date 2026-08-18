@@ -14,6 +14,7 @@ from inductor_designer.application.services.field_normalization import (
     normalize_field_results,
 )
 from inductor_designer.domain.project import RequestedOutput
+from inductor_designer.simulation.failure_advice import convergence_advice
 from inductor_designer.simulation.raw_results import RawFieldSection, RawScalarResults
 from inductor_designer.simulation.result_vocabulary import (
     DEVICE_SCOPE,
@@ -341,7 +342,13 @@ def _total_loss(raw: RawScalarResults, provenance: str) -> NormalizedQuantity:
     )
 
 
-def _convergence(raw: RawScalarResults, provenance: str) -> NormalizedQuantity:
+def _convergence(
+    raw: RawScalarResults,
+    provenance: str,
+    *,
+    percent_error_target: float | None = None,
+    maximum_passes: int | None = None,
+) -> NormalizedQuantity:
     convergence = raw.convergence
     if convergence is None or not convergence.passes:
         return _missing(
@@ -359,11 +366,21 @@ def _convergence(raw: RawScalarResults, provenance: str) -> NormalizedQuantity:
         if convergence.converged is False
         else "convergence state not reported"
     )
+    advice = convergence_advice(
+        final_error_percent=final_error,
+        target_percent=percent_error_target,
+        completed_passes=final_pass,
+        maximum_passes=maximum_passes,
+        converged=convergence.converged,
+    )
     return _available(
         RequestedOutput.CONVERGENCE,
         DEVICE_SCOPE,
         final_error,
         f"{provenance}: {final_pass} passes, {state}",
+        # An unconverged solve stays AVAILABLE: the number is real, and the
+        # note is what stops it being read as a converged number.
+        approximation=None if advice is None else f"{advice.code}: {advice.action}",
     )
 
 
@@ -425,6 +442,8 @@ def normalize_scalar_results(
     provenance: str,
     dc_biased: bool = False,
     resistance_scale: Mapping[str, tuple[float, float]] | None = None,
+    percent_error_target: float | None = None,
+    maximum_passes: int | None = None,
 ) -> NormalizedResultSet:
     """One entry per requested scalar quantity per scope, never a silent gap.
 
@@ -452,7 +471,14 @@ def normalize_scalar_results(
         elif quantity is RequestedOutput.TOTAL_LOSS:
             quantities.append(_total_loss(raw, provenance))
         elif quantity is RequestedOutput.CONVERGENCE:
-            quantities.append(_convergence(raw, provenance))
+            quantities.append(
+                _convergence(
+                    raw,
+                    provenance,
+                    percent_error_target=percent_error_target,
+                    maximum_passes=maximum_passes,
+                )
+            )
         elif quantity is RequestedOutput.COPPER_LOSS:
             quantities.append(
                 _device_scalar(quantity, raw.copper_loss_w, raw, provenance)

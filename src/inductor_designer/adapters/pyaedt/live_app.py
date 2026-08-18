@@ -271,3 +271,19 @@ class LiveAppExtraction:
         if angle:
             self._app.modeler.rotate(created, axis="Z", angle=angle)
         return str(created)
+
+    def desktop_messages(self) -> tuple[str, ...]:
+        """AEDT's own message channel for this design, oldest first.
+
+        The only place a solver's reason for dying is stated: on 2026-08-18 a
+        run was recorded `succeeded` while this channel held "Unable to
+        create child process: 3dedy". Session-scoped, so it must be read
+        before the desktop is released.
+        """
+        try:
+            messages = self._app.odesktop.GetMessages(
+                self._app.project_name, self._app.design_name, 0
+            )
+        except Exception:  # noqa: BLE001 - a silent channel is not a failure
+            return ()
+        return tuple(str(line) for line in messages or ())

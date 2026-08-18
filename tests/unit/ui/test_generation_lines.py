@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from inductor_designer.application.services.maxwell_export import _with_advice
 from inductor_designer.simulation.run_contracts import RunStatus
 from inductor_designer.ui.generation_lines import GenerationBackend, run_generation
 from tests.fakes.femm_solver import RecordingFemmSolver
@@ -97,12 +98,12 @@ def test_exception_becomes_error_line(tmp_path: Path) -> None:
         CAPABILITIES,
         **exporters,  # type: ignore[arg-type]
     )
-    assert len(result) == 2
+    assert len(result) == 3
     assert "boom" in result[0]
     manifest = result.failed_manifest
     assert manifest is not None
     assert manifest.status is RunStatus.FAILED
-    assert manifest.diagnostics == ("RuntimeError: boom",)
+    assert manifest.diagnostics == _with_advice(("RuntimeError: boom",))
     assert manifest.artifacts == ()
     with pytest.raises(FrozenInstanceError):
         manifest.status = RunStatus.SUCCEEDED  # type: ignore[misc]
