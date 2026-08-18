@@ -786,8 +786,8 @@ saved pre-solve project on disk. A cancelled run reports
 
 #### Current state
 
-M8a implementation is **complete and awaiting Fabio Posser's live
-verification** (only he accepts a milestone). The non-live gate is clean:
+M8a is **accepted by Fabio Posser as of 2026-08-18**. The non-live gate is
+clean:
 Ruff, strict mypy across 127 source files, `tools.check_architecture`, and
 1213 tests passing under `pytest -n 8 -m "not aedt and not femm"`.
 
@@ -799,8 +799,7 @@ evidence record is
 
 ### Milestone 8b: Scalar normalized results
 
-Implementation is **complete and awaiting Fabio Posser's live verification**;
-the plan is
+Accepted by Fabio Posser as of 2026-08-18; the plan is
 [2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md)
 and the evidence record is [m8b-results-evidence.md](m8b-results-evidence.md).
 Resistance, inductance and complex impedance per winding, supported matrices,
@@ -835,8 +834,7 @@ recorded in [m8b-results-evidence.md](m8b-results-evidence.md).
 
 ### Milestone 8c: Field results
 
-Implementation is **complete and awaiting Fabio Posser's live verification**;
-the plan is
+Accepted by Fabio Posser as of 2026-08-18; the plan is
 [2026-08-10 M8c field results](../superpowers/plans/2026-08-10-m8c-field-results.md)
 and the evidence record is [m8c-field-evidence.md](m8c-field-evidence.md). It
 implements the approved

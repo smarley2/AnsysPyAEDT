@@ -78,16 +78,14 @@ before the next plan freezes assumptions that depend on it.
 - **Milestone 8 is split into three plans**, for the same reason M7 was: its
   approved scope covers three independently testable subsystems, each with its
   own failure modes and its own live evidence.
-  - **M8a implementation is complete and awaiting Fabio Posser's live
-    verification** (only he accepts a milestone); the evidence record is
+  - **M8a is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8a-live-solve-evidence.md](../../development/m8a-live-solve-evidence.md):
     [2026-08-10 M8a solve execution](2026-08-10-m8a-solve-execution.md) —
     solve execution on all three backends, stage progress, cooperative
     cancellation between stages, a durable `running` manifest, failed-stage
     diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
     `RunManifest.results` stays `None` through the whole slice.
-  - **M8b implementation is complete and awaiting Fabio Posser's live
-    verification**; the evidence record is
+  - **M8b is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8b-results-evidence.md](../../development/m8b-results-evidence.md):
     [2026-08-10 M8b scalar results](2026-08-10-m8b-scalar-results.md) — scalar
     normalized results (resistance, inductance, impedance, supported matrices,
@@ -97,8 +95,7 @@ before the next plan freezes assumptions that depend on it.
     2026-08-10: export is automatic per run, results are a Review section
     rather than a sixth step, and a total loss the backend does not report is
     derived from its parts with a visible label and a `derived` provenance.
-  - **M8c implementation is complete and awaiting Fabio Posser's live
-    verification**; the evidence record is
+  - **M8c is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8c-field-evidence.md](../../development/m8c-field-evidence.md):
     [2026-08-10 M8c field results](2026-08-10-m8c-field-results.md) — field
     results implementing the approved
@@ -110,6 +107,16 @@ before the next plan freezes assumptions that depend on it.
     than the magnitude and those components cancel around a toroid; and a
     DC-biased run reports the combined field with a label, with the AC-only
     entries unavailable, because one nonlinear solve cannot separate them.
+
+  M8 acceptance note, 2026-08-18: the recorded live evidence is the Maxwell 3D
+  session of that day, in
+  [m8b-results-evidence.md](../../development/m8b-results-evidence.md) -- the
+  enumerated AC Magnetic report vocabulary, one completed solve's matrix, loss
+  and convergence values, and the removal of `Total_Energy`. That session also
+  found a dead solver being reported as a `succeeded` run, now refused. A
+  Maxwell 2D and a FEMM live results run are **not** recorded; M8a's and M8c's
+  own evidence records still hold only their earlier sessions. Acceptance was
+  Fabio Posser's call with that gap known.
 
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`
