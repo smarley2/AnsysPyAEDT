@@ -13,12 +13,22 @@ import re
 
 SOLID_LOSS_EXPRESSION = "SolidLoss"
 CORE_LOSS_EXPRESSION = "CoreLoss"
-ENERGY_EXPRESSION = "Total_Energy"
 
+# No energy expression. An AC Magnetic design exposes exactly these report
+# quantities, enumerated live on AEDT 2025 R2 Commercial on 2026-08-18 by
+# walking `post.available_quantities_categories`:
+#
+#   Loss:            CoreLoss, SolidLoss, PerWindingSolidLoss(<w>),
+#                    StrandedLoss, StrandedLossAC, StrandedLossR
+#   L / Lnom / R / Rnom / Z / Znom / Coupling Coeff: Matrix1.<name>(<w>,<w>)
+#   Winding:         FluxLinkage(<w>), InducedVoltage(<w>), InputCurrent(<w>)
+#
+# There is no energy category at all, so `Total_Energy` -- asked for here until
+# 2026-08-18 -- could never return anything for this solution type. Magnetic
+# energy is reported as not exposed instead of asked for and missed.
 DEVICE_EXPRESSIONS: tuple[str, ...] = (
     SOLID_LOSS_EXPRESSION,
     CORE_LOSS_EXPRESSION,
-    ENERGY_EXPRESSION,
 )
 
 # Maxwell writes a matrix entry as <matrix>.<symbol>(<row>,<column>).

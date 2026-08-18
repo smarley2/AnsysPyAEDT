@@ -3,7 +3,6 @@ from __future__ import annotations
 from inductor_designer.simulation.result_expressions import (
     CORE_LOSS_EXPRESSION,
     DEVICE_EXPRESSIONS,
-    ENERGY_EXPRESSION,
     SOLID_LOSS_EXPRESSION,
     matrix_expressions,
     parse_matrix_expression,
@@ -40,8 +39,18 @@ def test_device_expressions_are_the_assumed_maxwell_names() -> None:
     assert DEVICE_EXPRESSIONS == (
         SOLID_LOSS_EXPRESSION,
         CORE_LOSS_EXPRESSION,
-        ENERGY_EXPRESSION,
     )
     assert SOLID_LOSS_EXPRESSION == "SolidLoss"
     assert CORE_LOSS_EXPRESSION == "CoreLoss"
-    assert ENERGY_EXPRESSION == "Total_Energy"
+
+
+def test_no_energy_quantity_is_asked_for() -> None:
+    """Guards the wasted request that shipped until 2026-08-18.
+
+    Walking `post.available_quantities_categories` live on AEDT 2025 R2
+    Commercial showed an AC Magnetic design exposes no energy category at all -
+    only losses, the winding matrix, flux linkage, induced voltage and input
+    current. Asking for `Total_Energy` could only ever return nothing, and this
+    table is the one place a name can creep back in.
+    """
+    assert not any("energy" in name.lower() for name in DEVICE_EXPRESSIONS)

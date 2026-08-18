@@ -139,6 +139,24 @@ class LiveAppExtraction:
         passes, error_percent = rows[-1]
         return f"{passes} passes, {error_percent:.4g}% error"
 
+    def solve_status(self, name: str) -> str:
+        """AEDT's own verdict on the finished solve, or "" when it states none.
+
+        `Normal Completion` or `Engine Detected Error`, read from the setup
+        profile. `Setup.is_solved` is True in both cases -- it was True for the
+        run that lost its solver after one pass -- so it cannot be used for this.
+        """
+        setup = next((item for item in self._app.setups if item.name == name), None)
+        if setup is None:
+            return ""
+        try:
+            profile = setup.get_profile()
+        except Exception:  # noqa: BLE001 - a missing profile states no verdict
+            return ""
+        entry = (profile or {}).get(name)
+        status = getattr(entry, "status", None)
+        return str(status) if status else ""
+
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
         """`(pass number, error percent)` per adaptive pass, via AEDT's export.
 

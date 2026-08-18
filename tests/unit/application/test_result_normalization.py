@@ -6,6 +6,7 @@ import pytest
 
 from inductor_designer.application.services.result_normalization import (
     DERIVED_TOTAL_LOSS_NOTE,
+    MAXWELL_ENERGY_REASON,
     normalize_scalar_results,
 )
 from inductor_designer.domain.project import RequestedOutput
@@ -246,6 +247,40 @@ def test_matrices_are_unavailable_when_the_backend_exposes_none() -> None:
     assert entry.availability is ResultAvailability.UNAVAILABLE
     assert entry.reason is not None
     assert entry.reason.startswith("matrices.not_exposed")
+
+
+@pytest.mark.parametrize(
+    ("backend", "expected_reason"),
+    [
+        (RunBackend.MAXWELL_3D, "magnetic-energy.not_exposed"),
+        (RunBackend.MAXWELL_2D, "magnetic-energy.not_exposed"),
+        (RunBackend.FEMM, "magnetic-energy.not_reported"),
+    ],
+)
+def test_a_missing_magnetic_energy_says_whether_the_backend_could_report_it(
+    backend: RunBackend, expected_reason: str
+) -> None:
+    """Would catch reporting `not_reported` for every backend alike.
+
+    An AC Magnetic design exposes no energy report quantity at all (enumerated
+    live on AEDT 2025 R2 Commercial, 2026-08-18), so on the Maxwell backends the
+    gap is permanent and `not_exposed`. FEMM does expose a stored-energy block
+    integral that nothing here reads yet, so its gap stays `not_reported` - a
+    thing still worth fetching, not a thing that cannot exist.
+    """
+    result_set = normalize_scalar_results(
+        RawScalarResults(),
+        run_id="20260818-120000",
+        backend=backend,
+        requested_outputs=(RequestedOutput.MAGNETIC_ENERGY,),
+        provenance="solution data",
+    )
+
+    entry = find(result_set, RequestedOutput.MAGNETIC_ENERGY, "device")
+    assert entry.availability is ResultAvailability.UNAVAILABLE
+    assert entry.reason is not None
+    assert entry.reason.startswith(expected_reason)
+    assert (MAXWELL_ENERGY_REASON in entry.reason) is (backend is not RunBackend.FEMM)
 
 
 def test_total_loss_is_derived_from_the_parts_and_says_so() -> None:

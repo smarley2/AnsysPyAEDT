@@ -102,20 +102,78 @@ which quantities came back available with which units and provenance, and
 every unavailable quantity with its reason. That table is the M8b exit
 criterion made concrete.
 
+## The report-quantity names, settled live on 2026-08-18
+
+The two risks this section used to carry -- that the Maxwell names and the
+convergence source could not be proven without AEDT -- are now settled, on AEDT
+2025 R2 Commercial, Maxwell 3D, solution type AC Magnetic.
+
+An AC Magnetic design exposes exactly these quantities, enumerated by walking
+`post.available_quantities_categories` and then
+`post.available_report_quantities` per category:
+
+| Category | Quantities |
+| --- | --- |
+| Loss | `CoreLoss`, `SolidLoss`, `PerWindingSolidLoss(<w>)`, `StrandedLoss`, `StrandedLossAC`, `StrandedLossR` |
+| L / Lnom / R / Rnom / Z / Znom / Coupling Coeff | `Matrix1.<name>(<w>,<w>)` |
+| Winding | `FluxLinkage(<w>)`, `InducedVoltage(<w>)`, `InputCurrent(<w>)` |
+| Design | `Volume(<object>)`, `Area(<terminal>)` |
+
+Read back from one completed solve of the M8b test design at 125 kHz, 2 A RMS,
+20 turns:
+
+| Expression | Value |
+| --- | --- |
+| `Matrix1.L(w1,w1)` | 21 423.5 nH |
+| `Matrix1.Lnom(w1,w1)` | 21 423.5 nH, identical |
+| `Matrix1.R(w1,w1)` | 0.073 144 ohm |
+| `Matrix1.Z(w1,w1)` | 0.073 144 + j16.826 ohm |
+| `SolidLoss` | 292.84 mW |
+| `CoreLoss` | 80.68 mW |
+
+The reactance is its own cross-check: 2 pi x 125 kHz x 21.4235 uH = 16.83 ohm,
+which is the imaginary part AEDT reports separately. So `SolidLoss`, `CoreLoss`
+and the `Matrix1.L` / `Matrix1.R` entries are the right names, and the `nom`
+flavours carry the same numbers.
+
+**`Total_Energy` was wrong and is gone.** AC Magnetic has no energy category at
+all -- not `Total_Energy`, `TotalEnergy`, `Energy` or `Total_Magnetic_Energy`,
+all four tried. Magnetic energy needs a Magnetostatic or Transient solution.
+The application no longer asks: `DEVICE_EXPRESSIONS` holds the two loss names,
+and magnetic energy reports `magnetic-energy.not_exposed` on the Maxwell
+backends, naming AC Magnetic as the reason. FEMM keeps
+`magnetic-energy.not_reported`, because FEMM does expose a stored-energy block
+integral that nothing here reads yet.
+
+**Convergence comes from `ExportConvergence`,** parsed by
+`adapters/pyaedt/convergence_file.py`. `get_profile()` describes timing steps
+and carries no adaptive error, which is why walking it returned nothing.
+
+### A dead solver was being reported as a solved run
+
+The same session exposed a defect the recorded risks did not predict. One live
+run finished its first adaptive pass, then lost its eddy-current child process:
+
+```
+Unable to create child process: 3dedy. Please contact Ansys technical support.
+Simulation completed with execution error on server: Local Machine.
+```
+
+The desktop then reported no simulation running, which is exactly what
+`solve_watch.analyze_watched` waited for, so the run was recorded `succeeded`.
+It published the copper loss, core loss and 1-pass convergence that the one
+completed pass had produced, while every matrix entry read NaN and resistance,
+inductance, impedance and both matrices came back unavailable.
+
+`Setup.is_solved` cannot catch this: it was `True` for the broken run and for a
+good one. `setup.get_profile()[setup].status` separates them exactly --
+`Engine Detected Error` against `Normal Completion` -- and survives a reopen.
+`analyze_watched` now reads that verdict and refuses to call such a solve
+finished. An empty status stays acceptable, because absence of a verdict is not
+a verdict.
+
 ## Known risks
 
-- **The Maxwell report-quantity names are unproven.** `SolidLoss`,
-  `CoreLoss` and `Total_Energy` in `simulation/result_expressions.py` are the
-  names this application asks for, and `convergence_rows` is the assumed
-  convergence source. None can be verified without AEDT. A name AEDT does not
-  recognize returns no data, which surfaces as an `unavailable` quantity with
-  a reason and a diagnostic — never as a wrong number. The fix is one line in
-  that table; if a quantity is genuinely not exposed, remove the name and let
-  it report unavailable.
-- **PyAEDT exposes no convergence accessor on `Setup`.** Only `get_profile`
-  exists, so the adapter's `convergence_rows` may need
-  `post.get_solution_data` with the adaptive-cost report category instead.
-  This is isolated to one adapter method.
 - **One intermittent UI test.** `tests/ui/test_simulation_controller.py`
   occasionally crashes its `pytest-xdist` worker (`test_proceed_ac_only_...`,
   `test_a_second_proceed_ac_only_...`). It passes serially every time and on a

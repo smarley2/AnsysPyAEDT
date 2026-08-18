@@ -43,7 +43,9 @@ def test_a_solved_run_attaches_raw_results(tmp_path: Path) -> None:
     assert result.raw_results.windings[0].winding_id == "w1"
     assert result.raw_results.copper_loss_w == pytest.approx(3.0)
     assert result.raw_results.core_loss_w == pytest.approx(1.25)
-    assert result.raw_results.magnetic_energy_j == pytest.approx(4.2e-4)
+    # No magnetic energy: an AC Magnetic design exposes no energy report
+    # quantity, so nothing is asked for and nothing can come back.
+    assert result.raw_results.magnetic_energy_j is None
     assert result.raw_results.convergence is not None
 
 

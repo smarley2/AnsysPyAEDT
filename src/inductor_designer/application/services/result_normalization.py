@@ -276,6 +276,48 @@ def _device_scalar(
     return _available(quantity, DEVICE_SCOPE, value, provenance)
 
 
+MAXWELL_ENERGY_REASON = (
+    "An AC Magnetic design exposes no energy quantity: its report categories "
+    "hold losses, the winding matrix, flux linkage, induced voltage and input "
+    "current, and nothing else. Enumerated live on AEDT 2025 R2 Commercial, "
+    "2026-08-18. Energy needs a Magnetostatic or Transient solution."
+)
+
+
+def _magnetic_energy(
+    raw: RawScalarResults, backend: RunBackend, provenance: str
+) -> NormalizedQuantity:
+    """Not exposed on the Maxwell backends, merely unread on FEMM.
+
+    The distinction is the point: this application asked Maxwell for
+    `Total_Energy` until 2026-08-18 and read the silence as "the backend
+    reported nothing", which invites re-checking every run. AC Magnetic has no
+    energy quantity to report, so say so once. FEMM does expose a stored-energy
+    block integral that nothing here reads yet, which is `not_reported`.
+    """
+    if raw.magnetic_energy_j is not None:
+        return _available(
+            RequestedOutput.MAGNETIC_ENERGY,
+            DEVICE_SCOPE,
+            raw.magnetic_energy_j,
+            provenance,
+        )
+    if backend is RunBackend.FEMM:
+        return _missing(
+            RequestedOutput.MAGNETIC_ENERGY,
+            DEVICE_SCOPE,
+            raw,
+            "The backend reported no magnetic-energy.",
+        )
+    return _missing(
+        RequestedOutput.MAGNETIC_ENERGY,
+        DEVICE_SCOPE,
+        raw,
+        MAXWELL_ENERGY_REASON,
+        code=NOT_EXPOSED,
+    )
+
+
 def _total_loss(raw: RawScalarResults, provenance: str) -> NormalizedQuantity:
     if raw.total_loss_w is not None:
         return _available(
@@ -421,7 +463,7 @@ def normalize_scalar_results(
             )
         else:
             quantities.append(
-                _device_scalar(quantity, raw.magnetic_energy_j, raw, provenance)
+                _magnetic_energy(raw, backend, provenance)
             )
     return NormalizedResultSet(
         run_id=run_id, backend=backend, quantities=tuple(quantities)

@@ -820,12 +820,18 @@ Decisions taken with Fabio Posser on 2026-08-10:
    reported parts and a `derived` provenance. It is never presented as a
    solver-reported value.
 
-Known risk recorded in the plan: the Maxwell report-quantity names
-(`SolidLoss`, `CoreLoss`, `Total_Energy`) and the convergence source cannot be
-proven without AEDT. They are isolated behind one pure expression table and
-one adapter method, so the live run corrects them without touching
-normalization, export or the UI. A name AEDT does not recognize yields an
-`unavailable` quantity with a reason, never a wrong number.
+That risk is closed. Live on AEDT 2025 R2 Commercial on 2026-08-18, `SolidLoss`
+and `CoreLoss` and the `Matrix1.L` / `Matrix1.R` entries all returned real
+numbers (21.42 uH, 0.0731 ohm, 292.84 mW, 80.68 mW at 125 kHz), and convergence
+comes from `ExportConvergence`. `Total_Energy` was wrong: AC Magnetic exposes no
+energy quantity at all, so magnetic energy now reports
+`magnetic-energy.not_exposed` instead of being asked for and missed.
+
+The same session found what the risk did not predict: a solve whose solver died
+after the first adaptive pass was reported as a `succeeded` run, publishing that
+pass's losses while every matrix entry read NaN. `analyze_watched` now reads
+AEDT's own profile verdict and refuses `Engine Detected Error`. Both are
+recorded in [m8b-results-evidence.md](m8b-results-evidence.md).
 
 ### Milestone 8c: Field results
 

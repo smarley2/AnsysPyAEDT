@@ -197,6 +197,50 @@ def test_an_unknown_setup_name_is_refused() -> None:
     assert app.exports == []
 
 
+class _Profiled:
+    """A setup whose profile carries AEDT's verdict, as PyAEDT exposes it."""
+
+    def __init__(self, status: object, *, raises: bool = False) -> None:
+        self.name = "Setup1"
+        self._status = status
+        self._raises = raises
+
+    def get_profile(self) -> object:
+        if self._raises:
+            raise RuntimeError("no profile for this setup")
+        entry = type("Entry", (), {"status": self._status})()
+        return {"Setup1": entry}
+
+
+class _ProfiledApp(_App):
+    def __init__(self, setup: object) -> None:
+        super().__init__()
+        self.setups = [setup]
+
+
+def test_the_solve_status_is_aedt_s_own_verdict_on_the_finished_solve() -> None:
+    """`Setup.is_solved` was True for a run whose solver died after one adaptive
+    pass, so it cannot separate a completed solve from a broken one. The profile
+    status can: `Normal Completion` against `Engine Detected Error`, both read
+    live on 2026-08-18."""
+    completed = LiveAppExtraction(_ProfiledApp(_Profiled("Normal Completion")))
+    broken = LiveAppExtraction(_ProfiledApp(_Profiled("Engine Detected Error")))
+
+    assert completed.solve_status("Setup1") == "Normal Completion"
+    assert broken.solve_status("Setup1") == "Engine Detected Error"
+
+
+def test_a_setup_that_states_no_status_reads_as_empty_not_as_a_failure() -> None:
+    """Absent, unnamed and unreadable profiles all mean "AEDT did not say".
+    Reporting them as a failure would fail runs that are fine."""
+    assert LiveAppExtraction(_ProfiledApp(_Profiled(None))).solve_status("Setup1") == ""
+    assert (
+        LiveAppExtraction(_ProfiledApp(_Profiled("x", raises=True))).solve_status("Setup1")
+        == ""
+    )
+    assert LiveAppExtraction(_ProfiledApp(_Profiled("x"))).solve_status("Setup2") == ""
+
+
 def test_private_attributes_stay_on_the_wrapper() -> None:
     app = _App()
     wrapper = LiveAppExtraction(app)
