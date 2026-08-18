@@ -8,13 +8,17 @@ storage is the existing lock-protected `CurrentProjectProvider`.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
+from inductor_designer.adapters.system.app_logging import LOGGER_NAME
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.ui.generation_controller import CurrentProjectProvider
+
+_logger = logging.getLogger(LOGGER_NAME)
 
 
 class ProjectSession(QObject):
@@ -101,9 +105,11 @@ class ProjectSession(QObject):
         try:
             self._save_callback(self.project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
+            _logger.warning("Save failed: %s", error)
             self.set_status(f"Unable to save project: {error}")
             return False
         self._set_dirty(False)
+        _logger.info("Project saved to %s.", self._document_path)
         self.set_status("Saved")
         return True
 
@@ -125,10 +131,12 @@ class ProjectSession(QObject):
             self._save_callback(self.project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
             self._document_path = previous_path
+            _logger.warning("Save as %s failed: %s", path, error)
             self.set_status(f"Unable to save project: {error}")
             return False
         self._set_dirty(False)
         self.documentPathChanged.emit()
+        _logger.info("Project saved to %s.", path)
         self.set_status(f"Saved as {path.name}")
         return True
 
@@ -159,5 +167,6 @@ class ProjectSession(QObject):
         self._set_dirty(False)
         self.projectChanged.emit()
         self.documentPathChanged.emit()
+        _logger.info("Project opened from %s.", path)
         self.set_status(f"Opened {path.name}")
         return True

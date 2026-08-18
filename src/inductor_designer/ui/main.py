@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -172,6 +173,21 @@ def _install_qml_logging() -> None:
 
 def main() -> int:
     from PySide6.QtGui import QGuiApplication
+
+    from inductor_designer import __version__
+    from inductor_designer.adapters.system.app_logging import (
+        LOGGER_NAME,
+        configure_application_logging,
+    )
+    from inductor_designer.adapters.system.environment import (
+        environment_redaction_context,
+        log_directory,
+    )
+
+    redaction_context = environment_redaction_context()
+    configure_application_logging(log_directory(), redaction_context)
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.info("Application %s starting.", __version__)
 
     args = _parse_args(sys.argv[1:])
     _install_qml_logging()

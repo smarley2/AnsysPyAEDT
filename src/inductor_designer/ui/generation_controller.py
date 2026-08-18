@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from inductor_designer.adapters.system.app_logging import LOGGER_NAME
 from inductor_designer.application.services.project_run import ProjectRunFailed
 from inductor_designer.simulation.run_control import (
     CancellationToken,
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
         NormalizedResultSet,
         RunManifest,
     )
+
+_logger = logging.getLogger(LOGGER_NAME)
 
 
 class CurrentProjectProvider:
@@ -158,6 +162,8 @@ class GenerationController(QObject):
         self._last_result_set = result.result_set
         self.record_run_evidence(result.run_directory, result.generated_file)
         self._busy = False
+        status = "failed" if result.failed_manifest is not None else "finished"
+        _logger.info("Run %s: %s.", status, result.run_directory)
         self.linesChanged.emit()
         self.busyChanged.emit()
 
@@ -178,6 +184,7 @@ class GenerationController(QObject):
         self._lines = []
         token = CancellationToken()
         self._token = token
+        _logger.info("Run started: backend=%s, solve=%s.", backend_label, solve)
         self.busyChanged.emit()
 
         class _Sink:
@@ -218,6 +225,9 @@ class GenerationController(QObject):
                     )
                 )
             except ProjectRunFailed as error:
+                _logger.warning(
+                    "Run failed: %s", "; ".join(error.manifest.diagnostics)
+                )
                 result = GenerationResult(
                     tuple(
                         f"Generation failed: {diagnostic}"
@@ -227,6 +237,7 @@ class GenerationController(QObject):
                     run_directory=error.location.directory,
                 )
             except Exception as error:  # noqa: BLE001 - UI must never wedge
+                _logger.warning("Run failed: %s", error)
                 result = GenerationResult((f"Generation failed: {error}",))
             finally:
                 self._finished.emit(result)
