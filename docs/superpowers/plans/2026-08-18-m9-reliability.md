@@ -52,6 +52,31 @@ This is the security-relevant part of the milestone, so its enforcement points a
 - **One pure function**, `redact_text(text, context)` in `src/inductor_designer/application/services/redaction.py` (Task 1), removes drive-letter paths, UNC paths, POSIX home paths, e-mail addresses, `port@host` licence server identifiers, and the machine's own user names and host names. It keeps a file extension (`[redacted-path].adp`) because the extension is the diagnostic value and names nobody.
 - **Two write boundaries call it, and nothing else writes shareable text.** The application log's formatter (Task 2) redacts every record, including tracebacks, as the line is written — so the file on disk is already shareable and no caller can forget. The bundle builder (Task 8) redacts every entry's *text and name* in one loop, and the archive writer accepts only entries the builder produced.
 - **Two tests prove it.** A pure test drives `redact_text` over each pattern plus idempotence (Task 1). An end-to-end test seeds a run tree with `C:\Users\jane.doe\...`, `\\BRUSA-FS01\share\model.aedt`, `1055@LICSRV01`, `jane.doe@brusa.biz`, host `BRUSA-WS42`, writes a real archive, reopens it with `zipfile`, and asserts that no entry name and no entry byte matches an independently written forbidden-pattern list (Task 8).
+### Bundle contents, decided with Fabio Posser on 2026-08-18
+
+Two rulings, both settled before implementation, so Task 8 has no open scope:
+
+- **The Project document is excluded.** Not because it probably holds a name, but
+  because nothing can prove it does not: the project name, the description, the
+  winding labels and `terminal_intent` are free text, and no pattern can classify
+  user prose. Including it would downgrade the bundle from provably shareable to
+  probably fine. The diagnostic cost is small, because `run-manifest.json` already
+  carries every physical input -- frequency, both temperatures, the material
+  record, and per-winding currents, phase and direction -- keyed by `windingId`
+  rather than by label. So the bundle keeps the physics and drops only the prose,
+  and a user who wants to send the document attaches it deliberately.
+- **AEDT's own log files are excluded, and the messages that matter are captured
+  instead.** Those files are written in a format this application does not
+  control, so their redaction cannot be proven by any test here, and they demonstrably
+  carry BRUSA identity: the `batch.log` left by the 2026-08-18 session holds 132
+  lines naming the user, the machine or the domain, including the path fragment
+  `CH01NB296.brusa.biz_9996.pjt`. Copying such a file is unauditable. But the line
+  that actually explained that day's failure -- `Unable to create child process:
+  3dedy` -- came from the desktop *message channel*, not from a file, so Task 3
+  captures those messages through this application's own redacting logger. The
+  highest-value AEDT diagnostic therefore lands inside the boundary the tests
+  cover, and no third-party file is ever copied.
+
 - Logs *inside a run directory* are not redacted. They stay on the user's machine, where the absolute path is what makes them useful; redaction happens on the way into the bundle. That boundary is stated in the module docstrings so nobody later "fixes" one side.
 
 ## File Structure
@@ -62,6 +87,8 @@ This is the security-relevant part of the milestone, so its enforcement points a
 | `src/inductor_designer/adapters/system/environment.py` (create) | This machine: application data / recovery / log directories, and the machine's own user and host tokens |
 | `src/inductor_designer/adapters/system/app_logging.py` (create) | One rotating application log whose formatter redacts every line |
 | `src/inductor_designer/simulation/failure_advice.py` (create) | Pure: installation / license / material / file / convergence advice tables |
+| `src/inductor_designer/adapters/pyaedt/live_app.py` (modify) | `desktop_messages()`: AEDT's session-scoped message channel |
+| `src/inductor_designer/adapters/pyaedt/maxwell3d.py`, `maxwell2d.py` (modify) | Log that channel when a stage fails, before the desktop is released |
 | `src/inductor_designer/application/services/maxwell_export.py` (modify) | Append advice to manifest diagnostics at the single assembly point |
 | `src/inductor_designer/application/services/result_normalization.py` (modify) | Attach convergence advice to the convergence quantity |
 | `src/inductor_designer/ui/project_session.py` (modify) | Undo/redo stacks, dirty-by-comparison-to-saved, autosave scheduling, recovered-project entry point |
@@ -566,12 +593,82 @@ git commit -m "feat(diagnostics): write one rotating application log, redacted a
 - Create: `src/inductor_designer/simulation/failure_advice.py`
 - Modify: `src/inductor_designer/application/services/maxwell_export.py:492-537` (`_build_manifest`)
 - Modify: `src/inductor_designer/application/services/result_normalization.py:344-367,419-428` (`_convergence`, `normalize_scalar_results`)
+- Modify: `src/inductor_designer/adapters/pyaedt/live_app.py` (`desktop_messages`)
+- Modify: `src/inductor_designer/adapters/pyaedt/maxwell3d.py` and `maxwell2d.py` (log those messages when a stage fails, before the desktop is released)
 - Test: `tests/unit/simulation/test_failure_advice.py`
 - Test: `tests/unit/application/test_diagnostic_advice.py`
+- Test: `tests/unit/adapters/pyaedt/test_desktop_message_capture.py`
 
 **Interfaces:**
-- Consumes: nothing outside `domain`/`simulation`.
-- Produces: `AdviceCode` with the string constants below; `FailureAdvice(code: str, action: str)`; `advise(diagnostic: str) -> FailureAdvice`; `convergence_advice(*, final_error_percent: float, target_percent: float | None, completed_passes: int, maximum_passes: int | None, converged: bool | None) -> FailureAdvice | None`. `normalize_scalar_results` gains keyword-only `percent_error_target: float | None = None` and `maximum_passes: int | None = None`.
+- Consumes: nothing outside `domain`/`simulation` for the advice table; `LOGGER_NAME` (Task 2) for the capture.
+- Produces: `AdviceCode` with the string constants below; `FailureAdvice(code: str, action: str)`; `advise(diagnostic: str) -> FailureAdvice`; `convergence_advice(*, final_error_percent: float, target_percent: float | None, completed_passes: int, maximum_passes: int | None, converged: bool | None) -> FailureAdvice | None`. `normalize_scalar_results` gains keyword-only `percent_error_target: float | None = None` and `maximum_passes: int | None = None`. On `LiveAppExtraction`: `desktop_messages(self) -> tuple[str, ...]`.
+
+#### The desktop message channel is captured; AEDT's log files are not
+
+Decided with Fabio Posser on 2026-08-18, out of that day's evidence. The lines that
+explained a failed solve --- `Unable to create child process: 3dedy`, then
+`Simulation completed with execution error on server: Local Machine` --- exist only
+in AEDT's message channel. Nothing this application wrote said why the solve died.
+
+A failed stage therefore captures that channel into the application log, where
+Task 2's formatter redacts it like every other line. AEDT's own log files stay out
+of the bundle (see the bundle-contents decision above); this is what replaces
+them, and it is auditable because this application writes it.
+
+Two load-bearing constraints:
+
+- **The channel is session-scoped.** `release_live_app(app)` at
+  `adapters/pyaedt/maxwell3d.py:687` ends the session and the messages die with it,
+  so capture belongs at the stage-failure boundary --- the `except Exception`
+  handlers around `maxwell3d.py:582-660` and their 2D counterparts --- and never in
+  the application layer, which holds no desktop.
+- **Capture must never turn one failure into another.** A read that raises is
+  swallowed and noted; the run still reports the original error. Same rule the
+  result reader already follows.
+
+The captured text goes to the log, not into `StageRecord.message`: a message
+channel can run to hundreds of lines and `run-manifest.json` is a document a
+person reads.
+
+- [ ] **Step 0: `desktop_messages`, and the capture at the failure boundary**
+
+```python
+# src/inductor_designer/adapters/pyaedt/live_app.py
+    def desktop_messages(self) -> tuple[str, ...]:
+        """AEDT's own message channel for this design, oldest first.
+
+        The only place a solver's reason for dying is stated: on 2026-08-18 a run
+        was recorded `succeeded` while this channel held "Unable to create child
+        process: 3dedy". Session-scoped, so it must be read before the desktop is
+        released.
+        """
+        try:
+            messages = self._app.odesktop.GetMessages(
+                self._app.project_name, self._app.design_name, 0
+            )
+        except Exception:  # noqa: BLE001 - a silent channel is not a failure
+            return ()
+        return tuple(str(line) for line in messages or ())
+```
+
+```python
+# src/inductor_designer/adapters/pyaedt/maxwell3d.py, called from each stage-failure handler
+def _log_desktop_messages(app: Maxwell3dApp, stage: str) -> None:
+    """Record why AEDT failed, while the session that knows still exists."""
+    logger = logging.getLogger(LOGGER_NAME)
+    try:
+        messages = app.desktop_messages()
+    except Exception as error:  # noqa: BLE001 - capture never masks the real failure
+        logger.warning("Could not read AEDT messages after %s failed: %s", stage, error)
+        return
+    for line in messages:
+        logger.error("AEDT [%s]: %s", stage, line)
+```
+
+Verify: `pytest tests/unit/adapters/pyaedt/test_desktop_message_capture.py -q` proves
+that a failed stage writes every channel line to the log, that a raising channel
+leaves the original stage error intact and the run's own diagnostic unchanged, and
+that the lines reach the log through the redacting formatter rather than around it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2675,6 +2772,22 @@ def test_the_contents_index_lists_every_entry() -> None:
 def test_the_contents_index_is_itself_redacted() -> None:
     entries = _entries(BundleSource(name="notes.txt", text="jane.doe@brusa.biz"))
     assert "brusa.biz" not in entries[BUNDLE_CONTENTS_FILENAME]
+
+
+def test_the_index_names_what_was_left_out_on_purpose() -> None:
+    """A narrow bundle must not read as a broken one.
+
+    Excluding the project document and AEDT's own logs is a decision, not an
+    omission, and the person opening the archive cannot see the decision unless
+    the index states it.
+    """
+    entries = _entries(BundleSource(name="logs/app.log", text="ok"))
+
+    excluded = json.loads(entries[BUNDLE_CONTENTS_FILENAME])["redaction"]["excluded"]
+
+    assert "project document" in excluded
+    assert "AEDT log files" in excluded
+    assert ".inductor.json" in excluded["project document"]
     assert REDACTED_EMAIL in entries["notes.txt"]
 
 
@@ -2774,6 +2887,25 @@ def test_collect_reads_the_log_the_manifests_and_the_result_files(
     assert any(name.endswith("inductor-designer.log") for name in names)
     assert any(name.endswith("run-manifest.json") for name in names)
     assert any(name.endswith("solve-log.txt") for name in names)
+
+
+def test_the_project_document_never_becomes_an_entry(tmp_path: Path) -> None:
+    """The document locates the runs directory; it is not itself collected.
+
+    Ruled 2026-08-18. The parameter is a document path, so the cheapest wrong
+    change in this file is to read it -- which would put user-authored text into a
+    bundle built to be shareable. This test is the guard on that decision.
+    """
+    document, _ = _seed(tmp_path)
+    document.write_text(
+        '{"name": "a customer name no redactor can classify"}', encoding="utf-8"
+    )
+
+    sources = collect_bundle_sources(document, None)
+
+    assert sources  # the runs beside it were still found
+    assert all(document.name not in source.name for source in sources)
+    assert all("no redactor can classify" not in source.text for source in sources)
     assert any(name.endswith("results.json") for name in names)
 
 
@@ -2945,6 +3077,25 @@ def build_bundle_entries(
                     "e-mail addresses",
                 ],
             },
+            # A support engineer must be able to tell a deliberately narrow
+            # bundle from a broken one, and a user must be able to see what to
+            # attach by hand if they judge it safe. Silence about an exclusion
+            # reads as a missing file.
+            "excluded": {
+                "project document": (
+                    "User-authored text -- project name, description, winding "
+                    "labels, terminal intent -- cannot be classified by any "
+                    "redaction rule. Every physical input is in the run "
+                    "manifests instead. Attach the .inductor.json yourself if "
+                    "you judge it safe to share."
+                ),
+                "AEDT log files": (
+                    "Written by AEDT in a format this application does not "
+                    "control, so their redaction cannot be proven. The desktop "
+                    "messages captured during a failed run are in the "
+                    "application log instead."
+                ),
+            },
         },
         indent=2,
         sort_keys=True,
@@ -3004,7 +3155,14 @@ def _read_tail(path: Path) -> str | None:
 def collect_bundle_sources(
     project_document_path: Path | None, log_path: Path | None
 ) -> tuple[BundleSource, ...]:
-    """The application log and every run's evidence. Missing files are skipped."""
+    """The application log and every run's evidence. Missing files are skipped.
+
+    `project_document_path` is used only to find `runs/` beside it. The document
+    itself is never opened, by the 2026-08-18 ruling: it holds user-authored text
+    that no redaction rule can classify, and every physical input it carries is in
+    the run manifests anyway. `test_the_project_document_never_becomes_an_entry`
+    is what stops this from being "fixed" into reading it.
+    """
     sources: list[BundleSource] = []
     if log_path is not None:
         for candidate in (log_path, *sorted(log_path.parent.glob(f"{log_path.name}.*"))):
@@ -3309,7 +3467,7 @@ This is the part only a person can do, and it is what Fabio Posser verifies. **O
 1. Start the application on a saved project, edit a winding, and kill the process from Task Manager without saving. Restart: the recovery dialog offers the autosaved changes, `Recover` restores them, the project on disk is untouched, and `Generate` stays disabled until the project is saved.
 2. Repeat, and choose `Discard`: the on-disk project is what loads, and the snapshot is gone.
 3. Start a `Generate and Solve` run on Maxwell 3D, and kill the process while the `analyze` stage is visible. Restart and open the project: the Review screen names the interrupted run, `run-manifest.json` in that directory reads `"status": "interrupted"` with both diagnostics, the saved `*.aedt` is still there, and there is no control anywhere offering to resume it. Start a new run: it lands in a new directory and succeeds.
-4. `Help > Save diagnostic bundle…`, save it, and open the `.zip`. Read every member. Confirm no drive letter, no UNC path, no machine name, no user name, no licence server, and no e-mail address, and that `bundle-contents.json` lists what was removed. Confirm the failure text and its advice code are still readable.
+4. `Help > Save diagnostic bundle…`, save it, and open the `.zip`. Read every member. Confirm no drive letter, no UNC path, no machine name, no user name, no licence server, and no e-mail address, and that `bundle-contents.json` lists both what was removed and what was excluded on purpose. Confirm the failure text and its advice code are still readable, and that the AEDT message lines captured when the stage failed are in the log entry -- that is the evidence AEDT's own log files were excluded without losing the reason a solve died.
 5. Edit, then `Edit > Undo` and `Edit > Redo` across all five screens — core, material pin, windings, operating point, simulation recipe — and confirm each screen redraws and that undoing back to the saved state re-enables `Generate`.
 
 - [ ] **Step 4: Write the evidence document**
@@ -3347,13 +3505,15 @@ The M9 exit criterion is *forced UI and solver failures preserve the last valid 
 
 These are product rulings, not implementation choices. Each names what the plan does until he rules and what changes when he does. None of them changes the task structure.
 
+Questions 6 and 7 were ruled on 2026-08-18 and stay here, struck through, so the reasoning lives with the question and not only in the commit that settled it. Seven remain open, all with a working default.
+
 1. **Autosave interval.** How much unsaved work may a crash cost? The plan uses a 2000 ms debounce after the last valid edit (`AUTOSAVE_DEBOUNCE_MS` in `ui/project_session.py`). A ruling changes one constant.
 2. **Recovery snapshot location.** The plan writes it to `%LOCALAPPDATA%\InductorDesigner\recovery\`, so a shareable project directory never collects stray autosave files and a read-only project directory still autosaves. The alternative is beside the project document, where the user can see it. A ruling changes `recovery_directory()` in `adapters/system/environment.py`.
 3. **Undo depth.** The plan bounds the history at 50 project snapshots (`UNDO_DEPTH`). A ruling changes one constant.
 4. **Recovery prompt versus silent restore.** The plan prompts once at startup with `Recover` / `Discard` and never restores silently. A ruling would change `Main.qml`'s `Component.onCompleted` branch only.
 5. **Whether the bundle is also written automatically on a failed run.** The plan writes a bundle only when the user asks for one from the Help menu; a failed run already leaves its own run directory. A ruling would add one call in `project_run.py`'s failure path.
-6. **Whether the bundle may contain the Project document.** The plan excludes it, because the project name and description are user-authored text and the run manifests already carry every physical input. Including it would make a report self-contained but would ship text the redactor cannot recognise as personal. This one is a BRUSA-policy call, not a technical one.
-7. **Whether the bundle may contain AEDT's own log files** from the run directory. The plan does not read them: they are written by AEDT in a format this application does not control, so their redaction cannot be guaranteed by the tests above. A ruling to include them needs an accompanying rule for how they are proven safe.
+6. ~~Whether the bundle may contain the Project document.~~ **Ruled 2026-08-18: excluded.** Reasoning in the bundle-contents decision above.
+7. ~~Whether the bundle may contain AEDT's own log files.~~ **Ruled 2026-08-18: excluded, with the desktop message channel captured through this application's own redacting logger instead.** Reasoning in the bundle-contents decision; implementation in Task 3 Step 0.
 8. **Whether reconciliation of an interrupted run is automatic.** The plan reconciles at startup and on Open, so a stale `running` manifest can never be read as a live run. The alternative is reconciling only when the user asks, which leaves an untruthful document on disk until they do.
 9. **How long interrupted run directories are kept.** The plan never deletes one: it is the user's evidence. A retention rule (age, count) would need its own ruling and its own visible message before anything is removed.
 
