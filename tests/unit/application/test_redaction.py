@@ -244,3 +244,34 @@ def test_email_with_a_dotless_internal_domain_is_removed() -> None:
     """
     redacted = redact_text("owner jane.doe@brusa", CONTEXT)
     assert redacted == f"owner {REDACTED_EMAIL}"
+
+
+def test_posix_path_with_trailing_space_in_a_component_is_fully_redacted() -> None:
+    r"""Fix wave 4. The forward-slash branch forbade a trailing space before
+    "/", so ``Path("C:/Users/Jane Doe ")/"Documents"`` -- which really does
+    produce this POSIX-form string -- broke the segment chain at the space and
+    published "Doe /Documents/notes.txt". `_PATH_SEGMENT` now tolerates a
+    trailing space before either separator, matching the backslash form.
+    """
+    text = "C:/Users/Jane Doe /Documents/notes.txt"
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == f"{REDACTED_PATH}.txt"
+    assert "Doe" not in redacted
+
+
+def test_two_posix_paths_on_one_line_merge_when_the_first_has_a_trailing_space() -> None:
+    """Accepted trade, not a bug: tolerating a trailing space before "/" (the
+    fix above) means a trailing-space component no longer ends a segment, so
+    two forward-slash paths on one line can be read as a single match and the
+    prose between them is lost. That is a loss of diagnostic text, not a leak
+    -- the asymmetric rule it replaces bought anti-merge behaviour for this
+    shape at the price of publishing a surname, which is the wrong trade. Do
+    not "fix" this back into a leak; over-redaction is the correct direction.
+    This test pins the exact merged output so a future change to the pattern
+    has to consciously decide to alter it.
+    """
+    text = (
+        "wrote /home/jane.doe/Jane Doe /notes.txt and see /home/other/report.log"
+    )
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == f"wrote {REDACTED_PATH}.log"

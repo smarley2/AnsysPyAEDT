@@ -58,20 +58,21 @@ _PATH_CHAR = r'[^\\/:\r\n"\'<>|]'
 # the match: prose after a path always begins after a space.
 _FINAL_CHAR = r'[^\\/:\s"\'<>|]'
 # An interior segment always ends in a separator, so an embedded space (the
-# surname in "Jane Doe") is unambiguous: it is followed by more path. The two
-# separators are treated differently on purpose. Before a forward slash the last
-# character must not be a space, because that is what stops "dump and see
-# /home/x" from being read as one segment and swallowing the prose between two
-# POSIX paths. Before a backslash a trailing space is tolerated, because
+# surname in "Jane Doe") is unambiguous: it is followed by more path. A
+# trailing space is tolerated before EITHER separator, because
 # ``Path("C:/Users/Jane Doe ")/"Documents"`` really does produce
-# "C:\Users\Jane Doe \Documents" and refusing it there broke the chain and
-# published the surname; the colon excluded from both classes above is what
-# still keeps a second Windows path ("and see D:\...") out of the match. A
-# forward-slash path has no such marker, so "a/b c /d" is genuinely ambiguous
-# between one path and two: this keeps the prose and accepts that a POSIX
-# component ending in a space strands its remainder. Strip trailing whitespace
-# where such a path is written, not here.
-_PATH_SEGMENT = r"(?:" + _PATH_CHAR + r"*" + _FINAL_CHAR + r"/|" + _PATH_CHAR + r"+\\)"
+# "...Jane Doe \Documents" on the backslash side, and the same
+# ``.as_posix()`` value produces "...Jane Doe /Documents" on the forward-slash
+# side; refusing the space on only one side broke that side's segment chain
+# and published the surname. The colon excluded from both classes above is
+# what still keeps a second Windows path ("and see D:\...") out of the match
+# on the backslash side. The forward-slash side has no such marker, so two
+# POSIX paths on one line, the first with a trailing-space component, can
+# merge into a single match and lose the prose between them -- an accepted
+# loss of diagnostic text, not a leak, since over-redaction is the safe
+# direction here. Strip trailing whitespace where such a path is written, not
+# here.
+_PATH_SEGMENT = r"(?:" + _PATH_CHAR + r"+/|" + _PATH_CHAR + r"+\\)"
 # The final segment may not contain whitespace, so it can never swallow the
 # rest of the sentence. No extension guessing is involved in finding its end.
 _PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _FINAL_CHAR + r"*"
