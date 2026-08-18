@@ -1,5 +1,6 @@
-# tests/unit/application/test_redaction.py
 from __future__ import annotations
+
+import json
 
 from inductor_designer.application.services.redaction import (
     REDACTED_EMAIL,
@@ -260,18 +261,189 @@ def test_posix_path_with_trailing_space_in_a_component_is_fully_redacted() -> No
 
 
 def test_two_posix_paths_on_one_line_merge_when_the_first_has_a_trailing_space() -> None:
-    """Accepted trade, not a bug: tolerating a trailing space before "/" (the
-    fix above) means a trailing-space component no longer ends a segment, so
-    two forward-slash paths on one line can be read as a single match and the
-    prose between them is lost. That is a loss of diagnostic text, not a leak
-    -- the asymmetric rule it replaces bought anti-merge behaviour for this
-    shape at the price of publishing a surname, which is the wrong trade. Do
-    not "fix" this back into a leak; over-redaction is the correct direction.
-    This test pins the exact merged output so a future change to the pattern
-    has to consciously decide to alter it.
+    """Accepted trade, not a bug: an interior segment may contain a space, so
+    two paths on one line merge into a single match whenever nothing between
+    them ends a segment (only a colon does). The prose between them is lost.
+    That is a loss of diagnostic text, not a leak -- the asymmetric rule this
+    replaced bought anti-merge behaviour for one shape at the price of
+    publishing a surname, which is the wrong trade. Do not "fix" this back into
+    a leak; over-redaction is the correct direction. This test pins the exact
+    merged output so a future change to the pattern has to consciously decide
+    to alter it.
     """
     text = (
         "wrote /home/jane.doe/Jane Doe /notes.txt and see /home/other/report.log"
     )
     redacted = redact_text(text, CONTEXT)
     assert redacted == f"wrote {REDACTED_PATH}.log"
+
+
+def test_json_escaped_drive_path_is_fully_redacted() -> None:
+    r"""Fix wave 5. ``json.dumps`` doubles every backslash, and `run-manifest.json`
+    puts AEDT free text through it, so this is the shape the bundle really
+    carries. A segment could not cross the second backslash of a doubled pair,
+    so the match stopped after the drive and published the surname:
+    "C:[redacted-path]\Jane Doe[redacted-path].aedt".
+    """
+    text = json.dumps({"p": r"C:\Users\Jane Doe\model.aedt"})
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == '{"p": "' + REDACTED_PATH + '.aedt"}'
+
+
+def test_json_escaped_unc_path_is_fully_redacted_and_idempotent() -> None:
+    r"""Same defect on the UNC branch, and worse: every doubled pair read as a
+    fresh UNC opener, so the first pass left "\\[redacted-path]\share..." and a
+    second pass produced a different string again -- redaction was not
+    idempotent for the one shape the bundle writes most.
+    """
+    text = json.dumps({"p": r"\\FS01\share\Jane Doe\model.aedt"})
+    once = redact_text(text, CONTEXT)
+    assert once == '{"p": "' + REDACTED_PATH + '.aedt"}'
+    assert redact_text(once, CONTEXT) == once
+
+
+def test_json_escaped_paths_in_a_run_manifest_diagnostic_are_redacted() -> None:
+    """End-to-end shape check on the actual writer's output: `diagnostics` and
+    `stages[].diagnostic` are free text holding AEDT engine errors, and
+    `run_manifest_json` serialises them with ``json.dumps``.
+    """
+    text = json.dumps(
+        {
+            "diagnostics": [r"Engine Detected Error: C:\Users\Jane Doe\runs\m.adp"],
+            "stages": [{"diagnostic": r"see \\FS01\share\Jane Doe\solve.log"}],
+        }
+    )
+    redacted = redact_text(text, CONTEXT)
+    assert "Jane" not in redacted
+    assert "Doe" not in redacted
+    assert "FS01" not in redacted
+    assert f"{REDACTED_PATH}.adp" in redacted
+    assert f"{REDACTED_PATH}.log" in redacted
+
+
+def test_second_unc_server_name_on_a_line_is_not_stranded() -> None:
+    r"""An interior segment may contain a space, so "f.log b " plus the FIRST
+    backslash of "\\FS02" was consumed as one segment and the surviving lone
+    backslash then matched nothing: the match ended there and FS02 was published
+    intact. Reading a separator run as one separator removes the leak; the two
+    raw paths now merge, which loses the prose but never the server name.
+    """
+    for first, second in ((r"\\", r"\\"), ("//", "//"), ("//", r"\\"), (r"\\", "//")):
+        first_sep = "\\" if first == r"\\" else "/"
+        second_sep = "\\" if second == r"\\" else "/"
+        text = (
+            f"a {first}FS01{first_sep}s{first_sep}f.log"
+            f" b {second}FS02{second_sep}s{second_sep}g.csv"
+        )
+        redacted = redact_text(text, CONTEXT)
+        assert redacted == f"a {REDACTED_PATH}.csv", text
+        assert redact_text(redacted, CONTEXT) == redacted
+
+
+def test_two_json_escaped_unc_paths_on_one_line_are_redacted_separately() -> None:
+    r"""In the escaped form the opener is four backslashes and a separator is
+    two, so the two are told apart: the first match ends before the second
+    opener instead of stranding its server name, and the prose survives.
+    """
+    text = json.dumps(r"a \\FS01\s\f.log b \\FS02\s\g.csv")
+    redacted = redact_text(text, CONTEXT)
+    assert redacted == f'"a {REDACTED_PATH}.log b {REDACTED_PATH}.csv"'
+
+
+def test_extended_length_prefix_path_is_fully_redacted() -> None:
+    r"""The UNC rule read the "?" of "\\?\C:\..." as the host and stopped at the
+    excluded colon, which ate the drive letter and left the drive rule nothing to
+    anchor on: "opened [redacted-path]:\Users\Jane Doe\file.txt".
+    """
+    redacted = redact_text(r"opened \\?\C:\Users\Jane Doe\file.txt", CONTEXT)
+    assert redacted == f"opened {REDACTED_PATH}.txt"
+    assert redact_text(redacted, CONTEXT) == redacted
+
+
+def test_extended_length_unc_prefix_and_device_path_still_redact() -> None:
+    r"""The other two "\\"-prefixed forms must keep working: an extended-length
+    UNC path, and a device path whose host segment is a bare dot.
+    """
+    assert (
+        redact_text(r"opened \\?\UNC\FS01\share\Jane Doe\f.log", CONTEXT)
+        == f"opened {REDACTED_PATH}.log"
+    )
+    assert redact_text(r"\\.\PhysicalDrive0 is busy", CONTEXT) == (
+        f"{REDACTED_PATH} is busy"
+    )
+
+
+def test_a_token_is_matched_literally_not_as_a_regular_expression() -> None:
+    """Without ``re.escape`` the dots of a fully qualified host name become
+    wildcards, so an unrelated word of the same length is redacted as if it were
+    the machine.
+    """
+    context = RedactionContext(host_names=("ws42.brusa",))
+    assert redact_text("node ws42.brusa stays", context) == f"node {REDACTED_HOST} stays"
+    assert redact_text("node ws42Xbrusa stays", context) == "node ws42Xbrusa stays"
+
+
+def test_a_token_containing_regex_metacharacters_redacts_instead_of_raising() -> None:
+    """Without ``re.escape`` a name containing "[", "(", "+" or "*" makes
+    ``re.compile`` raise, so ``redact_text`` throws and nothing is redacted at
+    all. Real machine and user values reach this pattern.
+    """
+    context = RedactionContext(host_names=("brusa-ws42[+",))
+    assert (
+        redact_text("machine brusa-ws42[+ down", context)
+        == f"machine {REDACTED_HOST} down"
+    )
+
+
+def test_host_tokens_are_substituted_before_user_tokens() -> None:
+    """When a user token is a substring of a host token, substituting users
+    first replaces the prefix and leaves the rest of the machine name behind
+    ("[redacted-user]-ws42").
+    """
+    context = RedactionContext(user_names=("brusa",), host_names=("brusa-ws42",))
+    assert redact_text("session on brusa-ws42", context) == f"session on {REDACTED_HOST}"
+
+
+def test_a_colon_ends_the_final_path_segment() -> None:
+    """The colon guard is needed on the final-segment class too, not only on the
+    interior one: with a colon allowed, a "path:line:" suffix from a tool report
+    is swallowed into the match, the extension is no longer found, and the words
+    after it are deleted.
+    """
+    redacted = redact_text(r"C:\src\main.py:42: SyntaxError", CONTEXT)
+    assert redacted == f"{REDACTED_PATH}.py:42: SyntaxError"
+
+
+def test_macos_users_home_path_is_removed() -> None:
+    """The POSIX rule covers "/Users/" as well as "/home/"; that branch is what
+    catches a mac home directory, which no other rule reaches.
+    """
+    redacted = redact_text("wrote /Users/jane.doe/model.aedt", CONTEXT)
+    assert redacted == f"wrote {REDACTED_PATH}.aedt"
+
+
+def test_closing_punctuation_after_a_path_with_an_extension_is_preserved() -> None:
+    """Trailing punctuation is trimmed before the extension is looked up, so the
+    branch that KEEPS an extension has to reattach it too; only the
+    no-extension branch was covered.
+    """
+    redacted = redact_text(r"see (C:\temp\dump.log)", CONTEXT)
+    assert redacted == f"see ({REDACTED_PATH}.log)"
+
+
+def test_a_long_allowlisted_extension_survives() -> None:
+    """The extension is read with an unbounded run of characters; capping it at
+    six silently drops ".aedtresults", the extension of an AEDT result folder.
+    """
+    assert redact_text(r"C:\runs\r.aedtresults", CONTEXT) == (
+        f"{REDACTED_PATH}.aedtresults"
+    )
+
+
+def test_a_three_character_token_is_still_redacted() -> None:
+    """The minimum token length is a floor, not a bar: three characters is the
+    shortest token that IS applied, and raising the floor would publish short
+    user names such as "fpo".
+    """
+    context = RedactionContext(user_names=("fpo",))
+    assert redact_text("run by fpo", context) == f"run by {REDACTED_USER}"

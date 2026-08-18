@@ -1,4 +1,3 @@
-# src/inductor_designer/application/services/redaction.py
 """Turn diagnostic text into text that is allowed to leave this machine.
 
 BRUSA policy is that no personally identifiable information leaves BRUSA
@@ -57,22 +56,34 @@ _PATH_CHAR = r'[^\\/:\r\n"\'<>|]'
 # A FINAL path character additionally excludes whitespace, which is what bounds
 # the match: prose after a path always begins after a space.
 _FINAL_CHAR = r'[^\\/:\s"\'<>|]'
+# A RUN of separators is one separator. `json.dumps` doubles every backslash,
+# and so do `repr()` and `logger.exception`, so the same AEDT string reaches
+# this module as both "C:\Users\..." and "C:\\Users\\..." -- `run-manifest.json`
+# carries free-text `diagnostics` and `stages[].diagnostic` straight through
+# `json.dumps`. Matching only a lone backslash meant a segment could not cross
+# the second character of a doubled pair: the match stopped mid-path and
+# published everything after it, and a second pass then produced a different
+# result again.
+# The lookahead is what keeps two paths on one line apart. A run of three or
+# four (the escaped form of a UNC opener, "\\\\HOST") is not accepted as a
+# separator, so a match ends there and the following UNC path is matched on its
+# own. A run of exactly two is ambiguous -- an escaped separator and a raw UNC
+# opener look identical -- and is read as a separator, so two RAW UNC paths on
+# one line merge into a single marker with the prose between them lost. That is
+# a loss of diagnostic text, not a leak; over-redaction is the safe direction.
+_SEPARATOR = r"[\\/]{1,2}(?![\\/])"
 # An interior segment always ends in a separator, so an embedded space (the
 # surname in "Jane Doe") is unambiguous: it is followed by more path. A
-# trailing space is tolerated before EITHER separator, because
+# trailing space is tolerated before the separator, because
 # ``Path("C:/Users/Jane Doe ")/"Documents"`` really does produce
-# "...Jane Doe \Documents" on the backslash side, and the same
-# ``.as_posix()`` value produces "...Jane Doe /Documents" on the forward-slash
-# side; refusing the space on only one side broke that side's segment chain
-# and published the surname. The colon excluded from both classes above is
-# what still keeps a second Windows path ("and see D:\...") out of the match
-# on the backslash side. The forward-slash side has no such marker, so two
-# POSIX paths on one line, the first with a trailing-space component, can
-# merge into a single match and lose the prose between them -- an accepted
-# loss of diagnostic text, not a leak, since over-redaction is the safe
-# direction here. Strip trailing whitespace where such a path is written, not
-# here.
-_PATH_SEGMENT = r"(?:" + _PATH_CHAR + r"+/|" + _PATH_CHAR + r"+\\)"
+# "...Jane Doe \Documents", and the same ``.as_posix()`` value produces
+# "...Jane Doe /Documents"; refusing the space broke the segment chain there
+# and published the surname. The price is the merge described above: any two
+# paths on one line whose separators are ambiguous, or whose prose does not
+# contain a colon (the one character excluded from both classes above), are
+# read as one match. Strip trailing whitespace where such a path is written,
+# not here.
+_PATH_SEGMENT = _PATH_CHAR + r"+" + _SEPARATOR
 # The final segment may not contain whitespace, so it can never swallow the
 # rest of the sentence. No extension guessing is involved in finding its end.
 _PATH_TAIL = r"(?:" + _PATH_SEGMENT + r")*" + _FINAL_CHAR + r"*"
@@ -102,29 +113,34 @@ _EMAIL = re.compile(
 # `https://`, and `/` for the third slash of `file:///C:/...`, where matching
 # "//C" would consume the drive letter and leave the rest of the path in the text
 # for no rule to catch.
+# The opener accepts up to four backslashes so the escaped form "\\\\HOST"
+# (what `json.dumps` writes for "\\HOST") is one opener rather than two.
 _UNC_PATH = re.compile(
-    r"(?:\\\\|(?<![:/])//)" + _FINAL_CHAR + r"+(?:[\\/]" + _PATH_TAIL + r")?"
+    r"(?:\\{2,4}|(?<![:/])//)" + _FINAL_CHAR + r"+(?:" + _SEPARATOR + _PATH_TAIL + r")?"
 )
 # A drive letter must not be preceded by a word character, or the `p:` of
 # `https://` is read as one and the scheme is mangled into a path marker. This
 # still matches the drive in `file:///C:/...`, where a slash precedes it.
-_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]" + _PATH_TAIL)
+_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:" + _SEPARATOR + _PATH_TAIL)
 _POSIX_HOME_PATH = re.compile(r"/(?:home|Users)/" + _PATH_TAIL)
 _EXTENSION = re.compile(r"\.([A-Za-z0-9]+)$")
-# Trailing punctuation (closing bracket/quote, sentence punctuation) is never
-# part of the path; it is trimmed off the match and reattached verbatim so it
-# is not silently swallowed by a path that turned out to have no extension.
-_TRAILING_PUNCTUATION = ".,;:)\u2019'\""
+# Trailing punctuation (closing bracket, sentence punctuation) is never part of
+# the path; it is trimmed off the match and reattached verbatim so it is not
+# silently swallowed by a path that turned out to have no extension. Only
+# characters a match can actually end on are listed: a colon and the ASCII
+# quotes are excluded from `_FINAL_CHAR`, so no match ever ends with one.
+_TRAILING_PUNCTUATION = ".,;)\u2019"
 
 # A token contained anywhere in a marker string (e.g. user name "cted" inside
 # "[redacted-path]") would re-redact the marker it just produced, so those
 # tokens are dropped rather than applied. This makes "idempotent by
 # construction" below actually true instead of true-except-for-this-case. The
-# price is stated plainly: a machine or user actually named "reda", "host",
-# "path", "user" or "server" is never token-redacted. Idempotence is worth more,
-# because such a name is a common word that would corrupt ordinary prose, and
-# the path, e-mail and licence rules still cover it wherever it appears in a
-# path or an address.
+# price is stated plainly: EVERY substring of a marker three characters or
+# longer -- "reda", "cted", "host", "server", "ted-p" and the rest of that set,
+# not a short list of words -- is never token-redacted when it is a machine or
+# user name. Idempotence is worth more, because such a name is a common word
+# that would corrupt ordinary prose, and the path, e-mail and licence rules
+# still cover it wherever it appears in a path or an address.
 _MARKERS = (
     REDACTED_EMAIL,
     REDACTED_HOST,
@@ -177,8 +193,15 @@ def redact_text(text: str, context: RedactionContext) -> str:
     """Remove every shareability hazard. Idempotent by construction."""
     redacted = _LICENSE_SERVER.sub(REDACTED_LICENSE_SERVER, text)
     redacted = _EMAIL.sub(REDACTED_EMAIL, redacted)
-    redacted = _UNC_PATH.sub(_path_replacement, redacted)
+    # Drive letters before UNC hosts. An extended-length prefix ("\\?\C:\...")
+    # opens like a UNC pair, and the UNC rule reads "?" as the host and stops at
+    # the excluded colon, which strands the drive letter and everything after
+    # it. Anchoring on the drive first redacts the path, and the UNC rule then
+    # takes the leftover prefix with the marker. This also keeps a doubled
+    # interior separator ("C:\\Users\\Jane Doe \\Documents") from being read as
+    # a UNC opener inside a drive path.
     redacted = _DRIVE_PATH.sub(_path_replacement, redacted)
+    redacted = _UNC_PATH.sub(_path_replacement, redacted)
     redacted = _POSIX_HOME_PATH.sub(_path_replacement, redacted)
     hosts = _token_pattern(context.host_names)
     if hosts is not None:
