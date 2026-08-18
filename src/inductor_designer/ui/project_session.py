@@ -20,12 +20,17 @@ from inductor_designer.ui.generation_controller import CurrentProjectProvider
 
 _logger = logging.getLogger(LOGGER_NAME)
 
+# Deep enough to cover a working session's edits, bounded so a long session
+# cannot grow the process without limit. Each entry is one immutable project.
+UNDO_DEPTH = 50
+
 
 class ProjectSession(QObject):
     projectChanged = Signal()
     dirtyChanged = Signal()
     statusMessageChanged = Signal()
     documentPathChanged = Signal()
+    undoStackChanged = Signal()
 
     def __init__(
         self,
@@ -42,6 +47,14 @@ class ProjectSession(QObject):
         self._open_callback = open_callback
         self._dirty = False
         self._status_message = "Ready"
+        self._undo: list[InductorProject] = []
+        self._redo: list[InductorProject] = []
+        # The project as it exists on disk, or None when nothing has been
+        # written yet. `dirty` is a comparison against this, not a flag: an
+        # undo back to the saved state must re-enable the M7c Generate gate.
+        self._saved_project: InductorProject | None = (
+            project if document_path is not None else None
+        )
 
     @property
     def project(self) -> InductorProject:
@@ -63,9 +76,54 @@ class ProjectSession(QObject):
 
     def apply(self, project: InductorProject) -> None:
         """Accept an already-validated edit as the current session project."""
+        self._push_undo(self._provider.current())
+        self._redo.clear()
         self._provider.replace(project)
-        self._set_dirty(True)
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
         self.projectChanged.emit()
+
+    def _push_undo(self, project: InductorProject) -> None:
+        self._undo.append(project)
+        if len(self._undo) > UNDO_DEPTH:
+            del self._undo[0]
+
+    def _refresh_dirty(self) -> None:
+        self._set_dirty(self._provider.current() != self._saved_project)
+
+    @Slot(result=bool)
+    def undo(self) -> bool:
+        if not self._undo:
+            return False
+        self._redo.append(self._provider.current())
+        self._provider.replace(self._undo.pop())
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Undid the last edit")
+        return True
+
+    @Slot(result=bool)
+    def redo(self) -> bool:
+        if not self._redo:
+            return False
+        self._push_undo(self._provider.current())
+        self._provider.replace(self._redo.pop())
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Redid the last undone edit")
+        return True
+
+    def _get_can_undo(self) -> bool:
+        return bool(self._undo)
+
+    canUndo = Property(bool, _get_can_undo, notify=undoStackChanged)
+
+    def _get_can_redo(self) -> bool:
+        return bool(self._redo)
+
+    canRedo = Property(bool, _get_can_redo, notify=undoStackChanged)
 
     def _get_dirty(self) -> bool:
         return self._dirty
@@ -108,7 +166,8 @@ class ProjectSession(QObject):
             _logger.warning("Save failed: %s", error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._set_dirty(False)
+        self._saved_project = self.project
+        self._refresh_dirty()
         _logger.info("Project saved to %s.", self._document_path)
         self.set_status("Saved")
         return True
@@ -134,7 +193,8 @@ class ProjectSession(QObject):
             _logger.warning("Save as %s failed: %s", path, error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._set_dirty(False)
+        self._saved_project = self.project
+        self._refresh_dirty()
         self.documentPathChanged.emit()
         _logger.info("Project saved to %s.", path)
         self.set_status(f"Saved as {path.name}")
@@ -164,7 +224,13 @@ class ProjectSession(QObject):
             return False
         self._provider.replace(project)
         self._document_path = path
-        self._set_dirty(False)
+        # An Open is not an edit: the history of the previous document must
+        # not be able to overwrite the newly opened one.
+        self._undo.clear()
+        self._redo.clear()
+        self._saved_project = project
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
         self.projectChanged.emit()
         self.documentPathChanged.emit()
         _logger.info("Project opened from %s.", path)

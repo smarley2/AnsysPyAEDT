@@ -123,29 +123,59 @@ def test_menu_bar_and_items_exist_with_expected_enabled_state() -> None:
     assert menu_bar is not None
     file_menu = root.findChild(QObject, "fileMenu")
     assert file_menu is not None and file_menu.property("title") == "File"
+    edit_menu = root.findChild(QObject, "editMenu")
+    assert edit_menu is not None and edit_menu.property("title") == "Edit"
     help_menu = root.findChild(QObject, "helpMenu")
     assert help_menu is not None and help_menu.property("title") == "Help"
 
     open_item = root.findChild(QObject, "openProjectMenuItem")
     save_item = root.findChild(QObject, "saveProjectMenuItem")
     save_as_item = root.findChild(QObject, "saveProjectAsMenuItem")
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    redo_item = root.findChild(QObject, "redoMenuItem")
     exit_item = root.findChild(QObject, "exitMenuItem")
     about_item = root.findChild(QObject, "aboutMenuItem")
 
-    for item in (open_item, save_item, save_as_item, exit_item, about_item):
+    for item in (open_item, save_item, save_as_item, undo_item, redo_item, exit_item, about_item):
         assert item is not None
 
-    # No project loaded: Open/Save/Save As are all disabled, and the reason
-    # is exposed to accessibility tooling (and to this test), not just a
-    # dead button.
+    # No project loaded: Open/Save/Save As/Undo/Redo are all disabled, and
+    # the reason is exposed to accessibility tooling (and to this test), not
+    # just a dead button.
     assert open_item.property("enabled") is False
     assert save_item.property("enabled") is False
     assert save_as_item.property("enabled") is False
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is False
     assert _accessible_text(open_item, QAccessible.Description) != ""
     assert _accessible_text(save_item, QAccessible.Description) != ""
+    assert _accessible_text(undo_item, QAccessible.Description) != ""
+    assert _accessible_text(redo_item, QAccessible.Description) != ""
     # Exit and About are always available.
     assert exit_item.property("enabled") is True
     assert about_item.property("enabled") is True
+
+
+def test_undo_and_redo_menu_items_reflect_and_drive_the_session_history() -> None:
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    redo_item = root.findChild(QObject, "redoMenuItem")
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is False
+
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    assert undo_item.property("enabled") is True
+
+    _trigger(undo_item)
+    app.processEvents()
+    assert session.project.description == ""
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is True
+
+    _trigger(redo_item)
+    app.processEvents()
+    assert session.project.description == "edited"
 
 
 def test_exit_routes_through_the_same_unsaved_changes_guard_as_window_close() -> None:

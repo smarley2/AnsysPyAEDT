@@ -76,6 +76,41 @@ ApplicationWindow {
             }
         }
         Menu {
+            objectName: "editMenu"
+            title: qsTr("Edit")
+
+            MenuItem {
+                objectName: "undoMenuItem"
+                text: qsTr("Undo")
+                enabled: projectSession !== null && projectSession.canUndo
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Undo is unavailable: there is no earlier project edit to return to."
+                )
+                onTriggered: projectSession.undo()
+
+                Shortcut {
+                    sequence: StandardKey.Undo
+                    onActivated: parent.triggered()
+                }
+            }
+            MenuItem {
+                objectName: "redoMenuItem"
+                text: qsTr("Redo")
+                enabled: projectSession !== null && projectSession.canRedo
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Redo is unavailable: nothing has been undone."
+                )
+                onTriggered: projectSession.redo()
+
+                Shortcut {
+                    sequence: StandardKey.Redo
+                    onActivated: parent.triggered()
+                }
+            }
+        }
+        Menu {
             objectName: "helpMenu"
             title: qsTr("Help")
 
