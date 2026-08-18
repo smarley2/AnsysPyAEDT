@@ -44,6 +44,7 @@ class ProjectSession(QObject):
         open_callback: Callable[[Path], InductorProject] | None = None,
         autosave_callback: Callable[[InductorProject, Path | None], None] | None = None,
         recovery_cleanup: Callable[[], None] | None = None,
+        debounce_ms: int = AUTOSAVE_DEBOUNCE_MS,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -68,7 +69,7 @@ class ProjectSession(QObject):
         # session is destroyed, with no separate cleanup step to remember.
         self._autosave_timer = QTimer(self)
         self._autosave_timer.setSingleShot(True)
-        self._autosave_timer.setInterval(AUTOSAVE_DEBOUNCE_MS)
+        self._autosave_timer.setInterval(debounce_ms)
         self._autosave_timer.timeout.connect(self.flushAutosave)
 
     @property
@@ -197,7 +198,10 @@ class ProjectSession(QObject):
         self._autosave_pending = False
         self._autosave_timer.stop()
         if self._recovery_cleanup is not None:
-            self._recovery_cleanup()
+            try:
+                self._recovery_cleanup()
+            except Exception as error:  # noqa: BLE001 - a locked snapshot must not fail a successful save
+                _logger.warning("Unable to clear the recovery snapshot: %s", error)
 
     @Slot(result=bool)
     def saveProject(self) -> bool:
@@ -281,6 +285,8 @@ class ProjectSession(QObject):
         # not be able to overwrite the newly opened one.
         self._undo.clear()
         self._redo.clear()
+        self._autosave_pending = False
+        self._autosave_timer.stop()
         self._saved_project = project
         self._refresh_dirty()
         self.undoStackChanged.emit()

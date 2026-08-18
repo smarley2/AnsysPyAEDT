@@ -11,6 +11,8 @@ The index is written after the document, so a half-written pair is detected as
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +22,26 @@ from inductor_designer.domain.project import InductorProject
 
 RECOVERY_INDEX_FILENAME = "recovery-index.json"
 RECOVERY_DOCUMENT_FILENAME = "recovery.inductor.json"
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Write `text` to `path` so a crash mid-write never leaves a truncated
+    file behind. Mirrors `ProjectRepository.save`'s mkstemp + os.replace, kept
+    on the same volume as `path` so the replace is guaranteed atomic."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+            descriptor = -1
+            stream.write(text)
+            stream.flush()
+        os.replace(temporary_path, path)
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+        temporary_path.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +79,8 @@ class RecoveryStore:
             timezone.utc
         )
         self._repository.save(project, self.document_path)
-        self.index_path.write_text(
+        _write_atomic(
+            self.index_path,
             json.dumps(
                 {
                     "documentPath": None if document_path is None else str(document_path),
@@ -67,7 +90,6 @@ class RecoveryStore:
                 sort_keys=True,
             )
             + "\n",
-            encoding="utf-8",
         )
         return RecoverySnapshot(
             document_path=document_path,

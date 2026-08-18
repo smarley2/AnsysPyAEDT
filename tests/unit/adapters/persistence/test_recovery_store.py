@@ -83,13 +83,21 @@ def test_a_non_finite_value_is_refused_and_leaves_the_old_snapshot(
             ),
         ),
     )
+    # A different moment than the good write's: the module docstring's safety
+    # mechanism is writing the document BEFORE the index, so a broken write
+    # that fails validation never reaches the index at all. Reusing `NOW` for
+    # both writes would let the index get overwritten first (the ordering bug
+    # MINOR 7 describes) without this test noticing, because the timestamp
+    # would happen to match either way.
+    later = NOW.replace(hour=NOW.hour + 1)
 
     with pytest.raises(ValueError):
-        store.write(broken, None, now=NOW)
+        store.write(broken, None, now=later)
 
     snapshot = store.read()
     assert snapshot is not None
     assert store.load_project(snapshot).description == "good"
+    assert snapshot.saved_at_utc == NOW.isoformat()
 
 
 def test_a_corrupt_index_reads_as_no_snapshot(tmp_path: Path) -> None:
@@ -123,3 +131,49 @@ def test_the_index_records_the_document_path_as_written(tmp_path: Path) -> None:
     )
     assert index["documentPath"] == str(document_path)
     assert index["savedAtUtc"] == "2026-08-18T10:15:00+00:00"
+
+
+def test_a_missing_document_with_a_valid_index_reads_as_no_snapshot(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    store.write(make_project(), None, now=NOW)
+    store.document_path.unlink()
+
+    assert store.read() is None
+
+
+def test_a_crash_replacing_the_index_leaves_the_previous_index_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The index must get the same mkstemp + os.replace treatment as the
+    document (`ProjectRepository.save`), or a crash mid-write silently
+    discards an otherwise-valid snapshot. `os.replace` is shared by both
+    writes, so the first call (the document's) is left real and only the
+    second (the index's) is made to fail -- isolating the index write without
+    also breaking the document write that must precede it."""
+    import os as os_module
+
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="old"), None, now=NOW)
+    original_index = (tmp_path / "recovery" / RECOVERY_INDEX_FILENAME).read_text(
+        encoding="utf-8"
+    )
+    real_replace = os_module.replace
+    calls = {"count": 0}
+
+    def fragile_replace(source: object, destination: object) -> None:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            real_replace(source, destination)
+            return
+        raise OSError("crash mid-replace")
+
+    monkeypatch.setattr(os_module, "replace", fragile_replace)
+
+    with pytest.raises(OSError):
+        store.write(replace(make_project(), description="new"), None, now=NOW)
+
+    assert (
+        tmp_path / "recovery" / RECOVERY_INDEX_FILENAME
+    ).read_text(encoding="utf-8") == original_index

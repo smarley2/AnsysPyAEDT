@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,9 +12,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QUrl  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
-from inductor_designer.adapters.system.app_logging import LOGGER_NAME  # noqa: E402
+from inductor_designer.adapters.system.app_logging import (  # noqa: E402
+    LOGGER_NAME,
+    configure_application_logging,
+)
+from inductor_designer.application.services.redaction import RedactionContext  # noqa: E402
 from inductor_designer.domain.project import InductorProject  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
 from tests.unit.domain.test_project import make_project  # noqa: E402
@@ -151,3 +157,81 @@ def test_an_autosave_oserror_leaves_project_dirty_and_undo_history_untouched(
     assert session.undo() is True
     assert session.project.description == make_project().description
     assert any("autosave" in record.message.casefold() for record in caplog.records)
+
+
+def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autosave() -> None:
+    """Edit A, then Open B before the debounce timer fires: A's pending
+    snapshot write must be cancelled, not carried out on B's behalf. Without
+    cancelling it, the still-running timer would fire after Open and hand the
+    autosave callback the freshly opened (clean, on-disk) project -- silently
+    overwriting the one snapshot actually worth keeping."""
+    calls: list[tuple[InductorProject, Path | None]] = []
+    opened = replace(make_project(), description="from disk")
+    session = _session(calls, open_callback=lambda path: opened)
+    session.apply(replace(session.project, description="edited A"))
+
+    assert session.openProject(QUrl.fromLocalFile("other.inductor.json")) is True
+
+    session.flushAutosave()
+
+    assert calls == []
+
+
+def test_flushing_stops_the_timer_and_a_second_flush_writes_nothing() -> None:
+    calls: list[tuple[InductorProject, Path | None]] = []
+    session = _session(calls)
+    session.apply(replace(session.project, description="edited"))
+    assert session._autosave_timer.isActive() is True
+
+    session.flushAutosave()
+    session.flushAutosave()
+
+    assert session._autosave_timer.isActive() is False
+    assert len(calls) == 1
+
+
+def test_the_debounce_timer_itself_triggers_the_autosave() -> None:
+    """The only thing wired to `flushAutosave` in production is the QTimer's
+    own `timeout` signal (see `ProjectSession.__init__`). Every other test in
+    this file calls `flushAutosave()` directly, so deleting that `connect`
+    call would leave them all green while autosave never fired in the shipped
+    app. This test never calls `flushAutosave()` itself -- only a real timer
+    firing on a real event loop can make it pass."""
+    app = QGuiApplication.instance() or QGuiApplication([])
+    calls: list[tuple[InductorProject, Path | None]] = []
+    session = ProjectSession(
+        make_project(),
+        autosave_callback=lambda project, path: calls.append((project, path)),
+        debounce_ms=20,
+    )
+    session.apply(replace(session.project, description="edited"))
+
+    deadline = time.monotonic() + 5.0
+    while not calls and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert [project.description for project, _ in calls] == ["edited"]
+
+
+def test_an_autosave_failure_warning_is_redacted_on_disk(tmp_path: Path) -> None:
+    """The `OSError` text logged on autosave failure can carry the recovery
+    snapshot's absolute path, which contains the user's login name. The
+    redacting formatter is supposed to catch this like any other log line --
+    this proves it actually does, by inspecting the bytes written to disk."""
+    log_path = configure_application_logging(
+        tmp_path / "logs", RedactionContext(user_names=("jane.doe",))
+    )
+
+    def explode(project: InductorProject, path: Path | None) -> None:
+        raise OSError(r"cannot write C:\Users\jane.doe\recovery.inductor.json")
+
+    session = ProjectSession(make_project(), autosave_callback=explode)
+    session.apply(replace(session.project, description="edited"))
+
+    session.flushAutosave()
+    logging.getLogger(LOGGER_NAME).handlers[0].flush()
+
+    written = log_path.read_bytes()
+    assert b"jane.doe" not in written
+    assert b"Users" not in written
