@@ -166,8 +166,13 @@ def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autos
     autosave callback the freshly opened (clean, on-disk) project -- silently
     overwriting the one snapshot actually worth keeping."""
     calls: list[tuple[InductorProject, Path | None]] = []
+    cleanups: list[int] = []
     opened = replace(make_project(), description="from disk")
-    session = _session(calls, open_callback=lambda path: opened)
+    session = _session(
+        calls,
+        open_callback=lambda path: opened,
+        recovery_cleanup=lambda: cleanups.append(1),
+    )
     session.apply(replace(session.project, description="edited A"))
 
     assert session.openProject(QUrl.fromLocalFile("other.inductor.json")) is True
@@ -175,6 +180,10 @@ def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autos
     session.flushAutosave()
 
     assert calls == []
+    # Cancelling is not the same as discarding. A's snapshot is the one worth
+    # keeping, so Open must leave it on disk: clearing it here would pass the
+    # assertion above while destroying the very recovery this task exists for.
+    assert cleanups == []
 
 
 def test_flushing_stops_the_timer_and_a_second_flush_writes_nothing() -> None:
