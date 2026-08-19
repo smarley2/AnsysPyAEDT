@@ -25,6 +25,14 @@ ApplicationWindow {
     color: "#f3f1ed"
     title: qsTr("PyAEDT Inductor Designer")
 
+    Component.onCompleted: {
+        if (typeof recoveryController !== "undefined"
+            && recoveryController !== null
+            && recoveryController.available) {
+            recoveryDialog.open()
+        }
+    }
+
     menuBar: MenuBar {
         objectName: "appMenuBar"
 
@@ -801,6 +809,40 @@ ApplicationWindow {
                         .arg(appInfo.supportedAedtEdition)
                     : ""
                 Accessible.name: text
+            }
+        }
+    }
+
+    Dialog {
+        id: recoveryDialog
+        objectName: "recoveryDialog"
+        title: qsTr("Recover unsaved changes?")
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.NoAutoClose
+
+        contentItem: Label {
+            objectName: "recoveryDialogMessage"
+            text: recoveryController === null ? "" : recoveryController.summary
+            wrapMode: Text.WordWrap
+        }
+
+        footer: DialogButtonBox {
+            Button {
+                objectName: "recoverButton"
+                text: qsTr("Recover")
+                onClicked: {
+                    recoveryController.recover()
+                    recoveryDialog.close()
+                }
+            }
+            Button {
+                objectName: "discardRecoveryButton"
+                text: qsTr("Discard")
+                onClicked: {
+                    recoveryController.discard()
+                    recoveryDialog.close()
+                }
             }
         }
     }

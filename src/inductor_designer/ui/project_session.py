@@ -100,6 +100,20 @@ class ProjectSession(QObject):
         self.projectChanged.emit()
         self._schedule_autosave()
 
+    def applyRecovered(self, project: InductorProject) -> None:
+        """Adopt a recovered snapshot as the current project.
+
+        Deliberately not `apply`: there is no earlier in-session edit to undo
+        back to, and the recovered project is not on disk, so it stays dirty.
+        """
+        self._undo.clear()
+        self._redo.clear()
+        self._provider.replace(project)
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Recovered unsaved changes")
+
     def _push_undo(self, project: InductorProject) -> None:
         self._undo.append(project)
         if len(self._undo) > UNDO_DEPTH:

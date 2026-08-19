@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from inductor_designer.ui.preliminary_controller import PreliminaryController
     from inductor_designer.ui.preview_geometry import PreviewEntry
     from inductor_designer.ui.project_session import ProjectSession
+    from inductor_designer.ui.recovery_controller import RecoveryController
     from inductor_designer.ui.review_controller import ReviewController
     from inductor_designer.ui.simulation_controller import SimulationController
 
@@ -44,6 +45,7 @@ def create_engine(
     simulation_controller: SimulationController | None = None,
     review_controller: ReviewController | None = None,
     app_info_controller: AppInfoController | None = None,
+    recovery_controller: RecoveryController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -64,6 +66,7 @@ def create_engine(
     engine.rootContext().setContextProperty("simulationController", simulation_controller)
     engine.rootContext().setContextProperty("reviewController", review_controller)
     engine.rootContext().setContextProperty("appInfo", app_info_controller)
+    engine.rootContext().setContextProperty("recoveryController", recovery_controller)
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -196,6 +199,7 @@ def main() -> int:
     preview_entries: list[PreviewEntry] | None = None
     simulation_summary: list[str] = []
     generation_controller: GenerationController | None = None
+    recovery_controller: RecoveryController | None = None
     backend_choices: list[str] = []
     project: InductorProject | None = None
     if args.project is not None:
@@ -240,6 +244,7 @@ def main() -> int:
         )
         from inductor_designer.adapters.system.environment import recovery_directory
         from inductor_designer.ui.project_session import ProjectSession
+        from inductor_designer.ui.recovery_controller import RecoveryController
 
         project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
         recovery_store = RecoveryStore(recovery_directory(), project_repository)
@@ -268,6 +273,13 @@ def main() -> int:
 
         session.set_save_callback(save_project)
         generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
+
+        # Assigned to a name, not passed inline, for the same reason as
+        # `app_info_controller` below: a parent-less QObject with no
+        # surviving Python reference is garbage collected out from under
+        # `setContextProperty`, and this function's own stack frame is what
+        # keeps it alive for the life of the app.
+        recovery_controller = RecoveryController(recovery_store, session)
 
     material_repository = FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY)
     material_studio_controller = MaterialStudioController(
@@ -350,6 +362,7 @@ def main() -> int:
         simulation_controller,
         review_controller,
         app_info_controller,
+        recovery_controller,
     )
     roots = engine.rootObjects()
     if not roots:
