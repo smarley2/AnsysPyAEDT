@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.ui.app_info_controller import AppInfoController
     from inductor_designer.ui.core_material_controller import CoreMaterialController
+    from inductor_designer.ui.diagnostics_controller import DiagnosticsController
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.guided_studio_controller import GuidedStudioController
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
@@ -47,6 +48,7 @@ def create_engine(
     review_controller: ReviewController | None = None,
     app_info_controller: AppInfoController | None = None,
     recovery_controller: RecoveryController | None = None,
+    diagnostics_controller: DiagnosticsController | None = None,
 ) -> QQmlApplicationEngine:
     from PySide6.QtCore import QUrl
     from PySide6.QtQml import QQmlApplicationEngine
@@ -68,6 +70,7 @@ def create_engine(
     engine.rootContext().setContextProperty("reviewController", review_controller)
     engine.rootContext().setContextProperty("appInfo", app_info_controller)
     engine.rootContext().setContextProperty("recoveryController", recovery_controller)
+    engine.rootContext().setContextProperty("diagnosticsController", diagnostics_controller)
     engine.load(QUrl.fromLocalFile(str(qml_directory() / "Main.qml")))
     return engine
 
@@ -189,7 +192,7 @@ def main() -> int:
     )
 
     redaction_context = environment_redaction_context()
-    configure_application_logging(log_directory(), redaction_context)
+    app_log_path = configure_application_logging(log_directory(), redaction_context)
     logger = logging.getLogger(LOGGER_NAME)
     logger.info("Application %s starting.", __version__)
 
@@ -201,6 +204,7 @@ def main() -> int:
     simulation_summary: list[str] = []
     generation_controller: GenerationController | None = None
     recovery_controller: RecoveryController | None = None
+    diagnostics_controller: DiagnosticsController | None = None
     backend_choices: list[str] = []
     project: InductorProject | None = None
     if args.project is not None:
@@ -244,6 +248,7 @@ def main() -> int:
             SchemaRepository,
         )
         from inductor_designer.adapters.system.environment import recovery_directory
+        from inductor_designer.ui.diagnostics_controller import DiagnosticsController
         from inductor_designer.ui.project_session import ProjectSession
         from inductor_designer.ui.recovery_controller import RecoveryController
 
@@ -298,6 +303,9 @@ def main() -> int:
         # `setContextProperty`, and this function's own stack frame is what
         # keeps it alive for the life of the app.
         recovery_controller = RecoveryController(recovery_store, session)
+        diagnostics_controller = DiagnosticsController(
+            session, app_log_path, redaction_context
+        )
 
     material_repository = FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY)
     material_studio_controller = MaterialStudioController(
@@ -381,6 +389,7 @@ def main() -> int:
         review_controller,
         app_info_controller,
         recovery_controller,
+        diagnostics_controller,
     )
     roots = engine.rootObjects()
     if not roots:

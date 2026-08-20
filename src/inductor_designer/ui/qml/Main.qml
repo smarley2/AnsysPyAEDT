@@ -127,6 +127,16 @@ ApplicationWindow {
             title: qsTr("Help")
 
             MenuItem {
+                objectName: "saveDiagnosticBundleMenuItem"
+                text: qsTr("Save diagnostic bundle…")
+                enabled: diagnosticsController !== null
+                Accessible.name: text
+                onTriggered: {
+                    saveBundleDialog.currentFile = ""
+                    saveBundleDialog.open()
+                }
+            }
+            MenuItem {
                 objectName: "aboutMenuItem"
                 text: qsTr("About")
                 Accessible.name: text
@@ -776,6 +786,15 @@ ApplicationWindow {
                 projectSession.saveProjectAs(selectedFile)
             }
         }
+    }
+
+    FileDialog {
+        id: saveBundleDialog
+        objectName: "saveBundleDialog"
+        title: qsTr("Save diagnostic bundle")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Diagnostic bundle (*.zip)")]
+        onAccepted: diagnosticsController.saveBundle(selectedFile)
     }
 
     Dialog {
