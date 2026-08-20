@@ -90,7 +90,9 @@ def test_a_newer_snapshot_is_offered_and_summarised(tmp_path: Path) -> None:
     controller = RecoveryController(store, session)
 
     assert controller.available is True
-    assert "2026-08-18" in controller.summary
+    # Local time, so the date must be derived rather than hardcoded: a UTC+12
+    # or later machine renders LATER as the following day.
+    assert LATER.astimezone().strftime("%Y-%m-%d") in controller.summary
 
 
 def test_recover_loads_the_snapshot_dirty_without_touching_disk(
@@ -341,3 +343,43 @@ def test_a_relative_and_an_absolute_spelling_of_the_same_document_still_match(
     session = ProjectSession(make_project(), document_path=respelled)
 
     assert RecoveryController(store, session).available is True
+
+
+def test_an_unrenderable_timestamp_still_describes_the_snapshot(tmp_path: Path) -> None:
+    """A year-9999 or pre-epoch stamp is offerable but not locally renderable.
+
+    `astimezone()` raises OSError on Windows outside the range the platform can
+    represent, and the summary caught nothing: the dialog opened with an EMPTY
+    message, asking the user to choose Recover or Discard with nothing to go on.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    _corrupt_saved_at(store, document, "9999-12-31T23:59:59+00:00")
+    controller = RecoveryController(store, ProjectSession(make_project(), document_path=document))
+
+    assert controller.available is True
+    assert "9999-12-31" in controller.summary
+
+
+def test_a_failing_discard_still_dismisses_the_offer(tmp_path: Path) -> None:
+    """`clear()` unlinks two files and raises on Windows when either is locked.
+
+    Unguarded, the exception escaped into the dialog's `onClicked` handler so
+    `close()` never ran -- a modal with NoAutoClose and no Cancel button, whose
+    only remaining exit was to press Recover.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    controller = RecoveryController(store, ProjectSession(make_project(), document_path=document))
+
+    def refuse() -> None:
+        raise PermissionError("locked by antivirus")
+
+    store.clear = refuse  # type: ignore[method-assign]
+
+    assert controller.discard() is True
+    assert controller.available is False

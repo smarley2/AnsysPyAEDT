@@ -144,11 +144,17 @@ class RecoveryController(QObject):
         # lagging the content, so naming the write is more honest than
         # naming the edit. Rendered in local time -- the raw UTC ISO string
         # reads hours off to a user outside UTC.
-        recorded_at = (
-            snapshot.saved_at_utc
-            if saved_at is None
-            else saved_at.astimezone().strftime("%Y-%m-%d %H:%M")
-        )
+        recorded_at = snapshot.saved_at_utc
+        if saved_at is not None:
+            try:
+                recorded_at = saved_at.astimezone().strftime("%Y-%m-%d %H:%M")
+            except (OSError, OverflowError, ValueError):
+                # `astimezone` fails outside the range the platform can render
+                # locally -- a year 9999 or pre-1970 stamp raises OSError on
+                # Windows. `_parse_saved_at` keeps such a snapshot offerable, so
+                # without this the dialog opened with an EMPTY message and asked
+                # the user to choose Recover or Discard with nothing to go on.
+                recorded_at = snapshot.saved_at_utc
         return (
             f"The last autosave for {target} was recorded at {recorded_at}. "
             "Recover it, or discard it and keep the version on disk."
@@ -177,7 +183,18 @@ class RecoveryController(QObject):
 
     @Slot(result=bool)
     def discard(self) -> bool:
-        self._store.clear()
+        try:
+            self._store.clear()
+        except OSError as error:
+            # `clear()` unlinks two files, which raises on Windows when either is
+            # locked or read-only -- antivirus, a sync client. `ProjectSession`
+            # already guards this same call for that reason. Unguarded here, the
+            # exception escaped into the dialog's `onClicked` and `close()` never
+            # ran: a modal with `NoAutoClose` and no Cancel, so the only way out
+            # was to press Recover. Discarding is best-effort; the offer is
+            # dropped either way, and a stale snapshot is caught next launch by
+            # the byte-identity and freshness checks.
+            _logger.warning("Recovery snapshot could not be cleared: %s", error)
         self._snapshot = None
         self.offerChanged.emit()
         return True
