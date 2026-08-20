@@ -274,6 +274,19 @@ def main() -> int:
         session.set_save_callback(save_project)
         generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
 
+        # A run directory still reading "running" at startup means its process
+        # died mid-run. Reconcile it to "interrupted" so Review never reads it
+        # as a result; a failure here must never block opening the app, since
+        # the project itself is unaffected.
+        import contextlib
+
+        from inductor_designer.application.services.run_recovery import (
+            reconcile_unfinished_runs,
+        )
+
+        with contextlib.suppress(OSError):
+            reconcile_unfinished_runs(args.project)
+
         # Assigned to a name, not passed inline, for the same reason as
         # `app_info_controller` below: a parent-less QObject with no
         # surviving Python reference is garbage collected out from under

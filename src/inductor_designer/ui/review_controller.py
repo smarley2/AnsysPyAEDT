@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from inductor_designer.application.services.run_recovery import (
+    UnfinishedRun,
+    find_unfinished_runs,
+)
 from inductor_designer.application.services.simulation_summary import (
     simulation_summary,
 )
@@ -207,7 +211,23 @@ class ReviewController(QObject):
                 {"label": "Solver notice", "text": warning}
                 for warning in manifest.warnings
             )
+        for run in self._interrupted_runs():
+            rows.append(
+                {
+                    "label": "Interrupted run",
+                    "text": (
+                        f"{run.run_id} ({run.backend}): no result. Start a new "
+                        "run; this directory cannot be solved again."
+                    ),
+                }
+            )
         return rows
+
+    def _interrupted_runs(self) -> tuple[UnfinishedRun, ...]:
+        document_path = self._session.document_path
+        if document_path is None:
+            return ()
+        return find_unfinished_runs(document_path)
 
     def _get_sections(self) -> list[dict[str, object]]:
         results = self._generation.last_result_set
@@ -265,6 +285,18 @@ class ReviewController(QObject):
 
     canOpenRunFolder = Property(bool, _get_can_open_run_folder, notify=reviewChanged)
 
+    def _get_interrupted_runs(self) -> list[dict[str, str]]:
+        return [
+            {
+                "runId": run.run_id,
+                "backend": run.backend,
+                "startedUtc": run.started_utc or "",
+            }
+            for run in self._interrupted_runs()
+        ]
+
+    interruptedRuns = Property(list, _get_interrupted_runs, notify=reviewChanged)
+
     def _get_message(self) -> str:
         return self._message
 
@@ -303,3 +335,10 @@ class ReviewController(QObject):
     @Slot(result=bool)
     def openRunFolder(self) -> bool:
         return self._open(self._generation.last_run_directory, "run folder")
+
+    @Slot(str, result=bool)
+    def openRunFolderById(self, run_id: str) -> bool:
+        for run in self._interrupted_runs():
+            if run.run_id == run_id:
+                return self._open(run.directory, "run folder")
+        return False

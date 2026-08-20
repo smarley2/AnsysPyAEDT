@@ -117,6 +117,20 @@ Pane {
                 }
             }
 
+            Repeater {
+                id: interruptedRuns
+                objectName: "interruptedRunButtons"
+                model: reviewPage.controller !== null ? reviewPage.controller.interruptedRuns : []
+                delegate: Button {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    activeFocusOnTab: true
+                    text: qsTr("Open run folder (%1, interrupted)").arg(modelData.runId)
+                    Accessible.name: qsTr("Open the folder for the interrupted run %1").arg(modelData.runId)
+                    onClicked: reviewPage.controller.openRunFolderById(modelData.runId)
+                }
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8

@@ -30,6 +30,9 @@ class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    # A run whose process died before it could write its own outcome. Set only
+    # by run recovery, never by an adapter.
+    INTERRUPTED = "interrupted"
 
 
 class StageStatus(str, Enum):

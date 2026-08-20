@@ -8,6 +8,7 @@ storage is the existing lock-protected `CurrentProjectProvider`.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +16,9 @@ from pathlib import Path
 from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from inductor_designer.adapters.system.app_logging import LOGGER_NAME
+from inductor_designer.application.services.run_recovery import (
+    reconcile_unfinished_runs,
+)
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.ui.generation_controller import CurrentProjectProvider
 
@@ -295,6 +299,12 @@ class ProjectSession(QObject):
             return False
         self._provider.replace(project)
         self._document_path = path
+        # A run directory beside the newly opened document may still read
+        # "running" from a process that died mid-run; reconcile it to
+        # "interrupted" now so Review never reads it as a result. A
+        # reconciliation failure must never block the open itself.
+        with contextlib.suppress(OSError):
+            reconcile_unfinished_runs(path)
         # An Open is not an edit: the history of the previous document must
         # not be able to overwrite the newly opened one.
         self._undo.clear()
