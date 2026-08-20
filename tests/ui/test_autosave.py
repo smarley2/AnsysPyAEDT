@@ -139,17 +139,12 @@ def test_an_autosave_oserror_leaves_project_dirty_and_undo_history_untouched(
     session = ProjectSession(make_project(), autosave_callback=explode)
     session.apply(replace(session.project, description="edited"))
 
-    # caplog's handler lives on the root logger; attach it to this logger
-    # directly too, because an earlier test in the same xdist worker may have
-    # called `configure_application_logging`, which sets
-    # `propagate = False` on it for the rest of the process.
-    logger = logging.getLogger(LOGGER_NAME)
-    logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-            session.flushAutosave()
-    finally:
-        logger.removeHandler(caplog.handler)
+    # `conftest.py`'s autouse `reset_recovery_logger_propagation` fixture
+    # undoes `configure_application_logging`'s process-wide
+    # `propagate = False` on this logger before every test, so caplog's
+    # root-logger handler sees records here without being attached directly.
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        session.flushAutosave()
 
     assert session.project.description == "edited"
     assert session.dirty is True

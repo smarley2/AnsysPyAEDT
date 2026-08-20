@@ -137,13 +137,12 @@ def test_a_failing_recovery_cleanup_does_not_fail_a_successful_save(
     )
     session.apply(replace(session.project, description="edited"))
 
-    logger = logging.getLogger(LOGGER_NAME)
-    logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-            result = session.saveProject()
-    finally:
-        logger.removeHandler(caplog.handler)
+    # `conftest.py`'s autouse `reset_recovery_logger_propagation` fixture
+    # undoes `configure_application_logging`'s process-wide
+    # `propagate = False` on this logger before every test, so caplog's
+    # root-logger handler sees records here without being attached directly.
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        result = session.saveProject()
 
     assert result is True
     assert session.dirty is False

@@ -43,6 +43,7 @@ CONTROLLER_CONTEXT_PROPERTIES = (
     "preliminaryController",
     "simulationController",
     "reviewController",
+    "recoveryController",
 )
 # objectName -> the QML `controller` property it must be bound to. A dropped
 # or reordered controller still lets the panel *load* (its `controller`

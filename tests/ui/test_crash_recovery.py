@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import replace
@@ -53,6 +54,22 @@ def _saved_document(tmp_path: Path) -> Path:
     timestamp = DOCUMENT_SAVED_AT.timestamp()
     os.utime(path, (timestamp, timestamp))
     return path
+
+
+def _corrupt_saved_at(store: RecoveryStore, document_path: Path | None, saved_at_utc: str) -> None:
+    """Overwrite a freshly-written index's `savedAtUtc` with an arbitrary
+    string, simulating an index left behind by another build or mangled out
+    of band -- `RecoveryStore.read()` only validates that this field is a
+    string at all, not that it is a well-formed, timezone-aware timestamp."""
+    store.index_path.write_text(
+        json.dumps(
+            {
+                "documentPath": None if document_path is None else str(document_path),
+                "savedAtUtc": saved_at_utc,
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_no_snapshot_means_no_offer(tmp_path: Path) -> None:
@@ -177,19 +194,12 @@ def test_a_load_failure_is_logged_and_leaves_the_application_usable(
     session = ProjectSession(make_project())
     controller = RecoveryController(store, session)
 
-    # `configure_application_logging` (run by any earlier test that calls
-    # `main()`, e.g. test_main_wiring.py) sets `propagate = False` on this
-    # named logger so it never doubles up into the root logger in production.
-    # caplog's handler lives on the root logger, so it must be attached here
-    # directly or a run of the full suite silently stops capturing anything
-    # this logger emits -- a single-file run would never catch that.
-    app_logger = logging.getLogger(LOGGER_NAME)
-    app_logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-            result = controller.recover()
-    finally:
-        app_logger.removeHandler(caplog.handler)
+    # `conftest.py`'s autouse `reset_recovery_logger_propagation` fixture
+    # undoes `configure_application_logging`'s process-wide
+    # `propagate = False` on this logger before every test, so caplog's
+    # root-logger handler sees records here without being attached directly.
+    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+        result = controller.recover()
 
     assert result is False
     assert session.project.description == make_project().description
@@ -211,3 +221,123 @@ def test_discard_then_a_second_launch_does_not_offer_again(tmp_path: Path) -> No
     second_controller = RecoveryController(store, second_session)
 
     assert second_controller.available is False
+
+
+def test_a_naive_datetime_index_is_treated_as_utc_and_does_not_crash(
+    tmp_path: Path,
+) -> None:
+    """An index written by another build (or mangled out of band) can carry a
+    timezone-naive `savedAtUtc`. Comparing that directly against the
+    document's timezone-aware mtime used to raise `TypeError` out of
+    `RecoveryController.__init__`, taking startup down with it -- the exact
+    failure this task exists to prevent."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    _corrupt_saved_at(store, document, "2026-08-18T12:00:00")
+    session = ProjectSession(make_project(), document_path=document)
+
+    controller = RecoveryController(store, session)
+
+    assert controller.available is True
+
+
+def test_a_naive_date_only_index_is_treated_as_utc_and_does_not_crash(
+    tmp_path: Path,
+) -> None:
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    _corrupt_saved_at(store, document, "2026-08-18")
+    session = ProjectSession(make_project(), document_path=document)
+
+    controller = RecoveryController(store, session)
+
+    assert controller.available is True
+
+
+def test_an_unparseable_timestamp_index_is_not_offered_and_does_not_crash(
+    tmp_path: Path,
+) -> None:
+    """Covers the `except ValueError: return None` branch directly: a
+    mutant that replaces it with `return snapshot` would offer garbage."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    _corrupt_saved_at(store, document, "not-a-date")
+    session = ProjectSession(make_project(), document_path=document)
+
+    controller = RecoveryController(store, session)
+
+    assert controller.available is False
+
+
+def test_a_snapshot_identical_to_the_document_after_edit_and_undo_is_not_offered(
+    tmp_path: Path,
+) -> None:
+    """`undo()` autosaves too (see `ProjectSession.undo`), so editing and then
+    undoing back to the last-saved state before a crash leaves a snapshot
+    that is *newer* than the document but changes nothing in it. Offering
+    that describes work that does not exist, and -- since `recover()` reports
+    success -- tells the user it recovered something it did not."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    session = ProjectSession(
+        make_project(),
+        document_path=document,
+        autosave_callback=lambda project, path: store.write(project, path, now=LATER),
+    )
+
+    session.apply(replace(session.project, description="edited"))
+    session.flushAutosave()
+    session.undo()
+    session.flushAutosave()
+
+    assert RecoveryController(store, session).available is False
+
+
+def test_an_unreadable_document_falls_through_to_still_offering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The byte-comparison guard must not turn "can't tell" into a crash: an
+    `OSError` reading the document (locked, permissions, a race with another
+    process) must fall through to still offering, not raise or silently
+    withhold the one recovery that does exist."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    session = ProjectSession(make_project(), document_path=document)
+
+    real_read_bytes = Path.read_bytes
+
+    def flaky_read_bytes(self: Path) -> bytes:
+        if self == document:
+            raise OSError("locked by another process")
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky_read_bytes)
+
+    assert RecoveryController(store, session).available is True
+
+
+def test_a_relative_and_an_absolute_spelling_of_the_same_document_still_match(
+    tmp_path: Path,
+) -> None:
+    """`main.py` passes `args.project` unresolved, so a launch with a
+    relative path and a launch with an absolute one must still recognise the
+    same document -- otherwise a valid offer is silently withheld."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document = _saved_document(tmp_path)
+    store = _store(tmp_path)
+    store.write(replace(make_project(), description="unsaved"), document, now=LATER)
+    # Same file, spelled differently: resolving must collapse the `..` back
+    # to the same path `document` already is.
+    respelled = tmp_path / "elsewhere" / ".." / document.name
+    session = ProjectSession(make_project(), document_path=respelled)
+
+    assert RecoveryController(store, session).available is True

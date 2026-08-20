@@ -26,9 +26,7 @@ ApplicationWindow {
     title: qsTr("PyAEDT Inductor Designer")
 
     Component.onCompleted: {
-        if (typeof recoveryController !== "undefined"
-            && recoveryController !== null
-            && recoveryController.available) {
+        if (recoveryController !== null && recoveryController.available) {
             recoveryDialog.open()
         }
     }
