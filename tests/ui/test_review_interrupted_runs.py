@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from inductor_designer.simulation.run_contracts import RunStatus  # noqa: E402
+from tests.ui.conftest import wait_until_idle  # noqa: E402
 
 pytestmark = pytest.mark.ui
 
@@ -70,11 +72,50 @@ def test_open_run_folder_by_id_reaches_the_path_opener(tmp_path: Path) -> None:
     assert env.opener.opened == [directory]
 
 
+def test_a_run_in_flight_is_never_shown_as_interrupted(tmp_path: Path) -> None:
+    """Every run writes the same "running" marker this process's own live run
+    is currently sitting under -- so while `generation.busy` is True, that
+    manifest must not be read back as evidence of an abandoned run."""
+    app = QGuiApplication.instance() or QGuiApplication([])
+    from tests.ui.test_review_controller import review_controller_environment
+
+    release = threading.Event()
+
+    def blocking_runner(_request: object) -> tuple[str, ...]:
+        release.wait(timeout=5.0)
+        return ("done",)
+
+    env = review_controller_environment(tmp_path, runner=blocking_runner)
+    # The directory this live run itself would be writing to right now.
+    _interrupted_run(env.document_path)
+
+    env.generation.generate("Maxwell 3D")
+    try:
+        env.controller.refresh()
+
+        assert env.controller.interruptedRuns == []
+        run_section = next(
+            section
+            for section in env.controller.sections
+            if section["title"] == "Run request"
+        )
+        assert not any(
+            row["label"] == "Interrupted run" for row in run_section["rows"]
+        )
+    finally:
+        release.set()
+        wait_until_idle(app, env.generation)
+
+
 def test_an_unknown_run_id_opens_nothing(tmp_path: Path) -> None:
     QGuiApplication.instance() or QGuiApplication([])
     from tests.ui.test_review_controller import review_controller_environment
 
     env = review_controller_environment(tmp_path)
+    # An interrupted run must exist so the loop body actually runs and
+    # compares ids -- otherwise an empty list makes the "no match" assertion
+    # trivially true even for a controller that opens the wrong folder.
+    _interrupted_run(env.document_path)
     env.controller.refresh()
 
     assert env.controller.openRunFolderById("19700101-000000") is False

@@ -146,3 +146,18 @@ def test_a_cancelled_run_is_not_unfinished(tmp_path: Path) -> None:
     _run(tmp_path, "20260818-101500", "femm", RunStatus.CANCELLED.value)
 
     assert find_unfinished_runs(project) == ()
+
+
+def test_a_directory_without_a_known_backend_suffix_is_ignored(tmp_path: Path) -> None:
+    """A `runs/` subdirectory this module did not create (any name not ending
+    in a `RunBackend` suffix) must never be treated as a run: not listed as
+    unfinished, and never written into by reconcile."""
+    project = _project(tmp_path)
+    directory = tmp_path / "runs" / "not-a-run"
+    directory.mkdir(parents=True)
+
+    assert find_unfinished_runs(project) == ()
+
+    reconcile_unfinished_runs(project, now=NOW)
+
+    assert list(directory.iterdir()) == []

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import replace
@@ -16,6 +17,7 @@ from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from inductor_designer.adapters.system.app_logging import LOGGER_NAME  # noqa: E402
 from inductor_designer.domain.project import InductorProject  # noqa: E402
+from inductor_designer.simulation.run_contracts import RunStatus  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
 from tests.unit.domain.test_project import make_project  # noqa: E402
 
@@ -150,3 +152,67 @@ def test_a_failing_recovery_cleanup_does_not_fail_a_successful_save(
     assert any(
         "recovery snapshot" in record.message.casefold() for record in caplog.records
     )
+
+
+def _running_manifest(document_path: Path) -> Path:
+    manifest_path = (
+        document_path.parent / "runs" / "20260818-101500-maxwell-3d" / "run-manifest.json"
+    )
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "runId": "20260818-101500",
+                "backend": "maxwell-3d",
+                "mode": "generate-and-solve",
+                "status": RunStatus.RUNNING.value,
+                "startedUtc": "2026-08-18T10:15:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+def test_opening_a_project_while_a_run_is_busy_skips_reconciliation(
+    tmp_path: Path,
+) -> None:
+    """Reproduces the race a reviewer demonstrated: reconciling on Open can
+    catch a run between its own manifest write and this one, permanently
+    overwriting a real "succeeded" record with "interrupted". The
+    `is_run_busy` check is what closes that window -- without it, this test's
+    manifest would be rewritten to `interrupted` by the `openProject` call
+    below."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document_path = tmp_path / "boost.inductor.json"
+    document_path.write_text("{}", encoding="utf-8")
+    manifest_path = _running_manifest(document_path)
+    before = manifest_path.read_text(encoding="utf-8")
+
+    session = ProjectSession(
+        make_project(),
+        open_callback=lambda path: make_project(),
+        is_run_busy=lambda: True,
+    )
+
+    assert session.openProject(QUrl.fromLocalFile(str(document_path))) is True
+    assert manifest_path.read_text(encoding="utf-8") == before
+
+
+def test_opening_a_project_while_idle_still_reconciles(tmp_path: Path) -> None:
+    """The other half of the guard: with no run in flight, Open must keep
+    reconciling a stale "running" marker exactly as before."""
+    QGuiApplication.instance() or QGuiApplication([])
+    document_path = tmp_path / "boost.inductor.json"
+    document_path.write_text("{}", encoding="utf-8")
+    manifest_path = _running_manifest(document_path)
+
+    session = ProjectSession(
+        make_project(),
+        open_callback=lambda path: make_project(),
+        is_run_busy=lambda: False,
+    )
+
+    assert session.openProject(QUrl.fromLocalFile(str(document_path))) is True
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert document["status"] == RunStatus.INTERRUPTED.value

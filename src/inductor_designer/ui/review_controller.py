@@ -224,6 +224,14 @@ class ReviewController(QObject):
         return rows
 
     def _interrupted_runs(self) -> tuple[UnfinishedRun, ...]:
+        # `_write_running_marker` (application/services/project_run.py) writes
+        # the identical "status": "running" marker for a run this process is
+        # executing right now and for one an earlier process abandoned mid-run
+        # -- the manifest alone cannot tell the two apart. `busy` is this
+        # process's own record of which case it is, so a run in flight is
+        # never listed here, no matter what its manifest currently says.
+        if self._generation.busy:
+            return ()
         document_path = self._session.document_path
         if document_path is None:
             return ()

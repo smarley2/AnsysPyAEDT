@@ -25,7 +25,7 @@ from inductor_designer.application.services.run_directory import (
     MANIFEST_FILENAME,
     RUNS_DIRECTORY_NAME,
 )
-from inductor_designer.simulation.run_contracts import RunStatus
+from inductor_designer.simulation.run_contracts import RunBackend, RunStatus
 
 INTERRUPTED_DIAGNOSTIC = "run.interrupted_before_completion"
 UNSOLVED_ARTIFACT_DIAGNOSTIC = "run.artifact_saved_but_unsolved"
@@ -39,9 +39,9 @@ _INTERRUPTED_MESSAGE = (
     "result was produced, and no part of this run may be read as a result."
 )
 _UNSOLVED_ARTIFACT_MESSAGE = (
-    "A solver project was saved before the analysis ran, so it holds geometry "
-    "and setup but no solution. Start a new run, which gets its own "
-    "directory; solving this directory again fails on its missing solver data."
+    "This run never recorded a completed analysis, so the saved project may "
+    "hold no solution. Start a new run, which gets its own directory; "
+    "solving this directory again fails on its missing solver data."
 )
 
 
@@ -70,14 +70,19 @@ def _read_document(path: Path) -> dict[str, object] | None:
     return loaded if isinstance(loaded, dict) else None
 
 
-def _identity_from_directory(directory: Path) -> tuple[str, str]:
-    """`<run-id>-<backend>` split from the right, because a run id has hyphens."""
+def _identity_from_directory(directory: Path) -> tuple[str, str] | None:
+    """`<run-id>-<backend>` split from the right, because a run id has hyphens.
+
+    `None` when the name carries none of `RunBackend`'s suffixes: such a
+    directory is not a run this module created, so it is not this module's
+    business to write a manifest into it (see `find_unfinished_runs`).
+    """
     name = directory.name
-    for backend in ("maxwell-3d", "maxwell-2d", "femm"):
-        suffix = f"-{backend}"
+    for backend in RunBackend:
+        suffix = f"-{backend.value}"
         if name.endswith(suffix):
-            return name[: -len(suffix)], backend
-    return name, "unknown"
+            return name[: -len(suffix)], backend.value
+    return None
 
 
 def find_unfinished_runs(project_document_path: Path) -> tuple[UnfinishedRun, ...]:
@@ -97,14 +102,19 @@ def find_unfinished_runs(project_document_path: Path) -> tuple[UnfinishedRun, ..
         return ()
     unfinished: list[UnfinishedRun] = []
     for directory in sorted(entry for entry in runs_root.iterdir() if entry.is_dir()):
+        identity = _identity_from_directory(directory)
+        if identity is None:
+            # Not a run this module created (see `_identity_from_directory`):
+            # skip it rather than writing a manifest into an unrelated folder.
+            continue
+        fallback_id, fallback_backend = identity
         manifest_path = directory / MANIFEST_FILENAME
         document = _read_document(manifest_path) if manifest_path.is_file() else None
         if document is None:
-            run_id, backend = _identity_from_directory(directory)
             unfinished.append(
                 UnfinishedRun(
-                    run_id=run_id,
-                    backend=backend,
+                    run_id=fallback_id,
+                    backend=fallback_backend,
                     mode=None,
                     directory=directory,
                     manifest_path=manifest_path,
@@ -120,7 +130,6 @@ def find_unfinished_runs(project_document_path: Path) -> tuple[UnfinishedRun, ..
         backend_value = document.get("backend")
         mode_value = document.get("mode")
         started_value = document.get("startedUtc")
-        fallback_id, fallback_backend = _identity_from_directory(directory)
         unfinished.append(
             UnfinishedRun(
                 run_id=run_id_value if isinstance(run_id_value, str) else fallback_id,

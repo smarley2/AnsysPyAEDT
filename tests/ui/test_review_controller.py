@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -58,19 +59,25 @@ class ReviewControllerEnvironment:
     generation: GenerationController
 
 
-def review_controller_environment(tmp_path: Path) -> ReviewControllerEnvironment:
+def review_controller_environment(
+    tmp_path: Path, runner: Callable[[object], object] | None = None
+) -> ReviewControllerEnvironment:
     """The same wiring as `build()`, but rooted at a real `tmp_path` document.
 
     `find_unfinished_runs` resolves run directories relative to the project
     document's parent, so tests that create `runs/<id>-<backend>/` directories
     (interrupted-run recovery) need a document path that actually lives under
     `tmp_path`, unlike `build()`'s unrooted relative path.
+
+    `runner` defaults to a stub that finishes instantly; pass a blocking one
+    (e.g. waiting on a `threading.Event`) to hold `generation.busy` True for a
+    test that needs to observe the controller mid-run.
     """
     QGuiApplication.instance() or QGuiApplication([])
     document_path = tmp_path / "boost.inductor.json"
     document_path.write_text("{}", encoding="utf-8")
     session = ProjectSession(make_project_with_material(), document_path)
-    generation = GenerationController(lambda _request: ("done",))
+    generation = GenerationController(runner or (lambda _request: ("done",)))
     opener = RecordingOpener()
     controller = ReviewController(
         session,

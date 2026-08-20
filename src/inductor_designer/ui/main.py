@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import sys
 from pathlib import Path
@@ -273,13 +274,17 @@ def main() -> int:
 
         session.set_save_callback(save_project)
         generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
+        # Open (menu item or File > Open) can run while this controller's own
+        # run is in flight -- it is a daemon thread, not something Open is
+        # gated on. `openProject`'s reconcile-on-open needs this to tell a
+        # live run's "running" marker apart from an abandoned one.
+        session.set_busy_check(lambda: bool(generation_controller.busy))
 
         # A run directory still reading "running" at startup means its process
         # died mid-run. Reconcile it to "interrupted" so Review never reads it
         # as a result; a failure here must never block opening the app, since
-        # the project itself is unaffected.
-        import contextlib
-
+        # the project itself is unaffected. Safe unconditionally here: nothing
+        # can be busy before any run has started.
         from inductor_designer.application.services.run_recovery import (
             reconcile_unfinished_runs,
         )

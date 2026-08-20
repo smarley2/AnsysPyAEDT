@@ -48,6 +48,7 @@ class ProjectSession(QObject):
         open_callback: Callable[[Path], InductorProject] | None = None,
         autosave_callback: Callable[[InductorProject, Path | None], None] | None = None,
         recovery_cleanup: Callable[[], None] | None = None,
+        is_run_busy: Callable[[], bool] | None = None,
         debounce_ms: int = AUTOSAVE_DEBOUNCE_MS,
         parent: QObject | None = None,
     ) -> None:
@@ -56,6 +57,7 @@ class ProjectSession(QObject):
         self._document_path = document_path
         self._save_callback = save_callback
         self._open_callback = open_callback
+        self._is_run_busy = is_run_busy
         self._dirty = False
         self._status_message = "Ready"
         self._undo: list[InductorProject] = []
@@ -93,6 +95,16 @@ class ProjectSession(QObject):
         session has to exist first.
         """
         self._save_callback = callback
+
+    def set_busy_check(self, is_run_busy: Callable[[], bool] | None) -> None:
+        """Bind the run-in-flight check after construction.
+
+        `main.py` builds the `GenerationController` from this session, so the
+        session cannot be told at construction time whether a run it starts
+        later is in flight -- the same ordering reason `set_save_callback`
+        exists.
+        """
+        self._is_run_busy = is_run_busy
 
     def apply(self, project: InductorProject) -> None:
         """Accept an already-validated edit as the current session project."""
@@ -301,10 +313,20 @@ class ProjectSession(QObject):
         self._document_path = path
         # A run directory beside the newly opened document may still read
         # "running" from a process that died mid-run; reconcile it to
-        # "interrupted" now so Review never reads it as a result. A
-        # reconciliation failure must never block the open itself.
-        with contextlib.suppress(OSError):
-            reconcile_unfinished_runs(path)
+        # "interrupted" now so Review never reads it as a result. But a run
+        # this process is executing right now writes that identical marker,
+        # and Open is reachable while one is in flight (the run is a daemon
+        # thread, not something the Open menu item is gated on) -- reconciling
+        # in that window can catch a just-finished run between its manifest
+        # write and this one, permanently overwriting a real "succeeded"
+        # record with "interrupted". `_is_run_busy` is the same signal
+        # `ReviewController` uses to hide a live run from the interrupted-run
+        # list, so skipping the reconcile write under it here closes the same
+        # gap rather than adding a second, separate guard. A reconciliation
+        # failure must never block the open itself.
+        if self._is_run_busy is None or not self._is_run_busy():
+            with contextlib.suppress(OSError):
+                reconcile_unfinished_runs(path)
         # An Open is not an edit: the history of the previous document must
         # not be able to overwrite the newly opened one.
         self._undo.clear()
