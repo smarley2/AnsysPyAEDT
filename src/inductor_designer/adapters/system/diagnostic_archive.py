@@ -104,8 +104,19 @@ def write_diagnostic_archive(path: Path, entries: Sequence[BundleEntry]) -> Path
             # supposed to be one this module's own builder produced, but
             # nothing upstream guarantees that, and an absolute name or a
             # ".." segment is a zip-slip onto the support engineer's machine.
-            member = PurePosixPath(entry.name)
-            if member.is_absolute() or ".." in member.parts:
+            # `ZipInfo` rewrites os.sep to "/" AFTER this check, so a name
+            # checked as `..\\..\\evil.txt` is STORED as `../../evil.txt` -- the
+            # very name rejected one line below. Normalise first, and refuse a
+            # drive letter and a NUL, which `ZipInfo` would keep and truncate at
+            # respectively. A control defeated by its own platform's separator is
+            # worse than none, because its test green-lights the bypass.
+            member = PurePosixPath(entry.name.replace("\\", "/"))
+            if (
+                member.is_absolute()
+                or ".." in member.parts
+                or ":" in entry.name
+                or "\x00" in entry.name
+            ):
                 raise ValueError(f"Unsafe bundle entry name: {entry.name!r}")
             archive.writestr(entry.name, entry.text)
     return path

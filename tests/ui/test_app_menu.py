@@ -555,3 +555,32 @@ def test_open_a_project_with_different_winding_ids_resets_the_selection(
     turns_field = root.findChild(QObject, "windingTurnsField")
     assert turns_field.property("text") == "42"
     assert label_field.property("text") == "Primary"
+
+
+def test_the_diagnostic_bundle_item_offers_a_name_carrying_no_project_identity() -> None:
+    """The dialog's default name is the string users paste into tickets.
+
+    `suggestedFileName` was computed correctly and then never used -- the item
+    cleared `currentFile` instead, so the user typed a name, usually the
+    project's, putting a customer name in a filename that leaves BRUSA. This
+    pins the binding, which no test covered: reverting it to `""` kept every
+    other test green.
+    """
+    from inductor_designer.adapters.system.environment import environment_redaction_context
+    from inductor_designer.ui.diagnostics_controller import DiagnosticsController
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project(), Path("CustomerACME") / "boost.inductor.json")
+    controller = DiagnosticsController(session, None, environment_redaction_context())
+    engine = create_engine(diagnostics_controller=controller, project_session=session)
+    root = engine.rootObjects()[0]
+    _KEEPALIVE.append((app, engine, *engine.rootObjects(), controller, session))
+    app.processEvents()
+
+    _trigger(root.findChild(QObject, "saveDiagnosticBundleMenuItem"))
+
+    dialog = root.findChild(QObject, "saveBundleDialog")
+    offered = str(dialog.property("currentFile"))
+    assert "diagnostics-" in offered
+    assert "CustomerACME" not in offered
+    assert "boost" not in offered

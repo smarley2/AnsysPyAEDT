@@ -287,8 +287,11 @@ def test_a_raw_slice_through_a_drive_letter_path_does_not_strand_the_remainder(
     }
 
     payload = entries["logs/inductor-designer.log"]
-    assert customer not in payload
-    assert "hans.mueller" not in payload
+    # Collected into a list rather than asserted with `not in`: pytest rewrites
+    # a failing `in` over a 512 kB string into a difflib diff, which took over
+    # ten minutes and printed nothing. A regression here would have looked like
+    # a hung CI job instead of a failed security test.
+    assert [token for token in (customer, "hans.mueller") if token in payload] == []
 
 
 def test_a_raw_slice_through_a_unc_opener_does_not_strand_the_file_server(
@@ -329,8 +332,7 @@ def test_a_raw_slice_through_a_unc_opener_does_not_strand_the_file_server(
     }
 
     payload = entries["logs/inductor-designer.log"]
-    assert "BRUSA-FS01" not in payload
-    assert customer not in payload
+    assert [token for token in ("BRUSA-FS01", customer) if token in payload] == []
 
 
 def test_write_diagnostic_archive_rejects_zip_slip_member_names(
@@ -351,3 +353,19 @@ def test_write_diagnostic_archive_rejects_zip_slip_member_names(
             tmp_path / "evil2.zip",
             (BundleEntry(name="/etc/passwd", text="x"),),
         )
+    # The Windows shapes, which the first version of this guard accepted:
+    # `ZipInfo` rewrites os.sep to "/" AFTER the check, so a backslash name
+    # was checked as one thing and STORED as the very name being rejected. A
+    # drive letter survived as `C:/Windows/...`, and a NUL was silently
+    # truncated, so the archive held a member the contents index did not name.
+    for name in (
+        "..\\..\\evil.txt",
+        "C:\\Windows\\evil.txt",
+        "C:/Windows/evil.txt",
+        "\\\\HOST\\share\\evil.txt",
+        "evil\x00",
+    ):
+        with pytest.raises(ValueError):
+            write_diagnostic_archive(
+                tmp_path / "evil-windows.zip", (BundleEntry(name=name, text="x"),)
+            )
