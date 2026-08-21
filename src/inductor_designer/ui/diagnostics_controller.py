@@ -69,7 +69,10 @@ class DiagnosticsController(QObject):
             written = write_diagnostic_archive(path, entries)
         except Exception as error:  # noqa: BLE001 - the UI must never crash here
             logging.getLogger(LOGGER_NAME).warning("Bundle failed: %s", error)
-            self._message = f"Unable to write the diagnostic bundle: {error}"
+            # Not `{error}`: an OSError's text carries the absolute target
+            # path, and this message is exactly the copy a user pastes into
+            # an e-mail or a ticket.
+            self._message = f"Unable to write the diagnostic bundle: {type(error).__name__}"
             self.messageChanged.emit()
             return False
         logging.getLogger(LOGGER_NAME).info(

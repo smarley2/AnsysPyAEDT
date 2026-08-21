@@ -157,8 +157,20 @@ def test_menu_bar_and_items_exist_with_expected_enabled_state() -> None:
     redo_item = root.findChild(QObject, "redoMenuItem")
     exit_item = root.findChild(QObject, "exitMenuItem")
     about_item = root.findChild(QObject, "aboutMenuItem")
+    save_bundle_item = root.findChild(QObject, "saveDiagnosticBundleMenuItem")
+    save_bundle_dialog = root.findChild(QObject, "saveBundleDialog")
 
-    for item in (open_item, save_item, save_as_item, undo_item, redo_item, exit_item, about_item):
+    for item in (
+        open_item,
+        save_item,
+        save_as_item,
+        undo_item,
+        redo_item,
+        exit_item,
+        about_item,
+        save_bundle_item,
+        save_bundle_dialog,
+    ):
         assert item is not None
 
     # No project loaded: Open/Save/Save As/Undo/Redo are all disabled, and

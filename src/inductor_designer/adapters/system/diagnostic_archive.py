@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import zipfile
 from collections.abc import Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from inductor_designer.application.services.diagnostic_bundle import (
     BundleEntry,
@@ -34,9 +34,14 @@ def _read_tail(path: Path) -> str | None:
         return None
     if len(text) <= _MAX_SOURCE_BYTES:
         return text
+    # A raw character slice can land mid-path and strip the "C:\" or "\\host"
+    # anchor every redaction rule needs to match, stranding whatever followed
+    # it in clear text. Dropping the partial first line removes that risk:
+    # `partition` yields "" when the tail holds no newline at all, so a single
+    # pathological 512 kB line is dropped rather than leaked.
     return (
         "[earlier lines omitted to keep the bundle small]\n"
-        + text[-_MAX_SOURCE_BYTES:]
+        + text[-_MAX_SOURCE_BYTES:].partition("\n")[2]
     )
 
 
@@ -87,9 +92,20 @@ def collect_bundle_sources(
 
 
 def write_diagnostic_archive(path: Path, entries: Sequence[BundleEntry]) -> Path:
-    """Write one deterministic, deflated archive of already-redacted entries."""
+    """Write one deflated archive of already-redacted entries.
+
+    Not byte-deterministic: `writestr` stamps each member with the current
+    local time, so two runs over identical entries differ in their zip bytes.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for entry in entries:
+            # Enforced, not just conventional: a member name is only ever
+            # supposed to be one this module's own builder produced, but
+            # nothing upstream guarantees that, and an absolute name or a
+            # ".." segment is a zip-slip onto the support engineer's machine.
+            member = PurePosixPath(entry.name)
+            if member.is_absolute() or ".." in member.parts:
+                raise ValueError(f"Unsafe bundle entry name: {entry.name!r}")
             archive.writestr(entry.name, entry.text)
     return path

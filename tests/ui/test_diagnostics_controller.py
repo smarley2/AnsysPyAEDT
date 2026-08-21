@@ -65,4 +65,14 @@ def test_an_unwritable_target_is_reported_not_raised(tmp_path: Path) -> None:
 
 
 def test_the_suggested_name_carries_the_bundle_suffix(tmp_path: Path) -> None:
-    assert _controller(tmp_path).suggestedFileName.endswith(BUNDLE_SUFFIX)
+    """A timestamped name only -- no path, no project name. This is the one
+    string that gets pasted into e-mails and ticket titles, so a mutant that
+    returns the full absolute document path must fail here, not just a
+    suffix check that a full path would also satisfy.
+    """
+    name = _controller(tmp_path).suggestedFileName
+
+    assert name.endswith(BUNDLE_SUFFIX)
+    assert "/" not in name
+    assert "\\" not in name
+    assert "boost" not in name  # the project document's stem

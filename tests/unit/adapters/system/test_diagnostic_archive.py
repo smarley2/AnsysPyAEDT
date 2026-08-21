@@ -7,12 +7,16 @@ import re
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from inductor_designer.adapters.system.diagnostic_archive import (
+    _MAX_SOURCE_BYTES,
     collect_bundle_sources,
     write_diagnostic_archive,
 )
 from inductor_designer.application.services.diagnostic_bundle import (
     BUNDLE_CONTENTS_FILENAME,
+    BundleEntry,
     BundleSource,
     build_bundle_entries,
 )
@@ -20,6 +24,10 @@ from inductor_designer.application.services.redaction import RedactionContext
 
 # Written independently of the production patterns on purpose: this list is the
 # requirement, not a restatement of the implementation.
+# NOTE: the drive-letter pattern below also matches the "e:/" inside a
+# "file:///[redacted-path].aedt" entry. A fixture that plants a real file://
+# URL would fail this pattern spuriously -- that is a limitation of this
+# test's own forbidden-list, not of production redaction.
 FORBIDDEN = (
     re.compile(r"[A-Za-z]:[\\/]"),
     re.compile(r"\\\\[A-Za-z0-9]"),
@@ -35,6 +43,18 @@ FORBIDDEN = (
 CONTEXT = RedactionContext(
     user_names=("jane.doe",), host_names=("BRUSA-WS42", "BRUSA-FS01")
 )
+
+
+def _filler(length: int) -> str:
+    """`length` characters of harmless padding for a truncation fixture.
+
+    Not a solid run of letters: `_EMAIL`'s unbounded `[A-Za-z0-9._%+-]+`
+    local-part backtracks quadratically over a long run with no "@" to find,
+    turning a single `redact_text` call on a ~512 kB solid-letter tail into a
+    multi-minute hang. A newline every other character keeps every attempt
+    O(1), which is also what real log padding looks like.
+    """
+    return ("y\n" * (length // 2 + 1))[:length]
 
 
 def _seed(tmp_path: Path) -> tuple[Path, Path]:
@@ -216,3 +236,118 @@ def test_a_redacted_entry_name_does_not_reappear_in_clear_text_in_the_index() ->
     }
 
     assert "jane.doe" not in entries[BUNDLE_CONTENTS_FILENAME]
+
+
+def test_rotated_logs_are_collected_alongside_the_current_one(tmp_path: Path) -> None:
+    """`app_logging` rotates the log; a bundle from a machine that has been in
+    use must carry the rotated files too, not only `log_path` itself.
+    """
+    log_directory = tmp_path / "logs"
+    log_directory.mkdir()
+    log_path = log_directory / "inductor-designer.log"
+    log_path.write_text("current\n", encoding="utf-8")
+    (log_directory / "inductor-designer.log.1").write_text(
+        "rotated\n", encoding="utf-8"
+    )
+
+    names = [source.name for source in collect_bundle_sources(None, log_path)]
+
+    assert any(name.endswith("inductor-designer.log") for name in names)
+    assert any(name.endswith("inductor-designer.log.1") for name in names)
+
+
+def test_a_raw_slice_through_a_drive_letter_path_does_not_strand_the_remainder(
+    tmp_path: Path,
+) -> None:
+    """A source bigger than `_MAX_SOURCE_BYTES` must not have its tail cut
+    through the middle of a path: that strips the "C:\\" anchor the
+    drive-path rule needs, and the customer directory name that follows is
+    unknown to any redaction token -- only the anchored rule can catch it.
+    """
+    customer = "CustomerACME"
+    path = rf"C:\Users\hans.mueller\Projects\{customer}\coil.aedt"
+    line = f"solve failed: {path}\n"
+    # Strand everything one character past the drive letter "C", i.e. the
+    # raw tail begins with ":\Users\..." -- the anchor is gone.
+    cut_point = line.index(path) + 1
+    trailer = _filler(_MAX_SOURCE_BYTES + cut_point - len(line))
+    log_path = tmp_path / "logs" / "inductor-designer.log"
+    log_path.parent.mkdir()
+    log_path.write_text(line + trailer, encoding="utf-8")
+
+    sources = collect_bundle_sources(None, log_path)
+    entries = {
+        entry.name: entry.text
+        for entry in build_bundle_entries(
+            sources,
+            CONTEXT,
+            application_version="0.9.0",
+            created_utc="2026-08-18T12:00:00+00:00",
+        )
+    }
+
+    payload = entries["logs/inductor-designer.log"]
+    assert customer not in payload
+    assert "hans.mueller" not in payload
+
+
+def test_a_raw_slice_through_a_unc_opener_does_not_strand_the_file_server(
+    tmp_path: Path,
+) -> None:
+    """A file-server name is never in `RedactionContext` -- only the UNC
+    opener `\\\\host` can catch it. A raw slice that strips the opener down
+    to a single backslash (below the two the UNC rule requires) must not
+    leave the host and the customer directory it shares in clear text.
+    """
+    # No file server in this context on purpose: it never would be, in a
+    # real `RedactionContext`, which holds only the local machine.
+    no_server_context = RedactionContext(
+        user_names=("jane.doe",), host_names=("BRUSA-WS42",)
+    )
+    customer = "CustomerACME"
+    unc = f"\\\\BRUSA-FS01\\share\\{customer}\\coil.aedt"
+    # The doubled-backslash form a JSON-escaped manifest carries.
+    json_form = unc.replace("\\", "\\\\")
+    line = f'"diagnostics": ["cannot reach {json_form}"]\n'
+    # Strip 3 of the opener's 4 backslashes, leaving 1 -- below the `\\{2,4}`
+    # the UNC rule requires.
+    cut_point = line.index(json_form) + 3
+    trailer = _filler(_MAX_SOURCE_BYTES + cut_point - len(line))
+    log_path = tmp_path / "logs" / "inductor-designer.log"
+    log_path.parent.mkdir()
+    log_path.write_text(line + trailer, encoding="utf-8")
+
+    sources = collect_bundle_sources(None, log_path)
+    entries = {
+        entry.name: entry.text
+        for entry in build_bundle_entries(
+            sources,
+            no_server_context,
+            application_version="0.9.0",
+            created_utc="2026-08-18T12:00:00+00:00",
+        )
+    }
+
+    payload = entries["logs/inductor-designer.log"]
+    assert "BRUSA-FS01" not in payload
+    assert customer not in payload
+
+
+def test_write_diagnostic_archive_rejects_zip_slip_member_names(
+    tmp_path: Path,
+) -> None:
+    """Nothing upstream actually enforces "one of our own entry names" --
+    it is convention. An absolute name or a `..` segment would otherwise be
+    written verbatim, a zip-slip onto the support engineer's machine when
+    they extract the bundle.
+    """
+    with pytest.raises(ValueError):
+        write_diagnostic_archive(
+            tmp_path / "evil.zip",
+            (BundleEntry(name="../../evil.txt", text="x"),),
+        )
+    with pytest.raises(ValueError):
+        write_diagnostic_archive(
+            tmp_path / "evil2.zip",
+            (BundleEntry(name="/etc/passwd", text="x"),),
+        )

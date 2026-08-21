@@ -18,3 +18,4 @@ artifacts/
 *.aedt
 *.aedt.lock
 *.aedtz
+*.log

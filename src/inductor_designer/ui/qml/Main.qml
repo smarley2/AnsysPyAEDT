@@ -132,7 +132,7 @@ ApplicationWindow {
                 enabled: diagnosticsController !== null
                 Accessible.name: text
                 onTriggered: {
-                    saveBundleDialog.currentFile = ""
+                    saveBundleDialog.currentFile = diagnosticsController.suggestedFileName
                     saveBundleDialog.open()
                 }
             }

@@ -53,8 +53,21 @@ def test_the_contents_index_lists_every_entry() -> None:
 
 
 def test_the_contents_index_is_itself_redacted() -> None:
-    entries = _entries(BundleSource(name="notes.txt", text="jane.doe@brusa.biz"))
-    assert "brusa.biz" not in entries[BUNDLE_CONTENTS_FILENAME]
+    """`application_version` and `created_utc` are arbitrary caller-supplied
+    strings that go straight into the index -- they never pass through the
+    per-source redaction loop, only through the index's own `redact_text`
+    call. Seeding an entry TEXT (as a previous version of this test did)
+    never reaches the index at all, since the index only lists entry names.
+    """
+    built = build_bundle_entries(
+        (),
+        CONTEXT,
+        application_version=r"0.9.0 built by jane.doe on C:\Users\jane.doe\src",
+        created_utc="2026-08-18T12:00:00+00:00",
+    )
+    index_text = {entry.name: entry.text for entry in built}[BUNDLE_CONTENTS_FILENAME]
+    assert "jane.doe" not in index_text
+    assert r"C:\Users" not in index_text
 
 
 def test_the_index_names_what_was_left_out_on_purpose() -> None:
@@ -84,3 +97,18 @@ def test_duplicate_names_after_redaction_stay_distinct() -> None:
         BundleSource(name=r"C:\b\log.txt", text="two"),
     )
     assert len(entries) == 3
+
+
+def test_the_index_lists_every_category_of_pii_removed() -> None:
+    """A support engineer reading the index must be told what was stripped,
+    not just that redaction "applied" -- deleting the whole `removed` list
+    would still leave `applied: True` in place and pass unnoticed.
+    """
+    entries = _entries(BundleSource(name="logs/app.log", text="ok"))
+    removed = json.loads(entries[BUNDLE_CONTENTS_FILENAME])["redaction"]["removed"]
+
+    assert "absolute filesystem paths" in removed
+    assert "machine names" in removed
+    assert "licence server identifiers" in removed
+    assert "user names" in removed
+    assert "e-mail addresses" in removed
