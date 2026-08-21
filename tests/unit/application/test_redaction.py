@@ -13,7 +13,7 @@ from inductor_designer.application.services.redaction import (
 )
 
 CONTEXT = RedactionContext(
-    user_names=("jane.doe", "fpo01"), host_names=("BRUSA-WS42", "brusa-ws42.brusa.biz")
+    user_names=("jane.doe", "abc07"), host_names=("BRUSA-WS42", "brusa-ws42.brusa.biz")
 )
 
 
@@ -152,7 +152,7 @@ def test_dotted_user_name_in_posix_home_keeps_no_extension() -> None:
     """Same leak through the POSIX branch: "/home/jane.doe" became
     "[redacted-path].doe".
     """
-    redacted = redact_text("wrote /home/m.signer", CONTEXT)
+    redacted = redact_text("wrote /home/j.tester", CONTEXT)
     assert redacted == f"wrote {REDACTED_PATH}"
 
 

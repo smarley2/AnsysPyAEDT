@@ -70,7 +70,7 @@ Two rulings, both settled before implementation, so Task 8 has no open scope:
   control, so their redaction cannot be proven by any test here, and they demonstrably
   carry BRUSA identity: the `batch.log` left by the 2026-08-18 session holds 132
   lines naming the user, the machine or the domain, including the path fragment
-  `CH01NB296.brusa.biz_9996.pjt`. Copying such a file is unauditable. But the line
+  `WS0417.example.invalid_9996.pjt`. Copying such a file is unauditable. But the line
   that actually explained that day's failure -- `Unable to create child process:
   3dedy` -- came from the desktop *message channel*, not from a file, so Task 3
   captures those messages through this application's own redacting logger. The
@@ -133,7 +133,7 @@ from inductor_designer.application.services.redaction import (
 )
 
 CONTEXT = RedactionContext(
-    user_names=("jane.doe", "fpo01"), host_names=("BRUSA-WS42", "brusa-ws42.brusa.biz")
+    user_names=("jane.doe", "abc07"), host_names=("BRUSA-WS42", "brusa-ws42.brusa.biz")
 )
 
 

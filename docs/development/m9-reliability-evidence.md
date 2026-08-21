@@ -123,7 +123,7 @@ files this fix wave edited (line-ending normalisation on this checkout, not a
 whitespace error); no error output.
 
 `%LOCALAPPDATA%\InductorDesigner` does not exist after either run (checked on
-the real, unredirected `%LOCALAPPDATA%`, `C:\Users\fpo01\AppData\Local`): the
+the real, unredirected `%LOCALAPPDATA%`, `C:\Users\<login>\AppData\Local`): the
 test file still never calls `recovery_directory()` or `log_directory()`, it
 builds its own `RecoveryStore` against `tmp_path`.
 
@@ -357,6 +357,10 @@ solve:**
   ],
   "mode": "generate-and-solve",
   "reconciledUtc": "2026-08-21T09:03:00+00:00",
+  // Whole seconds because the clock was injected via `now=`; the
+  // production call uses `datetime.now(timezone.utc)` and carries
+  // microseconds. Everything else here is byte-for-byte what
+  // `reconcile_unfinished_runs` writes.
   "results": null,
   "runId": "20260821-090000",
   "startedUtc": "2026-08-21T09:00:00+00:00",
@@ -366,11 +370,16 @@ solve:**
 
 **Artifact 2 -- diagnostic bundle member list and redaction confirmation,
 shape, produced without a live solve.** Built from the same faked run
-directory plus a faked application-log source containing one absolute path
-and one FlexNet-shaped licence identifier:
+directory plus a faked application-log source. The two hazards sat in
+different sources, which matters when reading the confirmation below: the
+absolute path was in the log line, and the FlexNet-shaped licence identifier
+was in the run manifest's diagnostics. Members:
 
-- `bundle-contents.json` (the marker legend and the excluded-on-purpose list,
-  as shown earlier in this document)
+- `bundle-contents.json`, holding the marker legend, the five removed
+  categories, and the two excluded-on-purpose entries with their reasons --
+  the project document ("attach the .inductor.json yourself if you judge it
+  safe to share") and AEDT's own log files ("written by AEDT in a format this
+  application does not control, so their redaction cannot be proven")
 - `logs/app.log`
 - `runs/20260821-090000-maxwell-3d/run-manifest.json`
 
@@ -434,6 +443,25 @@ reading the archive.
    Review screen redraws to match -- e.g. a changed winding count or a
    changed **Generate** availability is reflected without needing to
    navigate away and back.
+
+## Recording the walk
+
+Fill this in as you go. **Any step that does not behave as described rejects the
+milestone** -- the four mechanisms are meant to hold under exactly these
+conditions, so a failure here is a defect, not a note for later. The automated
+suite cannot reach any of these five, which is why they are yours.
+
+| Step | Expected | Observed | Pass / fail |
+| --- | --- | --- | --- |
+| 1 | Autosave survives a killed process; the recovery prompt offers the newer work | | |
+| 2 | Discarding the offer clears it, and a second launch does not ask again | | |
+| 3 | A killed solve reconciles to `interrupted`, keeps its saved project, and offers only a new run -- never a resume | | |
+| 4 | The bundle opens, and no entry name or byte carries an absolute path, machine name, licence server, user name or e-mail address | | |
+| 5 | Undo and redo cross every screen, and `Generate` re-enables when an undo returns to the saved state | | |
+
+Time to allow: about 40 minutes. Prerequisites beyond a licensed AEDT 2025 R2
+Commercial session: a project you can afford to interrupt mid-solve, and Task
+Manager (or `Stop-Process`) to kill the application and the solver.
 
 ## Known risks carried into M9 acceptance
 

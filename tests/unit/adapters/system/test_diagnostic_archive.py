@@ -208,7 +208,7 @@ def test_a_run_directory_with_aedt_files_contributes_only_our_own_evidence(
     (run_directory / "model.aedt").write_text("aedt binary stand-in", encoding="utf-8")
     (run_directory / "coil.fem").write_text("femm stand-in", encoding="utf-8")
     (run_directory / "batch.log").write_text(
-        "CH01NB296.brusa.biz_9996.pjt opened by jane.doe\n", encoding="utf-8"
+        "WS0417.example.invalid_9996.pjt opened by jane.doe\n", encoding="utf-8"
     )
     (results / "results.json").write_text("{}", encoding="utf-8")
 

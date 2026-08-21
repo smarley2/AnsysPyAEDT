@@ -23,7 +23,7 @@ otherwise: by the time it runs, the path rule has already consumed
 ``C:\\Users\\Jane`` and left `` Doe`` alone, so a supplied token of
 ``Jane Doe`` no longer matches anything. Only a token equal to the stranded word
 itself would. What limits the exposure is that a BRUSA login is a single token
-(`fpo01`, `m.signer`), so a user-profile path has no space to break on; the
+(`abc07`, `j.tester`), so a user-profile path has no space to break on; the
 residual is a directory somebody named with a space, and the stranded text is
 its last word. Both cases are pinned by tests so this stays visible instead of
 being rediscovered as a bug, and it is recorded as an open question in the M9
