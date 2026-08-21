@@ -126,6 +126,28 @@ before the next plan freezes assumptions that depend on it.
   temperature only on exact equality, and a mismatch names the recorded
   temperatures so the user can pick one that exists.
 
+- **Milestone 9, Reliability, implementation is complete as of 2026-08-21 and
+  awaiting Fabio Posser's verification.** Only he accepts a milestone. The
+  plan is
+  [2026-08-18 M9 reliability](2026-08-18-m9-reliability.md)
+  and the evidence record is
+  [m9-reliability-evidence.md](../../development/m9-reliability-evidence.md):
+  autosave and crash recovery through a `%LOCALAPPDATA%`-based recovery
+  snapshot, application-wide undo/redo with a structural `dirty` comparison
+  that re-gates `Generate` on undo, interrupted-run reconciliation that never
+  re-solves in place, an actionable installation/licence/material/file/
+  convergence advice table wired at the single manifest-diagnostic assembly
+  point, and a redacted application log plus a shareable diagnostic bundle.
+  `tests/integration/test_reliability_recovery.py` proves four forced
+  failures end to end against the real catalog, the real material overlay,
+  and the recording exporter fakes: a save that fails, a killed solve, a
+  licence failure whose bundle stays redacted, and a domain-rejected edit
+  undone back to the last valid project. Ruled 2026-08-18: the diagnostic
+  bundle excludes both the Project document and AEDT's own log files. Eight
+  other product questions remain open with a working default each, listed in
+  the evidence record. The next detailed plan is Milestone 10, Windows
+  Release, whose entry condition is M9 acceptance.
+
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
 remains in the repository, but MCP expansion or parity is future work and does

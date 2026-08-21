@@ -866,6 +866,41 @@ Decisions taken with Fabio Posser on 2026-08-10:
 Exit criterion: forced UI and solver failures preserve the last valid Project
 document and produce sufficient redacted evidence for diagnosis.
 
+### Current state
+
+Implementation is **complete and awaiting Fabio Posser's verification.** Only
+he accepts a milestone. The plan is
+[2026-08-18 M9 reliability](../superpowers/plans/2026-08-18-m9-reliability.md)
+and the evidence record is [m9-reliability-evidence.md](m9-reliability-evidence.md),
+which records the non-live gate, four forced-failure scenarios with
+mutation-proven tests, the defects the reviews found (several of them
+redaction leaks, now closed), and a manual forced-kill walk for him to run on
+the Windows workstation.
+
+Four decisions from the plan's open-questions section are already ruled:
+
+- Whether the bundle may contain the Project document: **excluded** (ruled
+  2026-08-18).
+- Whether the bundle may contain AEDT's own log files: **excluded**, with the
+  desktop message channel captured through this application's own redacting
+  logger instead (ruled 2026-08-18).
+- 2D/FEMM proceed AC-only after explicit confirmation rather than being
+  blocked outright, with the omission recorded in `RunManifest.warnings`
+  (ruled 2026-08-07, carried from the M7c follow-up work this milestone
+  builds on).
+- The DC-biased core-loss estimate reuses a zero-bias loss curve with a
+  visible "optimistic" label rather than reporting unavailable (ruled
+  2026-08-03, carried from the same M7c follow-up work).
+
+Eight questions remain open, each with a working default the plan uses until
+ruled otherwise: the autosave debounce interval, the recovery snapshot's
+location outside the project directory, the undo depth, prompting versus
+silently restoring on startup, whether a bundle is also written automatically
+on a failed run, whether interrupted-run reconciliation is automatic,
+retention of interrupted run directories, and the accepted residual where an
+extensionless path whose last component contains a space strands its last
+word in a redacted log line. Full detail on each is in the evidence record.
+
 ## Milestone 10: Windows Release
 
 - Resolve packaged resources outside the source checkout.
