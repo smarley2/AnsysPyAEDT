@@ -742,6 +742,12 @@ ApplicationWindow {
                     Accessible.name: qsTr("Discard unsaved changes and continue")
                     onClicked: {
                         unsavedProjectDialog.close()
+                        // Discarding the edits must discard their recovery copy
+                        // too, or the next launch offers back the very work the
+                        // user just chose to abandon.
+                        if (projectSession !== null) {
+                            projectSession.discardRecoverySnapshot()
+                        }
                         var action = window.pendingUnsavedAction
                         window.pendingUnsavedAction = null
                         if (action !== null) {

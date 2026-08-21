@@ -223,6 +223,22 @@ class ProjectSession(QObject):
             _logger.warning("Autosave failed: %s", error)
             self.set_status(f"Unable to autosave a recovery copy: {error}")
 
+    @Slot()
+    def discardRecoverySnapshot(self) -> None:
+        """The user chose to abandon the unsaved edits, so drop their copy too.
+
+        Autosave's snapshot was cleared only on save, and crash recovery reads
+        "a snapshot exists" as "the process died". Together those meant pressing
+        Discard on the unsaved-changes dialog and then quitting produced a
+        recovery offer for the very edits the user had just discarded -- training
+        them to dismiss the prompt that does matter.
+
+        Distinct from `openProject`'s cancel-without-discard on purpose: that
+        stops a pending timer whose snapshot is still worth keeping, whereas this
+        is an explicit instruction to let the work go.
+        """
+        self._drop_recovery_snapshot()
+
     def _drop_recovery_snapshot(self) -> None:
         """What is now on disk needs no recovery copy."""
         self._autosave_pending = False

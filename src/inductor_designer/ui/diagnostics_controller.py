@@ -72,15 +72,30 @@ class DiagnosticsController(QObject):
             # Not `{error}`: an OSError's text carries the absolute target
             # path, and this message is exactly the copy a user pastes into
             # an e-mail or a ticket.
-            self._message = f"Unable to write the diagnostic bundle: {type(error).__name__}"
-            self.messageChanged.emit()
+            self._set_message(
+                f"Unable to write the diagnostic bundle: {type(error).__name__}"
+            )
             return False
         logging.getLogger(LOGGER_NAME).info(
             "Diagnostic bundle written with %d entries.", len(entries)
         )
-        self._message = (
+        self._set_message(
             f"Saved {written.name}. It contains no file paths, machine names, "
             "licence servers, user names, or e-mail addresses."
         )
-        self.messageChanged.emit()
         return True
+
+    def _set_message(self, message: str) -> None:
+        """Say it on the status bar as well as on this property.
+
+        `message` was bound nowhere in QML and `saveBundle`'s result was
+        discarded, so a failed write looked exactly like a successful one and the
+        user attached a file that did not exist. Worse, the success sentence is
+        the ONE place the application tells them the artifact is safe to share,
+        and it never rendered. `ProjectSession.set_status` already drives a
+        visible status bar that every other controller uses, so this reuses it
+        rather than inventing a second channel that also needs wiring.
+        """
+        self._message = message
+        self.messageChanged.emit()
+        self._session.set_status(message)

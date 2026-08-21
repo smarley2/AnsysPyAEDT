@@ -76,3 +76,27 @@ def test_the_suggested_name_carries_the_bundle_suffix(tmp_path: Path) -> None:
     assert "/" not in name
     assert "\\" not in name
     assert "boost" not in name  # the project document's stem
+
+
+def test_the_outcome_reaches_the_visible_status_bar(tmp_path: Path) -> None:
+    """`message` was bound nowhere in QML and the result was discarded.
+
+    So a failed write looked exactly like a successful one -- the user attached a
+    file that did not exist -- and the success sentence, the one place the
+    application says the artifact is safe to share, never rendered anywhere. Both
+    outcomes now go through `ProjectSession.set_status`, which drives a status bar
+    every other controller already uses.
+    """
+    controller = _controller(tmp_path)
+    session = controller._session
+
+    assert controller.saveBundle(
+        QUrl.fromLocalFile(str(tmp_path / f"out{BUNDLE_SUFFIX}"))
+    ) is True
+    assert "no file paths" in session.statusMessage
+
+    # A directory as the target is a write that cannot succeed.
+    refused = tmp_path / "refused"
+    refused.mkdir()
+    assert controller.saveBundle(QUrl.fromLocalFile(str(refused))) is False
+    assert "Unable to write the diagnostic bundle" in session.statusMessage
