@@ -137,6 +137,7 @@ def test_a_save_that_fails_preserves_the_last_valid_project(tmp_path: Path) -> N
     assert session.project == edited
     assert session.dirty is True
     assert "disk full" in session.statusMessage
+    assert document_path.read_text(encoding="utf-8") == "{}"
 
     session.flushAutosave()
     snapshot = store.read()
@@ -175,8 +176,15 @@ def test_a_killed_solve_is_reconciled_and_never_re_solved(tmp_path: Path) -> Non
     assert INTERRUPTED_DIAGNOSTIC in diagnostics_text
     assert UNSOLVED_ARTIFACT_DIAGNOSTIC in diagnostics_text
     assert saved_artifact.is_file()
+    assert (
+        saved_artifact.read_text(encoding="utf-8")
+        == "saved before the process was killed"
+    )
     # Recovery reached no adapter: reconciliation reads and rewrites a manifest
-    # file, and never calls the exporter that would re-solve the run.
+    # file, and never calls the exporter that would re-solve the run. `exporter`
+    # is never passed to `reconcile_unfinished_runs`, so these two lines cannot
+    # fail by themselves; the artifact-content assertion above is the real
+    # check that reconciliation never touched the solver's output.
     assert exporter.requests == []
     assert exporter.geometry_only_requests == []
 
@@ -215,8 +223,20 @@ def test_a_licence_failure_produces_actionable_redactable_evidence(
     assert "License checkout failed on 1055@LICSRV01" in diagnostics_text
     assert "license.unavailable:" in diagnostics_text
 
+    # The run manifest alone never carries an absolute path (artifact paths are
+    # written relative to the project directory), so a source that actually
+    # contains one is added here: an application log line of the kind
+    # `app_logging.py` writes, naming the failing document by its absolute
+    # path. Without this, the "no absolute path in the bundle" half of the
+    # exit criterion is unexercised by this test.
+    log_path = tmp_path / "app.log"
+    log_path.write_text(
+        f"AEDT [launch]: failed while staging {document_path}\n",
+        encoding="utf-8",
+    )
+
     entries = build_bundle_entries(
-        collect_bundle_sources(document_path, None),
+        collect_bundle_sources(document_path, log_path),
         RedactionContext(),
         application_version="0.9.0-test",
         created_utc="2026-08-21T09:05:00+00:00",

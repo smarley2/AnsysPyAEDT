@@ -75,10 +75,14 @@ errors.**
 - `src/inductor_designer/ui/diagnostics_controller.py` and the `Help > Save
   diagnostic bundle...` menu item in `Main.qml`.
 
-## Non-live gate, measured on this machine, 2026-08-21
+## Non-live gate, measured on this machine, 2026-08-21 (fix wave)
 
-Branch `claude/live-results-and-direction-fixes`, HEAD `1af92f1` plus this
-task's commit.
+Branch `claude/live-results-and-direction-fixes`, HEAD `137436d` (the M9
+task 9 evidence commit) plus this review-fix-wave's commit. Re-measured after
+the fix wave below because the fix wave changed
+`tests/integration/test_reliability_recovery.py` and this document; no
+production code under `src/` changed (confirmed below by byte-identical
+`git diff` after every mutation was restored).
 
 ```
 .venv/Scripts/python.exe -m ruff check .
@@ -102,25 +106,26 @@ Clean exit, no output.
 .venv/Scripts/python.exe -m pytest -m "not aedt and not femm" -q
 ```
 
-`1717 passed, 16 deselected in 71.98s (0:01:11)`
+`1717 passed, 16 deselected in 64.79s (0:01:04)`
 
-Re-run for speed as `-n 8`: `1717 passed in 51.65s`. The recorded count is
-from the serial command above, as the brief requires.
+Re-run for speed as `-n 8`: `1717 passed in 28.72s`. The recorded count is
+from the serial command above, as the brief requires. The count is unchanged
+from the original task-9 measurement (still four tests in
+`test_reliability_recovery.py`, no tests added or removed by this fix wave --
+only assertions inside the existing four were strengthened).
 
 ```
 git diff --check
 ```
 
-Clean, no output.
+Exit code 0. Two advisory "LF will be replaced by CRLF" notices for the two
+files this fix wave edited (line-ending normalisation on this checkout, not a
+whitespace error); no error output.
 
 `%LOCALAPPDATA%\InductorDesigner` does not exist after either run (checked on
-the real, unredirected `%LOCALAPPDATA%`): the new test file never calls
-`recovery_directory()` or `log_directory()`, it builds its own `RecoveryStore`
-against `tmp_path`, and the existing `tests/ui/conftest.py` autouse fixture
-already redirects `LOCALAPPDATA` to `tmp_path` for every test under `tests/ui`.
-
-The 1713 -> 1717 delta is exactly the four new tests in
-`tests/integration/test_reliability_recovery.py`.
+the real, unredirected `%LOCALAPPDATA%`, `C:\Users\fpo01\AppData\Local`): the
+test file still never calls `recovery_directory()` or `log_directory()`, it
+builds its own `RecoveryStore` against `tmp_path`.
 
 ## Forced-failure scenarios
 
@@ -131,9 +136,9 @@ AEDT, no FEMM.
 
 | # | Forced failure | What was preserved | What was produced |
 | --- | --- | --- | --- |
-| 1 | `save_callback` raises `OSError` after an edit | `session.project` still holds the edited project; `dirty` stays `True`; the file on disk is untouched | `saveProject()` returns `False`; the status message names the failure; `flushAutosave()` writes a recovery snapshot that loads back as the exact edited project |
-| 2 | A run directory seeded with `"status": "running"` and a saved `Inductor3D.aedt`, as a killed solve would leave it | The `.aedt` artifact stays on disk, untouched | `reconcile_unfinished_runs` rewrites the manifest to `"status": "interrupted"`, `"results": null`, with both `run.interrupted_before_completion` and `run.artifact_saved_but_unsolved` in `diagnostics`; the recording exporter recorded **zero** calls -- recovery reached no adapter |
-| 3 | The recording Maxwell 3D exporter fails its `launch` stage with `License checkout failed on 1055@LICSRV01` | -- (no artifact exists yet at `launch`) | `ProjectRunFailed`, manifest `status: failed`, diagnostics carrying the raw text *and* `license.unavailable: ...`; a bundle built from the run directory contains `license.unavailable` but neither `1055@LICSRV01` nor any absolute path (the licence-server text is caught by the e-mail-shaped redaction rule, `port@host` reads as `local@domain`) |
+| 1 | `save_callback` raises `OSError` after an edit | `session.project` still holds the edited project; `dirty` stays `True`; the file on disk is byte-identical to what the test wrote (`document_path.read_text() == "{}"`, asserted) | `saveProject()` returns `False`; the status message names the failure; `flushAutosave()` writes a recovery snapshot that loads back as the exact edited project |
+| 2 | A run directory seeded with `"status": "running"` and a saved `Inductor3D.aedt`, as a killed solve would leave it | The `.aedt` artifact stays on disk, byte-identical to what the test wrote (`saved_artifact.read_text() == "saved before the process was killed"`, asserted) | `reconcile_unfinished_runs` rewrites the manifest to `"status": "interrupted"`, `"results": null`, with both `run.interrupted_before_completion` and `run.artifact_saved_but_unsolved` in `diagnostics`; the recording exporter recorded **zero** calls -- recovery reached no adapter |
+| 3 | The recording Maxwell 3D exporter fails its `launch` stage with `License checkout failed on 1055@LICSRV01`, and a faked application-log source (containing the failing project document's absolute path) is fed into the bundle alongside the run's own manifest | -- (no artifact exists yet at `launch`) | `ProjectRunFailed`, manifest `status: failed`, diagnostics carrying the raw text *and* `license.unavailable: ...`; a bundle built from the run directory *and* the faked log contains `license.unavailable` but neither `1055@LICSRV01` nor the absolute path that was in the faked log source (both redaction rules -- licence-server and drive-path -- are exercised on a source proven to actually contain the hazard) |
 | 4 | A valid edit (add a winding), then an edit the domain rejects (the new winding's start angle overlaps the first winding's sector) | `session.project` still holds the valid edit, unchanged by the rejected attempt | The rejected edit returns `False` and changes nothing; `undo()` returns `True` and restores the pre-edit project exactly; `SimulationController.canGenerate` is `True` before any edit, `False` once dirty, and `True` again once undo returns to the saved state |
 
 Test file: `tests/integration/test_reliability_recovery.py`. Each of the four
@@ -155,9 +160,40 @@ file was re-run green. All runs used `PYTHONDONTWRITEBYTECODE=1` and
 | 2 | `application/services/run_recovery.py:183` | `if artifacts:` -> `if False:` (never append the unsolved-artifact diagnostic) | `test_a_killed_solve_is_reconciled_and_never_re_solved` failed: `run.artifact_saved_but_unsolved` missing from `diagnostics` |
 | 3 | `application/services/maxwell_export.py:502` | `_with_advice`: `advised.append(f"{advice.code}: {advice.action}")` -> `advised.append("mutated")` | `test_a_licence_failure_produces_actionable_redactable_evidence` failed: `license.unavailable:` missing from the manifest diagnostics |
 | 4 | `domain/validation.py:42` | `_sectors_overlap`: `return any(...)` -> `return False and any(...)` | `test_undo_restores_the_last_valid_project_after_a_rejected_edit` failed: the overlapping edit was accepted instead of refused |
+| 5 | `application/services/redaction.py:220` | `redact_text`: `redacted = _DRIVE_PATH.sub(_path_replacement, redacted)` -> `redacted = redacted` (drive-path rule neutralised) | `test_a_licence_failure_produces_actionable_redactable_evidence` failed: `assert str(tmp_path) not in bundle_text` -- the absolute path added by the fix-wave's log source leaked into the bundle text |
+| 6 | `application/services/redaction.py:211` | `redact_text`: `redacted = _LICENSE_SERVER.sub(REDACTED_LICENSE_SERVER, text)` -> `redacted = text` (licence-server rule alone neutralised) | `test_a_licence_failure_produces_actionable_redactable_evidence` **stayed green** -- see the "Known risks" entry on defence-in-depth below |
+| 7 | Both `application/services/redaction.py:211` and `:212` (licence-server *and* e-mail rules) neutralised together | `test_a_licence_failure_produces_actionable_redactable_evidence` failed: `assert '1055@LICSRV01' not in bundle_text` | Confirms the two rules jointly, not singly, guarantee the licence-server text is caught |
 
-Every mutation was confirmed reverted (`git status --short` clean for `src/`)
-and the full four-test file was re-run green after each restore.
+Every mutation was confirmed reverted (`git status --short` clean for `src/`,
+and `git diff -- src/` empty -- byte-identical to `HEAD`) and the full
+four-test file was re-run green after each restore.
+
+Mutations 1-4 predate this fix wave, protect assertions this fix wave did not
+change, and were not re-run here. Mutations 5-7 were added by this fix wave.
+Mutation 5 closes a real gap: before this fix wave, scenario 3's test built
+its bundle sources from the run manifest alone, which never carries an
+absolute path (artifact paths in a manifest are always written relative to
+the project directory), so `assert str(tmp_path) not in bundle_text` could
+never fail no matter what `redact_text` did. The fix wave added a faked
+application-log source containing the failing project document's absolute
+path (see scenario 3's row above) specifically so that assertion has
+something real to catch; mutation 5 is what proves it now does. Mutations 6
+and 7 together prove the Known-risk entry on licence-server redaction added
+below.
+
+Two of this fix wave's other strengthened assertions -- the byte-identity
+checks in scenarios 1 and 2 above (`document_path` untouched, `saved_artifact`
+untouched) -- have **no corresponding production line to mutate**, and that
+is stated plainly rather than papered over with a manufactured mutant.
+`saveProject`'s only interaction with the document file is through the
+injected `_save_callback` (here, a test-local function that unconditionally
+raises before writing anything), and `reconcile_unfinished_runs` never opens
+or writes any file other than `run-manifest.json`. Both assertions guard
+against a *future* regression -- a save path that partially writes before
+failing, or a reconciliation change that touches solver output -- that does
+not exist in the current code to break. They were still added because Minor
+4 and Minor 5 of the review named exactly this gap: the evidence document
+claimed byte-identity without asserting it anywhere.
 
 ## Defects the reviews found
 
@@ -165,16 +201,21 @@ M9's value is not that it shipped clean -- it shipped only after these were
 found and closed. The ones that mattered most were leaks: text that would
 have left BRUSA's systems inside evidence meant to be shareable.
 
-**The truncation slice that stranded `\\BRUSA-FS01\share\...` in a real
-archive.** Task 8's bundle reader truncated an oversized log with a raw
-character slice, which can land mid-path and strip the `C:\` or `\\host`
-anchor every redaction rule matches on. Real archives from a used machine
-contained `:\Users\hans.mueller\Projects\CustomerACME\coil.aedt` and
-`\BRUSA-FS01\share\CustomerACME\coil.aedt` in clear text, because the log
-rotates at 1 MB against a 512 kB cap -- this was the *ordinary* case, not an
-edge case. The UNC form was worse: a file-server name is not in
-`RedactionContext` at all, so nothing downstream could have caught it either
-way. Fixed by dropping the partial first line of the truncated tail.
+**The truncation slice that stranded a user-profile path and a file-server
+path in a real archive.** Task 8's bundle reader truncated an oversized log
+with a raw character slice, which can land mid-path and strip the `C:\` or
+`\\host` anchor every redaction rule matches on. A real archive, produced from
+a real bundle build (not a mock), contained an unredacted drive-letter path
+of the shape `:\Users\<login>\Projects\<customer>\coil.aedt` and an unredacted
+UNC path of the shape `\\<file-server>\share\<customer>\coil.aedt` in clear
+text, because the log rotates at 1 MB against a 512 kB cap -- this was the
+*ordinary* case, not an edge case. The specific login, server, and customer
+names in that finding were the seeded fixture values from
+`tests/unit/adapters/system/test_diagnostic_archive.py`, not a real person or
+machine -- the leak mechanism was real, the identity in it was not. The UNC
+form was worse: a file-server name is not in `RedactionContext` at all, so
+nothing downstream could have caught it either way. Fixed by dropping the
+partial first line of the truncated tail.
 
 **The extension-guessing that published a surname.** Early in Task 1, the
 redaction rule tried to guess where a path ended by looking for a short
@@ -282,6 +323,71 @@ This is the part only a person can do, and it is what closes the exit
 criterion. **One AEDT session at a time:** confirm no `ansysedt.exe` process
 is running before starting, and between steps.
 
+**This walk has not been run yet.** It needs a licensed AEDT session and a
+real process kill on the Windows workstation, neither of which this
+implementation pass had. Two of the artifacts the brief for this task
+requires -- the verbatim `run-manifest.json` of an interrupted run, and the
+complete member list of one real diagnostic bundle with its redaction
+confirmation -- can therefore not be the real thing yet. What follows instead
+is the *shape* those two artifacts take, produced by running the real
+production code (`reconcile_unfinished_runs`, `collect_bundle_sources`,
+`build_bundle_entries`) against a faked run directory in a temp folder --
+exactly what `test_a_killed_solve_is_reconciled_and_never_re_solved` and
+`test_a_licence_failure_produces_actionable_redactable_evidence` already
+exercise, run once more here standalone so the output could be captured
+outside pytest. **No AEDT was involved in producing either artifact below**;
+they are placeholders for what step 3 and step 4 of the walk will produce for
+real, not evidence that the walk happened.
+
+**Artifact 1 -- reconciled `run-manifest.json`, shape, produced without a live
+solve:**
+
+```json
+{
+  "artifacts": [
+    {
+      "kind": "unsolved-solver-project",
+      "path": "Inductor3D.aedt"
+    }
+  ],
+  "backend": "maxwell-3d",
+  "diagnostics": [
+    "run.interrupted_before_completion: The application or the solver stopped before this run finished. No result was produced, and no part of this run may be read as a result.",
+    "run.artifact_saved_but_unsolved: This run never recorded a completed analysis, so the saved project may hold no solution. Start a new run, which gets its own directory; solving this directory again fails on its missing solver data."
+  ],
+  "mode": "generate-and-solve",
+  "reconciledUtc": "2026-08-21T09:03:00+00:00",
+  "results": null,
+  "runId": "20260821-090000",
+  "startedUtc": "2026-08-21T09:00:00+00:00",
+  "status": "interrupted"
+}
+```
+
+**Artifact 2 -- diagnostic bundle member list and redaction confirmation,
+shape, produced without a live solve.** Built from the same faked run
+directory plus a faked application-log source containing one absolute path
+and one FlexNet-shaped licence identifier:
+
+- `bundle-contents.json` (the marker legend and the excluded-on-purpose list,
+  as shown earlier in this document)
+- `logs/app.log`
+- `runs/20260821-090000-maxwell-3d/run-manifest.json`
+
+The faked `logs/app.log` source contained the absolute path of the faked
+project document; the corresponding bundle entry reads:
+
+```
+AEDT [analyze]: Engine Detected Error: missing file X.adp
+AEDT [analyze]: failed while staging [redacted-path].json
+```
+
+Redaction confirmation for this faked bundle: the absolute path was present
+in the raw log source before redaction, and is absent from every entry's
+text after `build_bundle_entries` -- checked here by substring search over
+all three entries' text, the same check step 4 of the real walk performs by
+reading the archive.
+
 1. Start the application on a saved project, edit a winding, and kill the
    process from Task Manager without saving. Restart the application: the
    recovery dialog should offer the autosaved changes; choose **Recover**.
@@ -317,11 +423,17 @@ is running before starting, and between steps.
      entry name or in any entry's bytes.** Read the whole archive, not just
      the parts that look interesting -- a leak in a section nobody expected
      to check is exactly the failure mode the earlier defects above produced.
-5. On each of the five Guided Studio screens in turn -- Core & Material,
-   Windings, Preliminary, Simulation, Review -- make one edit, then
-   **Edit > Undo** and **Edit > Redo**. Confirm each screen redraws correctly
-   after both, and that undoing all the way back to the last-saved state
-   re-enables **Generate**.
+5. On the Core & Material, Windings, and Simulation screens in turn, make one
+   edit, then **Edit > Undo** and **Edit > Redo**. Confirm each screen
+   redraws correctly after both, and that undoing all the way back to the
+   last-saved state re-enables **Generate**. Preliminary and Review are
+   read-only (`PreliminaryPage.qml` and `ReviewPage.qml` contain no
+   `TextField`, `SpinBox`, `ComboBox`, or `CheckBox`), so there is no edit to
+   make on either: instead, while viewing each of them, undo and redo an edit
+   made on one of the other three screens, and confirm the Preliminary and
+   Review screen redraws to match -- e.g. a changed winding count or a
+   changed **Generate** availability is reflected without needing to
+   navigate away and back.
 
 ## Known risks carried into M9 acceptance
 
@@ -346,3 +458,17 @@ and a reviewer will ask about them:
 6. `application_data_directory()` falls back to `~/.local/share` when
    `LOCALAPPDATA` is unset, purely so the non-solver suite runs on Linux CI.
    Not a supported product configuration (ADR 0004).
+7. The "no licence server identifier" guarantee rests on two overlapping
+   redaction rules, not one, and only one of them is labelled for it.
+   `_LICENSE_SERVER` in `redaction.py` matches the FlexNet `port@host` shape
+   and is meant to be what catches `1055@LICSRV01`. In practice `_EMAIL` also
+   matches that shape (`port@host` reads the same as `local@domain`), so if
+   `_LICENSE_SERVER` alone is ever weakened, `_EMAIL` independently catches
+   the same text -- confirmed by disabling `_LICENSE_SERVER.sub` alone and
+   observing `test_a_licence_failure_produces_actionable_redactable_evidence`
+   stay green; only disabling both rules together turns it red. This is real
+   defence in depth today, but it means the licence-server rule is not
+   independently proven by this test suite: if `_EMAIL`'s two-character host
+   requirement is ever narrowed or its pattern otherwise changed, a licence
+   server identifier could start leaking with no test catching it until
+   someone also breaks `_LICENSE_SERVER`.
