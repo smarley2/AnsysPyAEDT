@@ -49,16 +49,25 @@ packages = ["src/inductor_designer"]
 # runtime -- schemas, the built catalog index, the compatibility matrix, and
 # the material overlay -- inside the package, under `_resources/`, mirroring
 # the source checkout's own relative layout so the same joins resolve both.
-# `force-include` bypasses the default VCS-ignore-based file selection,
-# which matters here: `artifacts/` (holding the catalog index) is
-# git-ignored on purpose, since it is build OUTPUT, not source -- run
-# `python -m tools.build_catalog` before building a release wheel, or this
-# entry has nothing to include and the build fails.
+# `force-include` ships the data the application reads at runtime, which the
+# default package selection would otherwise leave out of every distribution.
+#
+# The catalog INDEX is deliberately absent from this table. It is build output
+# (`artifacts/` is git-ignored) rather than source, and a `force-include` entry
+# is evaluated for the EDITABLE wheel too -- so listing it made
+# `pip install -e .` fail on any checkout that had not run
+# `python -m tools.build_catalog` yet, which is every fresh clone and all five
+# CI jobs. Worse, it deadlocked: that tool imports `yaml` and `jsonschema`,
+# which arrive through the install it was blocking.
+#
+# So the index is built rather than shipped: the frozen bundle generates it
+# during packaging (M10 Task 3), and a source or `pip install` user runs
+# `python -m tools.build_catalog` once. `resources.missing_resources()` names it
+# if absent, so the failure is a sentence rather than a traceback.
 [tool.hatch.build.targets.wheel.force-include]
 "schemas" = "inductor_designer/_resources/schemas"
 "compatibility" = "inductor_designer/_resources/compatibility"
 "materials-overlay" = "inductor_designer/_resources/materials-overlay"
-"artifacts/catalog/catalog.sqlite" = "inductor_designer/_resources/artifacts/catalog/catalog.sqlite"
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config"
