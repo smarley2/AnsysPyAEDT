@@ -236,9 +236,15 @@ exe = EXE(
     # A console, not a windowed subsystem: `--help`, `--project` parse
     # errors, and the project-lock and resources refusals all print to
     # stderr for a terminal or CI launch (see ui/main.py), and the frozen
-    # build must keep that readable. The Start Menu shortcut Task 4 builds
-    # can still hide the window if that turns out to matter for the
-    # installer's polish; nothing here forecloses that.
+    # build must keep that readable.
+    #
+    # The cost is a console window behind the application on a Start Menu
+    # launch, and a shortcut CANNOT suppress it -- a .lnk has no way to hide
+    # the console of a console-subsystem executable, so do not plan the
+    # installer around that. Removing it means a second, windowed `EXE()`
+    # here (or a small launcher), which is a release-polish decision rather
+    # than a packaging one, and the refusal paths above are why it has not
+    # been taken yet: a windowed build shows the user nothing at all.
     console=True,
 )
 

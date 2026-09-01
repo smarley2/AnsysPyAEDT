@@ -190,11 +190,19 @@ def compile_installer(
     being duplicated as a literal in the script, the same reasoning
     `resolve_datas` above applies to the bundle's data paths.
     """
-    subprocess.run(
+    completed = subprocess.run(
         [str(iscc_path), f"/DMyAppVersion={version}", str(ISS_PATH)],
-        check=True,
         cwd=REPO_ROOT,
+        check=False,
     )
+    if completed.returncode != 0:
+        # Reported the same way as every other failure in this script rather
+        # than as a `CalledProcessError` traceback: ISCC has already printed
+        # the offending line, and a traceback on top of it only buries it.
+        raise SystemExit(
+            f"build_frozen: Inno Setup failed to compile {ISS_PATH.name} "
+            f"(exit code {completed.returncode}); its output is above."
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
