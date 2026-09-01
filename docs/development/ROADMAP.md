@@ -868,8 +868,12 @@ document and produce sufficient redacted evidence for diagnosis.
 
 ### Current state
 
-Implementation is **complete and awaiting Fabio Posser's verification.** Only
-he accepts a milestone. The plan is
+Milestone 9 is **accepted by Fabio Posser on 2026-09-01**, after he ran the
+manual forced-failure walk on the Windows workstation: the recovery offer, the
+Discard path and a real diagnostic bundle were exercised on a live build (the
+application log records "Recovered autosaved project changes." and a 21-entry
+bundle), and he confirmed a second window is refused on a locked project. The
+plan is
 [2026-08-18 M9 reliability](../superpowers/plans/2026-08-18-m9-reliability.md)
 and the evidence record is [m9-reliability-evidence.md](m9-reliability-evidence.md),
 which records the non-live gate, four forced-failure scenarios with
@@ -900,6 +904,25 @@ on a failed run, whether interrupted-run reconciliation is automatic,
 retention of interrupted run directories, and the accepted residual where an
 extensionless path whose last component contains a space strands its last
 word in a redacted log line. Full detail on each is in the evidence record.
+
+### Accepted with two follow-ups already delivered
+
+Two defects were found after the whole-branch review, while Fabio Posser was
+walking the milestone, and are fixed on the same branch under
+[2026-09-01 recovery slot and project lock](../superpowers/plans/2026-09-01-recovery-slot-and-project-lock.md):
+
+- The recovery snapshot slot was global, so two windows editing two DIFFERENT
+  projects shared it. The later autosave won, and because a snapshot is only
+  offered when its document path matches, the loser's unsaved work was never
+  even offered. Slots are now keyed per document.
+- Nothing stopped two windows opening one project. An advisory lock now refuses
+  the second, names the process holding it, and shows that on screen rather than
+  only on stderr -- while a STALE lock is always taken rather than blocking,
+  because a dead owner's lock is the ordinary aftermath of the crash this area
+  exists to survive.
+
+Both are recorded here rather than in the M9 record, because they were found
+after that record was reviewed and accepted.
 
 ## Milestone 10: Windows Release
 

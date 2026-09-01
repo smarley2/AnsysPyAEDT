@@ -9,6 +9,15 @@
   reviews found (several of them leaks), the open product questions still
   waiting on his ruling, and a manual walk he runs on the Windows workstation.
 
+**ACCEPTED by Fabio Posser on 2026-09-01.** He ran the manual walk on the
+Windows workstation. Evidence from that session, in the application log this
+milestone added: `Recovered autosaved project changes.` and
+`Diagnostic bundle written with 21 entries.` -- steps 1 and 4 exercised on a live
+build -- and he confirmed separately that a locked project refuses a second
+window. The two artifacts below that are labelled "shape, produced without a
+live solve" were placeholders for that walk and are left as they are: the walk
+has now happened, and its outcome is this acceptance.
+
 ## Exit criterion
 
 Verbatim from the roadmap: *"forced UI and solver failures preserve the last

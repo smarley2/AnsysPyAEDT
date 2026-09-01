@@ -126,8 +126,8 @@ before the next plan freezes assumptions that depend on it.
   temperature only on exact equality, and a mismatch names the recorded
   temperatures so the user can pick one that exists.
 
-- **Milestone 9, Reliability, implementation is complete as of 2026-08-21 and
-  awaiting Fabio Posser's verification.** Only he accepts a milestone. The
+- **Milestone 9, Reliability, is accepted by Fabio Posser on 2026-09-01**,
+  after he ran the manual forced-failure walk on the Windows workstation. The
   plan is
   [2026-08-18 M9 reliability](2026-08-18-m9-reliability.md)
   and the evidence record is
@@ -145,8 +145,19 @@ before the next plan freezes assumptions that depend on it.
   undone back to the last valid project. Ruled 2026-08-18: the diagnostic
   bundle excludes both the Project document and AEDT's own log files. Eight
   other product questions remain open with a working default each, listed in
-  the evidence record. The next detailed plan is Milestone 10, Windows
-  Release, whose entry condition is M9 acceptance.
+  the evidence record.
+
+  Two defects found after that record was reviewed are fixed on the same branch
+  under [2026-09-01 recovery slot and project lock](2026-09-01-recovery-slot-and-project-lock.md):
+  the recovery snapshot slot was global, so two windows on two different
+  projects silently overwrote each other's unsaved work, and nothing stopped two
+  windows opening one project. Slots are now per document, and an advisory lock
+  refuses the second window while always taking a stale lock rather than
+  blocking a launch.
+
+  The active plan is now Milestone 10, Windows Release. **Decision, 2026-09-01:
+  the MCP server is NOT shipped in this release** -- it stays in the repository,
+  is excluded from the installer, and the release notes say so.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
