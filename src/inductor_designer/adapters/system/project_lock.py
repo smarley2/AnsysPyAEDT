@@ -64,11 +64,19 @@ def _pid_alive_windows(pid: int) -> bool:
     # still lets us learn the process exists, so this never needs privileges
     # beyond what any user process already has.
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
-        return False
-    ctypes.windll.kernel32.CloseHandle(handle)
-    return True
+    # A denied handle still means "exists but is not ours" -- e.g. another
+    # user's session on the same host (RDP/Citrix/fast user switching), or
+    # one window elevated and the other not. Reading ERROR_ACCESS_DENIED as
+    # "dead" is how a live owner's lock got stolen out from under it; only
+    # an OpenProcess failure for any OTHER reason (pid does not exist) means
+    # dead, matching the POSIX branch's PermissionError == alive rule below.
+    ERROR_ACCESS_DENIED = 5
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    return ctypes.get_last_error() == ERROR_ACCESS_DENIED
 
 
 def _pid_alive(pid: int) -> bool:
@@ -109,7 +117,20 @@ def _read_lock(path: Path) -> _LockRecord | None:
     pid = loaded.get("pid")
     host = loaded.get("host")
     started = loaded.get("startedAtUtc")
-    if not isinstance(pid, int) or not isinstance(host, str) or not isinstance(started, str):
+    # `bool` is a subclass of `int`, so `isinstance(pid, int)` alone lets
+    # `{"pid": true}` through as pid 1. The upper bound keeps an
+    # out-of-range pid (e.g. 10**12) from reaching `OpenProcess`/`os.kill`,
+    # where it raises instead of returning -- the same "must never block
+    # startup" shape as the malformed-recovery-index defect. The lower
+    # bound excludes 0, which `os.kill(0, 0)` reads as "this process's own
+    # group" on POSIX -- always alive, never a real pid.
+    if (
+        not isinstance(pid, int)
+        or isinstance(pid, bool)
+        or not 0 < pid < 2**32
+        or not isinstance(host, str)
+        or not isinstance(started, str)
+    ):
         return None
     return _LockRecord(pid=pid, host=host, started_at_utc=started)
 

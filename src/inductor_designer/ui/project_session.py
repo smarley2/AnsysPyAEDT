@@ -323,8 +323,36 @@ class ProjectSession(QObject):
         self._refresh_dirty()
         self._drop_recovery_snapshot()
         self.documentPathChanged.emit()
+        # The write has already landed on disk, so -- unlike openProject --
+        # refusing here is not an option: there is no "undo the save" to
+        # fall back to. Acquire the new path's lock now, swap it in, and
+        # release the old path's lock (this document no longer lives there).
+        # On the rare HELD_BY_LIVE_PROCESS -- another window already has
+        # THIS exact path open -- there is nothing correct left to do but
+        # proceed unlocked and say so: two windows racing to save the same
+        # path is a pre-existing hazard this after-the-fact lock cannot
+        # retroactively prevent, only report.
+        new_lock = ProjectLock(path)
+        outcome = new_lock.acquire()
+        previous_lock = self._lock
+        if outcome is LockOutcome.HELD_BY_LIVE_PROCESS:
+            assert new_lock.holder is not None
+            self._lock = None
+            _logger.warning(
+                "Saved to %s, but could not lock it: %s",
+                path,
+                _lock_refusal_message(path, new_lock.holder),
+            )
+            self.set_status(
+                f"Saved as {path.name}, but it is already open elsewhere -- "
+                "this window will not warn you if that window saves too."
+            )
+        else:
+            self._lock = new_lock
+            self.set_status(f"Saved as {path.name}")
+        if previous_lock is not None:
+            previous_lock.release()
         _logger.info("Project saved to %s.", path)
-        self.set_status(f"Saved as {path.name}")
         return True
 
     @Slot(QUrl, result=bool)
@@ -344,6 +372,27 @@ class ProjectSession(QObject):
             )
             return False
         path = Path(source.toLocalFile())
+        # There is no Revert menu item, so File > Open on the document this
+        # session already has open is the only way to reload from disk --
+        # and the unsaved-changes guard's Discard button leads straight
+        # here. Routing it through the lock like any other target would
+        # refuse it: a lock this same process already holds reads as
+        # `HELD_BY_LIVE_PROCESS` (pinned by
+        # `test_a_lock_held_by_this_live_process_is_refused`, which must
+        # stay refusing a SECOND window, not this one reopening its own
+        # document) rather than making `acquire()` re-entrant. So this case
+        # is short-circuited before the lock is even touched: reload the
+        # file, keep the existing lock exactly as it is.
+        if self._document_path is not None and path == self._document_path:
+            try:
+                project = self._open_callback(path)
+            except Exception as error:  # noqa: BLE001 - a bad file must never crash the app
+                self.set_status(f"Unable to open {path.name}: {error}")
+                return False
+            self._adopt_loaded_project(path, project)
+            _logger.info("Project reloaded from %s.", path)
+            self.set_status(f"Reloaded {path.name}")
+            return True
         # Acquire the new document's lock BEFORE touching anything: a
         # refused Open must leave the current document open and untouched,
         # and the previous lock is only released once this one is confirmed
@@ -362,9 +411,27 @@ class ProjectSession(QObject):
             self.set_status(f"Unable to open {path.name}: {error}")
             return False
         previous_lock = self._lock
+        self._adopt_loaded_project(path, project)
+        self.documentPathChanged.emit()
+        # The new document's lock is ours; release the previous one only now
+        # that the swap has actually succeeded.
+        self._lock = new_lock
+        if previous_lock is not None:
+            previous_lock.release()
+        _logger.info("Project opened from %s.", path)
+        self.set_status(f"Opened {path.name}")
+        return True
+
+    def _adopt_loaded_project(self, path: Path, project: InductorProject) -> None:
+        """Swap a freshly loaded project in as the session's current state.
+
+        Shared by `openProject`'s normal path and its reload-the-current-
+        document short circuit; the only difference between the two is
+        whether the lock is touched, which stays in each caller.
+        """
         self._provider.replace(project)
         self._document_path = path
-        # A run directory beside the newly opened document may still read
+        # A run directory beside the (re)opened document may still read
         # "running" from a process that died mid-run; reconcile it to
         # "interrupted" now so Review never reads it as a result. But a run
         # this process is executing right now writes that identical marker,
@@ -390,15 +457,6 @@ class ProjectSession(QObject):
         self._refresh_dirty()
         self.undoStackChanged.emit()
         self.projectChanged.emit()
-        self.documentPathChanged.emit()
-        # The new document's lock is ours; release the previous one only now
-        # that the swap has actually succeeded.
-        self._lock = new_lock
-        if previous_lock is not None:
-            previous_lock.release()
-        _logger.info("Project opened from %s.", path)
-        self.set_status(f"Opened {path.name}")
-        return True
 
     def release_lock(self) -> None:
         """Release this session's current document lock, if any.

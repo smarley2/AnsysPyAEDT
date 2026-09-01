@@ -17,7 +17,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from inductor_designer.adapters.system.project_lock import LockOutcome, ProjectLock
+import pytest
+
+from inductor_designer.adapters.system.project_lock import (
+    LockOutcome,
+    ProjectLock,
+    _pid_alive,
+)
 
 
 def _document(tmp_path: Path) -> Path:
@@ -104,6 +110,16 @@ def test_a_stale_lock_is_taken_rather_than_blocking(tmp_path: Path) -> None:
     assert ProjectLock(document).acquire() is LockOutcome.TAKEN_FROM_STALE
 
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows-only probe")
+def test_a_live_but_unopenable_process_reads_as_alive_on_windows() -> None:
+    """The System process (pid 4) is unquestionably alive but never openable
+    by an ordinary user process -- `OpenProcess` fails with
+    `ERROR_ACCESS_DENIED`. Reading that as "dead" is how a live owner's lock
+    gets stolen out from under it: two users on one host (RDP/Citrix/fast
+    user switching), or one window elevated and the other not."""
+    assert _pid_alive(4) is True
+
+
 def test_a_lock_from_another_host_is_refused_distinctly(tmp_path: Path) -> None:
     """Liveness cannot be probed across hosts, so it is treated as live --
     but the message has to differ, because the remedy is on another
@@ -119,27 +135,52 @@ def test_a_lock_from_another_host_is_refused_distinctly(tmp_path: Path) -> None:
     assert lock.holder.host == "a-different-machine"
 
 
-def test_a_malformed_lock_file_does_not_block(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("not json at all {{{", id="not_json"),
+        pytest.param("", id="empty"),
+        pytest.param("   \n\t  ", id="whitespace_only"),
+        pytest.param('{"pid": 123, "host": "h"', id="truncated"),
+        pytest.param("[1, 2, 3]", id="non_object_json"),
+        pytest.param('{"host": "h", "startedAtUtc": "t"}', id="missing_pid"),
+        pytest.param('{"pid": "123", "host": "h", "startedAtUtc": "t"}', id="pid_as_string"),
+        pytest.param('{"pid": 123.5, "host": "h", "startedAtUtc": "t"}', id="pid_as_float"),
+        pytest.param('{"pid": true, "host": "h", "startedAtUtc": "t"}', id="pid_as_bool"),
+        pytest.param('{"pid": 0, "host": "h", "startedAtUtc": "t"}', id="pid_zero"),
+        pytest.param('{"pid": -5, "host": "h", "startedAtUtc": "t"}', id="pid_negative"),
+        pytest.param(
+            '{"pid": 4294967296, "host": "h", "startedAtUtc": "t"}', id="pid_out_of_range"
+        ),
+    ],
+)
+def test_a_malformed_lock_file_does_not_block(tmp_path: Path, raw: str) -> None:
     """Same reasoning as the naive-timestamp defect in M9 Task 6: an
-    unparseable file left by another build must not prevent startup."""
+    unparseable or otherwise untrustworthy record left by another build must
+    not prevent startup. `pid_as_bool` and `pid_zero` are the two cousins
+    Important 2 named: `isinstance(True, int)` lets a bool through as pid 1,
+    and `os.kill(0, 0)` on POSIX reads pid 0 as this process's own group --
+    both would otherwise read as alive. `pid_out_of_range` is Important 2
+    itself: an oversized pid reaching `OpenProcess`/`os.kill` raises instead
+    of returning, which is exactly the shape that blocked startup."""
     document = _document(tmp_path)
-    _lock_path(document).write_text("not json at all {{{", encoding="utf-8")
+    _lock_path(document).write_text(raw, encoding="utf-8")
 
     assert ProjectLock(document).acquire() is LockOutcome.TAKEN_FROM_STALE
 
 
-def test_releasing_removes_only_our_own_lock(tmp_path: Path) -> None:
-    """Releasing a lock this process does not own would hand the document to
-    a third window while the real owner is still editing."""
+def test_releasing_does_not_remove_a_lock_stolen_back_on_this_host(tmp_path: Path) -> None:
+    """A window on this machine stole the (by-then-stale) lock back after we
+    acquired it: same host, a different (foreign) pid. Deleting either half
+    of the ownership check at `project_lock.py`'s `release()` -- pid alone,
+    or host alone -- would let this slip through, so this case plants a
+    foreign pid on OUR host, leaving host matching and only pid foreign."""
     document = _document(tmp_path)
     lock = ProjectLock(document)
     assert lock.acquire() is LockOutcome.ACQUIRED
 
-    # Simulate another window stealing the (by-then-stale) lock back after
-    # we acquired it -- the file on disk no longer agrees with what we
-    # think we own.
     lock.path.write_text(
-        json.dumps({"pid": 999999, "host": "someone-elses-window", "startedAtUtc": "x"}),
+        json.dumps({"pid": 999999, "host": platform.node(), "startedAtUtc": "x"}),
         encoding="utf-8",
     )
 
@@ -147,3 +188,29 @@ def test_releasing_removes_only_our_own_lock(tmp_path: Path) -> None:
 
     assert lock.path.is_file()
     assert json.loads(lock.path.read_text(encoding="utf-8"))["pid"] == 999999
+
+
+def test_releasing_does_not_remove_a_lock_with_our_pid_on_a_foreign_host(
+    tmp_path: Path,
+) -> None:
+    """Pids collide across machines on a network share: a lock recording
+    OUR pid but a different host is not ours to release. This is the
+    complementary half of the ownership check -- pid matching, host
+    foreign -- that a host-only or pid-only check would also miss."""
+    document = _document(tmp_path)
+    lock = ProjectLock(document)
+    assert lock.acquire() is LockOutcome.ACQUIRED
+
+    lock.path.write_text(
+        json.dumps(
+            {"pid": os.getpid(), "host": "someone-elses-window", "startedAtUtc": "x"}
+        ),
+        encoding="utf-8",
+    )
+
+    lock.release()
+
+    assert lock.path.is_file()
+    assert (
+        json.loads(lock.path.read_text(encoding="utf-8"))["host"] == "someone-elses-window"
+    )

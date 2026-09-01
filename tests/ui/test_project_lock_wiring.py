@@ -38,6 +38,7 @@ from inductor_designer.adapters.system.project_lock import (  # noqa: E402
     LockOutcome,
     ProjectLock,
 )
+from inductor_designer.domain.project import InductorProject  # noqa: E402
 from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
     GuidedStudioController,
 )
@@ -97,12 +98,23 @@ def _loaded_root(document_path: Path) -> tuple[object, ProjectSession, object]:
     app = QGuiApplication.instance() or QGuiApplication([])
     lock = ProjectLock(document_path)
     assert lock.acquire() is LockOutcome.ACQUIRED
+    repository = _repository()
     session = ProjectSession(
         make_project(),
         document_path,
-        open_callback=_repository().load,
+        open_callback=repository.load,
         lock=lock,
     )
+
+    # Same shape as `main.py`'s `save_project`: always writes to the
+    # session's *current* document path, not the one it was built with, so
+    # Save As (which moves that path before saving) writes to the new one.
+    def _save(updated_project: InductorProject) -> None:
+        assert session.document_path is not None
+        repository.save(updated_project, session.document_path)
+
+    session.set_save_callback(_save)
+
     controller = GuidedStudioController(session, CATALOG)
     engine = create_engine(guided_studio_controller=controller, project_session=session)
     root = engine.rootObjects()[0]
@@ -161,6 +173,67 @@ def test_opening_a_project_with_a_stale_lock_succeeds_and_swaps_the_lock(
     # The previous document's lock is released only once the swap succeeds.
     assert not _lock_path(path_a).is_file()
     assert json.loads(_lock_path(path_b).read_text(encoding="utf-8"))["pid"] == os.getpid()
+
+    session.release_lock()
+
+
+def test_save_as_moves_the_lock_to_the_new_document(tmp_path: Path) -> None:
+    """Important 3: a Save As that does not move the lock strands the old
+    document locked (a second window is wrongly refused there) and leaves
+    the newly edited document unlocked (a second window can open it right
+    out from under this one)."""
+    repository = _repository()
+    path_a = tmp_path / "a.inductor.json"
+    path_b = tmp_path / "b.inductor.json"
+    repository.save(make_project(), path_a)
+
+    root, session, _guided = _loaded_root(path_a)
+    assert _lock_path(path_a).is_file()
+
+    save_as_dialog = root.findChild(QObject, "saveProjectAsDialog")
+    _accept_file_dialog(save_as_dialog, path_b)
+    QGuiApplication.instance().processEvents()
+
+    assert session.documentPath == str(path_b)
+    # The old document's lock is gone -- a second window can now open it.
+    assert not _lock_path(path_a).is_file()
+    assert ProjectLock(path_a).acquire() is LockOutcome.ACQUIRED
+    # The new document's lock is held by this process -- a second window
+    # opening it is refused, not silently sharing the file.
+    assert json.loads(_lock_path(path_b).read_text(encoding="utf-8"))["pid"] == os.getpid()
+    assert ProjectLock(path_b).acquire() is LockOutcome.HELD_BY_LIVE_PROCESS
+
+    session.release_lock()
+    # The session's lock tracking followed the document, not just the lock
+    # file on disk: exit releases b, not a stale reference to a's already-
+    # gone lock.
+    assert not _lock_path(path_b).is_file()
+
+
+def test_opening_the_already_open_document_reloads_instead_of_refusing(
+    tmp_path: Path,
+) -> None:
+    """Important 4: there is no Revert menu item, so File > Open on the
+    document already open here -- reachable from the unsaved-changes
+    guard's Discard button -- is the only way to reload from disk. Routing
+    it through the lock like any other target refuses it, blaming this
+    window's own pid."""
+    repository = _repository()
+    path_a = tmp_path / "a.inductor.json"
+    repository.save(make_project(), path_a)
+
+    root, session, guided = _loaded_root(path_a)
+    lock_record_before = json.loads(_lock_path(path_a).read_text(encoding="utf-8"))
+
+    open_dialog = root.findChild(QObject, "openProjectDialog")
+    _accept_file_dialog(open_dialog, path_a)
+    QGuiApplication.instance().processEvents()
+
+    assert session.documentPath == str(path_a)
+    assert "already open" not in guided.statusMessage
+    assert "Reloaded" in guided.statusMessage
+    # The lock this window already held is untouched, not re-acquired.
+    assert json.loads(_lock_path(path_a).read_text(encoding="utf-8")) == lock_record_before
 
     session.release_lock()
 
