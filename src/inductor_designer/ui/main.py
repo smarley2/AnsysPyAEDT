@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from PySide6.QtGui import QGuiApplication
     from PySide6.QtQml import QQmlApplicationEngine
 
     from inductor_designer.adapters.system.project_lock import ProjectLock
@@ -25,10 +26,6 @@ if TYPE_CHECKING:
     from inductor_designer.ui.review_controller import ReviewController
     from inductor_designer.ui.simulation_controller import SimulationController
 
-_DEFAULT_CATALOG = Path("artifacts/catalog/catalog.sqlite")
-_DEFAULT_SCHEMAS = Path("schemas")
-_DEFAULT_MATRIX = Path("compatibility/aedt-matrix.yml")
-_DEFAULT_MATERIAL_OVERLAY = Path("materials-overlay")
 
 
 def qml_directory() -> Path:
@@ -101,8 +98,9 @@ def show_launch_refusal(message: str) -> QQmlApplicationEngine:
 def _load_project(project_path: Path) -> InductorProject:
     from inductor_designer.adapters.persistence.project_repository import ProjectRepository
     from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+    from inductor_designer.adapters.system import resources
 
-    repo = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
+    repo = ProjectRepository(SchemaRepository(resources.schemas_directory()))
     return repo.load(project_path)
 
 
@@ -185,10 +183,15 @@ def _build_generation_controller(
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
+    from inductor_designer.adapters.system import resources
+
     parser = argparse.ArgumentParser(prog="inductor-designer")
     parser.add_argument("--project", type=Path, default=None)
-    parser.add_argument("--catalog", type=Path, default=_DEFAULT_CATALOG)
-    parser.add_argument("--matrix", type=Path, default=_DEFAULT_MATRIX)
+    # The seam's defaults, not a path relative to the working directory: an
+    # explicit flag here still wins, argparse only falls back to these when
+    # the flag is absent.
+    parser.add_argument("--catalog", type=Path, default=resources.catalog_index_path())
+    parser.add_argument("--matrix", type=Path, default=resources.compatibility_matrix_path())
     return parser.parse_args(argv)
 
 
@@ -199,6 +202,42 @@ def _install_qml_logging() -> None:
         print(f"[qml] {message}", file=sys.stderr, flush=True)
 
     qInstallMessageHandler(handler)
+
+
+def _refuse_if_resources_are_missing(app: QGuiApplication, logger: logging.Logger) -> int | None:
+    """Refuse the launch, on both channels, if a shipped resource is absent.
+
+    Checked before anything else is built: a shortcut launch that dies partway
+    through wiring a repository is a traceback with no explanation, exactly
+    the failure mode M9 ruled out for the project lock. Returns the exit code
+    to use, or None when every resource resolved and startup should continue.
+    """
+    from inductor_designer.adapters.system import resources
+    from inductor_designer.simulation.failure_advice import AdviceCode
+
+    missing = resources.missing_resources()
+    if not missing:
+        return None
+
+    lines = [f"{item.name}: not found at {item.path}" for item in missing]
+    override = resources.active_override()
+    if override is not None:
+        # A mis-set INDUCTOR_DESIGNER_RESOURCES is the most likely cause of
+        # a missing resource in a shipped build; name it so the engineer who
+        # set it does not have to guess.
+        lines.append(
+            f"{resources.OVERRIDE_VARIABLE} is currently set to: {override}"
+        )
+    message = (
+        f"{AdviceCode.RESOURCES_MISSING}: the application cannot find data it "
+        "needs to start.\n\n" + "\n".join(lines)
+    )
+    print(message.replace("\n\n", " "), file=sys.stderr, flush=True)
+    logger.info("Launch refused: %d shipped resource(s) missing.", len(missing))
+    refusal_engine = show_launch_refusal(message)
+    if refusal_engine.rootObjects():
+        app.exec()
+    return 6
 
 
 def main() -> int:
@@ -222,6 +261,10 @@ def main() -> int:
     args = _parse_args(sys.argv[1:])
     _install_qml_logging()
     app = QGuiApplication(sys.argv)
+
+    resources_refusal = _refuse_if_resources_are_missing(app, logger)
+    if resources_refusal is not None:
+        return resources_refusal
 
     preview_entries: list[PreviewEntry] | None = None
     simulation_summary: list[str] = []
@@ -306,6 +349,7 @@ def main() -> int:
         )
 
     from inductor_designer.adapters.materials import FileOverlayMaterialRepository
+    from inductor_designer.adapters.system import resources
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
 
     session: ProjectSession | None = None
@@ -317,12 +361,13 @@ def main() -> int:
         from inductor_designer.adapters.persistence.schema_repository import (
             SchemaRepository,
         )
+        from inductor_designer.adapters.system import resources
         from inductor_designer.adapters.system.environment import recovery_directory
         from inductor_designer.ui.diagnostics_controller import DiagnosticsController
         from inductor_designer.ui.project_session import ProjectSession
         from inductor_designer.ui.recovery_controller import RecoveryController
 
-        project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
+        project_repository = ProjectRepository(SchemaRepository(resources.schemas_directory()))
         recovery_store = RecoveryStore(recovery_directory(), project_repository)
 
         def autosave_project(
@@ -389,7 +434,7 @@ def main() -> int:
             session, app_log_path, redaction_context
         )
 
-    material_repository = FileOverlayMaterialRepository(_DEFAULT_MATERIAL_OVERLAY)
+    material_repository = FileOverlayMaterialRepository(resources.material_overlay_directory())
     material_studio_controller = MaterialStudioController(
         material_repository,
         pinned_revision=(

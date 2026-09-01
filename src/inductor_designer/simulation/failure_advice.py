@@ -37,6 +37,12 @@ class AdviceCode:
     CONVERGENCE_PASS_LIMIT = "convergence.pass_limit_reached"
     RUN_CANCELLED = "run.cancelled"
     UNCLASSIFIED = "run.unclassified_failure"
+    # Not reached through `advise()`'s substring match: a shipped resource
+    # (schemas, catalog index, compatibility matrix, material overlay) is
+    # missing at startup, before any solver diagnostic exists to classify.
+    # `ui/main.py`'s launch refusal tags its message with this code directly,
+    # from the same stable vocabulary the solver-failure codes above use.
+    RESOURCES_MISSING = "resources.missing"
 
 
 @dataclass(frozen=True, slots=True)

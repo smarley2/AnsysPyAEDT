@@ -30,6 +30,7 @@ from inductor_designer.adapters.persistence.project_repository import (  # noqa:
 from inductor_designer.adapters.persistence.schema_repository import (  # noqa: E402
     SchemaRepository,
 )
+from inductor_designer.adapters.system import resources  # noqa: E402
 from tests.unit.domain.test_project import make_project_with_material  # noqa: E402
 from tools.build_catalog import build  # noqa: E402
 
@@ -136,3 +137,40 @@ def test_main_wires_all_five_controllers_and_shared_session(
         panel = root.findChild(QObject, name)
         assert panel is not None, name
         assert panel.property("controller") is not None, name
+
+
+def test_main_refuses_before_any_window_when_a_shipped_resource_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Task 1's Step 5: the seam's defect surfaces here, on the real `main()`
+    startup path, not only inside `resources.py`'s own unit tests. An empty
+    override directory stands in for a broken install -- every one of the
+    four resources is absent."""
+    empty_resource_root = tmp_path / "broken-install"
+    empty_resource_root.mkdir()
+    monkeypatch.setenv(resources.OVERRIDE_VARIABLE, str(empty_resource_root))
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    def _must_not_be_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("create_engine must not run for a refused launch")
+
+    monkeypatch.setattr(main_module, "create_engine", _must_not_be_called)
+    monkeypatch.setattr(sys, "argv", ["inductor-designer"])
+
+    result = main_module.main()
+
+    assert result == 6
+    stderr = capsys.readouterr().err
+    assert "resources.missing" in stderr
+    assert "schemas directory" in stderr
+    assert "catalog index" in stderr
+    assert "compatibility matrix" in stderr
+    assert "material overlay directory" in stderr
+    assert str(empty_resource_root) in stderr

@@ -25,6 +25,7 @@ from inductor_designer.adapters.femm.solver import PyfemmSolver
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.adapters.pyaedt.maxwell2d import PyaedtMaxwell2dExporter
 from inductor_designer.adapters.pyaedt.maxwell3d import PyaedtMaxwell3dExporter
+from inductor_designer.adapters.system import resources
 from inductor_designer.mcp_server import tools
 from inductor_designer.mcp_server.tools import ToolContext
 
@@ -45,7 +46,7 @@ def build_context(root: Path, catalog_index: Path | None = None) -> ToolContext:
         )
     return ToolContext(
         catalog=SqliteCatalogRepository(index),
-        schemas=SchemaRepository(root / "schemas"),
+        schemas=SchemaRepository(resources.schemas_directory()),
         matrix_path=root / "compatibility" / "aedt-matrix.yml",
         maxwell3d_exporter=PyaedtMaxwell3dExporter(),
         maxwell2d_exporter=PyaedtMaxwell2dExporter(),
