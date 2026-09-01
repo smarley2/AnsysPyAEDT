@@ -242,7 +242,7 @@ def test_main_without_installer_flag_never_looks_for_iscc(
     with only PyInstaller installed must still be able to freeze the
     bundle."""
     monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
-    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version: None)
+    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version, **kwargs: None)
 
     def _fail_if_called() -> Path:
         raise AssertionError("find_iscc must not be called without --installer")
@@ -286,7 +286,11 @@ def test_main_with_installer_flag_compiles_using_the_about_version(
 
     monkeypatch.setattr(build_frozen, "compile_installer", _record)
     checksum_calls: list[str] = []
-    monkeypatch.setattr(build_frozen, "emit_checksums", checksum_calls.append)
+    monkeypatch.setattr(
+        build_frozen,
+        "emit_checksums",
+        lambda version, **kwargs: checksum_calls.append(version),
+    )
 
     from inductor_designer.__about__ import __version__
 
@@ -316,7 +320,7 @@ def test_main_passes_the_generated_catalog_path_to_pyinstaller(
         captured["core_count"] = core_count
 
     monkeypatch.setattr(build_frozen, "_pyinstaller_run", fake_pyinstaller_run)
-    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version: None)
+    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version, **kwargs: None)
 
     build_frozen.main([])
 
@@ -407,7 +411,7 @@ def test_emit_checksums_covers_only_the_bundle_when_no_installer_was_built(
     bundle_dir.mkdir(parents=True)
     (bundle_dir / "inductor-designer.exe").write_bytes(b"stub-exe")
 
-    out_path = build_frozen.emit_checksums("0.1.0")
+    out_path = build_frozen.emit_checksums("0.1.0", installer_built=False)
 
     assert out_path == tmp_path / "dist" / "SHA256SUMS.txt"
     content = out_path.read_text(encoding="utf-8")
@@ -427,13 +431,56 @@ def test_emit_checksums_covers_the_installer_too_when_it_was_built(
     installer_dir.mkdir(parents=True)
     (installer_dir / "inductor-designer-0.1.0-setup.exe").write_bytes(b"stub-installer")
 
-    out_path = build_frozen.emit_checksums("0.1.0")
+    out_path = build_frozen.emit_checksums("0.1.0", installer_built=True)
 
     content = out_path.read_text(encoding="utf-8")
     lines = content.splitlines()
     assert len(lines) == 2
     assert any(line.endswith("inductor-designer-0.1.0-win64.zip") for line in lines)
     assert any(line.endswith("inductor-designer-0.1.0-setup.exe") for line in lines)
+
+
+def test_emit_checksums_ignores_an_installer_left_by_an_earlier_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`dist/installer/` is not cleaned between runs, so a bundle-only build
+    that followed an `--installer` build would otherwise publish the old
+    installer's hash beside a newly rebuilt bundle -- two entries in one
+    checksums file that do not describe the same build. Someone verifying
+    that hash would get a match and trust a stale installer."""
+    monkeypatch.setattr(build_frozen, "REPO_ROOT", tmp_path)
+    bundle_dir = tmp_path / "dist" / "inductor-designer"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "inductor-designer.exe").write_bytes(b"stub-exe")
+    installer_dir = tmp_path / "dist" / "installer"
+    installer_dir.mkdir(parents=True)
+    (installer_dir / "inductor-designer-0.1.0-setup.exe").write_bytes(b"stale-installer")
+
+    out_path = build_frozen.emit_checksums("0.1.0", installer_built=False)
+
+    content = out_path.read_text(encoding="utf-8")
+    assert "setup.exe" not in content
+    assert len(content.splitlines()) == 1
+
+
+def test_main_tells_emit_checksums_whether_it_compiled_an_installer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flag must come from `--installer`, not from probing `dist/` --
+    see `test_emit_checksums_ignores_an_installer_left_by_an_earlier_run`."""
+    monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+    monkeypatch.setattr(build_frozen, "find_iscc", lambda: Path("ISCC.exe"))
+    monkeypatch.setattr(build_frozen, "compile_installer", lambda iscc, version: None)
+    flags: list[bool] = []
+    monkeypatch.setattr(
+        build_frozen,
+        "emit_checksums",
+        lambda version, *, installer_built: flags.append(installer_built),
+    )
+
+    assert build_frozen.main([]) == 0
+    assert build_frozen.main(["--installer"]) == 0
+    assert flags == [False, True]
 
 
 def test_main_calls_emit_checksums_with_the_apps_own_version(
@@ -444,7 +491,9 @@ def test_main_calls_emit_checksums_with_the_apps_own_version(
     box (same reasoning as `compile_installer`'s version argument)."""
     monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
     calls: list[str] = []
-    monkeypatch.setattr(build_frozen, "emit_checksums", calls.append)
+    monkeypatch.setattr(
+        build_frozen, "emit_checksums", lambda version, **kwargs: calls.append(version)
+    )
 
     from inductor_designer.__about__ import __version__
 

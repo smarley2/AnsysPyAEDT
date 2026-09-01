@@ -261,21 +261,29 @@ def write_checksums(artifacts: list[Path], out_path: Path) -> Path:
     return out_path
 
 
-def emit_checksums(version: str) -> Path:
-    """Zip the bundle and write `dist/SHA256SUMS.txt` over it and the
-    installer, if `--installer` built one in this run.
+def emit_checksums(version: str, *, installer_built: bool) -> Path:
+    """Zip the bundle and write `dist/SHA256SUMS.txt` over it and, when
+    `--installer` compiled one in THIS run, the installer.
 
     Always called at the end of `main()`, whether or not `--installer` was
     passed -- the bundle archive is a release artifact on its own (an
     unsigned installer is not the only way to get this application onto a
     machine), so it is always checksummed.
+
+    `installer_built` is required and is deliberately not a probe of the
+    filesystem. `dist/installer/` survives between runs, so a plain
+    `is_file()` test would list the PREVIOUS run's installer beside a bundle
+    just rebuilt from different sources -- a checksums file whose two
+    entries do not describe the same build. Someone verifying that hash
+    would get a match and conclude they hold the current release. A
+    checksums file exists to make that conclusion safe, so it lists only
+    what this run actually produced.
     """
     dist_dir = REPO_ROOT / "dist"
     artifacts = [archive_bundle(dist_dir, version)]
 
-    installer_path = dist_dir / "installer" / f"inductor-designer-{version}-setup.exe"
-    if installer_path.is_file():
-        artifacts.append(installer_path)
+    if installer_built:
+        artifacts.append(dist_dir / "installer" / f"inductor-designer-{version}-setup.exe")
 
     return write_checksums(artifacts, dist_dir / "SHA256SUMS.txt")
 
@@ -309,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"build_frozen: {error}") from error
         compile_installer(iscc_path, __version__)
 
-    emit_checksums(__version__)
+    emit_checksums(__version__, installer_built=args.installer)
     return 0
 
 

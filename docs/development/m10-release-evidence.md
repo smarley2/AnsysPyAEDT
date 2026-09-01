@@ -362,12 +362,14 @@ installs and works," and a failure here is a defect, not a note for later.
   its absence is not a failure of any step below.
 - **A project file, copied there by hand.** This release ships no sample
   project (ruled 2026-09-01), so step 3 needs a `.inductor.json` file that
-  did not come from the installer. Get one either of two ways: save one from
-  a source checkout on another machine (`File > Save` in a running
-  `inductor-designer-mcp`-free build, or the existing sample at
-  `artifacts/maxwell3d/2025.2-commercial/m7b.inductor.json` in this
-  repository), or copy any existing `.inductor.json` you already have. Copy
-  it onto the clean machine by USB drive, network share, or any transfer
+  did not come from the installer. Get one either of two ways: copy the
+  tracked fixture `tests/fixtures/sample_geometry_project.inductor.json`
+  from a source checkout (it is in git, so every checkout has it, and the
+  live FEMM tests load it -- so it is current against the document schema),
+  or use any existing `.inductor.json` of your own. Do NOT reach for
+  anything under `artifacts/`: that directory is git-ignored, so whatever
+  is in it exists only on the one machine that produced it. Copy the file
+  onto the clean machine by USB drive, network share, or any transfer
   method you trust -- this application never reaches across machines by
   itself.
 - The installer file (`inductor-designer-0.1.0-setup.exe`) and
