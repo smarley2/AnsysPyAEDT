@@ -16,6 +16,11 @@ from pathlib import Path
 from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
 from inductor_designer.adapters.system.app_logging import LOGGER_NAME
+from inductor_designer.adapters.system.project_lock import (
+    LockHolder,
+    LockOutcome,
+    ProjectLock,
+)
 from inductor_designer.application.services.run_recovery import (
     reconcile_unfinished_runs,
 )
@@ -23,6 +28,19 @@ from inductor_designer.domain.project import InductorProject
 from inductor_designer.ui.generation_controller import CurrentProjectProvider
 
 _logger = logging.getLogger(LOGGER_NAME)
+
+
+def _lock_refusal_message(path: Path, holder: LockHolder) -> str:
+    if holder.same_host:
+        return (
+            f"Unable to open {path.name}: already open in another window "
+            f"(process {holder.pid}). Close it there first."
+        )
+    return (
+        f"Unable to open {path.name}: already open on host {holder.host} "
+        f"(process {holder.pid}). It cannot be checked from here -- close "
+        "it on that machine."
+    )
 
 # Deep enough to cover a working session's edits, bounded so a long session
 # cannot grow the process without limit. Each entry is one immutable project.
@@ -50,6 +68,7 @@ class ProjectSession(QObject):
         recovery_cleanup: Callable[[], None] | None = None,
         is_run_busy: Callable[[], bool] | None = None,
         debounce_ms: int = AUTOSAVE_DEBOUNCE_MS,
+        lock: ProjectLock | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -58,6 +77,11 @@ class ProjectSession(QObject):
         self._save_callback = save_callback
         self._open_callback = open_callback
         self._is_run_busy = is_run_busy
+        # The lock guarding `self._document_path`, already acquired by
+        # whoever constructed this session (`main.py`, for the document
+        # given on launch). `openProject` swaps it for the newly opened
+        # document's lock; nothing else in this class touches it.
+        self._lock = lock
         self._dirty = False
         self._status_message = "Ready"
         self._undo: list[InductorProject] = []
@@ -320,11 +344,24 @@ class ProjectSession(QObject):
             )
             return False
         path = Path(source.toLocalFile())
+        # Acquire the new document's lock BEFORE touching anything: a
+        # refused Open must leave the current document open and untouched,
+        # and the previous lock is only released once this one is confirmed
+        # ours (below). Acquiring ahead of the load itself means a locked
+        # target never even gets read.
+        new_lock = ProjectLock(path)
+        outcome = new_lock.acquire()
+        if outcome is LockOutcome.HELD_BY_LIVE_PROCESS:
+            assert new_lock.holder is not None
+            self.set_status(_lock_refusal_message(path, new_lock.holder))
+            return False
         try:
             project = self._open_callback(path)
         except Exception as error:  # noqa: BLE001 - a bad file must never crash the app
+            new_lock.release()
             self.set_status(f"Unable to open {path.name}: {error}")
             return False
+        previous_lock = self._lock
         self._provider.replace(project)
         self._document_path = path
         # A run directory beside the newly opened document may still read
@@ -354,6 +391,22 @@ class ProjectSession(QObject):
         self.undoStackChanged.emit()
         self.projectChanged.emit()
         self.documentPathChanged.emit()
+        # The new document's lock is ours; release the previous one only now
+        # that the swap has actually succeeded.
+        self._lock = new_lock
+        if previous_lock is not None:
+            previous_lock.release()
         _logger.info("Project opened from %s.", path)
         self.set_status(f"Opened {path.name}")
         return True
+
+    def release_lock(self) -> None:
+        """Release this session's current document lock, if any.
+
+        Called on every normal exit path (`main.py` connects it to
+        `QGuiApplication.aboutToQuit`), so a clean shutdown never leaves a
+        lock behind for the next launch to have to clear as stale.
+        """
+        if self._lock is not None:
+            self._lock.release()
+            self._lock = None

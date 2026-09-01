@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PySide6.QtQml import QQmlApplicationEngine
 
+    from inductor_designer.adapters.system.project_lock import ProjectLock
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.ui.app_info_controller import AppInfoController
     from inductor_designer.ui.core_material_controller import CoreMaterialController
@@ -207,7 +208,12 @@ def main() -> int:
     diagnostics_controller: DiagnosticsController | None = None
     backend_choices: list[str] = []
     project: InductorProject | None = None
+    project_lock: ProjectLock | None = None
     if args.project is not None:
+        from inductor_designer.adapters.system.project_lock import (
+            LockOutcome,
+            ProjectLock,
+        )
         from inductor_designer.application.services.geometry_model import GeometryModelError
         from inductor_designer.ui.generation_lines import GenerationBackend
 
@@ -220,6 +226,38 @@ def main() -> int:
         if not args.matrix.is_file():
             print(f"Compatibility matrix not found: {args.matrix}", file=sys.stderr)
             return 2
+
+        project_lock = ProjectLock(args.project)
+        lock_outcome = project_lock.acquire()
+        if lock_outcome is LockOutcome.HELD_BY_LIVE_PROCESS:
+            holder = project_lock.holder
+            assert holder is not None
+            if holder.same_host:
+                print(
+                    f"{args.project} is already open in another window "
+                    f"(process {holder.pid}). Close it there first.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"{args.project} is already open on host {holder.host} "
+                    f"(process {holder.pid}); it cannot be checked from here "
+                    "-- close it on that machine.",
+                    file=sys.stderr,
+                )
+            return 5
+        if lock_outcome is LockOutcome.TAKEN_FROM_STALE:
+            # The ordinary aftermath of the crash this whole area exists to
+            # survive: the previous owner's process is gone, so its lock is
+            # taken rather than left to block this launch. See
+            # `project_lock.py`'s module docstring for why a stale lock must
+            # never refuse to start.
+            logger.info(
+                "Cleared a stale project lock for %s (previous owner is no "
+                "longer running).",
+                args.project,
+            )
+
         try:
             project = _load_project(args.project)
             preview_entries = _load_preview_entries(project, args.catalog)
@@ -227,6 +265,7 @@ def main() -> int:
         except GeometryModelError as error:
             for issue in error.issues:
                 print(issue, file=sys.stderr)
+            project_lock.release()
             return 3
         backend_choices = [backend.value for backend in GenerationBackend]
         print(
@@ -276,6 +315,7 @@ def main() -> int:
             open_callback=_load_project,
             autosave_callback=autosave_project,
             recovery_cleanup=clear_recovery_snapshot,
+            lock=project_lock,
         )
 
         def save_project(updated_project: InductorProject) -> None:
@@ -298,8 +338,17 @@ def main() -> int:
         # A run directory still reading "running" at startup means its process
         # died mid-run. Reconcile it to "interrupted" so Review never reads it
         # as a result; a failure here must never block opening the app, since
-        # the project itself is unaffected. Safe unconditionally here: nothing
-        # can be busy before any run has started.
+        # the project itself is unaffected. Safe for THIS document now that
+        # the project lock above already refused a second window before
+        # reaching this line -- no other process can be mid-run against
+        # `args.project` when we get here. Residual, deliberately not closed
+        # by this lock: `reconcile_unfinished_runs` scans the whole `runs/`
+        # directory beside the document, and two different, unlocked
+        # projects that happen to sit in the same folder still share that
+        # one root -- a live run belonging to a NEIGHBOURING document could
+        # still be reconciled away by this call. Closing that would mean
+        # plumbing document identity into `run_recovery.py`, which this lock
+        # does not touch.
         from inductor_designer.application.services.run_recovery import (
             reconcile_unfinished_runs,
         )
@@ -404,6 +453,8 @@ def main() -> int:
     roots = engine.rootObjects()
     if not roots:
         print("QML failed to load; no window created.", file=sys.stderr, flush=True)
+        if session is not None:
+            session.release_lock()
         return 1
     # Raise the window to the front so it is not lost behind the terminal.
     window = roots[0]
@@ -411,6 +462,14 @@ def main() -> int:
         window.raise_()
     if hasattr(window, "requestActivate"):
         window.requestActivate()
+    # Release whichever document lock the session currently holds (Open can
+    # have swapped it since launch) on every normal way the application
+    # quits -- the Exit menu item and the window's close button both route
+    # through `window.close()`, which ends the last window and triggers this
+    # same signal. A lock left behind by a crash instead is handled by the
+    # stale-lock path on the next launch, not by anything here.
+    if session is not None:
+        app.aboutToQuit.connect(session.release_lock)
     return int(app.exec())
 
 
