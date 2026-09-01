@@ -84,18 +84,77 @@ inline; summarized here:
   where the grep evidence stops -- and Task 3 Step 4 below is the empirical
   check that it actually still renders, not just a grep-based guess.
 
-  These excludes shrink the *binary and plugin* footprint for Qt libraries
-  the app never touches; they do **not** shrink `PySide6/qml/`, which is the
-  majority of `PySide6`'s ~384 MB in the bundle (see sizes below).
-  `QQmlApplicationEngine` loads QML modules by string at runtime, so
-  PyInstaller's hook bundles the entire Qt QML plugin tree rather than
-  guessing which of it is reachable -- a known PyInstaller/PySide6
-  limitation, not something `excludes` can address without risking exactly
-  the breakage this section exists to avoid.
+  These excludes only shrink the *Python binding* (`.pyd`) for each
+  submodule -- they do **not**, by themselves, shrink the corresponding
+  native Qt DLL or the `PySide6/qml/` tree; see "Reducing the QML and DLL
+  footprint" below for the filter that does.
 
-`pyaedt` and `pyfemm` are **not** excluded -- the frozen application talks to
-a real installed AEDT/FEMM through them, and they are the largest
-contributors to the bundle's size after PySide6.
+`pyaedt` (`ansys.aedt.core`) and `pyfemm` are **not** excluded -- the frozen
+application talks to a real installed AEDT/FEMM through them. Neither ships a
+directory under `_internal/`; both are pure Python and land inside the PYZ
+archive, so their footprint doesn't show up in the top-level `_internal/`
+size table at all (only their `*.dist-info/` metadata does). `pyaedt` does
+ship one **data** dependency the spec must collect explicitly:
+`ansys.aedt.core`'s 114 non-Python data files, 13.3 MB, via
+`collect_data_files("ansys.aedt.core")` -- most importantly
+`visualization/post/fields_calculator_files/expression_catalog.toml`, which
+`PostProcessor3D`'s `FieldsCalculator` (`post_common_3d.py`,
+`fields_calculator.py`) reads eagerly on every result read. Without it, every
+result path in this application (`adapters/pyaedt/live_app.py`,
+`maxwell3d.py`, `maxwell2d.py`) raises `TypeError` the moment a solve is
+opened -- a frozen build could generate a solve but never read one back.
+`femm` and `ansys.edb` ship zero data files each; nothing to collect for
+those.
+
+## Reducing the QML and DLL footprint
+
+`excludes=` stops PyInstaller from including a submodule's Python binding,
+but PySide6's own PyInstaller hook still copies the *entire*
+`PySide6/qml/` tree, because `QQmlApplicationEngine` loads QML modules by
+string at runtime and the hook can't tell which of them are reachable. That
+QML tree then drags native Qt DLLs back in through plugin dependencies even
+for modules whose Python binding was already excluded -- concretely,
+`qml/QtWebEngine/qtwebenginequickplugin.dll` needs `Qt6WebEngineQuick.dll`,
+which links `Qt6WebEngineCore.dll` (195 MB on its own). `excludes=` cannot
+reach any of this; it only ever touches `.pyd` files.
+
+The spec addresses this after `Analysis` runs, by filtering `a.binaries` and
+`a.datas` before `COLLECT` (see `_keep_binary`/`_keep_data` in
+`inductor-designer.spec`). Dropped, all confirmed unreferenced by the same
+import-grep evidence above:
+
+- **WebEngine** -- `Qt6WebEngineCore.dll`, `Qt6WebEngineQuick.dll`,
+  `Qt6WebEngineQuickDelegatesQml.dll`, and `qml/QtWebEngine/`. Already
+  non-functional in this bundle before the filter existed (no
+  `QtWebEngineProcess.exe`, no `*.pak`, no `icudtl.dat` -- PyInstaller's
+  hook never copies those), so this is pure payload, not a working feature
+  being cut.
+- **The native Qt6\*.dll for every other already-excluded PySide6 submodule**
+  (`Qt6Widgets.dll`, the six `Qt63D*.dll`, `Qt6Charts.dll`,
+  `Qt6DataVisualization.dll`, `Qt6Graphs.dll`, `Qt6Location.dll`,
+  `Qt6Multimedia.dll`, `Qt6RemoteObjects.dll`, `Qt6SpatialAudio.dll`, and
+  the rest -- plus `Qt6WebView.dll`/`Qt6WebViewQuick.dll`, unused and absent
+  from both import greps above but never added to `excludes=`).
+- **17 unused `qml/` module directories**: `Qt3D`, `Qt5Compat`, `QtCharts`,
+  `QtDataVisualization`, `QtGraphs`, `QtLocation`, `QtMultimedia`,
+  `QtPositioning`, `QtRemoteObjects`, `QtScxml`, `QtSensors`, `QtTest`,
+  `QtTextToSpeech`, `QtWebChannel`, `QtWebEngine`, `QtWebSockets`,
+  `QtWebView` -- these are what pull the DLLs above back in. What remains
+  under `PySide6/qml/`: `Qt`, `QtCore`, `QtNetwork`, `QtQml`, `QtQuick`,
+  `QtQuick3D`.
+- **`PySide6/translations/`** -- the UI is English-only.
+
+**Deliberately kept**: `opengl32sw.dll` (the software OpenGL fallback) --
+it matters on RDP or a machine with no GPU driver, exactly where this
+application gets used, so it stays regardless of size. `matplotlib` and
+`PIL` are untouched too -- both are pulled in by `pyaedt`, not by this
+application's own code, and neither was verified unused the way the Qt
+modules above were.
+
+This is the riskiest change in the freeze: over-pruning produces a bundle
+that starts and renders nothing, silently. Task 3 Step 4 below is the
+post-prune empirical check -- a real launch on the real sample project, not
+a simulated one.
 
 ## One folder, not one file
 
@@ -110,21 +169,31 @@ under `_internal/` in place.
 ## Build output observed
 
 Bundle built 2026-09-01, PyInstaller 6.22.2, PySide6 6.11.1, Python 3.13.14,
-on the development workstation (24 logical processors, Windows 11).
+on the development workstation (24 logical processors, Windows 11). Measured
+with a recursive byte count, not `du`/Explorer rounding.
+
+**Before the QML/DLL prune** (`collect_data_files("ansys.aedt.core")`
+already applied, `a.binaries`/`a.datas` filter not yet applied): 544.5 MB
+(519.3 MiB) total, `PySide6/` 384 MB -- `PySide6/qml/` itself measured at
+29 MB, and the single largest object in the whole bundle was
+`Qt6WebEngineCore.dll` alone at 195.3 MB (38% of the bundle).
+
+**After the prune** -- the state that ships:
 
 ```text
-dist/inductor-designer/                514 MB total
+dist/inductor-designer/                297 MB total (296,534,641 bytes)
 ├── inductor-designer.exe              21 MB   (console subsystem; see below)
-└── _internal/                         494 MB
-    ├── PySide6/                       384 MB  (mostly PySide6/qml/, 23 top-level Qt QML modules -- see above)
+└── _internal/                         276 MB
+    ├── PySide6/                       148 MB  (qml/ down to 6 modules: Qt, QtCore, QtNetwork, QtQml, QtQuick, QtQuick3D -- see above)
     ├── numpy.libs/                     21 MB
-    ├── matplotlib/                     15 MB
-    ├── PIL/                            13 MB
+    ├── matplotlib/                     14 MB  (pulled in by pyaedt, not this app -- left alone)
+    ├── PIL/                            13 MB  (pulled in by pyaedt, not this app -- left alone)
+    ├── ansys/                          13 MB  (pyaedt's non-Python data files -- see above; NEW in this pass, was 0 MB)
     ├── grpc/                           11 MB  (pyaedt's gRPC transport)
-    ├── cryptography/                  9.5 MB
-    ├── numpy/                         6.1 MB
-    ├── pydantic_core/                 5.1 MB
-    ├── ansys_edb_core-*.dist-info/, pyaedt-*.dist-info/, pyfemm-*.dist-info/  -- pyaedt and pyfemm ship, deliberately (see above)
+    ├── cryptography/                  9.9 MB
+    ├── numpy/                         6.3 MB
+    ├── pydantic_core/                 5.3 MB
+    ├── ansys_edb_core-*.dist-info/, pyaedt-*.dist-info/, pyfemm-*.dist-info/  -- metadata only; pyaedt/pyfemm code itself is pure Python, inside the PYZ
     ├── schemas/                              -- resource 1/4
     ├── compatibility/aedt-matrix.yml         -- resource 2/4
     ├── artifacts/catalog/catalog.sqlite      -- resource 3/4, GENERATED, never copied
@@ -132,8 +201,13 @@ dist/inductor-designer/                514 MB total
     └── inductor_designer/ui/qml/             -- package data (Main.qml et al.), not one of the four resources
 ```
 
+Net effect of the prune: 544.5 MB -> 296.5 MB, a cut of 248.0 MB (45.5%).
+`PySide6/` alone: 384 MB -> 148 MB.
+
 Confirmed absent: `inductor_designer/mcp_server`, and no `mcp*`, `pytest*`,
-`hypothesis*`, `mypy*`, or `ruff*` directory anywhere under `_internal/`.
+`hypothesis*`, `mypy*`, or `ruff*` directory anywhere under `_internal/`; no
+`Qt6WebEngine*.dll`, no `PySide6/qml/QtWebEngine/`, no
+`PySide6/translations/`.
 
 ### `--help`, from a working directory outside the checkout
 
@@ -161,6 +235,11 @@ can hide the console for the Start Menu shortcut if that turns out to matter
 for the release's polish; nothing here forecloses it.
 
 ## Task 3 Step 4: launching on the real sample project, from outside the checkout
+
+This section records the *original* Task 3 launch, against the bundle as it
+existed before the fix wave below (no pyaedt data files, no QML/DLL prune).
+See "Fix wave 1 re-verification" further down for the launch against the
+bundle that actually ships.
 
 This is the step that actually proves Task 1's resource seam was worth
 building -- not a simulated `sys.frozen`, the real frozen artifact, launched
@@ -210,10 +289,63 @@ and this session must not start an AEDT session or run anything marked
 is called out as an open question for later verification in the M10 plan
 itself.
 
-## Known limitation carried forward
+## Fix wave 1 re-verification: the bundle that ships
 
-`PySide6/qml/` dominates the bundle and is not reduced by the `excludes`
-list (see above) -- this is inherent to using `QQmlApplicationEngine`, not a
-gap in this task's exclusion list. Task 4 or a later pass could investigate
-PyInstaller's `Tree`/QML-scanning options if bundle size becomes a shipping
-concern; out of scope here.
+After the pyaedt-data-files fix and the QML/DLL prune (see above), the
+bundle was rebuilt and relaunched the same way, from the same kind of
+directory outside the checkout, against the same sample project:
+
+```powershell
+cd C:\Users\fpo01\AppData\Local\Temp\inductor-designer-launch-test-2
+C:\Work\git\AnsysPyAEDT\dist\inductor-designer\inductor-designer.exe --project C:\Work\git\AnsysPyAEDT\artifacts\maxwell3d\2025.2-commercial\m7b.inductor.json
+```
+
+Observed directly:
+
+- stderr: the same `Loaded m7b.inductor.json: 6 winding(s); opening
+  viewer.` line, followed by the same two benign QML `Shortcut` warnings
+  from `Main.qml` seen in the original launch above -- no missing-module or
+  missing-plugin error of any kind, which is the failure mode an
+  over-aggressive prune would produce.
+- The process stayed alive and its working set grew from 116 MB
+  immediately after launch to 316 MB roughly eight seconds in -- consistent
+  with the QML engine and `QtQuick3D` scene initializing, though not itself
+  proof of what was drawn.
+- The application log recorded a fresh `Application 0.1.0.dev0 starting.`
+  plus `Detected AEDT 2025.2` / `Detected FEMM` entries at the time of this
+  launch, appended after the existing entries from earlier sessions (none
+  of which were touched or removed).
+- Closed with `taskkill /IM inductor-designer.exe`: the process exited and
+  no `.lock` file was left next to `m7b.inductor.json`, the same clean
+  shutdown as the original launch.
+- **Not confirmed in this session**: a visible window with the 3D preview
+  rendered. The screenshot tool available in this session captured the
+  operator's live desktop, which at the time was showing an unrelated
+  video call with third-party screen content -- not the frozen
+  application's window -- so no visual capture of this specific launch
+  exists. The evidence above (clean stderr, no module/plugin errors, a
+  live process with growing memory consistent with scene setup, a correct
+  log trail, and a clean lock-released shutdown) is the same signature the
+  original, visually-confirmed launch produced on every point it shares;
+  the one thing it does not independently prove is that the window
+  actually painted the toroid-and-windings preview rather than, say, a
+  blank `QtQuick3D` surface. A future pass should re-run this launch with
+  screen capture available and confirm the render directly.
+
+Not run in this pass either: `--project` against a Generate/Solve action
+that actually drives AEDT or FEMM -- same scope and house-rule limits as
+the original Task 3 Step 4.
+
+## Known limitations carried forward
+
+- `PySide6/qml/` still ships the plugin trees for the six Qt modules this
+  application actually uses (`Qt`, `QtCore`, `QtNetwork`, `QtQml`,
+  `QtQuick`, `QtQuick3D`) -- 29 MB after the prune above. Shrinking that
+  further would mean pruning within a module this application does use,
+  which is a different and much riskier kind of cut than removing modules
+  it doesn't; out of scope here.
+- `matplotlib` (14 MB) and `PIL` (13 MB) are untouched. Both are pulled in
+  by `pyaedt`, not by this application's own code, and neither has been
+  verified unused the way the PySide6 modules above were -- removing them
+  without that verification risks the same failure mode the QML/DLL prune
+  was careful to avoid.

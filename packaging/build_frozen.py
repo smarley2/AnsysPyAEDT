@@ -51,7 +51,12 @@ def build_catalog(source_root: Path, schema_root: Path, out_dir: Path) -> Path:
     `tools.build_catalog` has an empty `source_root` and must fail here, not
     ship a bundle whose application starts with no cores at all.
     """
-    sys.path.insert(0, str(REPO_ROOT))
+    # Guarded, not unconditional -- an unconditional insert on every call
+    # would grow `sys.path` by one repo-root entry per invocation and never
+    # pop it, leaving `packaging/`'s shadowing risk (see module docstring)
+    # on `sys.path` for the rest of the process.
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
     from tools.build_catalog import build
 
     out_path = out_dir / "catalog.sqlite"
@@ -61,11 +66,21 @@ def build_catalog(source_root: Path, schema_root: Path, out_dir: Path) -> Path:
     # `sqlite3.Connection`'s context manager only wraps the transaction, not
     # the file handle -- an unclosed connection keeps the file locked on
     # Windows, which then fails the temporary directory's own cleanup.
-    connection = sqlite3.connect(out_path)
     try:
-        core_count = connection.execute("SELECT COUNT(*) FROM cores").fetchone()[0]
-    finally:
-        connection.close()
+        connection = sqlite3.connect(out_path)
+        try:
+            core_count = connection.execute("SELECT COUNT(*) FROM cores").fetchone()[0]
+        finally:
+            connection.close()
+    except sqlite3.Error as error:
+        # A truncated or zero-byte catalog (e.g. a build interrupted
+        # mid-write) must still surface as `CatalogBuildError`, not a raw
+        # `sqlite3.DatabaseError`/`OperationalError` -- PyInstaller must
+        # never be reached either way, but the message should name the
+        # actual cause.
+        raise CatalogBuildError(
+            f"Generated catalog at {out_path} is not a valid SQLite database: {error}"
+        ) from error
     if core_count == 0:
         raise CatalogBuildError(
             f"Generated catalog at {out_path} has zero cores; refusing to feed "

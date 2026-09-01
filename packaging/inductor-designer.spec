@@ -14,13 +14,16 @@ import os
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 sys.path.insert(0, SPECPATH)
 from build_frozen import CATALOG_ENV_VAR, REPO_ROOT, resolve_datas  # noqa: E402
 
 _catalog_path = os.environ.get(CATALOG_ENV_VAR)
 if not _catalog_path:
     raise SystemExit(
-        f"{CATALOG_ENV_VAR} is not set -- run `python -m packaging.build_frozen`, "
+        f"{CATALOG_ENV_VAR} is not set -- run "
+        "`.venv\\Scripts\\python.exe packaging\\build_frozen.py`, "
         "not PyInstaller directly. The catalog index this spec ships has no "
         "other source; see build_frozen.py's module docstring."
     )
@@ -31,7 +34,15 @@ a = Analysis(
     [str(Path(SPECPATH) / "_entry_point.py")],
     pathex=[str(REPO_ROOT / "src")],
     binaries=[],
-    datas=resolve_datas(REPO_ROOT, Path(_catalog_path)),
+    # pyaedt (`ansys.aedt.core`) is imported eagerly by PostProcessor3D's
+    # FieldsCalculator, which reads
+    # `visualization/post/fields_calculator_files/expression_catalog.toml`
+    # off disk on every result read (post_common_3d.py, fields_calculator.py)
+    # -- none of pyaedt's 114 non-Python data files are on `sys.path`'s Python
+    # scan, so without this every result path (live_app.py, maxwell3d.py,
+    # maxwell2d.py) raises. `femm` and `ansys.edb` ship zero data files each
+    # -- nothing to collect for those.
+    datas=resolve_datas(REPO_ROOT, Path(_catalog_path)) + collect_data_files("ansys.aedt.core"),
     hiddenimports=[],
     hookspath=[],
     excludes=[
@@ -107,6 +118,109 @@ a = Analysis(
     ],
     noarchive=False,
 )
+
+# `excludes=` above only drops each PySide6 submodule's Python binding
+# (.pyd); PyInstaller's PySide6 hook still copies the whole `PySide6/qml/`
+# tree for `QQmlApplicationEngine`'s string-based module loading, and a
+# handful of that tree's plugin DLLs (chiefly `qml/QtWebEngine/
+# qtwebenginequickplugin.dll`, which needs `Qt6WebEngineQuick.dll`, which
+# links `Qt6WebEngineCore.dll`) drag the corresponding native Qt6*.dll
+# libraries back in even though nothing importable ever loads them. This
+# filters `a.binaries`/`a.datas` after Analysis to actually drop that dead
+# weight: 195+ MB of WebEngine (already non-functional here -- no
+# `QtWebEngineProcess.exe`, no `*.pak`, no `icudtl.dat`), the native Qt6*.dll
+# for every other excluded module above (plus QtWebView, unused and absent
+# from both import greps in docs/development/packaging.md but never added to
+# `excludes=`), the qml/ module directories those DLLs belong to, and the
+# English-only app's unused translations/. `opengl32sw.dll` is deliberately
+# NOT touched -- the software OpenGL fallback matters on RDP or a GPU-driver-
+# less machine, exactly where this application gets used.
+_DROP_BINARY_NAMES = frozenset(
+    {
+        "Qt6WebEngineCore.dll",
+        "Qt6WebEngineQuick.dll",
+        "Qt6WebEngineQuickDelegatesQml.dll",
+        "Qt6Widgets.dll",
+        "Qt6OpenGLWidgets.dll",
+        "Qt6WebChannel.dll",
+        "Qt6WebSockets.dll",
+        "Qt6WebView.dll",
+        "Qt6WebViewQuick.dll",
+        "Qt6Multimedia.dll",
+        "Qt6SpatialAudio.dll",
+        "Qt6Sensors.dll",
+        "Qt6Positioning.dll",
+        "Qt6Location.dll",
+        "Qt6Charts.dll",
+        "Qt6DataVisualization.dll",
+        "Qt6Graphs.dll",
+        "Qt6Pdf.dll",
+        "Qt6Test.dll",
+        "Qt6Sql.dll",
+        "Qt6RemoteObjects.dll",
+        "Qt6Scxml.dll",
+        "Qt6StateMachine.dll",
+        "Qt6TextToSpeech.dll",
+        "Qt63DAnimation.dll",
+        "Qt63DCore.dll",
+        "Qt63DExtras.dll",
+        "Qt63DInput.dll",
+        "Qt63DLogic.dll",
+        "Qt63DRender.dll",
+    }
+)
+
+_DROP_QML_MODULES = frozenset(
+    {
+        "Qt3D",
+        "Qt5Compat",
+        "QtCharts",
+        "QtDataVisualization",
+        "QtGraphs",
+        "QtLocation",
+        "QtMultimedia",
+        "QtPositioning",
+        "QtRemoteObjects",
+        "QtScxml",
+        "QtSensors",
+        "QtTest",
+        "QtTextToSpeech",
+        "QtWebChannel",
+        "QtWebEngine",
+        "QtWebSockets",
+        "QtWebView",
+    }
+)
+
+
+def _dest_parts(dest_name: str) -> tuple[str, ...]:
+    return Path(dest_name.replace("\\", "/")).parts
+
+
+def _keep_binary(entry: tuple[str, str, str]) -> bool:
+    parts = _dest_parts(entry[0])
+    if not parts or parts[0] != "PySide6":
+        return True
+    if parts[-1] in _DROP_BINARY_NAMES:
+        return False
+    if len(parts) >= 3 and parts[1] == "qml" and parts[2] in _DROP_QML_MODULES:
+        return False
+    return True
+
+
+def _keep_data(entry: tuple[str, str, str]) -> bool:
+    parts = _dest_parts(entry[0])
+    if not parts or parts[0] != "PySide6":
+        return True
+    if len(parts) >= 3 and parts[1] == "qml" and parts[2] in _DROP_QML_MODULES:
+        return False
+    if len(parts) >= 2 and parts[1] == "translations":
+        return False
+    return True
+
+
+a.binaries = [entry for entry in a.binaries if _keep_binary(entry)]
+a.datas = [entry for entry in a.datas if _keep_data(entry)]
 
 pyz = PYZ(a.pure)
 
