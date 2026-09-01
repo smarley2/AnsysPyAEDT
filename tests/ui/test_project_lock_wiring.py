@@ -338,3 +338,27 @@ def test_a_clean_exit_releases_the_lock(
     QGuiApplication.instance().aboutToQuit.emit()
 
     assert not lock_path.is_file()
+
+
+def test_a_refused_launch_shows_the_reason_in_a_window() -> None:
+    """A refusal printed only to stderr is invisible from a desktop shortcut.
+
+    The click produced no window and no reason, which reads as a crash rather
+    than as "your other window already has this project". The refusal now also
+    renders on screen, and the message has to carry the pid so the user can
+    find the window holding it.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+
+    engine = main_module.show_launch_refusal(
+        "boost.inductor.json is already open in another window (process 4242)."
+    )
+
+    roots = engine.rootObjects()
+    assert roots, "the refusal window failed to load"
+    window = roots[0]
+    assert window.property("visible") is True
+    message = window.findChild(QObject, "launchRefusedMessage")
+    assert "process 4242" in message.property("text")
+    assert window.findChild(QObject, "launchRefusedCloseButton") is not None
+    _KEEPALIVE.append(engine)

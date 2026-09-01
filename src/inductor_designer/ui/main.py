@@ -76,6 +76,28 @@ def create_engine(
     return engine
 
 
+def show_launch_refusal(message: str) -> QQmlApplicationEngine:
+    """Put a refused launch on screen, and return the engine holding it.
+
+    A refusal printed only to stderr is invisible to anyone starting the
+    application from a desktop shortcut: the click produces no window and no
+    reason, which reads as a crash rather than as "your other window has this
+    project". The caller runs the event loop and exits; the window's Close
+    button and its title-bar X both quit.
+
+    A plain Window in its own engine, not a dialog inside the real shell: the
+    shell is built around a project, and the reason we are here is that this
+    project could not be claimed.
+    """
+    from PySide6.QtCore import QUrl
+    from PySide6.QtQml import QQmlApplicationEngine
+
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("refusalMessage", message)
+    engine.load(QUrl.fromLocalFile(str(qml_directory() / "LaunchRefused.qml")))
+    return engine
+
+
 def _load_project(project_path: Path) -> InductorProject:
     from inductor_designer.adapters.persistence.project_repository import ProjectRepository
     from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
@@ -233,18 +255,27 @@ def main() -> int:
             holder = project_lock.holder
             assert holder is not None
             if holder.same_host:
-                print(
-                    f"{args.project} is already open in another window "
-                    f"(process {holder.pid}). Close it there first.",
-                    file=sys.stderr,
+                refusal = (
+                    f"{args.project.name} is already open in another window "
+                    f"(process {holder.pid}).\n\nClose it there first, then "
+                    "start this one again."
                 )
             else:
-                print(
-                    f"{args.project} is already open on host {holder.host} "
-                    f"(process {holder.pid}); it cannot be checked from here "
-                    "-- close it on that machine.",
-                    file=sys.stderr,
+                refusal = (
+                    f"{args.project.name} is already open on host "
+                    f"{holder.host} (process {holder.pid}).\n\nWhether that "
+                    "window is still running cannot be checked from here, so "
+                    "close it on that machine, or delete the lock file beside "
+                    "the project if that machine has crashed."
                 )
+            # Both channels: stderr for a terminal launch, the CLI and CI, and
+            # a window for the shortcut launch that would otherwise show
+            # nothing at all.
+            print(refusal.replace("\n\n", " "), file=sys.stderr)
+            logger.info("Launch refused: the project is already open elsewhere.")
+            refusal_engine = show_launch_refusal(refusal)
+            if refusal_engine.rootObjects():
+                app.exec()
             return 5
         if lock_outcome is LockOutcome.TAKEN_FROM_STALE:
             # The ordinary aftermath of the crash this whole area exists to
