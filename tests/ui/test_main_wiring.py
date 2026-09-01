@@ -174,3 +174,76 @@ def test_main_refuses_before_any_window_when_a_shipped_resource_is_missing(
     assert "compatibility matrix" in stderr
     assert "material overlay directory" in stderr
     assert str(empty_resource_root) in stderr
+
+    # Important 3: a Start Menu launch has no console, so the redacting log
+    # file `configure_application_logging` writes (LOCALAPPDATA redirected
+    # into `tmp_path` by the autouse fixture above) is the only durable
+    # record -- it must carry the same named list, at error level, not just
+    # a count. `caplog` cannot see this: `configure_application_logging`
+    # strips every existing handler off this named logger (including one
+    # `caplog.at_level(logger=...)` would attach) before this line runs, and
+    # sets `propagate = False` before the refusal log call, so a root-level
+    # `caplog` handler never sees it either.
+    from inductor_designer.adapters.system.app_logging import APP_LOG_FILENAME
+    from inductor_designer.adapters.system.environment import log_directory
+
+    log_text = (log_directory() / APP_LOG_FILENAME).read_text(encoding="utf-8")
+    refusal_lines = [line for line in log_text.splitlines() if "Launch refused" in line]
+    assert len(refusal_lines) == 1
+    refusal_line = refusal_lines[0]
+    assert "\tERROR\t" in refusal_line
+    assert "schemas directory" in refusal_line
+    assert "catalog index" in refusal_line
+    assert "compatibility matrix" in refusal_line
+    assert "material overlay directory" in refusal_line
+
+
+def test_main_launches_when_a_valid_catalog_flag_supersedes_a_resource_root_lacking_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Important 1: someone debugging with a hand-built catalog passes
+    `--catalog` pointing at a real index while the resource root itself (an
+    override, here, standing in for an otherwise-incomplete install) has
+    none. That is exactly the case the flag exists for -- it must supersede
+    the resource, not get refused for the very thing it fixes."""
+    partial_resource_root = tmp_path / "partial-install"
+    (partial_resource_root / "schemas").mkdir(parents=True)
+    (partial_resource_root / "compatibility").mkdir(parents=True)
+    (partial_resource_root / "compatibility" / "aedt-matrix.yml").write_text(
+        (ROOT / "compatibility" / "aedt-matrix.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (partial_resource_root / "materials-overlay").mkdir(parents=True)
+    # No artifacts/catalog/catalog.sqlite: the resource root's own catalog is
+    # missing on purpose -- the thing the `--catalog` flag below must cover.
+    monkeypatch.setenv(resources.OVERRIDE_VARIABLE, str(partial_resource_root))
+
+    hand_built_catalog = tmp_path / "hand-built-catalog.sqlite"
+    build(ROOT / "catalog", ROOT / "schemas" / "catalog", hand_built_catalog)
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    real_create_engine = main_module.create_engine
+
+    def capturing_create_engine(*args: object, **kwargs: object) -> object:
+        engine = real_create_engine(*args, **kwargs)
+        _ENGINES.append((engine, *engine.rootObjects(), *args, *kwargs.values()))
+        return engine
+
+    monkeypatch.setattr(main_module, "create_engine", capturing_create_engine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["inductor-designer", "--catalog", str(hand_built_catalog)],
+    )
+
+    result = main_module.main()
+
+    assert result == 0
+    assert _ENGINES, "create_engine must have run: the launch must not be refused"

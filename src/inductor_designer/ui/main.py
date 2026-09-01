@@ -204,18 +204,36 @@ def _install_qml_logging() -> None:
     qInstallMessageHandler(handler)
 
 
-def _refuse_if_resources_are_missing(app: QGuiApplication, logger: logging.Logger) -> int | None:
+def _refuse_if_resources_are_missing(
+    app: QGuiApplication, logger: logging.Logger, args: argparse.Namespace
+) -> int | None:
     """Refuse the launch, on both channels, if a shipped resource is absent.
 
     Checked before anything else is built: a shortcut launch that dies partway
     through wiring a repository is a traceback with no explanation, exactly
     the failure mode M9 ruled out for the project lock. Returns the exit code
     to use, or None when every resource resolved and startup should continue.
+
+    ``--catalog``/``--matrix`` default to the seam's own paths, but an
+    explicit flag pointing at a real file supersedes the seam's resource here
+    -- someone debugging with a hand-built catalog against an otherwise
+    incomplete resource root must not be refused for the very thing the flag
+    fixes. A bad flag path is still caught, just further down in `main()`,
+    where the per-flag checks report it against the flag, not this gate.
     """
     from inductor_designer.adapters.system import resources
     from inductor_designer.simulation.failure_advice import AdviceCode
 
-    missing = resources.missing_resources()
+    # name -> whether an explicit, valid flag already covers this resource.
+    superseded_by_flag = {
+        "catalog index": args.catalog.is_file(),
+        "compatibility matrix": args.matrix.is_file(),
+    }
+    missing = tuple(
+        item
+        for item in resources.missing_resources()
+        if not superseded_by_flag.get(item.name, False)
+    )
     if not missing:
         return None
 
@@ -233,7 +251,12 @@ def _refuse_if_resources_are_missing(app: QGuiApplication, logger: logging.Logge
         "needs to start.\n\n" + "\n".join(lines)
     )
     print(message.replace("\n\n", " "), file=sys.stderr, flush=True)
-    logger.info("Launch refused: %d shipped resource(s) missing.", len(missing))
+    # Error level, and the same named list the user was shown, on one line:
+    # a Start Menu launch has no console, so this log line is the only
+    # durable record of which resources were missing.
+    logger.error(
+        "Launch refused: %d shipped resource(s) missing: %s", len(missing), "; ".join(lines)
+    )
     refusal_engine = show_launch_refusal(message)
     if refusal_engine.rootObjects():
         app.exec()
@@ -307,7 +330,7 @@ def main() -> int:
     _install_qml_logging()
     app = QGuiApplication(sys.argv)
 
-    resources_refusal = _refuse_if_resources_are_missing(app, logger)
+    resources_refusal = _refuse_if_resources_are_missing(app, logger, args)
     if resources_refusal is not None:
         return resources_refusal
 
@@ -406,7 +429,6 @@ def main() -> int:
         from inductor_designer.adapters.persistence.schema_repository import (
             SchemaRepository,
         )
-        from inductor_designer.adapters.system import resources
         from inductor_designer.adapters.system.environment import recovery_directory
         from inductor_designer.ui.diagnostics_controller import DiagnosticsController
         from inductor_designer.ui.project_session import ProjectSession

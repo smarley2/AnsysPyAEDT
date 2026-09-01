@@ -100,6 +100,86 @@ def test_missing_resources_are_reported_together_and_by_name(
         assert not item.path.exists()
 
 
+def test_an_installed_wheel_resolves_from_the_packaged_resources_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`pip install` depends on this branch (`resources.py`'s ``packaged``
+    check), proven before this test only by a manual wheel extraction --
+    nothing in the suite exercised it. `_PACKAGE_DIRECTORY` is hoisted at
+    module level exactly so a test can point it at a `tmp_path` tree without
+    faking `__file__` or building a real wheel."""
+    package_directory = tmp_path / "site-packages" / "inductor_designer"
+    package_directory.mkdir(parents=True)
+    packaged_resources = package_directory / "_resources"
+    _write_resource_tree(packaged_resources)
+    monkeypatch.delenv(resources.OVERRIDE_VARIABLE, raising=False)
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.setattr(resources, "_PACKAGE_DIRECTORY", package_directory)
+
+    assert resources.resource_root() == packaged_resources
+    assert resources.schemas_directory().is_dir()
+    assert resources.catalog_index_path().is_file()
+    assert resources.compatibility_matrix_path().is_file()
+    assert resources.material_overlay_directory().is_dir()
+    assert resources.missing_resources() == ()
+
+
+def _make_checkout_root_markers(root: Path) -> None:
+    """The two directories `_find_source_checkout_root` looks for: the
+    top-level `schemas/` and `catalog/` that mark this project's root --
+    distinct from `_write_resource_tree`'s `artifacts/catalog/`, which is
+    build *output*, not the source-checkout marker."""
+    (root / "schemas").mkdir(parents=True, exist_ok=True)
+    (root / "catalog").mkdir(parents=True, exist_ok=True)
+
+
+def test_a_decoy_ancestor_is_not_mistaken_for_the_checkout_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reviewer's exact repro: the checkout root has neither `schemas/` nor
+    `catalog/`, but `outer/`, two levels up, happens to hold both --
+    reproducing a decoy directory that is not this project. Before the
+    `pyproject.toml` marker was added to the predicate, the walk-up stopped
+    at `outer` and reported nothing missing: silently wrong data. It must
+    not resolve there now."""
+    outer = tmp_path / "outer"
+    _make_checkout_root_markers(outer)
+    nested_checkout = outer / "checkout"
+    package_directory = nested_checkout / "src" / "inductor_designer"
+    package_directory.mkdir(parents=True)
+    monkeypatch.delenv(resources.OVERRIDE_VARIABLE, raising=False)
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.setattr(resources, "_PACKAGE_DIRECTORY", package_directory)
+
+    assert resources.resource_root() != outer
+    # The pre-fix defect was not just resolving to the wrong place, but
+    # reporting nothing missing while doing it.
+    assert resources.missing_resources() != ()
+
+
+def test_a_real_checkout_root_still_resolves_beside_a_decoy_ancestor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The positive case for the same predicate: a nested checkout that
+    genuinely has `schemas/`, `catalog/` *and* `pyproject.toml` must still
+    win, even with a decoy ancestor (`outer/`, itself data-shaped but not a
+    real checkout) further up the same walk."""
+    outer = tmp_path / "outer"
+    _make_checkout_root_markers(outer)
+    nested_checkout = outer / "checkout"
+    _write_resource_tree(nested_checkout)
+    _make_checkout_root_markers(nested_checkout)
+    (nested_checkout / "pyproject.toml").write_text("", encoding="utf-8")
+    package_directory = nested_checkout / "src" / "inductor_designer"
+    package_directory.mkdir(parents=True)
+    monkeypatch.delenv(resources.OVERRIDE_VARIABLE, raising=False)
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.setattr(resources, "_PACKAGE_DIRECTORY", package_directory)
+
+    assert resources.resource_root() == nested_checkout
+    assert resources.missing_resources() == ()
+
+
 def test_the_working_directory_does_not_matter(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

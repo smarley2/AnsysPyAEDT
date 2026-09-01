@@ -23,7 +23,7 @@ from typing import NamedTuple
 
 #: An explicit override, checked before every other source: a support
 #: engineer can point a shipped build at a corrected catalog without a
-#: rebuild. Documented in the release notes.
+#: rebuild. Will be documented in the release notes (M10 Task 5).
 OVERRIDE_VARIABLE = "INDUCTOR_DESIGNER_RESOURCES"
 
 # The relative layout shared, unchanged, by all three environments. A source
@@ -40,6 +40,11 @@ _MATERIAL_OVERLAY_RELATIVE = Path("materials-overlay")
 # Where the wheel's `force-include` table (see pyproject.toml) places the
 # mirrored layout, relative to the installed package directory.
 _PACKAGED_RESOURCES_DIRECTORY_NAME = "_resources"
+
+# Hoisted to module level (rather than computed inline in `resource_root()`)
+# so a test can monkeypatch it to a `tmp_path` tree and exercise the
+# installed-wheel branch without faking `__file__` or building a real wheel.
+_PACKAGE_DIRECTORY = Path(__file__).resolve().parents[2]
 
 
 class MissingResource(NamedTuple):
@@ -59,9 +64,11 @@ def resource_root() -> Path:
     2. Installed package: the ``_resources/`` directory shipped inside the
        wheel, next to ``inductor_designer/__init__.py``.
     3. Source checkout: walk up from the installed package directory until
-       one containing both ``schemas/`` and ``catalog/`` is found. Every
-       developer and every test runs this way today, with no environment
-       variable set.
+       one containing ``schemas/``, ``catalog/`` and ``pyproject.toml`` is
+       found -- the last marker keeps a checkout nested inside an unrelated
+       directory that happens to also hold data-shaped siblings from
+       resolving to that outer directory. Every developer and every test
+       runs this way today, with no environment variable set.
     """
     override = os.environ.get(OVERRIDE_VARIABLE)
     if override:
@@ -70,17 +77,24 @@ def resource_root() -> Path:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS)
 
-    package_directory = Path(__file__).resolve().parents[2]
-    packaged = package_directory / _PACKAGED_RESOURCES_DIRECTORY_NAME
+    packaged = _PACKAGE_DIRECTORY / _PACKAGED_RESOURCES_DIRECTORY_NAME
     if packaged.is_dir():
         return packaged
 
-    return _find_source_checkout_root(package_directory)
+    return _find_source_checkout_root(_PACKAGE_DIRECTORY)
 
 
 def _find_source_checkout_root(start: Path) -> Path:
     for candidate in (start, *start.parents):
-        if (candidate / "schemas").is_dir() and (candidate / "catalog").is_dir():
+        # `pyproject.toml` on top of the two data directories: without it, a
+        # checkout nested inside an unrelated directory that happens to also
+        # hold `schemas/` and `catalog/` siblings resolves to that outer
+        # directory instead -- silently serving a decoy's data.
+        if (
+            (candidate / "schemas").is_dir()
+            and (candidate / "catalog").is_dir()
+            and (candidate / "pyproject.toml").is_file()
+        ):
             return candidate
     # No developer or test environment reaches here: every checkout that can
     # import this module has both directories somewhere above it. Returning
