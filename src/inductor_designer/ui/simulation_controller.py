@@ -25,7 +25,9 @@ from inductor_designer.application.services.dc_bias_visibility import (
 from inductor_designer.application.services.solver_visibility import (
     visible_window_support,
 )
+from inductor_designer.domain.aedt_target import AedtRelease
 from inductor_designer.domain.project import MeshIntent, RequestedOutput, SimulationRecipe
+from inductor_designer.simulation.failure_advice import AdviceCode
 from inductor_designer.simulation.run_contracts import RunBackend, RunMode
 from inductor_designer.ui.generation_lines import GenerationBackend, run_backend_for
 
@@ -37,6 +39,14 @@ if TYPE_CHECKING:
     from inductor_designer.simulation.capabilities import CapabilitySnapshot
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.project_session import ProjectSession
+
+
+def _release_label(release: AedtRelease) -> str:
+    """"2025 R2", matching the wording `aedt_support.py`'s own supportability
+    message uses -- `AedtRelease.__str__` gives "2025.2" instead, which reads
+    as a different product to a user comparing the two messages."""
+    return f"{release.year} R{release.release}"
+
 
 _MODE_NOTES = {
     RunMode.GENERATE_ONLY: (
@@ -114,15 +124,17 @@ class SimulationController(QObject):
             return ""
         if self._aedt_installation is not None:
             return ""
-        wanted = f"AEDT {SUPPORTED_AEDT_RELEASE} {SUPPORTED_AEDT_EDITION.value}"
+        edition = SUPPORTED_AEDT_EDITION.value.capitalize()
+        wanted = f"AEDT {_release_label(SUPPORTED_AEDT_RELEASE)} {edition}"
         if self._unsupported_aedt_installation is not None:
             found = self._unsupported_aedt_installation
             return (
-                f"AEDT {found.release} is installed, but this application "
+                f"{AdviceCode.INSTALLATION_AEDT_UNSUPPORTED_RELEASE}: "
+                f"AEDT {_release_label(found.release)} is installed, but this application "
                 f"supports {wanted} only. Install it to generate with this backend."
             )
         return (
-            f"{wanted} was not found on this machine. "
+            f"{AdviceCode.INSTALLATION_AEDT_MISSING}: {wanted} was not found on this machine. "
             "Install it to generate with this backend."
         )
 

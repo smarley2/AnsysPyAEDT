@@ -334,8 +334,11 @@ def test_aedt_status_notice_names_an_unsupported_release_found() -> None:
     _, _, _, controller = build(unsupported_aedt_installation=found)
 
     notice = controller.aedtStatusNotice
-    assert "2024.2" in notice
-    assert "2025.2" in notice
+    # "2025 R2 Commercial", matching aedt_support.py's own wording -- not
+    # AedtRelease.__str__'s "2025.2", which reads as a different product.
+    assert "2024 R2" in notice
+    assert "2025 R2 Commercial" in notice
+    assert "installation.aedt_unsupported_release" in notice
 
 
 def test_aedt_status_notice_reports_absence_when_nothing_was_found() -> None:
@@ -343,7 +346,8 @@ def test_aedt_status_notice_reports_absence_when_nothing_was_found() -> None:
 
     notice = controller.aedtStatusNotice
     assert "not found" in notice
-    assert "2025.2" in notice
+    assert "2025 R2 Commercial" in notice
+    assert "installation.aedt_missing" in notice
 
 
 def test_aedt_status_notice_updates_when_the_backend_changes() -> None:

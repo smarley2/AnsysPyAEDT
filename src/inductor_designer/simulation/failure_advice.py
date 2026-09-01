@@ -43,6 +43,13 @@ class AdviceCode:
     # `ui/main.py`'s launch refusal tags its message with this code directly,
     # from the same stable vocabulary the solver-failure codes above use.
     RESOURCES_MISSING = "resources.missing"
+    # Also not reached through `advise()`: `adapters/system/installations.py`
+    # answers "is it installed" at startup, before any solver diagnostic
+    # exists -- so these are tagged directly by their callers
+    # (`SimulationController._get_aedt_status_notice`, and `ui/main.py`'s
+    # startup log line), the same way `RESOURCES_MISSING` is.
+    INSTALLATION_AEDT_MISSING = "installation.aedt_missing"
+    INSTALLATION_AEDT_UNSUPPORTED_RELEASE = "installation.aedt_unsupported_release"
 
 
 @dataclass(frozen=True, slots=True)
