@@ -316,10 +316,24 @@ def main() -> int:
             # `autosaved_path` above.
             recovery_store.clear(autosaved_path)
 
+        def open_project_document(path: Path) -> InductorProject:
+            nonlocal autosaved_path
+            # Load first: a refused or failed Open must leave the tracked slot
+            # alone, and `openProject` cannot fail after this returns.
+            opened = _load_project(path)
+            # An Open cancels the pending autosave but deliberately KEEPS the
+            # previous document's snapshot (see `ProjectSession.openProject`).
+            # The tracked slot has to follow it, or the next Save, Save As or
+            # quit-time Discard -- now made in the NEW document -- clears the
+            # slot the OLD document's snapshot lives in, losing the very work
+            # the snapshot was kept for.
+            autosaved_path = path
+            return opened
+
         session = ProjectSession(
             project,
             args.project,
-            open_callback=_load_project,
+            open_callback=open_project_document,
             autosave_callback=autosave_project,
             recovery_cleanup=clear_recovery_snapshot,
             lock=project_lock,

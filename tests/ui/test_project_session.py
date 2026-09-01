@@ -152,6 +152,61 @@ def test_saving_as_clears_the_old_documents_recovery_snapshot(tmp_path: Path) ->
     assert store.read(target_path) is None
 
 
+def test_an_open_moves_the_tracked_slot_so_a_later_save_spares_the_old_snapshot(
+    tmp_path: Path,
+) -> None:
+    """An Open keeps the previous document's snapshot -- on purpose, since
+    cancelling a pending autosave is not the same as discarding the work. But
+    the slot the cleanup targets has to follow the Open, or the first Save,
+    Save As or quit-time Discard made in the NEW document clears the slot the
+    OLD document's snapshot lives in, and that work is gone with nothing on
+    screen to say so. Tracking the last autosave's path alone is not enough:
+    it still points at the old document after an Open, which is how the first
+    fix for the Save As orphan introduced this second, opposite defect."""
+    QGuiApplication.instance() or QGuiApplication([])
+    store = RecoveryStore(
+        tmp_path / "recovery", ProjectRepository(SchemaRepository(Path("schemas")))
+    )
+    first_path = tmp_path / "first.inductor.json"
+    second_path = tmp_path / "second.inductor.json"
+    autosaved_path: Path | None = first_path
+
+    def autosave(project: InductorProject, document_path: Path | None) -> None:
+        nonlocal autosaved_path
+        store.write(project, document_path)
+        autosaved_path = document_path
+
+    def clear_recovery_snapshot() -> None:
+        store.clear(autosaved_path)
+
+    def open_document(path: Path) -> InductorProject:
+        nonlocal autosaved_path
+        opened = replace(make_project(), description="from disk")
+        autosaved_path = path
+        return opened
+
+    session = ProjectSession(
+        make_project(),
+        document_path=first_path,
+        save_callback=lambda project: None,
+        open_callback=open_document,
+        autosave_callback=autosave,
+        recovery_cleanup=clear_recovery_snapshot,
+    )
+    session.apply(replace(session.project, description="unsaved work in first"))
+    session.flushAutosave()
+    assert store.read(first_path) is not None
+
+    assert session.openProject(QUrl.fromLocalFile(str(second_path))) is True
+    assert session.saveProject() is True
+
+    # The Save happened in the second document, so only its slot may be
+    # touched; the first document's unsaved work must still be recoverable.
+    recovered = store.read(first_path)
+    assert recovered is not None
+    assert store.load_project(recovered).description == "unsaved work in first"
+
+
 def test_a_failing_recovery_cleanup_does_not_fail_a_successful_save(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
