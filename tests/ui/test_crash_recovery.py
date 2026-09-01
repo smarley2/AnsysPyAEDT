@@ -160,7 +160,7 @@ def test_an_unreadable_snapshot_document_is_not_offered(tmp_path: Path) -> None:
     QGuiApplication.instance() or QGuiApplication([])
     store = _store(tmp_path)
     store.write(replace(make_project(), description="unsaved"), None, now=LATER)
-    store.slot_for(None).document_path.write_text("{}", encoding="utf-8")
+    store.slot_for(None).snapshot_path.write_text("{}", encoding="utf-8")
     session = ProjectSession(make_project())
     controller = RecoveryController(store, session)
 
@@ -194,7 +194,7 @@ def test_a_load_failure_is_logged_and_leaves_the_application_usable(
     QGuiApplication.instance() or QGuiApplication([])
     store = _store(tmp_path)
     store.write(replace(make_project(), description="unsaved"), None, now=LATER)
-    store.slot_for(None).document_path.write_text("{}", encoding="utf-8")
+    store.slot_for(None).snapshot_path.write_text("{}", encoding="utf-8")
     session = ProjectSession(make_project())
     controller = RecoveryController(store, session)
 

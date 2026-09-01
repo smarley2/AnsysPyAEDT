@@ -294,20 +294,27 @@ def main() -> int:
         project_repository = ProjectRepository(SchemaRepository(_DEFAULT_SCHEMAS))
         recovery_store = RecoveryStore(recovery_directory(), project_repository)
 
+        # The slot the live snapshot actually occupies. NOT re-derived from
+        # `session.document_path` at cleanup time: Save As moves that
+        # attribute to the NEW document before the cleanup call fires (see
+        # `ProjectSession.saveProjectAs`), so re-deriving would clear the
+        # new document's empty slot and leave the old one's snapshot behind.
+        # Tracking the path each write actually used keeps this correct
+        # regardless of what the session's path has moved on to since.
+        autosaved_path: Path | None = args.project
+
         def autosave_project(
             updated_project: InductorProject, document_path: Path | None
         ) -> None:
+            nonlocal autosaved_path
             recovery_store.write(updated_project, document_path)
+            autosaved_path = document_path
 
         def clear_recovery_snapshot() -> None:
-            # Reads the session's *current* document path, same reasoning as
-            # `save_project` below: Open and Save As can move it after
-            # startup, and clearing must always target the slot the session
-            # is actually in, never the one it started at. `session` is
-            # assigned right after this closure is built, not before, but
-            # only ever called later -- by which time it is bound.
-            assert session is not None
-            recovery_store.clear(session.document_path)
+            # Clears the slot the last successful autosave actually wrote
+            # to, not the session's current document path -- see
+            # `autosaved_path` above.
+            recovery_store.clear(autosaved_path)
 
         session = ProjectSession(
             project,

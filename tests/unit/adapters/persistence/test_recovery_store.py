@@ -108,6 +108,22 @@ def test_a_corrupt_index_reads_as_no_snapshot(tmp_path: Path) -> None:
     assert store.read(None) is None
 
 
+def test_a_non_string_saved_at_reads_as_no_snapshot(tmp_path: Path) -> None:
+    """The only thing standing between `{"savedAtUtc": 17}` and a `TypeError`
+    out of `RecoveryController.__init__` (`fromisoformat(17)`, a startup
+    crash) is the `isinstance(saved_at, str)` guard in `read()`. An index from
+    another build, or one mangled out of band, must read as no snapshot
+    rather than take the app down."""
+    store = _store(tmp_path)
+    store.write(make_project(), None, now=NOW)
+    index_path = store.slot_for(None).index_path
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["savedAtUtc"] = 17
+    index_path.write_text(json.dumps(index), encoding="utf-8")
+
+    assert store.read(None) is None
+
+
 def test_clear_removes_both_files(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.write(make_project(), None, now=NOW)
@@ -116,7 +132,7 @@ def test_clear_removes_both_files(tmp_path: Path) -> None:
     store.clear(None)
 
     assert store.read(None) is None
-    assert not slot.document_path.exists()
+    assert not slot.snapshot_path.exists()
     assert not slot.index_path.exists()
 
 
@@ -137,7 +153,7 @@ def test_a_missing_document_with_a_valid_index_reads_as_no_snapshot(
 ) -> None:
     store = _store(tmp_path)
     store.write(make_project(), None, now=NOW)
-    store.slot_for(None).document_path.unlink()
+    store.slot_for(None).snapshot_path.unlink()
 
     assert store.read(None) is None
 
@@ -206,6 +222,20 @@ def test_the_same_document_by_two_spellings_is_one_slot(tmp_path: Path) -> None:
     assert store.load_project(snapshot).description == "only spelling"
 
 
+def test_a_case_only_difference_is_one_slot_even_for_a_file_that_does_not_exist(
+    tmp_path: Path,
+) -> None:
+    """`_slot_key`'s `.casefold()` is what makes this true -- `resolve()` alone
+    is not enough. Windows only canonicalises the case of a path segment that
+    actually exists on disk, so a same-casing test against an EXISTING file
+    would pass even with `.casefold()` deleted. Neither `Ghost.json` nor
+    `ghost.json` exists, so this is the form that actually exercises the
+    guard."""
+    store = _store(tmp_path)
+
+    assert store.slot_for(tmp_path / "Ghost.json") == store.slot_for(tmp_path / "ghost.json")
+
+
 def test_clearing_one_slot_leaves_the_other(tmp_path: Path) -> None:
     """A save in one window must not discard the other window's recovery copy."""
     store = _store(tmp_path)
@@ -249,5 +279,5 @@ def test_slot_filenames_do_not_contain_the_document_path(tmp_path: Path) -> None
 
     slot = store.slot_for(document_path)
     assert "secret-project-name" not in slot.index_path.name
-    assert "secret-project-name" not in slot.document_path.name
+    assert "secret-project-name" not in slot.snapshot_path.name
     assert RECOVERY_INDEX_FILENAME in slot.index_path.name

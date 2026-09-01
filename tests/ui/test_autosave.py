@@ -154,7 +154,9 @@ def test_an_autosave_oserror_leaves_project_dirty_and_undo_history_untouched(
     assert any("autosave" in record.message.casefold() for record in caplog.records)
 
 
-def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autosave() -> None:
+def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autosave(
+    tmp_path: Path,
+) -> None:
     """Edit A, then Open B before the debounce timer fires: A's pending
     snapshot write must be cancelled, not carried out on B's behalf. Without
     cancelling it, the still-running timer would fire after Open and hand the
@@ -170,7 +172,13 @@ def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autos
     )
     session.apply(replace(session.project, description="edited A"))
 
-    assert session.openProject(QUrl.fromLocalFile("other.inductor.json")) is True
+    # An absolute path under `tmp_path`, not a bare relative name: `openProject`
+    # acquires a real `ProjectLock` for whatever path it is given, which
+    # creates a `<path>.lock` file beside it -- a relative path here wrote
+    # that lock into the repository's working directory instead of this
+    # test's own sandbox.
+    other_path = tmp_path / "other.inductor.json"
+    assert session.openProject(QUrl.fromLocalFile(str(other_path))) is True
 
     session.flushAutosave()
 

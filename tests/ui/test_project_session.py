@@ -15,6 +15,13 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QUrl  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
+from inductor_designer.adapters.persistence.project_repository import (  # noqa: E402
+    ProjectRepository,
+)
+from inductor_designer.adapters.persistence.recovery_store import RecoveryStore  # noqa: E402
+from inductor_designer.adapters.persistence.schema_repository import (  # noqa: E402
+    SchemaRepository,
+)
 from inductor_designer.adapters.system.app_logging import LOGGER_NAME  # noqa: E402
 from inductor_designer.domain.project import InductorProject  # noqa: E402
 from inductor_designer.simulation.run_contracts import RunStatus  # noqa: E402
@@ -99,24 +106,50 @@ def test_saving_clears_the_recovery_snapshot(tmp_path: Path) -> None:
     assert calls == [1]
 
 
-def test_saving_as_clears_the_recovery_snapshot(tmp_path: Path) -> None:
+def test_saving_as_clears_the_old_documents_recovery_snapshot(tmp_path: Path) -> None:
+    """Before per-document recovery slots, one global slot meant Save As's
+    single `recovery_store.clear()` call always removed the live snapshot, so
+    asserting "the cleanup callback fired" was equivalent to "the snapshot is
+    gone". It no longer is: `ProjectSession.saveProjectAs` moves
+    `self._document_path` to the NEW document BEFORE calling
+    `recovery_cleanup`, so a cleanup that re-derives the slot from the
+    session's *current* path at call time (as `main.py` used to) clears the
+    new document's empty slot and leaves the OLD document's snapshot
+    orphaned on disk -- offered back on a later relaunch of the original
+    file. This drives a REAL `RecoveryStore` and wires the callbacks the way
+    `main.py` does: tracking the path each autosave actually wrote under,
+    rather than reading the session's current path at cleanup time."""
     QGuiApplication.instance() or QGuiApplication([])
-    calls: list[int] = []
+    store = RecoveryStore(
+        tmp_path / "recovery", ProjectRepository(SchemaRepository(Path("schemas")))
+    )
+    original_path = tmp_path / "boost.inductor.json"
+    target_path = tmp_path / "renamed.inductor.json"
+    autosaved_path: Path | None = original_path
+
+    def autosave(project: InductorProject, document_path: Path | None) -> None:
+        nonlocal autosaved_path
+        store.write(project, document_path)
+        autosaved_path = document_path
+
+    def clear_recovery_snapshot() -> None:
+        store.clear(autosaved_path)
+
     session = ProjectSession(
         make_project(),
+        document_path=original_path,
         save_callback=lambda project: None,
-        recovery_cleanup=lambda: calls.append(1),
+        autosave_callback=autosave,
+        recovery_cleanup=clear_recovery_snapshot,
     )
     session.apply(replace(session.project, description="edited"))
+    session.flushAutosave()
+    assert store.read(original_path) is not None
 
-    assert (
-        session.saveProjectAs(
-            QUrl.fromLocalFile(str(tmp_path / "boost.inductor.json"))
-        )
-        is True
-    )
+    assert session.saveProjectAs(QUrl.fromLocalFile(str(target_path))) is True
 
-    assert calls == [1]
+    assert store.read(original_path) is None
+    assert store.read(target_path) is None
 
 
 def test_a_failing_recovery_cleanup_does_not_fail_a_successful_save(

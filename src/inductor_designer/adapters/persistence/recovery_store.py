@@ -87,10 +87,17 @@ class RecoverySnapshot:
 
 @dataclass(frozen=True, slots=True)
 class RecoverySlot:
-    """The two files that make up one project document's recovery snapshot."""
+    """The two files that make up one project document's recovery snapshot.
+
+    `snapshot_path`, not `document_path`: this is the SNAPSHOT file living in
+    the recovery directory, the opposite of `RecoverySnapshot.document_path`
+    above, which is the USER's project file. Sharing a name between the two
+    would let `store.read(slot.document_path)` type-check while silently
+    keying a slot off a slot.
+    """
 
     index_path: Path
-    document_path: Path
+    snapshot_path: Path
 
 
 class RecoveryStore:
@@ -103,7 +110,7 @@ class RecoveryStore:
         key = _slot_key(document_path)
         return RecoverySlot(
             index_path=self._directory / f"{key}.{RECOVERY_INDEX_FILENAME}",
-            document_path=self._directory / f"{key}.{RECOVERY_DOCUMENT_FILENAME}",
+            snapshot_path=self._directory / f"{key}.{RECOVERY_DOCUMENT_FILENAME}",
         )
 
     def write(
@@ -122,7 +129,7 @@ class RecoveryStore:
         moment = (datetime.now(timezone.utc) if now is None else now).astimezone(
             timezone.utc
         )
-        self._repository.save(project, slot.document_path)
+        self._repository.save(project, slot.snapshot_path)
         _write_atomic(
             slot.index_path,
             json.dumps(
@@ -138,14 +145,14 @@ class RecoveryStore:
         return RecoverySnapshot(
             document_path=document_path,
             saved_at_utc=moment.isoformat(),
-            project_path=slot.document_path,
+            project_path=slot.snapshot_path,
         )
 
     def read(self, document_path: Path | None) -> RecoverySnapshot | None:
         """`document_path`'s slot, or None when there is nothing trustworthy
         to offer."""
         slot = self.slot_for(document_path)
-        if not slot.index_path.is_file() or not slot.document_path.is_file():
+        if not slot.index_path.is_file() or not slot.snapshot_path.is_file():
             return None
         try:
             index = json.loads(slot.index_path.read_text(encoding="utf-8"))
@@ -160,7 +167,7 @@ class RecoveryStore:
         return RecoverySnapshot(
             document_path=Path(raw_path) if isinstance(raw_path, str) else None,
             saved_at_utc=saved_at,
-            project_path=slot.document_path,
+            project_path=slot.snapshot_path,
         )
 
     def load_project(self, snapshot: RecoverySnapshot) -> InductorProject:
@@ -171,4 +178,4 @@ class RecoveryStore:
         discard another window's recovery copy."""
         slot = self.slot_for(document_path)
         slot.index_path.unlink(missing_ok=True)
-        slot.document_path.unlink(missing_ok=True)
+        slot.snapshot_path.unlink(missing_ok=True)
