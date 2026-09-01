@@ -187,6 +187,110 @@ def test_main_refuses_when_the_catalog_build_produces_no_index(
     assert calls == []
 
 
+def test_find_iscc_raises_when_not_found_anywhere(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No override set, and neither standard Inno Setup location exists --
+    `find_iscc` must name the download page rather than installing anything
+    itself (M10 Task 4: Inno Setup is a machine-wide change this build step
+    is not authorised to make silently)."""
+    monkeypatch.delenv(build_frozen._ISCC_OVERRIDE_ENV_VAR, raising=False)
+    monkeypatch.setattr(
+        build_frozen,
+        "_ISCC_CANDIDATES",
+        (tmp_path / "nowhere" / "ISCC.exe",),
+    )
+    with pytest.raises(build_frozen.InnoSetupNotFoundError, match="jrsoftware.org"):
+        build_frozen.find_iscc()
+
+
+def test_find_iscc_uses_a_standard_candidate_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    iscc = tmp_path / "Inno Setup 6" / "ISCC.exe"
+    iscc.parent.mkdir(parents=True)
+    iscc.write_text("stub")
+    monkeypatch.delenv(build_frozen._ISCC_OVERRIDE_ENV_VAR, raising=False)
+    monkeypatch.setattr(build_frozen, "_ISCC_CANDIDATES", (iscc,))
+    assert build_frozen.find_iscc() == iscc
+
+
+def test_find_iscc_prefers_the_override_env_var(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    override = tmp_path / "custom" / "ISCC.exe"
+    override.parent.mkdir(parents=True)
+    override.write_text("stub")
+    monkeypatch.setenv(build_frozen._ISCC_OVERRIDE_ENV_VAR, str(override))
+    # A candidate that also exists must lose to the override.
+    monkeypatch.setattr(build_frozen, "_ISCC_CANDIDATES", (tmp_path / "other" / "ISCC.exe",))
+    assert build_frozen.find_iscc() == override
+
+
+def test_find_iscc_rejects_an_override_that_does_not_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(build_frozen._ISCC_OVERRIDE_ENV_VAR, str(tmp_path / "missing.exe"))
+    with pytest.raises(build_frozen.InnoSetupNotFoundError, match="does not point to a file"):
+        build_frozen.find_iscc()
+
+
+def test_main_without_installer_flag_never_looks_for_iscc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default build must not require Inno Setup at all -- a machine
+    with only PyInstaller installed must still be able to freeze the
+    bundle."""
+    monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+
+    def _fail_if_called() -> Path:
+        raise AssertionError("find_iscc must not be called without --installer")
+
+    monkeypatch.setattr(build_frozen, "find_iscc", _fail_if_called)
+
+    assert build_frozen.main([]) == 0
+
+
+def test_main_with_installer_flag_refuses_clearly_when_iscc_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+
+    def _raise_not_found() -> Path:
+        raise build_frozen.InnoSetupNotFoundError("ISCC.exe was not found. See jrsoftware.org.")
+
+    monkeypatch.setattr(build_frozen, "find_iscc", _raise_not_found)
+    calls: list[tuple[Path, str]] = []
+
+    def _record(iscc_path: object, version: object) -> None:
+        calls.append((iscc_path, version))
+
+    monkeypatch.setattr(build_frozen, "compile_installer", _record)
+
+    with pytest.raises(SystemExit, match="jrsoftware.org"):
+        build_frozen.main(["--installer"])
+    assert calls == []
+
+
+def test_main_with_installer_flag_compiles_using_the_about_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+    fake_iscc = tmp_path / "ISCC.exe"
+    monkeypatch.setattr(build_frozen, "find_iscc", lambda: fake_iscc)
+    calls: list[tuple[Path, str]] = []
+
+    def _record(iscc_path: object, version: object) -> None:
+        calls.append((iscc_path, version))
+
+    monkeypatch.setattr(build_frozen, "compile_installer", _record)
+
+    from inductor_designer.__about__ import __version__
+
+    assert build_frozen.main(["--installer"]) == 0
+    assert calls == [(fake_iscc, __version__)]
+
+
 def test_main_passes_the_generated_catalog_path_to_pyinstaller(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

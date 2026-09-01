@@ -349,3 +349,102 @@ the original Task 3 Step 4.
   verified unused the way the PySide6 modules above were -- removing them
   without that verification risks the same failure mode the QML/DLL prune
   was careful to avoid.
+
+# Wrapping the bundle in an installer (M10 Task 4)
+
+- Plan: [2026-09-01 M10 Windows release](../superpowers/plans/2026-09-01-m10-windows-release.md), Task 4
+- Produces: an unsigned, per-user Inno Setup installer that wraps the Task 3
+  bundle unmodified.
+
+## Build it
+
+Inno Setup 6 must already be installed on the build machine --
+`packaging/build_frozen.py` never installs it for you; that would be a
+machine-wide change no packaging script has the authority to make silently.
+Get it from <https://jrsoftware.org/isdl.php>. The compiler is
+`%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe` at its default install location;
+set `INDUCTOR_DESIGNER_ISCC` to override that path.
+
+```powershell
+.venv\Scripts\python.exe packaging\build_frozen.py --installer
+```
+
+This runs the same catalog build and PyInstaller freeze as the plain command
+(see above), then compiles `packaging/installer.iss` with `ISCC.exe`,
+passing the running application's own version
+(`inductor_designer.__about__.__version__`) in via `/DMyAppVersion` so the
+installer can never disagree with the application's About box. Without
+`--installer`, the build never looks for `ISCC.exe` at all -- a machine with
+only PyInstaller installed can still produce the frozen bundle.
+
+If `ISCC.exe` cannot be found, the build exits with a message naming the
+paths it looked in and the download page; it does not attempt to install
+Inno Setup, and it does not silently skip the installer step. Verified on
+this development machine, which does not have Inno Setup installed:
+
+```text
+build_frozen: ISCC.exe (Inno Setup 6's command-line compiler) was not found.
+Looked in: C:\Program Files (x86)\Inno Setup 6\ISCC.exe, C:\Program
+Files\Inno Setup 6\ISCC.exe. Install Inno Setup 6 from
+https://jrsoftware.org/isdl.php, or set INDUCTOR_DESIGNER_ISCC to an
+existing ISCC.exe path. This build step never installs it for you.
+```
+
+The installer lands at
+`dist\installer\inductor-designer-<version>-setup.exe` (`dist/` is
+git-ignored, same as the bundle itself).
+
+## What the installer does
+
+`packaging/installer.iss`:
+
+- **Per-user, no administrator required** (`PrivilegesRequired=lowest`,
+  ruled by Fabio Posser 2026-09-01) -- an engineering workstation user who
+  cannot elevate can still install. Installs to
+  `%LOCALAPPDATA%\Programs\PyAEDT Inductor Designer` (Inno's `{userpf}`),
+  not `%ProgramFiles%`.
+- **Unsigned** for this release (ruled 2026-09-01) -- no signing
+  configuration is present; Task 5's release notes carry the resulting
+  SmartScreen warning.
+- **Version and product name read from `__about__.py`** at build time (via
+  `/DMyAppVersion`, above), not hard-coded in the `.iss`.
+- Installs a Start Menu shortcut unconditionally, and offers a desktop
+  shortcut as an unticked opt-in task.
+- Ships the Task 3 bundle unmodified, nothing else -- in particular, no
+  sample project (ruled 2026-09-01: nothing installed carries a design).
+
+## Verifying the uninstaller leaves user data alone
+
+**The thing that matters most about this installer.** `%LOCALAPPDATA%\
+InductorDesigner` (`adapters/system/environment.py`'s
+`application_data_directory()`) holds the user's crash-recovery snapshots
+and the application log. The installer must never delete it: losing a
+recovery snapshot during an uninstall would destroy unsaved work at the
+worst possible moment, and the log is what a support engineer reads
+afterwards. `installer.iss` has no `[UninstallDelete]` or `[Dirs]` entry
+naming that path at all (see the comment block at the bottom of the
+script), so the generated uninstaller has no instruction that could reach
+it -- the application creates and writes that directory at runtime, the
+installer never does.
+
+A repeatable test, for whoever runs this before a release:
+
+1. Note the directory's current contents, sizes, and modified times:
+   `Get-ChildItem -Recurse "$env:LOCALAPPDATA\InductorDesigner" | Select-Object FullName, Length, LastWriteTime`.
+2. Install the application into a throwaway per-user location and launch it
+   at least once (so a recovery snapshot and a log entry are written).
+3. Uninstall it (Settings > Apps, or the `unins000.exe` Inno Setup writes
+   under the install directory).
+4. Confirm two things:
+   - The install directory (`%LOCALAPPDATA%\Programs\PyAEDT Inductor
+     Designer`) and the Start Menu / desktop shortcuts are gone.
+   - `%LOCALAPPDATA%\InductorDesigner` still exists, and every file already
+     in it before the install -- by name, byte count, and modified time --
+     is unchanged: `Get-ChildItem -Recurse "$env:LOCALAPPDATA\InductorDesigner" | Select-Object FullName, Length, LastWriteTime`
+     again, and diff against step 1's output.
+
+This is the same check M10 Task 4's implementation session ran against this
+machine's own `%LOCALAPPDATA%\InductorDesigner\logs\inductor-designer.log`
+(which already held real acceptance-walk records from this machine's owner
+before this task started) -- see that task's report for the recorded
+before/after mtime and byte count.
