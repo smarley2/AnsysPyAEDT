@@ -198,11 +198,35 @@ Before building anything, call `missing_resources()`. If it is non-empty, print 
 
 ## Open questions for Fabio Posser
 
-1. **Per-user or per-machine install?** The plan installs per user, needing no administrator. Per-machine puts one copy under `%PROGRAMFILES%` for every user of a shared workstation but requires elevation. A ruling changes two lines of the Inno script.
-2. **Is the installer signed?** Unsigned means a SmartScreen warning on every first run, which trains users to click through security prompts. If BRUSA has a code-signing certificate, signing is one build step; if not, the release notes must warn about the prompt instead.
-3. **What version number ships?** `__about__.py` says `0.1.0.dev0`. A first release usually is not `.dev0`, and the installer, the About box and the release notes all read from it.
-4. **Does the release include the sample project** (`artifacts/maxwell3d/2025.2-commercial/m7b.inductor.json` or similar)? Shipping one makes the first launch demonstrable; it also ships a design, so it is a product decision rather than a packaging one.
-5. **Where do release artifacts live?** A GitHub release on `smarley2/AnsysPyAEDT`, a BRUSA network share, or both. This decides whether the checksums file is published beside the installer or handed over separately.
+All five were ruled by Fabio Posser on 2026-09-01. They are kept here, with
+their reasoning, so the decisions live with the questions rather than only in a
+commit message.
+
+1. ~~Per-user or per-machine install?~~ **Per-user.** `PrivilegesRequired=lowest`; no administrator needed to install.
+2. ~~Is the installer signed?~~ **Unsigned for this release.** So the release notes MUST warn about the SmartScreen prompt on first run -- an unexplained warning teaches users to click through security prompts, which is worse than the warning itself.
+3. ~~What version number ships?~~ **0.1.0.** `__about__.py` is bumped from `0.1.0.dev0`; the installer, the About box and the release notes all read from it, and `tests/unit/test_package.py` pins it.
+4. ~~Does the release include the sample project?~~ **No.** Nothing shipped carries a design, so the first launch starts from File > Open with the user's own project. Note the consequence for the clean-machine walk: it needs a project copied to that machine by hand, which Task 5's walk must say.
+5. ~~Where do release artifacts live?~~ **A GitHub release on `smarley2/AnsysPyAEDT`, for now.** The checksums file is published beside the installer there. See the migration note below.
+
+## Migrating to a BRUSA-hosted git later
+
+Asked on 2026-09-01, and worth recording because it affects what this release
+should avoid baking in. Git is distributed, so moving the repository later is a
+remote change, not a conversion: add the new remote, push every branch and tag,
+repoint `origin`. Two things in this milestone must therefore stay portable:
+
+- No release artifact, script or document may hard-code the GitHub URL as the
+  only source of truth. `packaging/build_frozen.py` must not embed a download
+  URL, and the release notes should name the artifact by checksum rather than by
+  link alone.
+- The CI definition currently targets GitHub Actions. It keeps working until the
+  move and is rewritten for whatever BRUSA hosts; nothing in the product reads
+  it, so this is not a product dependency.
+
+The move is also the natural moment to settle the identity strings still present
+in five commits of this branch's history and in two off-branch files -- a history
+rewrite is disruptive on a shared remote, and far cheaper to do while re-pushing
+into a fresh one.
 
 ## Known risks
 
