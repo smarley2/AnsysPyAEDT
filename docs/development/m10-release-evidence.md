@@ -333,12 +333,12 @@ build overwrites.
 Stated plainly, in its own section, rather than left for the reader to
 infer:
 
-1. **No installer has ever been compiled.** Inno Setup 6 (`ISCC.exe`) is not
-   installed on this development machine, confirmed directly by Task 4's
-   session and unchanged since (`find_iscc()` still returns the same "not
-   found, looked in ..." message this session would get by running it
-   again). `packaging/installer.iss` and the `--installer` build step are
-   written and unit-tested, but no `.exe` has ever come out of them.
+1. ~~**No installer has ever been compiled.**~~ **CLOSED 2026-09-01** --
+   see "The installer, compiled" below. Inno Setup 6.7.3 was installed at
+   Fabio Posser's explicit request and
+   `packaging/build_frozen.py --installer` produced
+   `dist/installer/inductor-designer-0.1.0-setup.exe` (90,354,682 bytes)
+   from a fresh end-to-end build.
 2. **The install -> launch -> uninstall walk has never run.** Consequently
    the "user data survives an uninstall" guarantee is verified only
    structurally (the `.iss` script has no `[UninstallDelete]`/`[Dirs]` entry
@@ -369,14 +369,92 @@ infer:
    `aedt`/`femm`). Whether PyAEDT behaves identically frozen -- it imports
    lazily and reaches for its own installed files -- remains the plan's
    known risk 2, unresolved.
-5. **This task's own checksum step ran against the Task 4 bundle already on
-   disk, not against a fresh end-to-end `build_frozen.py` run.** The catalog
-   build and PyInstaller freeze were not repeated for this task; the
-   296.5 MB bundle zipped and hashed above is exactly what Task 3/4 already
-   built and verified, unmodified since.
+5. ~~**The checksum step ran against the Task 4 bundle already on disk, not
+   against a fresh end-to-end `build_frozen.py` run.**~~ **CLOSED
+   2026-09-01** -- `dist/` was deleted and the whole chain re-run: catalog
+   build, PyInstaller freeze, ISCC compile, archive, checksums. Numbers
+   below.
 
-None of the five above can be closed from this machine or by an automated
-gate. They are exactly what the clean-machine walk below exists to close.
+Items 2, 3 and 4 remain open. None of them can be closed from this machine
+or by an automated gate -- item 2 needs someone to actually run the
+installer, and items 3 and 4 need eyes on a screen and a licensed solver.
+They are what the clean-machine walk below exists to close.
+
+## The installer, compiled (2026-09-01)
+
+Closing items 1 and 5 above. Recorded here because the previous revision of
+this document stated as fact that no installer had ever existed, and a
+reader who trusted that statement is entitled to see exactly what changed
+it.
+
+**How Inno Setup got onto this machine.** This account has no
+administrator rights and the machine has no `winget`, `scoop` or `choco`,
+so the ordinary `%ProgramFiles(x86)%` install was not available.
+`innosetup-6.7.3.exe` was downloaded from the vendor's own release --
+`github.com/jrsoftware/issrc`, tag `is-6_7_3` -- and its Authenticode
+signature checked BEFORE it was run: status `Valid`, signer
+`CN=Pyrsys B.V., O=Pyrsys B.V., C=NL` under `Sectigo Public Code Signing CA
+R36`, version resource `Inno Setup 6.7.3 / jrsoftware.org / Copyright
+1997-2026 Jordan Russell, portions 2000-2026 Martijn Laan`, SHA-256
+`9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732`,
+10,592,232 bytes. The publisher name is not literally "jrsoftware" --
+Pyrsys B.V. is co-maintainer Martijn Laan's company -- and that mismatch is
+recorded rather than glossed, since a reader checking the signature
+themselves will hit the same surprise.
+
+It installed **per-user** with `/CURRENTUSER /VERYSILENT`, into
+`%LOCALAPPDATA%\Programs\Inno Setup 6`. Nothing machine-wide: `HKLM`
+carries no uninstall entry (verified), only `HKCU` does, so it is removable
+from Settings > Apps by this user alone. Version 6, not the available 7.1.0,
+deliberately -- `installer.iss` and `find_iscc` are both written against
+Inno Setup 6, and a major-version jump would put directive compatibility
+into the same change as the first compile.
+
+`find_iscc()` needed one fix to see it: `_ISCC_CANDIDATES` listed only the
+two `%ProgramFiles%` locations, so the per-user install -- the only route
+open to a builder without administrator rights -- produced the "not found"
+refusal while a working `ISCC.exe` sat installed. `%LOCALAPPDATA%\Programs`
+is now the third candidate, and the refusal message names `/CURRENTUSER`.
+
+**The build.** `dist/` was deleted first, so nothing on disk could stand in
+for a step that did not run:
+
+```
+rm -rf dist
+.venv/Scripts/python.exe packaging/build_frozen.py --installer
+```
+
+Exit 0. `Successful compile (85.172 sec)`.
+
+| Artifact | Bytes | SHA-256 |
+| --- | --- | --- |
+| `dist/installer/inductor-designer-0.1.0-setup.exe` | 90,354,682 | `5294f5c3152105f5c69e7050b4b05c88cee75838bda11800115a8d4228573a2f` |
+| `dist/inductor-designer-0.1.0-win64.zip` | 129,073,278 | `fe37c2abf8d1736b3902518dd0320beabbea4559e924ef05f457254843b0e0d1` |
+
+Both hashes recomputed with PowerShell `Get-FileHash -Algorithm SHA256`,
+independently of the `hashlib` code that wrote `dist/SHA256SUMS.txt`, and
+both matched. `SHA256SUMS.txt` holds exactly these two lines, in this order.
+
+**What was checked on the compiled output, without installing it:**
+
+- `Get-AuthenticodeSignature` on the installer returns `NotSigned`. The
+  release notes' unsigned/SmartScreen warning is therefore accurate, not a
+  precaution.
+- The bundle is 2,956 files, 296,534,636 bytes (282.8 MiB). The 296.5 MB
+  figure quoted elsewhere in this document is the same number in MB.
+- The catalog index actually shipped:
+  `_internal/artifacts/catalog/catalog.sqlite`, 53,248 bytes, **15 cores**,
+  tables `cores` / `conductors` / `meta`. This is the failure mode
+  `build_frozen.py`'s docstring calls the worst available -- an application
+  that starts and shows an empty core list -- and it is now measured in the
+  shipped artifact rather than argued from the build script.
+- All five resource roots the runtime seam resolves are present under
+  `_internal/`: `schemas`, `compatibility`, `materials-overlay`,
+  `artifacts/catalog`, `inductor_designer/ui/qml`.
+
+**Still not proven by any of the above**: that the installer installs. It
+has been compiled and inspected, never executed. Item 2 stays open, and the
+walk below is still the thing that closes it.
 
 ## The clean-machine walk (Fabio Posser, on a machine that has never held the source tree)
 

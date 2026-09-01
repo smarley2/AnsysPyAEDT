@@ -215,6 +215,22 @@ def test_find_iscc_uses_a_standard_candidate_when_present(
     assert build_frozen.find_iscc() == iscc
 
 
+def test_iscc_candidates_include_the_per_user_install_location() -> None:
+    """The only route open to a builder without administrator rights.
+
+    Every other `find_iscc` test substitutes `_ISCC_CANDIDATES` wholesale,
+    so without this one nothing asserts what the real tuple holds -- and
+    dropping this entry does not fail any test while leaving a non-admin
+    builder with a "not found" refusal and a working ISCC.exe installed
+    under their own profile. That is exactly how the 0.1.0 installer was
+    compiled.
+    """
+    parts = [candidate.parts for candidate in build_frozen._ISCC_CANDIDATES]
+    assert any(
+        "Programs" in candidate and candidate[-2] == "Inno Setup 6" for candidate in parts
+    ), f"no %LOCALAPPDATA%\\Programs candidate in {build_frozen._ISCC_CANDIDATES}"
+
+
 def test_find_iscc_prefers_the_override_env_var(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

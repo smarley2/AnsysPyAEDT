@@ -177,11 +177,13 @@ before the next plan freezes assumptions that depend on it.
   All five open plan questions were ruled by Fabio Posser on 2026-09-01
   (per-user/no-admin, unsigned, version 0.1.0, no sample project shipped,
   artifacts published on `smarley2/AnsysPyAEDT` for now and identified by
-  checksum rather than URL alone). **Not yet verified on any machine**: no
-  installer has ever been compiled (Inno Setup 6 is not installed on the
-  development machine), the install/launch/uninstall walk has never run, and
-  the bundle's window was confirmed visually only before the size-pruning
-  pass -- the evidence record states all of this in its own section, and the
+  checksum rather than URL alone). An unsigned per-user installer was
+  compiled on 2026-09-01 from a fresh end-to-end build and inspected
+  (`NotSigned` as documented, 15 cores in the shipped catalog index).
+  **Still not verified on any machine**: the installer has never been
+  executed, so the install/launch/uninstall walk has never run, and the
+  bundle's window was confirmed visually only before the size-pruning pass
+  -- the evidence record states all of this in its own section, and the
   clean-machine walk is what closes it.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows

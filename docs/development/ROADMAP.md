@@ -946,10 +946,12 @@ and the evidence record is
 non-live gate, the checksum evidence (including a hash independently
 recomputed with a second tool), an honest account of the defects the four
 task reviews found, a section stating plainly what could not be verified on
-this development machine (no Inno Setup installed, so no installer has ever
-been compiled; the install/launch/uninstall walk has never run; the bundle's
-window was confirmed visually only before the QML/DLL size-pruning pass),
-and the clean-machine walk that alone can close the exit criterion above.
+this development machine, and the clean-machine walk that alone can close
+the exit criterion above. An unsigned per-user installer WAS compiled on
+2026-09-01 from a fresh end-to-end build (90,354,682 bytes, SHA-256 in the
+evidence record) and inspected, but never executed -- so the
+install/launch/uninstall walk has still never run, and the bundle's window
+was confirmed visually only before the QML/DLL size-pruning pass.
 
 Five open questions from the plan were ruled by Fabio Posser on 2026-09-01:
 per-user install needing no administrator; unsigned for this release

@@ -359,11 +359,34 @@ the original Task 3 Step 4.
 ## Build it
 
 Inno Setup 6 must already be installed on the build machine --
-`packaging/build_frozen.py` never installs it for you; that would be a
-machine-wide change no packaging script has the authority to make silently.
-Get it from <https://jrsoftware.org/isdl.php>. The compiler is
-`%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe` at its default install location;
-set `INDUCTOR_DESIGNER_ISCC` to override that path.
+`packaging/build_frozen.py` never installs it for you; installing a compiler
+changes the machine, and that is not a step a packaging script takes on its
+own. Get it from <https://jrsoftware.org/isdl.php>.
+
+`find_iscc()` looks in three places, in order:
+
+1. `%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe` -- the default, where the
+   installer puts it on 64-bit Windows when run with administrator rights.
+2. `%ProgramFiles%\Inno Setup 6\ISCC.exe`.
+3. `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe` -- where Inno
+   Setup's own installer lands when run with `/CURRENTUSER`.
+
+**If you have no administrator rights, use route 3.** It is the only one
+available to you, and it is how the 0.1.0 installer was actually compiled
+(see the evidence record). Inno Setup's installer accepts:
+
+```powershell
+.\innosetup-6.7.3.exe /CURRENTUSER /VERYSILENT
+```
+
+That writes nothing under `HKLM` and nothing outside your own profile;
+it is removable from Settings > Apps by you alone. Check the download's
+Authenticode signature before running it -- `Get-AuthenticodeSignature`
+should report `Valid`, signed by `Pyrsys B.V.` (co-maintainer Martijn
+Laan's company; the name is not literally "jrsoftware", which surprises
+everyone once).
+
+`INDUCTOR_DESIGNER_ISCC` overrides all three routes with an explicit path.
 
 ```powershell
 .venv\Scripts\python.exe packaging\build_frozen.py --installer
@@ -379,20 +402,42 @@ only PyInstaller installed can still produce the frozen bundle.
 
 If `ISCC.exe` cannot be found, the build exits with a message naming the
 paths it looked in and the download page; it does not attempt to install
-Inno Setup, and it does not silently skip the installer step. Verified on
-this development machine, which does not have Inno Setup installed:
+Inno Setup, and it does not silently skip the installer step. The message
+names `/CURRENTUSER`, because a reader without administrator rights would
+otherwise read the two `%ProgramFiles%` paths as a dead end:
 
 ```text
 build_frozen: ISCC.exe (Inno Setup 6's command-line compiler) was not found.
-Looked in: C:\Program Files (x86)\Inno Setup 6\ISCC.exe, C:\Program
-Files\Inno Setup 6\ISCC.exe. Install Inno Setup 6 from
-https://jrsoftware.org/isdl.php, or set INDUCTOR_DESIGNER_ISCC to an
-existing ISCC.exe path. This build step never installs it for you.
+Looked in: <the three paths above>. Install Inno Setup 6 from
+https://jrsoftware.org/isdl.php -- its installer accepts /CURRENTUSER if you
+have no administrator rights -- or set INDUCTOR_DESIGNER_ISCC to an existing
+ISCC.exe path. This build step never installs it for you.
 ```
 
 The installer lands at
 `dist\installer\inductor-designer-<version>-setup.exe` (`dist/` is
 git-ignored, same as the bundle itself).
+
+### What 0.1.0 actually measured, 2026-09-01
+
+A real end-to-end run, `dist/` deleted first so nothing on disk could stand
+in for a step that did not run. Inno Setup 6.7.3, installed per-user via
+route 3 above. `Successful compile (85.172 sec)`, exit 0.
+
+| Artifact | Bytes | SHA-256 |
+| --- | --- | --- |
+| `inductor-designer-0.1.0-setup.exe` | 90,354,682 | `5294f5c3...73a2f` |
+| `inductor-designer-0.1.0-win64.zip` | 129,073,278 | `fe37c2ab...0e0d1` |
+
+Bundle: 2,956 files, 296,534,636 bytes (282.8 MiB). Shipped catalog index
+`_internal/artifacts/catalog/catalog.sqlite`: 53,248 bytes, 15 cores. The
+installer reports `NotSigned`, as the release notes say it will. Full
+hashes and the signature-verification trail for the Inno Setup download are
+in
+[m10-release-evidence.md](m10-release-evidence.md#the-installer-compiled-2026-09-01).
+
+The installer has been compiled and inspected, **never executed** -- that
+is the clean-machine walk's job.
 
 ## What the installer does
 

@@ -56,14 +56,26 @@ ISS_PATH = Path(__file__).with_name("installer.iss")
 #: bundle's `datas`, since the spec file itself takes no arguments.
 CATALOG_ENV_VAR = "INDUCTOR_DESIGNER_BUILD_CATALOG"
 
-#: Where Inno Setup 6's command-line compiler installs by default. Checked
-#: in order; `%ProgramFiles(x86)%` is where Inno Setup's own installer puts
-#: it on 64-bit Windows regardless of this script's own architecture.
+#: Where Inno Setup 6's command-line compiler installs. Checked in order.
+#: `%ProgramFiles(x86)%` is where Inno Setup's own installer puts it on
+#: 64-bit Windows regardless of this script's own architecture.
+#:
+#: `%LOCALAPPDATA%\Programs` is last but is not an edge case: Inno
+#: Setup's installer accepts `/CURRENTUSER` and lands there, which is the
+#: ONLY route open to a builder without administrator rights -- the
+#: situation on the machine this milestone was built on. Without this
+#: entry such a builder gets the `InnoSetupNotFoundError` below while a
+#: working ISCC.exe sits installed, and has to find the override variable
+#: to get past it. An unset `LOCALAPPDATA` degrades to a relative path that
+#: matches nothing rather than raising: this tuple is built at import time,
+#: and every test that imports this module would fail on a machine without
+#: the variable over a candidate only `--installer` ever reads.
 _ISCC_CANDIDATES = (
     Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
     / "Inno Setup 6"
     / "ISCC.exe",
     Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Inno Setup 6" / "ISCC.exe",
+    Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Inno Setup 6" / "ISCC.exe",
 )
 
 #: Override for a non-default Inno Setup install -- checked before the
@@ -165,8 +177,8 @@ def find_iscc() -> Path:
     """Locate Inno Setup 6's command-line compiler.
 
     Raises `InnoSetupNotFoundError` naming the download page rather than
-    installing anything -- Inno Setup is a machine-wide change this build
-    step is not authorised to make silently.
+    installing anything -- installing a compiler changes the machine, and
+    that is not a step a packaging build gets to take on its own.
     """
     override = os.environ.get(_ISCC_OVERRIDE_ENV_VAR)
     if override:
@@ -183,7 +195,8 @@ def find_iscc() -> Path:
     raise InnoSetupNotFoundError(
         "ISCC.exe (Inno Setup 6's command-line compiler) was not found. Looked "
         f"in: {searched}. Install Inno Setup 6 from "
-        "https://jrsoftware.org/isdl.php, or set "
+        "https://jrsoftware.org/isdl.php -- its installer accepts /CURRENTUSER "
+        "if you have no administrator rights -- or set "
         f"{_ISCC_OVERRIDE_ENV_VAR} to an existing ISCC.exe path. This build "
         "step never installs it for you."
     )
