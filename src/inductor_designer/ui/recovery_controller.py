@@ -38,7 +38,7 @@ class RecoveryController(QObject):
         super().__init__(parent)
         self._store = store
         self._session = session
-        self._snapshot = self._offerable(store.read())
+        self._snapshot = self._offerable(store.read(session.document_path))
 
     @staticmethod
     def _parse_saved_at(saved_at_utc: str) -> datetime | None:
@@ -65,11 +65,13 @@ class RecoveryController(QObject):
         """Only a snapshot that targets this document, is newer than it, and
         actually differs from it.
 
-        The recovery slot is one global slot per app-data directory, not one
-        per project: it holds whatever was being edited when the app last
-        exited abnormally. If that is a different document than the one this
-        session is opening now, splicing it in would hand the user someone
-        else's unsaved edits under the wrong project's name -- so the
+        `store.read()` is already called with this session's document path,
+        so it can only return a snapshot from that document's own slot -- the
+        explicit path match below is now defense in depth rather than the
+        only thing standing between one project's crash snapshot and
+        another's, but it stays: a hash collision, or a slot reused by some
+        future caller, must still fail closed rather than splice a stranger's
+        unsaved edits into this session under the wrong project's name. The
         document paths (both None, meaning "never saved", or both equal once
         resolved) must match before anything else is considered. Resolving
         both sides means a document opened as a relative path on one launch
@@ -184,7 +186,7 @@ class RecoveryController(QObject):
     @Slot(result=bool)
     def discard(self) -> bool:
         try:
-            self._store.clear()
+            self._store.clear(self._session.document_path)
         except OSError as error:
             # `clear()` unlinks two files, which raises on Windows when either is
             # locked or read-only -- antivirus, a sync client. `ProjectSession`

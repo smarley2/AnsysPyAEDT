@@ -140,7 +140,7 @@ def test_a_save_that_fails_preserves_the_last_valid_project(tmp_path: Path) -> N
     assert document_path.read_text(encoding="utf-8") == "{}"
 
     session.flushAutosave()
-    snapshot = store.read()
+    snapshot = store.read(document_path)
     assert snapshot is not None
     assert store.load_project(snapshot) == edited
 

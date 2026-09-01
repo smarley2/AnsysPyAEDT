@@ -61,7 +61,7 @@ def _corrupt_saved_at(store: RecoveryStore, document_path: Path | None, saved_at
     string, simulating an index left behind by another build or mangled out
     of band -- `RecoveryStore.read()` only validates that this field is a
     string at all, not that it is a well-formed, timezone-aware timestamp."""
-    store.index_path.write_text(
+    store.slot_for(document_path).index_path.write_text(
         json.dumps(
             {
                 "documentPath": None if document_path is None else str(document_path),
@@ -126,7 +126,7 @@ def test_discard_clears_the_snapshot_and_leaves_the_session_alone(
 
     assert controller.discard() is True
 
-    assert store.read() is None
+    assert store.read(document) is None
     assert session.project.description == make_project().description
     assert session.dirty is False
     assert controller.available is False
@@ -160,7 +160,7 @@ def test_an_unreadable_snapshot_document_is_not_offered(tmp_path: Path) -> None:
     QGuiApplication.instance() or QGuiApplication([])
     store = _store(tmp_path)
     store.write(replace(make_project(), description="unsaved"), None, now=LATER)
-    store.document_path.write_text("{}", encoding="utf-8")
+    store.slot_for(None).document_path.write_text("{}", encoding="utf-8")
     session = ProjectSession(make_project())
     controller = RecoveryController(store, session)
 
@@ -169,11 +169,13 @@ def test_an_unreadable_snapshot_document_is_not_offered(tmp_path: Path) -> None:
 
 
 def test_a_snapshot_for_a_different_document_is_not_offered(tmp_path: Path) -> None:
-    """The recovery slot is global to the app-data directory, not per-project.
+    """Each project document has its own recovery slot.
 
     A crash while editing project A must not get spliced into project B just
     because B happens to be the one opened next -- that would hand the user
-    someone else's unsaved edits under B's name.
+    someone else's unsaved edits under B's name. Project B's slot legitimately
+    has nothing written to it here, so this also covers the case where
+    `RecoveryController` reads a document's own (empty) slot.
     """
     QGuiApplication.instance() or QGuiApplication([])
     document_a = _saved_document(tmp_path)
@@ -192,7 +194,7 @@ def test_a_load_failure_is_logged_and_leaves_the_application_usable(
     QGuiApplication.instance() or QGuiApplication([])
     store = _store(tmp_path)
     store.write(replace(make_project(), description="unsaved"), None, now=LATER)
-    store.document_path.write_text("{}", encoding="utf-8")
+    store.slot_for(None).document_path.write_text("{}", encoding="utf-8")
     session = ProjectSession(make_project())
     controller = RecoveryController(store, session)
 
@@ -376,7 +378,7 @@ def test_a_failing_discard_still_dismisses_the_offer(tmp_path: Path) -> None:
     store.write(replace(make_project(), description="unsaved"), document, now=LATER)
     controller = RecoveryController(store, ProjectSession(make_project(), document_path=document))
 
-    def refuse() -> None:
+    def refuse(document_path: Path | None) -> None:
         raise PermissionError("locked by antivirus")
 
     store.clear = refuse  # type: ignore[method-assign]

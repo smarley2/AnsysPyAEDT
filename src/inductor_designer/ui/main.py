@@ -260,12 +260,22 @@ def main() -> int:
         ) -> None:
             recovery_store.write(updated_project, document_path)
 
+        def clear_recovery_snapshot() -> None:
+            # Reads the session's *current* document path, same reasoning as
+            # `save_project` below: Open and Save As can move it after
+            # startup, and clearing must always target the slot the session
+            # is actually in, never the one it started at. `session` is
+            # assigned right after this closure is built, not before, but
+            # only ever called later -- by which time it is bound.
+            assert session is not None
+            recovery_store.clear(session.document_path)
+
         session = ProjectSession(
             project,
             args.project,
             open_callback=_load_project,
             autosave_callback=autosave_project,
-            recovery_cleanup=recovery_store.clear,
+            recovery_cleanup=clear_recovery_snapshot,
         )
 
         def save_project(updated_project: InductorProject) -> None:
