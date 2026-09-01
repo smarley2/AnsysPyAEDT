@@ -296,6 +296,38 @@ every one was closed within its own task's fix wave before the next task
 began. They are listed here so Fabio Posser sees what the review process
 actually caught, not just the state it left behind.
 
+### And two in Task 5 itself, found by its own review (fixed in `b0993b6`)
+
+Recorded by the same standard, including the one that was a defect in this
+very document -- an evidence record that hid a correction found in itself
+would be worth nothing.
+
+- **`emit_checksums` could publish a stale installer hash.** It decided
+  whether to list the installer by probing `dist/installer/` with
+  `is_file()`, and that directory is not cleaned between runs. A
+  bundle-only build after an `--installer` build therefore wrote one
+  `SHA256SUMS.txt` holding a fresh bundle's hash beside the PREVIOUS
+  installer's -- two entries describing different builds. Anyone verifying
+  that installer hash would get a match and conclude they held the current
+  release, which is precisely the conclusion a checksums file exists to
+  make safe. Now driven by the `--installer` flag, so the file lists only
+  what the run produced.
+- **The clean-machine walk cited a project file that does not exist
+  anywhere but this machine.** The prerequisite below pointed at
+  `artifacts/maxwell3d/2025.2-commercial/m7b.inductor.json` "in this
+  repository". `artifacts/` is git-ignored (`.gitignore:18`): that file is
+  untracked leftover state from manual M7b testing on this one development
+  machine. The walk's whole premise is a machine that has never held the
+  source tree, so the step would have dead-ended on the first reader who
+  was not me. It now names the tracked fixture
+  `tests/fixtures/sample_geometry_project.inductor.json`.
+
+One Minor was accepted rather than fixed: `write_checksums` writes
+`SHA256SUMS.txt` with a plain `write_text`, not a temp-file-plus-rename. It
+is a single-process build script with no concurrent reader, so the atomic
+write buys nothing; a crash mid-write leaves a truncated file that the next
+build overwrites.
+
 ## What is NOT verified on this machine
 
 Stated plainly, in its own section, rather than left for the reader to
