@@ -258,6 +258,51 @@ def main() -> int:
     logger = logging.getLogger(LOGGER_NAME)
     logger.info("Application %s starting.", __version__)
 
+    # M10 Task 2: what this machine actually has, logged once through the
+    # redacting logger above (never `print`, since an install root is an
+    # absolute path -- exactly the text `RedactingFormatter` exists for).
+    # Detection never imports PyAEDT or starts a desktop; see
+    # `adapters/system/installations.py`'s module docstring for why.
+    from inductor_designer.adapters.system.installations import (
+        detect_aedt,
+        detect_femm,
+        detect_unsupported_aedt,
+    )
+    from inductor_designer.application.services.aedt_support import (
+        SUPPORTED_AEDT_EDITION,
+        SUPPORTED_AEDT_RELEASE,
+    )
+
+    aedt_installation = detect_aedt()
+    unsupported_aedt_installation = detect_unsupported_aedt()
+    if aedt_installation is not None:
+        logger.info(
+            "Detected AEDT %s at %s (via %s).",
+            aedt_installation.release,
+            aedt_installation.install_root,
+            aedt_installation.route.value,
+        )
+    elif unsupported_aedt_installation is not None:
+        logger.info(
+            "Detected AEDT %s at %s (via %s); this application supports "
+            "AEDT %s %s only.",
+            unsupported_aedt_installation.release,
+            unsupported_aedt_installation.install_root,
+            unsupported_aedt_installation.route.value,
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION.value,
+        )
+    else:
+        logger.info("AEDT was not detected on this machine.")
+    femm_installation = detect_femm()
+    if femm_installation is not None:
+        logger.info(
+            "Detected FEMM at %s (via %s).",
+            femm_installation.install_root,
+            femm_installation.route.value,
+        )
+    # FEMM absent is normal and is not logged -- see detect_femm()'s docstring.
+
     args = _parse_args(sys.argv[1:])
     _install_qml_logging()
     app = QGuiApplication(sys.argv)
@@ -478,7 +523,11 @@ def main() -> int:
         )
         preliminary_controller = PreliminaryController(session, catalog_repository)
         simulation_controller = SimulationController(
-            session, generation_controller, capabilities
+            session,
+            generation_controller,
+            capabilities,
+            aedt_installation,
+            unsupported_aedt_installation,
         )
         review_controller = ReviewController(
             session,

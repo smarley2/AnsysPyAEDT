@@ -14,6 +14,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from inductor_designer.application.services.aedt_support import (
+    SUPPORTED_AEDT_EDITION,
+    SUPPORTED_AEDT_RELEASE,
+)
 from inductor_designer.application.services.dc_bias_visibility import (
     DcBiasVisibility,
     dc_bias_visibility,
@@ -22,10 +26,14 @@ from inductor_designer.application.services.solver_visibility import (
     visible_window_support,
 )
 from inductor_designer.domain.project import MeshIntent, RequestedOutput, SimulationRecipe
-from inductor_designer.simulation.run_contracts import RunMode
+from inductor_designer.simulation.run_contracts import RunBackend, RunMode
 from inductor_designer.ui.generation_lines import GenerationBackend, run_backend_for
 
 if TYPE_CHECKING:
+    from inductor_designer.adapters.system.installations import (
+        AedtInstallation,
+        UnsupportedAedtInstallation,
+    )
     from inductor_designer.simulation.capabilities import CapabilitySnapshot
     from inductor_designer.ui.generation_controller import GenerationController
     from inductor_designer.ui.project_session import ProjectSession
@@ -53,12 +61,21 @@ class SimulationController(QObject):
         session: ProjectSession,
         generation: GenerationController,
         capabilities: CapabilitySnapshot,
+        aedt_installation: AedtInstallation | None = None,
+        unsupported_aedt_installation: UnsupportedAedtInstallation | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._session = session
         self._generation = generation
         self._capabilities = capabilities
+        # What M10's `installations.detect_aedt()` / `detect_unsupported_aedt()`
+        # found on this machine at startup (Task 2) -- carried here, not
+        # re-detected, so the Simulation screen never starts a desktop of its
+        # own just to draw a label. `None`/`None` reads as "AEDT absent",
+        # which is the safe default for a caller that has not wired this in.
+        self._aedt_installation = aedt_installation
+        self._unsupported_aedt_installation = unsupported_aedt_installation
         self._backend = GenerationBackend.MAXWELL_3D
         self._mode = RunMode.GENERATE_ONLY
         self._show_solver_window = False
@@ -86,6 +103,30 @@ class SimulationController(QObject):
         return self._backend.value
 
     backend = Property(str, _get_backend, notify=configurationChanged)
+
+    def _get_aedt_status_notice(self) -> str:
+        """Empty when there is nothing to warn about: FEMM needs no AEDT at
+        all, and the supported release being present is the unremarkable
+        case. Otherwise names exactly what is wrong -- absent, or present but
+        the wrong release -- so a mismatch is visible before Generate is
+        clicked, not after a run fails against it."""
+        if run_backend_for(self._backend) is RunBackend.FEMM:
+            return ""
+        if self._aedt_installation is not None:
+            return ""
+        wanted = f"AEDT {SUPPORTED_AEDT_RELEASE} {SUPPORTED_AEDT_EDITION.value}"
+        if self._unsupported_aedt_installation is not None:
+            found = self._unsupported_aedt_installation
+            return (
+                f"AEDT {found.release} is installed, but this application "
+                f"supports {wanted} only. Install it to generate with this backend."
+            )
+        return (
+            f"{wanted} was not found on this machine. "
+            "Install it to generate with this backend."
+        )
+
+    aedtStatusNotice = Property(str, _get_aedt_status_notice, notify=configurationChanged)
 
     def _get_mode_options(self) -> list[str]:
         return [item.value for item in RunMode]
