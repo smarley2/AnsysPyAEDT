@@ -168,7 +168,7 @@ def test_opening_a_document_within_the_debounce_window_cancels_the_pending_autos
     session = _session(
         calls,
         open_callback=lambda path: opened,
-        recovery_cleanup=lambda: cleanups.append(1),
+        recovery_cleanup=lambda _path: cleanups.append(1),
     )
     session.apply(replace(session.project, description="edited A"))
 

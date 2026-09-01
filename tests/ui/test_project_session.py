@@ -97,7 +97,7 @@ def test_saving_clears_the_recovery_snapshot(tmp_path: Path) -> None:
         make_project(),
         document_path=tmp_path / "boost.inductor.json",
         save_callback=lambda project: None,
-        recovery_cleanup=lambda: calls.append(1),
+        recovery_cleanup=lambda _path: calls.append(1),
     )
     session.apply(replace(session.project, description="edited"))
 
@@ -125,22 +125,15 @@ def test_saving_as_clears_the_old_documents_recovery_snapshot(tmp_path: Path) ->
     )
     original_path = tmp_path / "boost.inductor.json"
     target_path = tmp_path / "renamed.inductor.json"
-    autosaved_path: Path | None = original_path
-
     def autosave(project: InductorProject, document_path: Path | None) -> None:
-        nonlocal autosaved_path
         store.write(project, document_path)
-        autosaved_path = document_path
-
-    def clear_recovery_snapshot() -> None:
-        store.clear(autosaved_path)
 
     session = ProjectSession(
         make_project(),
         document_path=original_path,
         save_callback=lambda project: None,
         autosave_callback=autosave,
-        recovery_cleanup=clear_recovery_snapshot,
+        recovery_cleanup=store.clear,
     )
     session.apply(replace(session.project, description="edited"))
     session.flushAutosave()
@@ -169,21 +162,11 @@ def test_an_open_moves_the_tracked_slot_so_a_later_save_spares_the_old_snapshot(
     )
     first_path = tmp_path / "first.inductor.json"
     second_path = tmp_path / "second.inductor.json"
-    autosaved_path: Path | None = first_path
-
     def autosave(project: InductorProject, document_path: Path | None) -> None:
-        nonlocal autosaved_path
         store.write(project, document_path)
-        autosaved_path = document_path
-
-    def clear_recovery_snapshot() -> None:
-        store.clear(autosaved_path)
 
     def open_document(path: Path) -> InductorProject:
-        nonlocal autosaved_path
-        opened = replace(make_project(), description="from disk")
-        autosaved_path = path
-        return opened
+        return replace(make_project(), description="from disk")
 
     session = ProjectSession(
         make_project(),
@@ -191,7 +174,7 @@ def test_an_open_moves_the_tracked_slot_so_a_later_save_spares_the_old_snapshot(
         save_callback=lambda project: None,
         open_callback=open_document,
         autosave_callback=autosave,
-        recovery_cleanup=clear_recovery_snapshot,
+        recovery_cleanup=store.clear,
     )
     session.apply(replace(session.project, description="unsaved work in first"))
     session.flushAutosave()
@@ -216,7 +199,7 @@ def test_a_failing_recovery_cleanup_does_not_fail_a_successful_save(
     received into a reported failure."""
     QGuiApplication.instance() or QGuiApplication([])
 
-    def explode_cleanup() -> None:
+    def explode_cleanup(_path: Path | None) -> None:
         raise PermissionError("locked by antivirus")
 
     session = ProjectSession(

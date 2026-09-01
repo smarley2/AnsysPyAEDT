@@ -217,7 +217,7 @@ def test_discard_also_drops_the_recovery_snapshot() -> None:
         make_project(),
         Path("boost.inductor.json"),
         lambda _: None,
-        recovery_cleanup=lambda: cleared.append(1),
+        recovery_cleanup=lambda _path: cleared.append(1),
     )
     controller = GuidedStudioController(session, CATALOG)
     assert controller.setWindingField("w1", "turns", "24") is True

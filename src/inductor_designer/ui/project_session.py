@@ -65,7 +65,7 @@ class ProjectSession(QObject):
         save_callback: Callable[[InductorProject], None] | None = None,
         open_callback: Callable[[Path], InductorProject] | None = None,
         autosave_callback: Callable[[InductorProject, Path | None], None] | None = None,
-        recovery_cleanup: Callable[[], None] | None = None,
+        recovery_cleanup: Callable[[Path | None], None] | None = None,
         is_run_busy: Callable[[], bool] | None = None,
         debounce_ms: int = AUTOSAVE_DEBOUNCE_MS,
         lock: ProjectLock | None = None,
@@ -94,6 +94,14 @@ class ProjectSession(QObject):
         )
         self._autosave_callback = autosave_callback
         self._recovery_cleanup = recovery_cleanup
+        # The slot the live recovery snapshot occupies, which is NOT always the
+        # session's current document: Save As moves `_document_path` to the new
+        # file before the cleanup runs, and an Open deliberately leaves the
+        # previous document's snapshot on disk. Both of those were shipped as
+        # defects while this lived as a variable inside `main()`, where no test
+        # executes it -- so it lives here instead, beside the two operations
+        # that move it.
+        self._autosaved_path = document_path
         self._autosave_pending = False
         # Parented to self: Qt tears the timer down (and stops it) when this
         # session is destroyed, with no separate cleanup step to remember.
@@ -243,6 +251,7 @@ class ProjectSession(QObject):
         self._autosave_pending = False
         try:
             self._autosave_callback(self.project, self._document_path)
+            self._autosaved_path = self._document_path
         except Exception as error:  # noqa: BLE001 - autosave must never wedge the UI
             _logger.warning("Autosave failed: %s", error)
             self.set_status(f"Unable to autosave a recovery copy: {error}")
@@ -269,7 +278,7 @@ class ProjectSession(QObject):
         self._autosave_timer.stop()
         if self._recovery_cleanup is not None:
             try:
-                self._recovery_cleanup()
+                self._recovery_cleanup(self._autosaved_path)
             except Exception as error:  # noqa: BLE001 - a locked snapshot must not fail a successful save
                 _logger.warning("Unable to clear the recovery snapshot: %s", error)
 
@@ -431,6 +440,12 @@ class ProjectSession(QObject):
         """
         self._provider.replace(project)
         self._document_path = path
+        # An Open cancels the pending autosave but KEEPS the previous document's
+        # snapshot, so the tracked slot has to follow the document. Without this,
+        # the first Save, Save As or quit-time Discard made in the newly opened
+        # file clears the slot the previous document's snapshot lives in, and
+        # that work is gone with nothing on screen to say so.
+        self._autosaved_path = path
         # A run directory beside the (re)opened document may still read
         # "running" from a process that died mid-run; reconcile it to
         # "interrupted" now so Review never reads it as a result. But a run
