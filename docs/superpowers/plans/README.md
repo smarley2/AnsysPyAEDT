@@ -159,6 +159,31 @@ before the next plan freezes assumptions that depend on it.
   the MCP server is NOT shipped in this release** -- it stays in the repository,
   is excluded from the installer, and the release notes say so.
 
+- **Milestone 10, Windows Release, is implementation complete, awaiting
+  Fabio Posser's verification** -- not accepted; only he accepts a
+  milestone. The plan is
+  [2026-09-01-m10-windows-release.md](2026-09-01-m10-windows-release.md) and
+  the evidence record is
+  [m10-release-evidence.md](../../development/m10-release-evidence.md):
+  a resource-resolution seam for the frozen bundle, installed wheel, and
+  source checkout (with an `INDUCTOR_DESIGNER_RESOURCES` support override);
+  AEDT 2025 R2 Commercial and optional-FEMM detection with no PyAEDT import
+  and no desktop session started; a one-folder PyInstaller bundle (296.5 MB
+  after a 45.5% QML/DLL prune) shipping pyaedt's data files; a per-user,
+  unsigned Inno Setup installer that never touches
+  `%LOCALAPPDATA%\InductorDesigner`; and, from this task, `SHA256SUMS.txt`
+  covering the bundle archive and the installer, the filled 0.1.0 release
+  notes, and the clean-machine walk that alone can close the exit criterion.
+  All five open plan questions were ruled by Fabio Posser on 2026-09-01
+  (per-user/no-admin, unsigned, version 0.1.0, no sample project shipped,
+  artifacts published on `smarley2/AnsysPyAEDT` for now and identified by
+  checksum rather than URL alone). **Not yet verified on any machine**: no
+  installer has ever been compiled (Inno Setup 6 is not installed on the
+  development machine), the install/launch/uninstall walk has never run, and
+  the bundle's window was confirmed visually only before the size-pruning
+  pass -- the evidence record states all of this in its own section, and the
+  clean-machine walk is what closes it.
+
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5
 remains in the repository, but MCP expansion or parity is future work and does

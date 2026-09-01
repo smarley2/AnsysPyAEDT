@@ -936,6 +936,29 @@ Exit criterion: the installed application completes authoring, generation,
 optional solving, result export, save, and reopen against AEDT 2025 R2
 Commercial.
 
+### Current state
+
+Milestone 10 is **implementation complete, awaiting Fabio Posser's
+verification.** Only he accepts a milestone. The plan is
+[2026-09-01 M10 Windows release](../superpowers/plans/2026-09-01-m10-windows-release.md)
+and the evidence record is
+[m10-release-evidence.md](m10-release-evidence.md), which records the
+non-live gate, the checksum evidence (including a hash independently
+recomputed with a second tool), an honest account of the defects the four
+task reviews found, a section stating plainly what could not be verified on
+this development machine (no Inno Setup installed, so no installer has ever
+been compiled; the install/launch/uninstall walk has never run; the bundle's
+window was confirmed visually only before the QML/DLL size-pruning pass),
+and the clean-machine walk that alone can close the exit criterion above.
+
+Five open questions from the plan were ruled by Fabio Posser on 2026-09-01:
+per-user install needing no administrator; unsigned for this release
+(with the resulting SmartScreen warning disclosed in the release notes);
+version 0.1.0; no sample project shipped; and release artifacts published on
+the GitHub release at `smarley2/AnsysPyAEDT` for now, identified by checksum
+rather than by download URL alone so a later move to a BRUSA-hosted remote
+does not strand the release notes.
+
 ## Milestone 11: Additional Core Families
 
 - Add E, PQ, EQ, EER, and other approved commercial geometries as independent

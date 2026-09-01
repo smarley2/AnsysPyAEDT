@@ -242,6 +242,7 @@ def test_main_without_installer_flag_never_looks_for_iscc(
     with only PyInstaller installed must still be able to freeze the
     bundle."""
     monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version: None)
 
     def _fail_if_called() -> Path:
         raise AssertionError("find_iscc must not be called without --installer")
@@ -284,11 +285,14 @@ def test_main_with_installer_flag_compiles_using_the_about_version(
         calls.append((iscc_path, version))
 
     monkeypatch.setattr(build_frozen, "compile_installer", _record)
+    checksum_calls: list[str] = []
+    monkeypatch.setattr(build_frozen, "emit_checksums", checksum_calls.append)
 
     from inductor_designer.__about__ import __version__
 
     assert build_frozen.main(["--installer"]) == 0
     assert calls == [(fake_iscc, __version__)]
+    assert checksum_calls == [__version__]
 
 
 def test_main_passes_the_generated_catalog_path_to_pyinstaller(
@@ -312,8 +316,137 @@ def test_main_passes_the_generated_catalog_path_to_pyinstaller(
         captured["core_count"] = core_count
 
     monkeypatch.setattr(build_frozen, "_pyinstaller_run", fake_pyinstaller_run)
+    monkeypatch.setattr(build_frozen, "emit_checksums", lambda version: None)
 
     build_frozen.main([])
 
     assert captured["args"] == [str(build_frozen.SPEC_PATH), "--noconfirm"]
     assert captured["core_count"] > 0
+
+
+# --- Checksums (M10 Task 5): SHA256SUMS.txt for the bundle archive and the
+# installer. Artifacts are named by hash and filename only, never a URL --
+# the plan's migration note requires the release notes and this file to
+# stay correct if the repository host ever moves off GitHub. ---
+
+
+def test_sha256_file_matches_a_known_test_vector(tmp_path: Path) -> None:
+    """Checked against a NIST-published SHA-256 test vector
+    (SHA256("abc") = ba7816bf...), not against `hashlib` called a second
+    time inside this test -- that would only prove the function agrees with
+    itself, not that it computes SHA-256 at all."""
+    sample = tmp_path / "sample.txt"
+    sample.write_bytes(b"abc")
+    assert (
+        build_frozen.sha256_file(sample)
+        == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    )
+
+
+def test_sha256_file_reads_large_files_in_chunks(tmp_path: Path) -> None:
+    """A 300 MB bundle archive must never be loaded into memory whole to be
+    hashed -- exercised here with a file larger than one read chunk."""
+    big = tmp_path / "big.bin"
+    payload = (b"x" * (1 << 20)) + b"y"  # bigger than a single 1 MiB chunk
+    big.write_bytes(payload)
+    import hashlib
+
+    assert build_frozen.sha256_file(big) == hashlib.sha256(payload).hexdigest()
+
+
+def test_write_checksums_uses_the_sha256sum_verifiable_format(tmp_path: Path) -> None:
+    """Each line is `<64 lowercase hex chars><two spaces><filename>` -- the
+    format `sha256sum -c` (and `Get-FileHash` by comparison) can verify
+    directly, and only the basename appears, never a full path or a URL."""
+    first = tmp_path / "artifacts" / "one.zip"
+    first.parent.mkdir()
+    first.write_bytes(b"hello")
+    second = tmp_path / "elsewhere" / "two.exe"
+    second.parent.mkdir()
+    second.write_bytes(b"world")
+
+    out_path = build_frozen.write_checksums([first, second], tmp_path / "SHA256SUMS.txt")
+
+    lines = out_path.read_text(encoding="utf-8").splitlines()
+    assert lines == [
+        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  one.zip",
+        "486ea46224d1bb4fb680f34f7c9ad96a8f24ec88be73ea8e5a6c65260e9cb8a7  two.exe",
+    ]
+    assert "http" not in out_path.read_text(encoding="utf-8")
+    assert str(tmp_path) not in out_path.read_text(encoding="utf-8")
+
+
+def test_archive_bundle_zips_the_bundle_with_its_folder_as_the_top_level_entry(
+    tmp_path: Path,
+) -> None:
+    """Unzipping must produce one `inductor-designer/` folder, not hundreds
+    of loose files dumped into whatever directory the user picked."""
+    import zipfile
+
+    dist_dir = tmp_path / "dist"
+    bundle_dir = dist_dir / "inductor-designer"
+    (bundle_dir / "_internal").mkdir(parents=True)
+    (bundle_dir / "inductor-designer.exe").write_bytes(b"stub-exe")
+    (bundle_dir / "_internal" / "data.bin").write_bytes(b"stub-data")
+
+    archive_path = build_frozen.archive_bundle(dist_dir, "0.1.0")
+
+    assert archive_path == dist_dir / "inductor-designer-0.1.0-win64.zip"
+    assert archive_path.is_file()
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+    assert "inductor-designer/inductor-designer.exe" in names
+    assert "inductor-designer/_internal/data.bin" in names
+
+
+def test_emit_checksums_covers_only_the_bundle_when_no_installer_was_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_frozen, "REPO_ROOT", tmp_path)
+    bundle_dir = tmp_path / "dist" / "inductor-designer"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "inductor-designer.exe").write_bytes(b"stub-exe")
+
+    out_path = build_frozen.emit_checksums("0.1.0")
+
+    assert out_path == tmp_path / "dist" / "SHA256SUMS.txt"
+    content = out_path.read_text(encoding="utf-8")
+    assert "inductor-designer-0.1.0-win64.zip" in content
+    assert "setup.exe" not in content
+    assert len(content.splitlines()) == 1
+
+
+def test_emit_checksums_covers_the_installer_too_when_it_was_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_frozen, "REPO_ROOT", tmp_path)
+    bundle_dir = tmp_path / "dist" / "inductor-designer"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "inductor-designer.exe").write_bytes(b"stub-exe")
+    installer_dir = tmp_path / "dist" / "installer"
+    installer_dir.mkdir(parents=True)
+    (installer_dir / "inductor-designer-0.1.0-setup.exe").write_bytes(b"stub-installer")
+
+    out_path = build_frozen.emit_checksums("0.1.0")
+
+    content = out_path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+    assert len(lines) == 2
+    assert any(line.endswith("inductor-designer-0.1.0-win64.zip") for line in lines)
+    assert any(line.endswith("inductor-designer-0.1.0-setup.exe") for line in lines)
+
+
+def test_main_calls_emit_checksums_with_the_apps_own_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wiring test: `main()` must pass its own package version, not a
+    hand-picked or hard-coded one, matching the installer and the About
+    box (same reasoning as `compile_installer`'s version argument)."""
+    monkeypatch.setattr(build_frozen, "_pyinstaller_run", lambda args: None)
+    calls: list[str] = []
+    monkeypatch.setattr(build_frozen, "emit_checksums", calls.append)
+
+    from inductor_designer.__about__ import __version__
+
+    assert build_frozen.main([]) == 0
+    assert calls == [__version__]

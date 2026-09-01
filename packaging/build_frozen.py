@@ -26,12 +26,21 @@ Setup's `ISCC.exe` once the bundle is built (M10 Task 4). It is optional and
 off by default: Inno Setup is a separate install this script never performs
 for you (see `find_iscc` below), so a machine without it can still produce
 the frozen bundle on its own.
+
+Every run, with or without `--installer`, ends by zipping the bundle
+(`dist/inductor-designer-<version>-win64.zip`) and writing
+`dist/SHA256SUMS.txt` over that archive plus the installer, if one was built
+(M10 Task 5; see `emit_checksums` below). Artifacts are named there by hash
+and filename only, never a download URL -- see `write_checksums`'s
+docstring for why.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -205,6 +214,72 @@ def compile_installer(
         )
 
 
+def sha256_file(path: Path) -> str:
+    """Hex SHA-256 digest of a file's bytes, read in 1 MiB chunks.
+
+    A bundle archive can be several hundred MB; loading it into memory
+    whole just to hash it would be wasteful for no reason.
+    """
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def archive_bundle(dist_dir: Path, version: str) -> Path:
+    """Zip the one-folder PyInstaller bundle into a single downloadable file.
+
+    A release attaches files, not directories -- `dist/inductor-designer/`
+    is nothing a browser (or `SHA256SUMS.txt`) can name as one artifact, so
+    this produces `dist/inductor-designer-<version>-win64.zip` from it.
+    `shutil.make_archive`'s `base_dir` keeps the bundle's own folder name as
+    the archive's single top-level entry, so unzipping never dumps
+    `_internal/`'s hundreds of files loose into whatever directory the user
+    picked.
+    """
+    base_name = str(dist_dir / f"inductor-designer-{version}-win64")
+    archive_path = shutil.make_archive(
+        base_name, "zip", root_dir=dist_dir, base_dir="inductor-designer"
+    )
+    return Path(archive_path)
+
+
+def write_checksums(artifacts: list[Path], out_path: Path) -> Path:
+    """Write a `sha256sum -c`-verifiable checksums file for `artifacts`.
+
+    Each line names an artifact by its hash and its filename only -- never a
+    full path, never a download URL. The plan's git-migration note requires
+    this: the repository may move off `smarley2/AnsysPyAEDT` to a
+    BRUSA-hosted remote later, and a checksums file (or release notes) that
+    identified an artifact by a baked-in GitHub URL would go stale the
+    moment that happens. A hash plus a filename stays correct wherever the
+    artifact is actually published.
+    """
+    lines = [f"{sha256_file(path)}  {path.name}\n" for path in artifacts]
+    out_path.write_text("".join(lines), encoding="utf-8")
+    return out_path
+
+
+def emit_checksums(version: str) -> Path:
+    """Zip the bundle and write `dist/SHA256SUMS.txt` over it and the
+    installer, if `--installer` built one in this run.
+
+    Always called at the end of `main()`, whether or not `--installer` was
+    passed -- the bundle archive is a release artifact on its own (an
+    unsigned installer is not the only way to get this application onto a
+    machine), so it is always checksummed.
+    """
+    dist_dir = REPO_ROOT / "dist"
+    artifacts = [archive_bundle(dist_dir, version)]
+
+    installer_path = dist_dir / "installer" / f"inductor-designer-{version}-setup.exe"
+    if installer_path.is_file():
+        artifacts.append(installer_path)
+
+    return write_checksums(artifacts, dist_dir / "SHA256SUMS.txt")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -225,14 +300,16 @@ def main(argv: list[str] | None = None) -> int:
         os.environ[CATALOG_ENV_VAR] = str(catalog_path)
         _pyinstaller_run([str(SPEC_PATH), "--noconfirm", *pyinstaller_args])
 
+    from inductor_designer.__about__ import __version__
+
     if args.installer:
         try:
             iscc_path = find_iscc()
         except InnoSetupNotFoundError as error:
             raise SystemExit(f"build_frozen: {error}") from error
-        from inductor_designer.__about__ import __version__
-
         compile_installer(iscc_path, __version__)
+
+    emit_checksums(__version__)
     return 0
 
 
