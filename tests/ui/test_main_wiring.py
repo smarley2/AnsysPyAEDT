@@ -139,6 +139,52 @@ def test_main_wires_all_five_controllers_and_shared_session(
         assert panel.property("controller") is not None, name
 
 
+def test_the_startup_log_tells_an_absent_aedt_from_an_unsupported_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two conditions, two remedies, so they must not read alike.
+
+    "No AEDT here" means install it; "AEDT 2024 R2 is here" means install the
+    supported release beside it. A log line carrying neither code sends the user
+    down the wrong path, which is what advice codes exist to prevent everywhere
+    else in this application. The log is also what the diagnostic bundle
+    carries, so it is the durable record for a machine support cannot reach.
+    """
+    import logging
+
+    from inductor_designer.adapters.system import app_logging, installations
+    from inductor_designer.application.services.redaction import RedactionContext
+    from inductor_designer.domain.aedt_target import AedtRelease
+    from inductor_designer.simulation.failure_advice import AdviceCode
+
+    log_path = app_logging.configure_application_logging(
+        tmp_path / "logs", RedactionContext()
+    )
+    logger = logging.getLogger(app_logging.LOGGER_NAME)
+
+    monkeypatch.setattr(installations, "detect_aedt", lambda: None)
+    monkeypatch.setattr(installations, "detect_femm", lambda: None)
+    monkeypatch.setattr(installations, "detect_unsupported_aedt", lambda: None)
+    assert main_module.log_detected_installations(logger) == (None, None)
+
+    unsupported = installations.UnsupportedAedtInstallation(
+        release=AedtRelease(2024, 2),
+        install_root=tmp_path / "v242" / "AnsysEM",
+        route=installations.DetectionRoute.REGISTRY,
+    )
+    monkeypatch.setattr(installations, "detect_unsupported_aedt", lambda: unsupported)
+    assert main_module.log_detected_installations(logger) == (None, unsupported)
+
+    for handler in logger.handlers:
+        handler.flush()
+    written = log_path.read_text(encoding="utf-8")
+
+    assert AdviceCode.INSTALLATION_AEDT_MISSING in written
+    assert AdviceCode.INSTALLATION_AEDT_UNSUPPORTED_RELEASE in written
+    # The install root is an absolute path, so it must not survive verbatim.
+    assert str(tmp_path) not in written
+
+
 def test_main_refuses_before_any_window_when_a_shipped_resource_is_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

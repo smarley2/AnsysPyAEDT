@@ -11,6 +11,10 @@ if TYPE_CHECKING:
     from PySide6.QtGui import QGuiApplication
     from PySide6.QtQml import QQmlApplicationEngine
 
+    from inductor_designer.adapters.system.installations import (
+        AedtInstallation,
+        UnsupportedAedtInstallation,
+    )
     from inductor_designer.adapters.system.project_lock import ProjectLock
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.ui.app_info_controller import AppInfoController
@@ -263,6 +267,71 @@ def _refuse_if_resources_are_missing(
     return 6
 
 
+def log_detected_installations(
+    logger: logging.Logger,
+) -> tuple[AedtInstallation | None, UnsupportedAedtInstallation | None]:
+    """Record what this machine has, and hand the findings back to the caller.
+
+    Module level rather than inline in `main()` on purpose: `main()`'s body is
+    executed by almost nothing, and this milestone has already shipped two
+    defects that lived in exactly that blind spot. Here a test can drive all
+    three states directly.
+
+    "Absent" and "present but the wrong release" carry different advice codes
+    because they need different remedies -- install AEDT, versus install the
+    supported release beside the one you have. Both go through the redacting
+    logger, since an install root is an absolute path.
+
+    Detection never imports PyAEDT and never starts a desktop; see
+    `adapters/system/installations.py`'s module docstring for why.
+    """
+    from inductor_designer.adapters.system.installations import (
+        detect_aedt,
+        detect_femm,
+        detect_unsupported_aedt,
+    )
+    from inductor_designer.application.services.aedt_support import (
+        SUPPORTED_AEDT_EDITION,
+        SUPPORTED_AEDT_RELEASE,
+    )
+    from inductor_designer.simulation.failure_advice import AdviceCode
+
+    aedt_installation = detect_aedt()
+    unsupported_aedt_installation = detect_unsupported_aedt()
+    if aedt_installation is not None:
+        logger.info(
+            "Detected AEDT %s at %s (via %s).",
+            aedt_installation.release,
+            aedt_installation.install_root,
+            aedt_installation.route.value,
+        )
+    elif unsupported_aedt_installation is not None:
+        logger.warning(
+            "%s: detected AEDT %s at %s (via %s); this application supports "
+            "AEDT %s %s only.",
+            AdviceCode.INSTALLATION_AEDT_UNSUPPORTED_RELEASE,
+            unsupported_aedt_installation.release,
+            unsupported_aedt_installation.install_root,
+            unsupported_aedt_installation.route.value,
+            SUPPORTED_AEDT_RELEASE,
+            SUPPORTED_AEDT_EDITION.value,
+        )
+    else:
+        logger.warning(
+            "%s: AEDT was not detected on this machine.",
+            AdviceCode.INSTALLATION_AEDT_MISSING,
+        )
+    femm_installation = detect_femm()
+    if femm_installation is not None:
+        logger.info(
+            "Detected FEMM at %s (via %s).",
+            femm_installation.install_root,
+            femm_installation.route.value,
+        )
+    # FEMM absent is normal and is not logged -- see detect_femm()'s docstring.
+    return aedt_installation, unsupported_aedt_installation
+
+
 def main() -> int:
     from PySide6.QtGui import QGuiApplication
 
@@ -286,45 +355,7 @@ def main() -> int:
     # absolute path -- exactly the text `RedactingFormatter` exists for).
     # Detection never imports PyAEDT or starts a desktop; see
     # `adapters/system/installations.py`'s module docstring for why.
-    from inductor_designer.adapters.system.installations import (
-        detect_aedt,
-        detect_femm,
-        detect_unsupported_aedt,
-    )
-    from inductor_designer.application.services.aedt_support import (
-        SUPPORTED_AEDT_EDITION,
-        SUPPORTED_AEDT_RELEASE,
-    )
-
-    aedt_installation = detect_aedt()
-    unsupported_aedt_installation = detect_unsupported_aedt()
-    if aedt_installation is not None:
-        logger.info(
-            "Detected AEDT %s at %s (via %s).",
-            aedt_installation.release,
-            aedt_installation.install_root,
-            aedt_installation.route.value,
-        )
-    elif unsupported_aedt_installation is not None:
-        logger.info(
-            "Detected AEDT %s at %s (via %s); this application supports "
-            "AEDT %s %s only.",
-            unsupported_aedt_installation.release,
-            unsupported_aedt_installation.install_root,
-            unsupported_aedt_installation.route.value,
-            SUPPORTED_AEDT_RELEASE,
-            SUPPORTED_AEDT_EDITION.value,
-        )
-    else:
-        logger.info("AEDT was not detected on this machine.")
-    femm_installation = detect_femm()
-    if femm_installation is not None:
-        logger.info(
-            "Detected FEMM at %s (via %s).",
-            femm_installation.install_root,
-            femm_installation.route.value,
-        )
-    # FEMM absent is normal and is not logged -- see detect_femm()'s docstring.
+    aedt_installation, unsupported_aedt_installation = log_detected_installations(logger)
 
     args = _parse_args(sys.argv[1:])
     _install_qml_logging()
