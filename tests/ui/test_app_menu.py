@@ -26,6 +26,7 @@ pytest.importorskip("PySide6")
 
 import PySide6.QtGui as QtGui  # noqa: E402
 from PySide6.QtCore import (  # noqa: E402
+    QMessageLogContext,
     QMetaObject,
     QObject,
     QtMsgType,
@@ -77,15 +78,27 @@ def _trigger(item: QObject) -> None:
 
 
 def _capture_qml_messages() -> list[str]:
-    """Record every `qWarning`/`qCritical` message, which is how a QML
-    runtime error (e.g. an uncaught `ReferenceError`) surfaces -- this is the
-    exact mechanism `main.py`'s `_install_qml_logging()` prints to stderr.
+    """Record every `qWarning`/`qCritical` message the QML engine itself
+    reports, which is how a QML runtime error (e.g. an uncaught
+    `ReferenceError`) surfaces -- the exact mechanism `main.py`'s
+    `_install_qml_logging()` prints to stderr.
     Caller must restore the previous handler with `qInstallMessageHandler(None)`.
+
+    Only messages carrying a QML source location are kept. `qInstallMessageHandler`
+    is process global and catches the platform's own chatter too: Qt's Windows
+    style opens native theme data per styled control, and when that fails it
+    logs `OpenThemeData() failed for theme 2 (EDIT). (The handle is invalid.)`
+    -- once per control, from whichever window happens to be building itself,
+    at a moment nothing in this test controls. That made `assert not messages`
+    fail at random under `pytest -n 8` and pass on every rerun. A QML
+    diagnostic always names the file and line of the offending QML; the
+    platform warnings name nothing, which is the difference filtered on here.
     """
     messages: list[str] = []
 
-    def handler(_mode: QtMsgType, _context: object, message: str) -> None:
-        messages.append(message)
+    def handler(_mode: QtMsgType, context: QMessageLogContext, message: str) -> None:
+        if context.line > 0 or context.file:
+            messages.append(message)
 
     qInstallMessageHandler(handler)
     return messages
@@ -265,6 +278,49 @@ def test_ctrl_z_does_nothing_when_undo_is_disabled() -> None:
         assert not messages, messages
     finally:
         qInstallMessageHandler(None)
+
+
+def test_the_qml_message_capture_keeps_qml_errors_and_drops_platform_chatter() -> None:
+    """Pins the filter the two shortcut tests above depend on.
+
+    Without it, `assert not messages` gated on every warning in the process,
+    so Qt's Windows style logging `OpenThemeData() failed ...` while some
+    other window built itself failed the shortcut tests at random under
+    `pytest -n 8`. Deleting the filter must not be the fix either: a capture
+    that drops everything would make those tests green with the QML wiring
+    ripped out, which is the regression they exist to catch. So both halves
+    are asserted here -- the real `ReferenceError` a broken
+    `Shortcut { onActivated: parent.triggered() }` produces is kept, the
+    location-less platform warning is not.
+    """
+    from PySide6.QtCore import qWarning
+    from PySide6.QtQml import QQmlApplicationEngine
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    engine = QQmlApplicationEngine()
+    messages = _capture_qml_messages()
+    try:
+        qWarning("OpenThemeData() failed for theme 2 (EDIT). (The handle is invalid.)")
+        assert messages == []
+
+        # The exact shape of the wiring bug: `QtObject`, like `Shortcut`, is
+        # not an `Item`, so `parent` does not resolve at all there -- it is
+        # not merely null -- and the handler throws when it runs.
+        engine.loadData(
+            b"""
+            import QtQml
+            QtObject {
+                objectName: "referenceErrorProbe"
+                Component.onCompleted: parent.triggered()
+            }
+            """
+        )
+        app.processEvents()
+    finally:
+        qInstallMessageHandler(None)
+        _KEEPALIVE.append((app, engine, *engine.rootObjects()))
+
+    assert any("ReferenceError" in message for message in messages), messages
 
 
 def test_exit_routes_through_the_same_unsaved_changes_guard_as_window_close() -> None:
