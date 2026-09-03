@@ -688,3 +688,30 @@ def test_save_on_a_project_with_no_document_path_offers_save_as_instead() -> Non
     assert root.findChild(QObject, "saveProjectAsDialog").property("visible") is True
     # Still unsaved: the dialog is open, nothing has been written.
     assert session.dirty is True
+
+
+def test_redo_also_answers_the_second_binding_windows_gives_it() -> None:
+    """`StandardKey.Redo` is two bindings on Windows -- Ctrl+Y and
+    Ctrl+Shift+Z -- and `sequence:` wires up only one of them, which is what
+    Qt's "Only binding to one of multiple key bindings" warning at load was
+    saying. `sequences:` binds both, so this is the half that used to be dead.
+    """
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    root.requestActivate()
+    app.processEvents()
+
+    QTest.keySequence(root, QKeySequence.Undo)
+    app.processEvents()
+    assert session.project.description == ""
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence("Ctrl+Shift+Z"))
+        app.processEvents()
+
+        assert session.project.description == "edited"
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)

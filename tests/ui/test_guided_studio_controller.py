@@ -12,6 +12,8 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
+from inductor_designer.domain.catalog_records import Dimension  # noqa: E402
+from inductor_designer.domain.project import CatalogCoreSelection  # noqa: E402
 from inductor_designer.domain.winding import (  # noqa: E402
     ConductorMode,
     CurrentDirection,
@@ -393,3 +395,44 @@ def test_a_project_with_no_core_yet_does_not_break_the_controller() -> None:
     # The reason is on the cut plane itself, not left as a blank rectangle.
     assert controller.cutPlaneDrawing["note"] != ""
     assert controller.windings[0]["turns"] == 1
+
+
+def test_a_core_that_cannot_hold_the_wire_says_so_on_the_empty_cut_plane() -> None:
+    """A new project starts with no geometry, so there is no "last valid
+    preview" to keep when the first core selection does not fit -- and the
+    placeholder note ("Select a core...") is then a lie: a core WAS selected.
+    The real refusal from the geometry model goes on the cut plane instead,
+    which is the only place the user is looking after picking a core.
+
+    `AWG 18` genuinely does not fit the smallest powder toroid's bore. That
+    refusal is correct; being told nothing about it is not.
+    """
+    from inductor_designer.application.services.new_project import new_project
+
+    session = ProjectSession(new_project())
+    controller = GuidedStudioController(session, CATALOG)
+    # The wiring `main.py` makes: the Core & Material screen applies to the
+    # session, and this controller recomputes from `projectChanged`.
+    session.projectChanged.connect(controller.refresh)
+    # A 1 mm bore cannot hold a ~1 mm conductor. The shipped catalog's
+    # smallest powder toroid refuses `AWG 18` for this exact reason; this
+    # test does not depend on which core in the index happens to be smallest.
+    catalog_core = CATALOG.list_cores()[0]
+    too_small = replace(
+        catalog_core,
+        inner_diameter=Dimension(nominal_m=0.001, min_m=None, max_m=None),
+    )
+    session.apply(
+        replace(
+            session.project,
+            design=replace(
+                session.project.design,
+                core=CatalogCoreSelection(too_small.part_number, too_small, ()),
+            ),
+        )
+    )
+
+    assert controller.previewEntries == []
+    note = controller.cutPlaneDrawing["note"]
+    assert "Select a core" not in note
+    assert "fit" in note

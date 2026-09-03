@@ -95,12 +95,16 @@ class GuidedStudioController(QObject):
         # already applied the very state `refresh()` would recompute.
         self._applying = False
 
-    def _empty_preview(self) -> _PreviewState:
-        """No geometry to show, and the reason, on the cut plane itself.
+    def _empty_preview(
+        self, note: str = "Select a core to see the winding cross-section."
+    ) -> _PreviewState:
+        """No geometry to show, and the reason for it, on the cut plane.
 
         The numbers match the defaults `CutPlaneView.qml` already carries for
         its own unset state (including `extent_mm` 1.0, which its scaling
         divides by), so an empty drawing renders exactly as no drawing does.
+        The default note is the no-core-yet case; `refresh` passes the
+        geometry model's own refusal when a selected core is the problem.
         """
         return _PreviewState(
             entries=[],
@@ -111,7 +115,7 @@ class GuidedStudioController(QObject):
                 extent_mm=1.0,
                 circles=(),
                 starts=(),
-                note="Select a core to see the winding cross-section.",
+                note=note,
             ),
         )
 
@@ -585,8 +589,20 @@ class GuidedStudioController(QObject):
         # Keep the last valid preview: a core edit that breaks geometry is
         # reported by its own controller, and a blank canvas would hide the
         # windings the user is about to fix.
-        with contextlib.suppress(GeometryModelError):
+        try:
             self._preview = self._build_preview(project)
+        except GeometryModelError as error:
+            # Unless there is no last valid preview to keep -- a new project
+            # whose first core selection does not fit. Keeping the empty one
+            # leaves "Select a core to see the winding cross-section." on
+            # screen after a core WAS selected, which sends the user looking
+            # for a control they already used. The model's own refusal (e.g.
+            # "Wire does not fit the core bore at layer 1") names what to
+            # change instead.
+            if not self._preview.entries:
+                self._preview = self._empty_preview(
+                    note="; ".join(str(issue) for issue in error.issues)
+                )
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )

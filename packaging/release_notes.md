@@ -77,11 +77,14 @@ desktop shortcut cannot suppress it in this release.
 ## No sample project is shipped
 
 Nothing this installer places on your machine carries a design. The first
-launch opens with nothing loaded; use **File > Open** with your own project.
-To get a project onto a machine that has never had this repository on it,
-either save one from a source checkout (`File > Save` produces a
-`.inductor.json` file you can copy) or copy an existing `.inductor.json`
-file from anywhere it already exists.
+launch opens a blank, unsaved project: no core selected, one winding, and a
+neutral operating point (100 kHz, no current). Pick a core on **Core &
+Material**, edit the winding, then use **File > Save As** to name the file.
+A run cannot start until the project has been saved, because every run
+writes its directory beside the project document.
+
+**File > New** starts another blank project at any time, and **File > Open**
+loads an existing `.inductor.json` from anywhere it already exists.
 
 ## `INDUCTOR_DESIGNER_RESOURCES`
 

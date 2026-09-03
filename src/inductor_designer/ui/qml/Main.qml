@@ -121,7 +121,15 @@ ApplicationWindow {
 
                 Shortcut {
                     objectName: "undoShortcut"
-                    sequence: StandardKey.Undo
+                    // `sequences`, not `sequence`: a StandardKey maps to
+                    // several bindings on some platforms, and binding one of
+                    // them leaves the others dead -- Qt says so at load
+                    // ("Only binding to one of multiple key bindings
+                    // associated with 11"), and that warning is a located QML
+                    // message, so it also leaked into the shortcut tests'
+                    // no-QML-errors assertion when the menu instantiated
+                    // inside their capture window.
+                    sequences: [StandardKey.Undo]
                     enabled: undoMenuItem.enabled
                     onActivated: undoMenuItem.triggered()
                 }
@@ -139,7 +147,9 @@ ApplicationWindow {
 
                 Shortcut {
                     objectName: "redoShortcut"
-                    sequence: StandardKey.Redo
+                    // Redo carries two bindings on Windows -- Ctrl+Y and
+                    // Ctrl+Shift+Z -- and `sequence` wired up only one.
+                    sequences: [StandardKey.Redo]
                     enabled: redoMenuItem.enabled
                     onActivated: redoMenuItem.triggered()
                 }
