@@ -640,3 +640,51 @@ def test_the_diagnostic_bundle_item_offers_a_name_carrying_no_project_identity()
     assert "diagnostics-" in offered
     assert "CustomerACME" not in offered
     assert "boost" not in offered
+
+
+def test_new_from_a_dirty_project_warns_first_and_then_blanks_the_session() -> None:
+    """File > New must not silently discard unsaved work: it routes through
+    the same single guard as File > Open and the window's close button."""
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+
+    new_item = root.findChild(QObject, "newProjectMenuItem")
+    assert new_item.property("enabled") is True
+    _trigger(new_item)
+    app.processEvents()
+
+    unsaved_dialog = root.findChild(QObject, "unsavedProjectDialog")
+    assert unsaved_dialog.property("visible") is True
+    # Nothing replaced yet: the choice has not been made.
+    assert session.project.description == "edited"
+
+    assert (
+        QMetaObject.invokeMethod(
+            root.findChild(QObject, "unsavedProjectDiscardButton"), "clicked"
+        )
+        is True
+    )
+    app.processEvents()
+
+    assert session.document_path is None
+    assert session.project.design.core is None
+    assert session.dirty is False
+
+
+def test_save_on_a_project_with_no_document_path_offers_save_as_instead() -> None:
+    """`Save` writes to the session's document path, and a project started
+    from New has none -- the persister raises `RuntimeError` there. The menu
+    item has to ask for a name rather than fail."""
+    app, root, session = _loaded_root(None)
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+
+    save_item = root.findChild(QObject, "saveProjectMenuItem")
+    assert save_item.property("enabled") is True
+    _trigger(save_item)
+    app.processEvents()
+
+    assert root.findChild(QObject, "saveProjectAsDialog").property("visible") is True
+    # Still unsaved: the dialog is open, nothing has been written.
+    assert session.dirty is True

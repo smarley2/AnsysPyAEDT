@@ -39,6 +39,20 @@ ApplicationWindow {
             title: qsTr("File")
 
             MenuItem {
+                objectName: "newProjectMenuItem"
+                text: qsTr("New")
+                enabled: projectSession !== null
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "New is unavailable: no project session is loaded."
+                )
+                // Same guard as Open and the window's close button: unsaved
+                // work is resolved before the project is replaced.
+                onTriggered: window.requestGuardedProjectAction(function() {
+                    projectSession.newProject()
+                })
+            }
+            MenuItem {
                 objectName: "openProjectMenuItem"
                 text: qsTr("Open…")
                 enabled: projectSession !== null
@@ -58,7 +72,16 @@ ApplicationWindow {
                 Accessible.description: enabled ? "" : qsTr(
                     "Save is unavailable: no project is loaded, or there are no unsaved changes."
                 )
-                onTriggered: guidedStudioController.saveDraft()
+                // A project started from New has no document path, and the
+                // persister raises there rather than inventing a filename.
+                // Asking for the name is what Save means in that state.
+                onTriggered: {
+                    if (projectSession.documentPath === "") {
+                        saveProjectAsDialog.open()
+                    } else {
+                        guidedStudioController.saveDraft()
+                    }
+                }
             }
             MenuItem {
                 objectName: "saveProjectAsMenuItem"
