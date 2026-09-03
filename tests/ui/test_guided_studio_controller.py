@@ -374,3 +374,22 @@ def test_the_drawing_and_the_three_d_entries_describe_the_same_windings() -> Non
     entry_colors = {entry.color for entry in controller.previewEntries[1:]}
 
     assert colors == entry_colors
+
+
+def test_a_project_with_no_core_yet_does_not_break_the_controller() -> None:
+    """`__init__` called `_build_preview` unguarded, and `build_geometry_model`
+    refuses a coreless project ("Project has no core selection; geometry needs
+    one."). The blank project a launch with no `--project` opens therefore
+    raised `GeometryModelError` out of this constructor and took the whole
+    launch with it. `refresh()` already suppressed exactly that error, for
+    exactly this reason; the constructor did not.
+    """
+    from inductor_designer.application.services.new_project import new_project
+
+    session = ProjectSession(new_project())
+    controller = GuidedStudioController(session, CATALOG)
+
+    assert controller.previewEntries == []
+    # The reason is on the cut plane itself, not left as a blank rectangle.
+    assert controller.cutPlaneDrawing["note"] != ""
+    assert controller.windings[0]["turns"] == 1

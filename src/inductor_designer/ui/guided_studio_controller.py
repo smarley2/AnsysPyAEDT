@@ -77,7 +77,16 @@ class GuidedStudioController(QObject):
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )
-        self._preview = self._build_preview(project)
+        # A project with no core yet -- the blank project a launch with no
+        # `--project` opens -- has no geometry to draw, and
+        # `build_geometry_model` refuses it rather than inventing one. That is
+        # not a startup failure: it is the state the user is about to fix on
+        # the Core & Material screen. `refresh()` already suppresses exactly
+        # this error for the same reason; without the same tolerance here the
+        # constructor raised and took the whole launch down with it.
+        self._preview = self._empty_preview()
+        with contextlib.suppress(GeometryModelError):
+            self._preview = self._build_preview(project)
         # Set around every `self._session.apply(...)` call below: `apply`
         # emits `projectChanged` synchronously, which `main.py` wires back to
         # `refresh()` on this same controller. Without the guard, one accepted
@@ -85,6 +94,26 @@ class GuidedStudioController(QObject):
         # `previewEntriesChanged` a second time for no reason -- the slot
         # already applied the very state `refresh()` would recompute.
         self._applying = False
+
+    def _empty_preview(self) -> _PreviewState:
+        """No geometry to show, and the reason, on the cut plane itself.
+
+        The numbers match the defaults `CutPlaneView.qml` already carries for
+        its own unset state (including `extent_mm` 1.0, which its scaling
+        divides by), so an empty drawing renders exactly as no drawing does.
+        """
+        return _PreviewState(
+            entries=[],
+            drawing=CutPlaneDrawing(
+                r_inner_mm=0.0,
+                r_outer_mm=0.0,
+                depth_mm=0.0,
+                extent_mm=1.0,
+                circles=(),
+                starts=(),
+                note="Select a core to see the winding cross-section.",
+            ),
+        )
 
     def _build_preview(self, project: InductorProject) -> _PreviewState:
         model = build_geometry_model(project, self._catalog)
