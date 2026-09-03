@@ -370,26 +370,32 @@ def main() -> int:
     generation_controller: GenerationController | None = None
     recovery_controller: RecoveryController | None = None
     diagnostics_controller: DiagnosticsController | None = None
-    backend_choices: list[str] = []
     project: InductorProject | None = None
     project_lock: ProjectLock | None = None
+    from inductor_designer.ui.generation_lines import GenerationBackend
+
+    # Checked on every launch, not just a launch with a document: a blank
+    # project still needs the catalog for the core list and the matrix for the
+    # backend gates. `_refuse_if_resources_are_missing` above covers the
+    # shipped defaults; these two catch an explicit flag pointing nowhere.
+    if not args.catalog.is_file():
+        print("Catalog index not found; run: python -m tools.build_catalog", file=sys.stderr)
+        return 2
+    if not args.matrix.is_file():
+        print(f"Compatibility matrix not found: {args.matrix}", file=sys.stderr)
+        return 2
+    backend_choices = [backend.value for backend in GenerationBackend]
+
     if args.project is not None:
         from inductor_designer.adapters.system.project_lock import (
             LockOutcome,
             ProjectLock,
         )
         from inductor_designer.application.services.geometry_model import GeometryModelError
-        from inductor_designer.ui.generation_lines import GenerationBackend
 
         if not args.project.is_file():
             print(f"Project file not found: {args.project}", file=sys.stderr)
             return 4
-        if not args.catalog.is_file():
-            print("Catalog index not found; run: python -m tools.build_catalog", file=sys.stderr)
-            return 2
-        if not args.matrix.is_file():
-            print(f"Compatibility matrix not found: {args.matrix}", file=sys.stderr)
-            return 2
 
         project_lock = ProjectLock(args.project)
         lock_outcome = project_lock.acquire()
@@ -440,104 +446,114 @@ def main() -> int:
                 print(issue, file=sys.stderr)
             project_lock.release()
             return 3
-        backend_choices = [backend.value for backend in GenerationBackend]
         print(
             f"Loaded {args.project.name}: {len(preview_entries) - 1} winding(s); opening viewer.",
             file=sys.stderr,
             flush=True,
         )
 
+    if project is None:
+        # No `--project`: a blank unsaved project, not a dead shell. The
+        # installer's shortcuts pass no arguments at all, and every screen
+        # controller below is built from the session -- so without this the
+        # core list, the windings, Preliminary, Simulation and Review are all
+        # empty, and `File > Open`, gated on the session existing, cannot fix
+        # it. `document_path` stays None until the first Save As, which is
+        # also what keeps a run refused until the project is on disk.
+        from inductor_designer.application.services.new_project import new_project
+
+        project = new_project()
+
     from inductor_designer.adapters.materials import FileOverlayMaterialRepository
+    from inductor_designer.adapters.persistence.project_repository import (
+        ProjectRepository,
+    )
+    from inductor_designer.adapters.persistence.recovery_store import RecoveryStore
+    from inductor_designer.adapters.persistence.schema_repository import (
+        SchemaRepository,
+    )
     from inductor_designer.adapters.system import resources
+    from inductor_designer.adapters.system.environment import recovery_directory
+    from inductor_designer.ui.diagnostics_controller import DiagnosticsController
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
+    from inductor_designer.ui.project_session import ProjectSession
+    from inductor_designer.ui.recovery_controller import RecoveryController
 
-    session: ProjectSession | None = None
-    if project is not None:
-        from inductor_designer.adapters.persistence.project_repository import (
-            ProjectRepository,
-        )
-        from inductor_designer.adapters.persistence.recovery_store import RecoveryStore
-        from inductor_designer.adapters.persistence.schema_repository import (
-            SchemaRepository,
-        )
-        from inductor_designer.adapters.system.environment import recovery_directory
-        from inductor_designer.ui.diagnostics_controller import DiagnosticsController
-        from inductor_designer.ui.project_session import ProjectSession
-        from inductor_designer.ui.recovery_controller import RecoveryController
+    project_repository = ProjectRepository(SchemaRepository(resources.schemas_directory()))
+    recovery_store = RecoveryStore(recovery_directory(), project_repository)
 
-        project_repository = ProjectRepository(SchemaRepository(resources.schemas_directory()))
-        recovery_store = RecoveryStore(recovery_directory(), project_repository)
+    def autosave_project(
+        updated_project: InductorProject, document_path: Path | None
+    ) -> None:
+        recovery_store.write(updated_project, document_path)
 
-        def autosave_project(
-            updated_project: InductorProject, document_path: Path | None
-        ) -> None:
-            recovery_store.write(updated_project, document_path)
+    session = ProjectSession(
+        project,
+        args.project,
+        open_callback=_load_project,
+        autosave_callback=autosave_project,
+        # The session tracks which slot its snapshot is in and passes it;
+        # this used to be a variable here, and shipped two defects.
+        recovery_cleanup=recovery_store.clear,
+        lock=project_lock,
+    )
 
-        session = ProjectSession(
-            project,
-            args.project,
-            open_callback=_load_project,
-            autosave_callback=autosave_project,
-            # The session tracks which slot its snapshot is in and passes it;
-            # this used to be a variable here, and shipped two defects.
-            recovery_cleanup=recovery_store.clear,
-            lock=project_lock,
-        )
+    def save_project(updated_project: InductorProject) -> None:
+        # Reads the session's *current* document path, not `args.project`:
+        # Open and Save As can move it after startup, and Save must always
+        # follow, never keep writing to where the app happened to start.
+        document_path = session.document_path
+        if document_path is None:
+            raise RuntimeError("The project has no document path to save into.")
+        project_repository.save(updated_project, document_path)
 
-        def save_project(updated_project: InductorProject) -> None:
-            # Reads the session's *current* document path, not `args.project`:
-            # Open and Save As can move it after startup, and Save must always
-            # follow, never keep writing to where the app happened to start.
-            document_path = session.document_path
-            if document_path is None:
-                raise RuntimeError("The project has no document path to save into.")
-            project_repository.save(updated_project, document_path)
+    session.set_save_callback(save_project)
+    generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
+    # Open (menu item or File > Open) can run while this controller's own
+    # run is in flight -- it is a daemon thread, not something Open is
+    # gated on. `openProject`'s reconcile-on-open needs this to tell a
+    # live run's "running" marker apart from an abandoned one.
+    session.set_busy_check(lambda: bool(generation_controller.busy))
 
-        session.set_save_callback(save_project)
-        generation_controller = _build_generation_controller(session, args.catalog, args.matrix)
-        # Open (menu item or File > Open) can run while this controller's own
-        # run is in flight -- it is a daemon thread, not something Open is
-        # gated on. `openProject`'s reconcile-on-open needs this to tell a
-        # live run's "running" marker apart from an abandoned one.
-        session.set_busy_check(lambda: bool(generation_controller.busy))
+    # A run directory still reading "running" at startup means its process
+    # died mid-run. Reconcile it to "interrupted" so Review never reads it
+    # as a result; a failure here must never block opening the app, since
+    # the project itself is unaffected. Safe for THIS document now that
+    # the project lock above already refused a second window before
+    # reaching this line -- no other process can be mid-run against
+    # `args.project` when we get here. Residual, deliberately not closed
+    # by this lock: `reconcile_unfinished_runs` scans the whole `runs/`
+    # directory beside the document, and two different, unlocked
+    # projects that happen to sit in the same folder still share that
+    # one root -- a live run belonging to a NEIGHBOURING document could
+    # still be reconciled away by this call. Closing that would mean
+    # plumbing document identity into `run_recovery.py`, which this lock
+    # does not touch.
+    from inductor_designer.application.services.run_recovery import (
+        reconcile_unfinished_runs,
+    )
 
-        # A run directory still reading "running" at startup means its process
-        # died mid-run. Reconcile it to "interrupted" so Review never reads it
-        # as a result; a failure here must never block opening the app, since
-        # the project itself is unaffected. Safe for THIS document now that
-        # the project lock above already refused a second window before
-        # reaching this line -- no other process can be mid-run against
-        # `args.project` when we get here. Residual, deliberately not closed
-        # by this lock: `reconcile_unfinished_runs` scans the whole `runs/`
-        # directory beside the document, and two different, unlocked
-        # projects that happen to sit in the same folder still share that
-        # one root -- a live run belonging to a NEIGHBOURING document could
-        # still be reconciled away by this call. Closing that would mean
-        # plumbing document identity into `run_recovery.py`, which this lock
-        # does not touch.
-        from inductor_designer.application.services.run_recovery import (
-            reconcile_unfinished_runs,
-        )
-
+    # A project that has never been saved has no document, so there is no
+    # `runs/` directory beside one to scan -- the blank project a launch with
+    # no `--project` opens reaches here with `args.project` None.
+    if args.project is not None:
         with contextlib.suppress(OSError):
             reconcile_unfinished_runs(args.project)
 
-        # Assigned to a name, not passed inline, for the same reason as
-        # `app_info_controller` below: a parent-less QObject with no
-        # surviving Python reference is garbage collected out from under
-        # `setContextProperty`, and this function's own stack frame is what
-        # keeps it alive for the life of the app.
-        recovery_controller = RecoveryController(recovery_store, session)
-        diagnostics_controller = DiagnosticsController(
-            session, app_log_path, redaction_context
-        )
+    # Assigned to a name, not passed inline, for the same reason as
+    # `app_info_controller` below: a parent-less QObject with no
+    # surviving Python reference is garbage collected out from under
+    # `setContextProperty`, and this function's own stack frame is what
+    # keeps it alive for the life of the app.
+    recovery_controller = RecoveryController(recovery_store, session)
+    diagnostics_controller = DiagnosticsController(
+        session, app_log_path, redaction_context
+    )
 
     material_repository = FileOverlayMaterialRepository(resources.material_overlay_directory())
     material_studio_controller = MaterialStudioController(
         material_repository,
-        pinned_revision=(
-            lambda: session.project.design.core_material if session is not None else None
-        ),
+        pinned_revision=lambda: session.project.design.core_material,
     )
 
     from inductor_designer.adapters.system.path_opener import DesktopPathOpener
@@ -555,7 +571,7 @@ def main() -> int:
     preliminary_controller: PreliminaryController | None = None
     simulation_controller: SimulationController | None = None
     review_controller: ReviewController | None = None
-    if session is not None and generation_controller is not None:
+    if generation_controller is not None:
         from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
         from inductor_designer.adapters.compatibility.matrix_repository import (
             MatrixCapabilityRepository,
@@ -623,8 +639,7 @@ def main() -> int:
     roots = engine.rootObjects()
     if not roots:
         print("QML failed to load; no window created.", file=sys.stderr, flush=True)
-        if session is not None:
-            session.release_lock()
+        session.release_lock()
         return 1
     # Raise the window to the front so it is not lost behind the terminal.
     window = roots[0]
@@ -638,8 +653,7 @@ def main() -> int:
     # through `window.close()`, which ends the last window and triggers this
     # same signal. A lock left behind by a crash instead is handled by the
     # stale-lock path on the next launch, not by anything here.
-    if session is not None:
-        app.aboutToQuit.connect(session.release_lock)
+    app.aboutToQuit.connect(session.release_lock)
     return int(app.exec())
 
 

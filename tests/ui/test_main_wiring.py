@@ -293,3 +293,97 @@ def test_main_launches_when_a_valid_catalog_flag_supersedes_a_resource_root_lack
 
     assert result == 0
     assert _ENGINES, "create_engine must have run: the launch must not be refused"
+
+
+def _run_main_without_a_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[object, object]:
+    """Run `main()` the way the installer's shortcuts do: no arguments beyond
+    the two resource paths a test has to point at its own copies."""
+    index = tmp_path / "catalog.sqlite"
+    build(ROOT / "catalog", ROOT / "schemas" / "catalog", index)
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    real_create_engine = main_module.create_engine
+
+    def capturing_create_engine(*args: object, **kwargs: object) -> object:
+        engine = real_create_engine(*args, **kwargs)
+        _ENGINES.append((engine, *engine.rootObjects(), *args, *kwargs.values()))
+        return engine
+
+    monkeypatch.setattr(main_module, "create_engine", capturing_create_engine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "inductor-designer",
+            "--catalog",
+            str(index),
+            "--matrix",
+            str(ROOT / "compatibility" / "aedt-matrix.yml"),
+        ],
+    )
+
+    assert main_module.main() == 0
+    engine, root, *_kept = _ENGINES[-1]
+    # `QtGui.QGuiApplication` is the monkeypatched lambda by now; the real
+    # class is the one captured above.
+    real_app_cls.instance().processEvents()
+    return engine, root
+
+
+def test_a_launch_with_no_project_still_offers_every_screen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 0.1.0 defect this closes: the installer's shortcuts pass no
+    arguments, `session` was built only for a `--project` launch, and every
+    screen controller hung off that session -- so the Core & Material core
+    list was literally `[]`, and `File > Open`, the one thing that could have
+    fixed it, was disabled because it is gated on the session existing. The
+    catalog was never the problem.
+    """
+    engine, root = _run_main_without_a_project(tmp_path, monkeypatch)
+    context = engine.rootContext()
+
+    session = context.contextProperty("projectSession")
+    assert session is not None
+    assert session.documentPath == ""
+    # Nothing has been edited, so there is nothing to warn about on Exit.
+    assert session.dirty is False
+
+    for name in CONTROLLER_CONTEXT_PROPERTIES:
+        assert context.contextProperty(name) is not None, name
+    core_material = context.contextProperty("coreMaterialController")
+    assert len(core_material.coreOptions) > 0
+    assert len(context.contextProperty("backendChoices")) > 0
+
+    for name in PANEL_OBJECT_NAMES:
+        panel = root.findChild(QObject, name)
+        assert panel is not None, name
+        assert panel.property("controller") is not None, name
+
+    assert root.findChild(QObject, "newProjectMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "openProjectMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "saveProjectAsMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "saveProjectMenuItem").property("enabled") is False
+
+
+def test_a_launch_with_no_project_refuses_to_generate_until_it_is_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run writes its directory beside the project document, and a project
+    that has never been saved has none. The refusal already existed; this
+    pins that a blank launch reaches it instead of crashing on the way, and
+    that Generate is not quietly enabled against a document-less project."""
+    engine, _root = _run_main_without_a_project(tmp_path, monkeypatch)
+    simulation = engine.rootContext().contextProperty("simulationController")
+
+    assert simulation.canGenerate is False
+    assert "no document path" in simulation.blockedReason
