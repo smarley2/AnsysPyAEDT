@@ -584,3 +584,59 @@ task and Fabio Posser's walk is what tests most of them directly:
    Documented in the release notes per Task 1's docstring promise; a
    mis-set value now produces a refusal naming the override as the cause
    rather than a silent wrong-data launch (Task 1's Minor 4 fix, above).
+
+## The defect 0.1.0 actually shipped, found by installing it (2026-09-03)
+
+Fabio Posser installed 0.1.0, launched it from the shortcut, and reported
+that there was no core to select. Every core-selection screen was empty, on
+every step, and there was no way in the application to open or create a
+project.
+
+The walk above never caught it because every step of it, and every test,
+launches with `--project`. Nothing exercised the launch the installer's own
+shortcuts perform.
+
+**What was wrong.** `main()` built the `ProjectSession` only inside `if
+project is not None`, and `project` came only from `--project`. The
+installer's `[Icons]` entries pass no arguments at all, so a shortcut launch
+reached QML with `projectSession` null, and every screen controller with it:
+the Core & Material core list is `controller !== null ? controller.coreOptions
+: []`, which is `[]`, and Windings, Preliminary, Simulation and Review were
+equally inert. `File > Open` -- the one control that could have loaded a
+project -- is gated on `projectSession !== null`, so it was disabled exactly
+when it was needed, and there was no `File > New` at all. The only way into
+the shipped application was a command line.
+
+The catalog was never involved. The installed
+`_internal/artifacts/catalog/catalog.sqlite` carries all 15 core records; it
+was read and counted directly to rule this out before anything was changed.
+
+**What the release notes said.** "The first launch opens with nothing loaded;
+use **File > Open** with your own project" -- a flow the application could
+not perform. Documentation asserting a capability nobody had executed.
+
+**Fixed** by `docs/superpowers/specs/2026-09-03-blank-project-on-launch-design.md`
+and its plan: a launch with no `--project` now opens a blank unsaved project,
+so every screen is live, plus `File > New` and a `Save` that asks for a name
+when the project has none. Three further defects surfaced while implementing
+it, each found by running the thing rather than reading it:
+
+- `GuidedStudioController.__init__` built the geometry preview unguarded, and
+  `build_geometry_model` refuses a project with no core. A blank project
+  raised `GeometryModelError` out of the constructor -- the fix's own first
+  attempt crashed on launch until the constructor adopted the tolerance
+  `refresh()` already had.
+- The cut plane kept saying "Select a core to see the winding cross-section."
+  after a core had been selected. With no previous valid preview to keep,
+  `refresh()`'s keep-the-last-geometry behaviour left the placeholder
+  standing while the real refusal ("Wire does not fit the core bore at layer
+  1", which `AWG 18` genuinely earns in the smallest powder toroid) reached
+  nowhere the user could see.
+- `sequence: StandardKey.Redo` bound one of the two bindings Windows gives
+  Redo, so Ctrl+Shift+Z did nothing. Qt says so at load; because that warning
+  carries a QML source location, it also leaked intermittently into the
+  shortcut tests' own no-QML-errors assertion under `pytest -n 8`.
+
+**The lesson for this record.** Every step of the clean-machine walk above
+starts from a project document. The one thing a first-time user does --
+double-click the shortcut and look for a core -- was not among them.
