@@ -21,6 +21,7 @@ from inductor_designer.adapters.system.project_lock import (
     LockOutcome,
     ProjectLock,
 )
+from inductor_designer.application.services.new_project import new_project
 from inductor_designer.application.services.run_recovery import (
     reconcile_unfinished_runs,
 )
@@ -431,7 +432,34 @@ class ProjectSession(QObject):
         self.set_status(f"Opened {path.name}")
         return True
 
-    def _adopt_loaded_project(self, path: Path, project: InductorProject) -> None:
+    @Slot(result=bool)
+    def newProject(self) -> bool:
+        """Replace the project with a blank unsaved one, in place.
+
+        Same swap-what-is-inside idiom as `openProject`: every Guided Studio
+        controller holds this session rather than the project it wraps, so
+        nothing has to be rebuilt for the screens to see the new project.
+
+        The blank project is adopted as its own saved state, which is what
+        keeps an untouched new project from reporting unsaved changes --
+        `dirty` is a comparison against `_saved_project`, not a flag, so
+        without that the Exit guard would nag before the user touched
+        anything. `Save` is therefore disabled until the first edit, and
+        `Save As` is how a new project gets a name.
+        """
+        previous_lock = self._lock
+        # Cleared before adopting, not after: this session no longer has a
+        # document, so it must not be holding one's lock even briefly.
+        self._lock = None
+        self._adopt_loaded_project(None, new_project())
+        self.documentPathChanged.emit()
+        if previous_lock is not None:
+            previous_lock.release()
+        _logger.info("Started a new project.")
+        self.set_status("New project")
+        return True
+
+    def _adopt_loaded_project(self, path: Path | None, project: InductorProject) -> None:
         """Swap a freshly loaded project in as the session's current state.
 
         Shared by `openProject`'s normal path and its reload-the-current-
@@ -459,7 +487,10 @@ class ProjectSession(QObject):
         # list, so skipping the reconcile write under it here closes the same
         # gap rather than adding a second, separate guard. A reconciliation
         # failure must never block the open itself.
-        if self._is_run_busy is None or not self._is_run_busy():
+        # `path is None` is File > New, and the blank project a launch with no
+        # `--project` opens: there is no document, so there is no `runs/`
+        # directory beside one to reconcile.
+        if path is not None and (self._is_run_busy is None or not self._is_run_busy()):
             with contextlib.suppress(OSError):
                 reconcile_unfinished_runs(path)
         # An Open is not an edit: the history of the previous document must

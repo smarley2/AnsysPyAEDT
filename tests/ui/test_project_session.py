@@ -287,3 +287,52 @@ def test_opening_a_project_while_idle_still_reconciles(tmp_path: Path) -> None:
     assert session.openProject(QUrl.fromLocalFile(str(document_path))) is True
     document = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert document["status"] == RunStatus.INTERRUPTED.value
+
+
+def test_new_project_replaces_the_document_with_a_blank_unsaved_one(
+    tmp_path: Path,
+) -> None:
+    """File > New has to leave the session in the state a launch with no
+    `--project` produces -- including NOT dirty. `dirty` is a comparison
+    against the saved project, so a blank project adopted without also being
+    adopted as its own saved state would make the Exit guard nag about
+    unsaved changes the user never made.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+    document = tmp_path / "boost.inductor.json"
+    document.write_text("{}", encoding="utf-8")
+    session = ProjectSession(make_project(), document)
+    session.apply(replace(session.project, description="edited"))
+    assert session.canUndo is True
+    assert session.dirty is True
+
+    assert session.newProject() is True
+
+    assert session.document_path is None
+    assert session.documentPath == ""
+    assert session.project.design.core is None
+    assert session.project.design.windings[0].turns == 1
+    # An Open is not an edit and neither is a New: the previous document's
+    # history must not be able to overwrite this one.
+    assert session.canUndo is False
+    assert session.canRedo is False
+    assert session.dirty is False
+
+
+def test_new_project_releases_the_previous_document_lock(tmp_path: Path) -> None:
+    """The previous document would stay claimed otherwise: a second window
+    could not open the file this session no longer holds."""
+    from inductor_designer.adapters.system.project_lock import LockOutcome, ProjectLock
+
+    QGuiApplication.instance() or QGuiApplication([])
+    document = tmp_path / "boost.inductor.json"
+    document.write_text("{}", encoding="utf-8")
+    lock = ProjectLock(document)
+    assert lock.acquire() is LockOutcome.ACQUIRED
+    session = ProjectSession(make_project(), document, lock=lock)
+
+    assert session.newProject() is True
+
+    second = ProjectLock(document)
+    assert second.acquire() is LockOutcome.ACQUIRED
+    second.release()
