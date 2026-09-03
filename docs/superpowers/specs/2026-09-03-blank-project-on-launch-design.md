@@ -61,10 +61,9 @@ does not already give, and the stack already anticipates a pathless session:
 
 ## The blank project
 
-A pure factory, `new_project(conductor_name: str) -> InductorProject`, with no
-catalog, filesystem or Qt import, so its defaults are testable without a
-window. `main()` supplies the conductor name from the catalog it already
-opens.
+A pure factory, `new_project() -> InductorProject`, with no catalog,
+filesystem or Qt import, so its defaults are testable without a window and
+`main()` needs nothing from the catalog to call it.
 
 | Field | Value | Where it comes from |
 | --- | --- | --- |
@@ -75,7 +74,7 @@ opens.
 | `design.core_material` | `None` | follows the core |
 | `manual_material_compatibility_acknowledged` | `False` | nothing to acknowledge yet |
 | windings | one: `w1`, `"Winding 1"`, 1 turn, `SOLID`, `start_angle_deg` 0.0, `sector_deg` 360.0, `min_spacing_m` 0.0002, `min_clearance_m` 0.001, `CLOCKWISE`, `terminal_intent` `""` | spacing and clearance are the repo's existing convention (`tests/unit/domain/test_project.py`'s `make_winding`) |
-| `conductor_name` | the first name in `CatalogRepository.list_conductor_names()` | that query is `ORDER BY name`, so it is deterministic (today `"0.2 mm"`), and it can never name a conductor the shipped index lacks |
+| `conductor_name` | `"AWG 18"` | the gauge the repo's own fixtures already wind with (`make_winding`); pinned rather than read from the catalog so the default never shifts when a conductor is added to the index. Test 5 below pins that the shipped index actually carries it. |
 | operating point | 100 kHz, 20 degC winding, 25 degC core, one entry for `w1` at 0 A AC, 0 deg, 0 A DC, `FORWARD` | 100 kHz is the repo's existing default (`make_operating_point`); the temperatures are `OperatingPoint`'s own field defaults. No new physical assumption is introduced. |
 | simulation recipe | `STANDARD` mesh, 10 passes, 1.0 percent error, requested outputs resistance + inductance | the same established convention as above |
 
@@ -110,9 +109,9 @@ resources every launch now needs, not just a launch with a document. (The
 startup `_refuse_if_resources_are_missing` covers the shipped defaults but not
 an explicitly passed bad flag.)
 
-Otherwise `project = new_project(first_conductor_name)`, `document_path =
-None`, `lock = None`. Every controller is then always built, which is the fix:
-the core list is populated on a shortcut launch.
+Otherwise `project = new_project()`, `document_path = None`, `lock = None`.
+Every controller is then always built, which is the fix: the core list is
+populated on a shortcut launch.
 
 ### `ProjectSession.newProject()`
 
@@ -162,9 +161,11 @@ Written before the implementation, per `AGENTS.md`.
    and the previous document's lock released.
 4. `new_project()` round-trips through `ProjectRepository.save`/`load`, which
    proves the defaults satisfy `schemas/project/v5.schema.json`.
-5. The blank winding's `conductor_name` exists in the built catalog index --
-   a factory naming a conductor the index lacks would break the Windings
-   screen on first launch.
+5. `new_project()`'s `conductor_name` exists in the built catalog index. A
+   pinned gauge is only safe while the shipped index carries it: without this
+   test, dropping `AWG 18` from `catalog/conductors/round-wire.yaml` would
+   leave the Windings screen on first launch naming a conductor no lookup can
+   resolve, and every other test would stay green.
 6. Generate stays refused on a pathless project, with the existing message.
 
 ## Documentation
