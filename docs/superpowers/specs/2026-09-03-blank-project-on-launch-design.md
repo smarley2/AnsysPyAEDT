@@ -67,7 +67,7 @@ filesystem or Qt import, so its defaults are testable without a window and
 
 | Field | Value | Where it comes from |
 | --- | --- | --- |
-| `project_id` | `uuid4().hex` | new |
+| `project_id` | `str(uuid4())` | new. Dashed, not `.hex`: `schemas/project/v5.schema.json` declares `projectId` as `format: uuid`, and a 32-character hex string is rejected by it -- confirmed by probing `ProjectRepository.save`. |
 | `name` | `"Untitled inductor"` | new; `InductorProject` rejects a blank name |
 | `description` | `""` | new |
 | `design.core` | `None` | picking a core is the user's first act |
@@ -128,6 +128,25 @@ user touched anything. An untouched new project is therefore not dirty, Save
 stays disabled until the first edit, and Save As is how an untouched blank
 project gets a name.
 
+### `GuidedStudioController.__init__`
+
+Today the constructor calls `self._build_preview(project)` unguarded, and
+`build_geometry_model` refuses a project with no core: "Project has no core
+selection; geometry needs one." A blank project would therefore raise
+`GeometryModelError` out of the constructor and kill the launch -- probed
+directly, not inferred.
+
+The constructor adopts the tolerance `refresh()` already has: on
+`GeometryModelError` it starts with an empty preview -- no entries, and a
+`CutPlaneDrawing` matching the defaults `CutPlaneView.qml` already carries
+(`r_inner_mm`, `r_outer_mm`, `depth_mm` 0.0, `extent_mm` 1.0, no circles or
+starts) whose `note` says a core has to be selected first. The QML already
+guards its own scaling with `Math.max(root.drawing.extent_mm, 1e-6)` and
+already renders `drawing.note`, so nothing on that side changes.
+
+This is the one change outside `main()`, the session and the menu, and it is
+the difference between a blank project and a crash on launch.
+
 ### QML
 
 - `File > New` above Open, routed through the existing
@@ -167,6 +186,10 @@ Written before the implementation, per `AGENTS.md`.
    leave the Windings screen on first launch naming a conductor no lookup can
    resolve, and every other test would stay green.
 6. Generate stays refused on a pathless project, with the existing message.
+7. `GuidedStudioController(session, catalog)` on a coreless project
+   constructs without raising, reports no preview entries, and puts the
+   select-a-core note on the cut plane. Today this raises `GeometryModelError`
+   from the constructor.
 
 ## Documentation
 
