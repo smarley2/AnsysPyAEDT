@@ -640,3 +640,26 @@ it, each found by running the thing rather than reading it:
 **The lesson for this record.** Every step of the clean-machine walk above
 starts from a project document. The one thing a first-time user does --
 double-click the shortcut and look for a core -- was not among them.
+
+## Accepted (2026-09-04)
+
+Fabio Posser accepted Milestone 10 on 2026-09-04, after installing the
+release and using it. What acceptance does and does not cover:
+
+**Covered.** The installer (per-user, unsigned, no administrator), resource
+resolution inside the frozen bundle, AEDT 2025 R2 Commercial detection with
+FEMM optional, the release artifacts and their checksums, and -- after the
+two defects below were fixed -- authoring a design from a shortcut launch:
+opening a blank project, choosing a core, editing a winding, and saving.
+
+**Not covered.** A live solve from the frozen bundle. Known risk 2 remains
+open: PyAEDT has only ever been exercised from source. Acceptance was granted
+with that stated, not overlooked.
+
+**The two defects acceptance was granted around**, both found by installing
+rather than by testing, and both fixed first: 0.1.0's shortcut launch could
+neither open nor create a project, which presented as an empty core list on
+every screen; and an installed user had no way to add a core, since that
+required the source tree and a rebuilt installer. Shipped as 0.2.0 and 0.3.0
+-- separate version numbers because a build that differs must not answer to a
+number whose hash is already published.

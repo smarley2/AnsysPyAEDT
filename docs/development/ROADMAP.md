@@ -938,8 +938,21 @@ Commercial.
 
 ### Current state
 
-Milestone 10 is **implementation complete, awaiting Fabio Posser's
-verification.** Only he accepts a milestone. The plan is
+Milestone 10 is **accepted** as of 2026-09-04 by Fabio Posser, who installed
+the release and used it. Acceptance covers the installer, the resource
+resolution, the AEDT/FEMM detection and the release artifacts; the live solve
+from a frozen bundle is explicitly NOT part of it (known risk 2 below, still
+open).
+
+Acceptance came with two defects the release itself exposed, both fixed
+before it was granted, and both recorded in
+[m10-release-evidence.md](m10-release-evidence.md): 0.1.0's shortcut launch
+could neither open nor create a project, so every screen was empty and the
+core list showed nothing; and there was no way for an installed user to add a
+core at all. The shipped versions are 0.2.0 (blank project on launch, File >
+New) and 0.3.0 (core import, and user data moved out of the program folder).
+
+The plan is
 [2026-09-01 M10 Windows release](../superpowers/plans/2026-09-01-m10-windows-release.md)
 and the evidence record is
 [m10-release-evidence.md](m10-release-evidence.md), which records the
@@ -956,7 +969,11 @@ was confirmed visually only before the QML/DLL size-pruning pass.
 Five open questions from the plan were ruled by Fabio Posser on 2026-09-01:
 per-user install needing no administrator; unsigned for this release
 (with the resulting SmartScreen warning disclosed in the release notes);
-version 0.1.0; no sample project shipped; and release artifacts published on
+version 0.1.0 (since superseded by 0.2.0 and 0.3.0, each because a build that
+differs must not wear a number already published); no sample project shipped
+-- which 0.2.0 revisited: the first launch now opens a blank project, because
+the alternative turned out to be an application with no way in; and release
+artifacts published on
 the GitHub release at `smarley2/AnsysPyAEDT` for now, identified by checksum
 rather than by download URL alone so a later move to a BRUSA-hosted remote
 does not strand the release notes.
