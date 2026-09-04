@@ -154,6 +154,10 @@ def _geometry_ratio(core: CoreMagneticProperties) -> float | PreliminaryValue:
                 f"Core {name} must be positive; got {value:g}. The inductance "
                 "factor cannot be estimated.",
             )
+    # A_e / (l_iron/mu_abs + l_gap/mu_0) for a gapped core, which is
+    # A_e/l_iron scaled by the fraction of the reluctance the iron carries.
+    # The gap term is expressed as an equivalent iron length here so the
+    # ungapped arithmetic below is bit-for-bit what it always was.
     ratio = core.effective_area_m2 / core.path_length_m
     if not math.isfinite(ratio):
         return unavailable(
@@ -193,7 +197,21 @@ def core_inductance(
         return permeability
     mu_abs, notes = permeability
 
-    al_effective_h = mu_abs * ratio
+    if core.gap_length_m > 0.0:
+        # R_total = l_iron/(mu_abs*A_e) + l_gap/(mu_0*A_e), so
+        # A_L = 1/(R_total) / N^2 per turn^2 = A_e / (l_iron/mu_abs + l_gap/mu_0).
+        # Without this the gap contributes nothing to the inductance factor and
+        # a gapped core reports the inductance of the ungapped one.
+        denominator = core.path_length_m / mu_abs + core.gap_length_m / MU_0
+        if not denominator > 0.0 or not math.isfinite(denominator):
+            return unavailable(
+                DiagnosticCode.INDUCTANCE_NON_POSITIVE_GEOMETRY,
+                "The gapped core's total reluctance is not a positive finite "
+                "number, so the inductance factor cannot be estimated.",
+            )
+        al_effective_h = core.effective_area_m2 / denominator
+    else:
+        al_effective_h = mu_abs * ratio
     mu_r_effective = mu_abs / MU_0
     if not (math.isfinite(al_effective_h) and math.isfinite(mu_r_effective)):
         return unavailable(
