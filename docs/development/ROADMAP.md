@@ -986,6 +986,32 @@ does not strand the release notes.
 Exit criterion: each family has its own approved design, catalog/schema needs,
 geometry invariants, preview, solver mapping, fixtures, and live evidence.
 
+### Current state
+
+Milestone 11 decomposes: four families, each of which the exit criterion above
+already asks for a separate design. The first family is split again at the
+line this machine can verify.
+
+**M11a (gapped E core, solver-independent) is implementation complete.** Plan:
+[2026-09-04 M11a](../superpowers/plans/2026-09-04-m11a-gapped-e-core.md);
+design:
+[2026-09-04 gapped E core](../superpowers/specs/2026-09-04-m11a-gapped-e-core-design.md).
+Delivered: the family seam (`geometry/toroid/` and `geometry/ecore/`, neither
+knowing the other's coordinates), the E+E body with a distributed gap stack,
+the reluctance network reduced to an iron and a gap length referred to the
+centre-leg area, a gapped flux solve against the recorded B-H curve, project
+schema v6 with placement per family, leg packing, the family-agnostic cut
+plane, and manual E-core entry.
+
+Fringing is deliberately not modelled, which overstates inductance and makes
+distributed gaps indistinguishable from one gap of the same total; one test
+pins that so a later correction cannot change published numbers quietly.
+
+**M11b (Maxwell/FEMM export and live evidence for the E core) is not
+started.** It needs an AEDT session. **M11c** is PQ/EQ/EER against the proven
+seam, plus E-core catalog records -- datasheet transcription, which is human
+work.
+
 ## Deferred beyond the active roadmap
 
 - MCP expansion or parity.

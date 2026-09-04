@@ -18,6 +18,7 @@ from inductor_designer.domain.winding import (
     CurrentDirection,
     ToroidPlacement,
     WindingDirection,
+    WindingPlacement,
     require_toroid_placement,
 )
 from inductor_designer.ui.cut_plane_view import CutPlaneDrawing, build_cut_plane_drawing
@@ -28,6 +29,29 @@ if TYPE_CHECKING:
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.domain.winding import WindingDefinition
     from inductor_designer.ui.project_session import ProjectSession
+
+
+def _placement_row(placement: WindingPlacement) -> dict[str, object]:
+    """One winding's placement, in the unit its own family uses.
+
+    Neutral keys with a `placementKind` discriminator, rather than a toroid
+    pair plus an E-core pair of which one is always dead: the panel needs one
+    label and one field per number either way, and a row that carries unused
+    keys is a row whose reader has to guess which half is real.
+    """
+    if isinstance(placement, ToroidPlacement):
+        return {
+            "placementKind": "toroid",
+            "placementUnit": "deg",
+            "placementStart": placement.start_angle_deg,
+            "placementSpan": placement.sector_deg,
+        }
+    return {
+        "placementKind": "leg",
+        "placementUnit": "mm",
+        "placementStart": placement.window_start_m * 1000.0,
+        "placementSpan": placement.window_span_m * 1000.0,
+    }
 
 
 _COLORS = ("#e77b49", "#2e65e7", "#157a61", "#8a5cf6")
@@ -169,11 +193,12 @@ class GuidedStudioController(QObject):
                 "conductor": winding.conductor_name,
                 "acRmsCurrentA": points_by_id[winding.winding_id].ac_rms_current_a,
                 "acPhaseDeg": points_by_id[winding.winding_id].ac_phase_deg,
-                # The Windings screen is the toroid's own editor today, so it
-                # reads the toroid placement directly. An E-core project
-                # reaches a different panel (M11a task 8), not this row shape.
-                "startAngleDeg": require_toroid_placement(winding).start_angle_deg,
-                "sectorDeg": require_toroid_placement(winding).sector_deg,
+                # Placement, in whichever family's terms this winding uses.
+                # Reading the toroid placement unconditionally here is what
+                # made the Windings screen raise out of `refresh()` for an
+                # E-core project -- found by walking the real application,
+                # not by a test.
+                **_placement_row(winding.placement),
                 "spacingMm": winding.min_spacing_m * 1000.0,
                 "clearanceMm": winding.min_clearance_m * 1000.0,
                 "direction": winding.winding_direction.value,
@@ -339,21 +364,25 @@ class GuidedStudioController(QObject):
             return replace(winding, turns=turns)
         if field == "conductor":
             return replace(winding, conductor_name=value.strip())
-        if field == "startAngleDeg":
+        if field == "placementStart":
+            placement = winding.placement
+            number = cls._number(value, "Placement start")
+            if isinstance(placement, ToroidPlacement):
+                return replace(
+                    winding, placement=replace(placement, start_angle_deg=number)
+                )
             return replace(
                 winding,
-                placement=replace(
-                    require_toroid_placement(winding),
-                    start_angle_deg=cls._number(value, "Start angle"),
-                ),
+                placement=replace(placement, window_start_m=number / 1000.0),
             )
-        if field == "sectorDeg":
+        if field == "placementSpan":
+            placement = winding.placement
+            number = cls._number(value, "Placement span")
+            if isinstance(placement, ToroidPlacement):
+                return replace(winding, placement=replace(placement, sector_deg=number))
             return replace(
                 winding,
-                placement=replace(
-                    require_toroid_placement(winding),
-                    sector_deg=cls._number(value, "Sector"),
-                ),
+                placement=replace(placement, window_span_m=number / 1000.0),
             )
         if field == "spacingMm":
             return replace(

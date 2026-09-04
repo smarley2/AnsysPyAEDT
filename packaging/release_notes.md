@@ -135,6 +135,30 @@ writes its directory beside the project document.
 **File > New** starts another blank project at any time, and **File > Open**
 loads an existing `.inductor.json` from anywhere it already exists.
 
+## Gapped E cores (new, and partly complete)
+
+Alongside the toroid, you can now enter a **manual gapped E+E core** on
+**Core & Material**: six dimensions (centre leg F, depth C, window width E,
+window height D, outer leg G, yoke H), a comma-separated list of gap lengths
+in mm, and the length of each core segment between those gaps. Tick
+**Gap outer legs** for the shim build, where a spacer gaps all three legs;
+leave it clear for the ground-centre-leg build. Turns are then placed along
+the leg inside the window, and the cut plane shows the section with each gap
+drawn as a break in the leg.
+
+The inductance estimate solves the reluctance network -- centre leg, both
+yokes, the two outer legs in parallel, plus the gaps -- against your material's
+recorded B-H curve. **Fringing is not modelled.** That understates reluctance
+and so **overstates inductance**, by more as the gap grows, and it is also why
+several small gaps read identically to one large gap of the same total in the
+estimate. A solved run is what shows the difference, and the estimate says all
+of this wherever it reports a gapped core.
+
+Not yet available for an E core: catalog parts (enter the dimensions by hand),
+outer-leg windings, the 3D preview, and **generation or solving** -- exporting
+an E core to Maxwell or FEMM is the next milestone. A toroid is unaffected in
+every respect.
+
 ## Adding your own cores
 
 The shipped catalog carries 15 toroids. To use one it does not have:

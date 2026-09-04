@@ -98,3 +98,17 @@ def test_an_ungapped_pair_reports_no_gap_at_all() -> None:
     properties = core_magnetic_properties(replace(E_CORE, gaps_m=()))
     assert properties is not None
     assert properties.gap_length_m == 0.0
+
+
+def test_a_hand_edited_core_the_body_refuses_reports_no_properties() -> None:
+    """The UI validates on entry, so an impossible stack can only arrive from
+    a hand-edited document. The estimator returns no core properties instead
+    of raising through the Preliminary screen -- `build_preliminary_request`
+    already treats that as "geometry refused this project" and says so per
+    value.
+
+    Found by walking the real application: clearing the gaps without clearing
+    their segments raised `CoreGeometryError` out of the estimate.
+    """
+    inconsistent = replace(E_CORE, gaps_m=(), gap_spacings_m=(0.004,))
+    assert core_magnetic_properties(inconsistent) is None

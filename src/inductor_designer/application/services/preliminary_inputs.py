@@ -21,6 +21,7 @@ from inductor_designer.domain.project import (
 )
 from inductor_designer.geometry.ecore.body import FinishedECore
 from inductor_designer.geometry.ecore.reluctance import referred_lengths
+from inductor_designer.geometry.toroid.core_solid import CoreGeometryError
 from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
@@ -71,17 +72,26 @@ def core_magnetic_properties(
         # needs (geometry/ecore/reluctance.py). Both are referred to the
         # centre-leg area, which is also the area flux density is quoted
         # against, by convention.
-        body = FinishedECore(
-            centre_leg_width_m=core.centre_leg_width_m,
-            depth_m=core.depth_m,
-            window_width_m=core.window_width_m,
-            window_height_m=core.window_height_m,
-            outer_leg_width_m=core.outer_leg_width_m,
-            yoke_thickness_m=core.yoke_thickness_m,
-            gaps=core.gaps_m,
-            gap_spacings_m=core.gap_spacings_m,
-            outer_legs_gapped=core.outer_legs_gapped,
-        )
+        try:
+            body = FinishedECore(
+                centre_leg_width_m=core.centre_leg_width_m,
+                depth_m=core.depth_m,
+                window_width_m=core.window_width_m,
+                window_height_m=core.window_height_m,
+                outer_leg_width_m=core.outer_leg_width_m,
+                yoke_thickness_m=core.yoke_thickness_m,
+                gaps=core.gaps_m,
+                gap_spacings_m=core.gap_spacings_m,
+                outer_legs_gapped=core.outer_legs_gapped,
+            )
+        except CoreGeometryError:
+            # The UI validates on entry, so this is a hand-edited document:
+            # dimensions the body refuses (a gap stack longer than the leg, a
+            # spacing count that does not separate the gaps). The estimator
+            # reports missing core properties rather than raising through the
+            # Preliminary screen -- `build_preliminary_request` already treats
+            # None as "geometry refused this project" and says so per value.
+            return None
         lengths = referred_lengths(body)
         return CoreMagneticProperties(
             path_length_m=lengths.iron_m,
