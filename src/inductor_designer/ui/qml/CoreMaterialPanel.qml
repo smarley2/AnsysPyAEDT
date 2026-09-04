@@ -170,6 +170,42 @@ Pane {
                 }
             }
 
+            // Only for one of your own imported cores that is still draft: a
+            // shipped core's review status belongs to the catalog source and
+            // its review process, not to whoever has the application open.
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: coreMaterialPanel.controller !== null
+                    && coreMaterialPanel.controller.selectedCore.origin === "imported"
+                    && coreMaterialPanel.controller.selectedCore.reviewStatus === "draft"
+
+                Label {
+                    objectName: "markReviewedPrompt"
+                    text: qsTr("Checked every number against the datasheet? Record who did:")
+                    color: "#6d7a7e"
+                    wrapMode: Text.WordWrap
+                }
+                TextField {
+                    id: reviewerField
+                    objectName: "coreReviewerField"
+                    placeholderText: qsTr("Reviewer name")
+                    Accessible.name: qsTr("Name of the person who checked this core")
+                }
+                Button {
+                    objectName: "markCoreReviewedButton"
+                    text: qsTr("Mark reviewed")
+                    enabled: reviewerField.text.trim() !== ""
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Records this core as checked against its datasheet, by the named reviewer."
+                    )
+                    onClicked: coreMaterialPanel.controller.markCoreReviewed(
+                        coreMaterialPanel.controller.selectedCore.partNumber,
+                        reviewerField.text)
+                }
+            }
+
             Label { text: qsTr("Manual core"); font.bold: true; color: "#1e2b32" }
 
             GridLayout {

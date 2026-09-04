@@ -432,3 +432,18 @@ def test_every_rendered_core_row_states_its_review_status() -> None:
     ]
     assert rendered
     assert all("reviewed" in text or "draft" in text for text in rendered), rendered
+
+
+def test_the_mark_reviewed_control_is_hidden_for_a_shipped_core() -> None:
+    """It exists for one of your own imported drafts and nothing else. The
+    default project pins a shipped catalog core, so the control must be there
+    in the tree and invisible -- offering it would imply the application can
+    promote catalog data, which it cannot."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    button = root.findChild(QObject, "markCoreReviewedButton")
+    field = root.findChild(QObject, "coreReviewerField")
+    assert button is not None
+    assert field is not None
+    assert button.property("visible") is False

@@ -144,6 +144,15 @@ and can be used immediately -- `draft` means the numbers have not been
 checked against the cited page by a second person, not that they are
 unusable.
 
+Once you have checked an imported core's numbers against the datasheet
+yourself, select it and use **Mark reviewed** -- it asks who did the checking
+and records that name with the core, because a review status with nobody
+attached to it is the same unverified number wearing a better label. It marks
+your local copy as checked; a core that belongs in the product still gets
+added to the shipped catalog by the development team. The control appears only
+for your own imported drafts: a shipped core's status belongs to the catalog's
+own review process.
+
 A part number the shipped catalog already carries is refused rather than
 replaced, so a project's Review page can never cite a catalog part while
 using someone's edited numbers. Rename yours, or use the shipped core.

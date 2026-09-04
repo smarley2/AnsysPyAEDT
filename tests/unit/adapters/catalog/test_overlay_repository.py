@@ -19,6 +19,7 @@ import pytest
 from inductor_designer.adapters.catalog.overlay_repository import (
     CoreOverlayError,
     OverlayCatalogRepository,
+    promote_overlay_core,
     write_overlay_core,
 )
 from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRepository
@@ -159,3 +160,45 @@ def test_a_missing_overlay_directory_is_simply_empty(
     repository = OverlayCatalogRepository(shipped, tmp_path / "never-created")
     assert repository.list_cores() == shipped.list_cores()
     assert repository.overlay_part_numbers() == ()
+
+
+def test_promoting_a_core_records_who_reviewed_it(index_path: Path, tmp_path: Path) -> None:
+    """`catalog/README.md`: only a human reviewer may set `reviewed`, after
+    checking every number against the cited source page. So promotion records
+    the person accountable for that check -- a status with no name attached is
+    the same unverified number wearing a better label."""
+    shipped = SqliteCatalogRepository(index_path)
+    overlay_root = tmp_path / "catalog-overlay"
+    write_overlay_core(overlay_root, _custom_core(shipped))
+
+    promote_overlay_core(overlay_root, "BRUSA-TEST-1", "F. Posser")
+
+    stored = OverlayCatalogRepository(shipped, overlay_root).get_core("BRUSA-TEST-1")
+    assert stored is not None
+    assert stored.review_status is ReviewStatus.REVIEWED
+    assert stored.reviewed_by == "F. Posser"
+
+
+def test_promoting_without_a_reviewer_is_refused(index_path: Path, tmp_path: Path) -> None:
+    shipped = SqliteCatalogRepository(index_path)
+    overlay_root = tmp_path / "catalog-overlay"
+    write_overlay_core(overlay_root, _custom_core(shipped))
+
+    with pytest.raises(CoreOverlayError, match="who"):
+        promote_overlay_core(overlay_root, "BRUSA-TEST-1", "   ")
+
+    stored = OverlayCatalogRepository(shipped, overlay_root).get_core("BRUSA-TEST-1")
+    assert stored is not None
+    assert stored.review_status is ReviewStatus.DRAFT
+
+
+def test_promoting_a_core_that_is_not_in_the_overlay_is_refused(
+    index_path: Path, tmp_path: Path
+) -> None:
+    """A shipped core's review status belongs to the repository's own catalog
+    source and its review process, not to whoever has the application open."""
+    shipped = SqliteCatalogRepository(index_path)
+    overlay_root = tmp_path / "catalog-overlay"
+
+    with pytest.raises(CoreOverlayError, match=shipped.list_cores()[0].part_number):
+        promote_overlay_core(overlay_root, shipped.list_cores()[0].part_number, "F. Posser")

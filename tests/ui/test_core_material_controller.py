@@ -508,3 +508,135 @@ def test_the_core_template_downloads_with_its_header(
     target = tmp_path / "template.csv"
     assert controller.downloadCoreTemplate("csv", target.as_uri()) is True
     assert target.read_text(encoding="utf-8").startswith("manufacturer,family,partNumber")
+
+
+def test_marking_an_imported_core_reviewed_records_the_reviewer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The status only means something if a person is attached to it, so the
+    slot takes a name and the row shows the promotion."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+    source = tmp_path / "one.csv"
+    source.write_bytes(_filled_core_csv(("BRUSA-A",)))
+    assert controller.importCores(source.as_uri()) is True
+
+    assert controller.markCoreReviewed("BRUSA-A", "F. Posser") is True
+
+    row = next(r for r in controller.coreOptions if r["partNumber"] == "BRUSA-A")
+    assert row["reviewStatus"] == "reviewed"
+    assert "F. Posser" in controller.message
+
+
+def test_marking_a_core_reviewed_without_a_name_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+    source = tmp_path / "one.csv"
+    source.write_bytes(_filled_core_csv(("BRUSA-A",)))
+    controller.importCores(source.as_uri())
+
+    assert controller.markCoreReviewed("BRUSA-A", "  ") is False
+
+    row = next(r for r in controller.coreOptions if r["partNumber"] == "BRUSA-A")
+    assert row["reviewStatus"] == "draft"
+
+
+def test_a_shipped_core_cannot_be_marked_reviewed_from_the_application(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A shipped core's status belongs to the repository's catalog source and
+    its review process, not to whoever has the application open."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    shipped = CATALOG.list_cores()[0].part_number
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+
+    assert controller.markCoreReviewed(shipped, "F. Posser") is False
+    assert shipped in controller.message
+
+
+def test_the_selected_core_carries_the_provenance_the_list_shows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The screen offers "mark reviewed" only for an imported draft, so the
+    selection has to say which it is -- otherwise the control would appear for
+    a shipped core it cannot promote."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+    source = tmp_path / "one.csv"
+    source.write_bytes(_filled_core_csv(("BRUSA-A",)))
+    controller.importCores(source.as_uri())
+
+    assert controller.selectCatalogCore("BRUSA-A") is True
+    assert controller.selectedCore["origin"] == "imported"
+    assert controller.selectedCore["reviewStatus"] == "draft"
+
+    controller.markCoreReviewed("BRUSA-A", "F. Posser")
+    assert controller.selectedCore["reviewStatus"] == "reviewed"
+
+    shipped = CATALOG.list_cores()[0].part_number
+    controller.selectCatalogCore(shipped)
+    assert controller.selectedCore["origin"] == "shipped"
+
+
+def test_promoting_a_core_leaves_the_project_snapshot_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A project records the numbers it was designed against, so marking the
+    catalog record reviewed must not rewrite the pinned snapshot -- only the
+    reported status follows the catalog."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+    source = tmp_path / "one.csv"
+    source.write_bytes(_filled_core_csv(("BRUSA-A",)))
+    controller.importCores(source.as_uri())
+    controller.selectCatalogCore("BRUSA-A")
+
+    controller.markCoreReviewed("BRUSA-A", "F. Posser")
+
+    pinned = session.project.design.core
+    assert isinstance(pinned, CatalogCoreSelection)
+    assert pinned.snapshot.review_status is ReviewStatus.DRAFT
+    assert controller.selectedCore["reviewStatus"] == "reviewed"

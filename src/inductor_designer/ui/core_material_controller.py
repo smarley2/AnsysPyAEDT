@@ -125,6 +125,23 @@ class CoreMaterialController(QObject):
         if isinstance(core, CatalogCoreSelection):
             return {
                 "kind": "catalog",
+                # Read from the catalog, not from the snapshot the project
+                # pinned when this core was selected: "has this data been
+                # checked?" is a question about the record as it stands now,
+                # and marking a core reviewed must not appear to do nothing.
+                # The pinned snapshot itself is deliberately left alone --
+                # a project records the numbers it was designed against.
+                "reviewStatus": (
+                    current.review_status.value
+                    if (current := self._catalog.get_core(core.part_number))
+                    is not None
+                    else core.snapshot.review_status.value
+                ),
+                "origin": (
+                    "imported"
+                    if core.part_number in self._overlay_part_numbers()
+                    else "shipped"
+                ),
                 "partNumber": core.part_number,
                 "manufacturer": core.snapshot.manufacturer,
                 "materialLabel": (
@@ -361,6 +378,40 @@ class CoreMaterialController(QObject):
             summary = summary + " " + " | ".join(problems)
         self._set_message(summary)
         return imported > 0
+
+    @Slot(str, str, result=bool)
+    def markCoreReviewed(self, part_number: str, reviewed_by: str) -> bool:
+        """Record that a person checked one of your imported cores.
+
+        `catalog/README.md` rules that only a human reviewer may set
+        `reviewed`, after checking every number against the cited source page.
+        So this asks for the name of whoever did that, and the adapter refuses
+        without one: a status with nobody attached is the same unverified
+        number wearing a better label.
+
+        A core that belongs in the product still gets promoted by being added
+        to `catalog/cores/*.yaml` and reviewed there -- this marks a local
+        core as checked, it does not publish one.
+        """
+        from inductor_designer.adapters.catalog.overlay_repository import (
+            CoreOverlayError,
+            promote_overlay_core,
+        )
+        from inductor_designer.adapters.system.environment import (
+            catalog_overlay_directory,
+        )
+
+        try:
+            promote_overlay_core(catalog_overlay_directory(), part_number, reviewed_by)
+        except (OSError, CoreOverlayError) as error:
+            self._set_message(str(error))
+            return False
+        self.optionsChanged.emit()
+        self.selectionChanged.emit()
+        self._set_message(
+            f"{part_number} marked reviewed by {reviewed_by.strip()}."
+        )
+        return True
 
     @Slot()
     def openMaterialStudio(self) -> None:

@@ -54,6 +54,15 @@ def _core_path(overlay_root: Path, part_number: str) -> Path:
     )
 
 
+def _write(path: Path, record: CoreRecord) -> None:
+    """One writer for both the import and the promotion, so a stored core has
+    exactly one on-disk shape."""
+    path.write_text(
+        json.dumps(core_record_to_json(record), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def write_overlay_core(
     overlay_root: Path,
     record: CoreRecord,
@@ -75,10 +84,40 @@ def write_overlay_core(
     stored = replace(record, review_status=ReviewStatus.DRAFT, reviewed_by=None)
     path = _core_path(overlay_root, stored.part_number)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(core_record_to_json(stored), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    _write(path, stored)
+    return path
+
+
+def promote_overlay_core(overlay_root: Path, part_number: str, reviewed_by: str) -> Path:
+    """Record that a person checked this core against its cited source page.
+
+    `catalog/README.md` rules that only a human reviewer may set `reviewed`,
+    after checking every number against the source. So this takes the
+    reviewer's name and refuses without one: a status with nobody attached to
+    it is the same unverified number wearing a better label, and the whole
+    point of the status is that someone is accountable for it.
+
+    Only cores in this overlay can be promoted. A shipped core's status
+    belongs to the catalog source in the repository and its review process,
+    not to whoever happens to have the application open.
+    """
+    reviewer = reviewed_by.strip()
+    if not reviewer:
+        raise CoreOverlayError(
+            "Marking a core reviewed records who checked it against the "
+            "datasheet. Enter a name first."
+        )
+    path = _core_path(overlay_root, part_number)
+    if not path.is_file():
+        raise CoreOverlayError(
+            f"{part_number} is not one of your imported cores, so its review "
+            "status is not yours to change."
+        )
+    record = core_record_from_json(json.loads(path.read_text(encoding="utf-8")))
+    reviewed = replace(
+        record, review_status=ReviewStatus.REVIEWED, reviewed_by=reviewer
     )
+    _write(path, reviewed)
     return path
 
 
