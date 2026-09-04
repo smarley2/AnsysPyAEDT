@@ -8,12 +8,12 @@ from inductor_designer.domain.winding import (
     ConductorMode,
     WindingDefinition,
 )
-from inductor_designer.geometry.core_profile import build_core_profile
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.naming import core_name, unique_identifiers
-from inductor_designer.geometry.packing import PackedWinding
-from inductor_designer.geometry.terminals import build_terminal_disk
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.core_profile import build_core_profile
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding
+from inductor_designer.geometry.toroid.terminals import build_terminal_disk
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (

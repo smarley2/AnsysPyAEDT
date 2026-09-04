@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.naming import (
     core_name,
     lead_names,
@@ -12,7 +11,8 @@ from inductor_designer.geometry.naming import (
     unique_identifiers,
     winding_names,
 )
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 
 
 def test_sanitize() -> None:

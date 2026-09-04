@@ -62,7 +62,7 @@ def test_flipping_a_winding_sense_changes_what_the_preview_draws(
         build_geometry_model,
     )
     from inductor_designer.domain.winding import WindingDirection
-    from inductor_designer.geometry.tessellation import tessellate_winding
+    from inductor_designer.geometry.toroid.tessellation import tessellate_winding
 
     app = QGuiApplication.instance() or QGuiApplication([])
     assert app is not None

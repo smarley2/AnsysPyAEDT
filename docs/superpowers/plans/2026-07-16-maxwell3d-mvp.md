@@ -154,8 +154,8 @@ Create `tests/unit/geometry/test_core_profile.py`:
 ```python
 from __future__ import annotations
 
-from inductor_designer.geometry.core_profile import build_core_profile
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_profile import build_core_profile
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, Vec3
 
 
@@ -191,7 +191,7 @@ def test_rounded_profile_closes_and_lies_in_xz_plane() -> None:
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `.venv\Scripts\python.exe -m pytest tests/unit/geometry/test_core_profile.py -q`
-Expected: FAIL — `ModuleNotFoundError: inductor_designer.geometry.core_profile`.
+Expected: FAIL — `ModuleNotFoundError: inductor_designer.geometry.toroid.core_profile`.
 
 - [ ] **Step 3: Implement**
 
@@ -202,7 +202,7 @@ from __future__ import annotations
 
 import math
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, PathSegment, Vec3
 
 
@@ -276,9 +276,9 @@ Create `tests/unit/geometry/test_terminals.py`:
 ```python
 from __future__ import annotations
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import Vec3
-from inductor_designer.geometry.terminals import build_terminal_disk
+from inductor_designer.geometry.toroid.terminals import build_terminal_disk
 
 CORE = FinishedCore(r_inner_m=0.01, r_outer_m=0.02, half_height_m=0.005, corner_radius_m=0.0)
 
@@ -316,9 +316,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import LineSegment, Vec3
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)
@@ -477,7 +477,7 @@ from enum import Enum
 from inductor_designer.domain.catalog_records import CoreFamily, CoreRecord, ReviewStatus
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
-from inductor_designer.geometry.terminals import TerminalDisk
+from inductor_designer.geometry.toroid.terminals import TerminalDisk
 
 SOLUTION_TYPE = "EddyCurrent"
 DESIGN_NAME = "Inductor3D"
@@ -651,8 +651,8 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
 from inductor_designer.simulation.plan_builder import build_maxwell3d_plan
 from tests.unit.simulation.test_maxwell_plan import make_core_record
@@ -790,12 +790,12 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.core_profile import build_core_profile
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_profile import build_core_profile
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.naming import core_name, unique_identifiers
-from inductor_designer.geometry.packing import PackedWinding
-from inductor_designer.geometry.terminals import build_terminal_disk
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.packing import PackedWinding
+from inductor_designer.geometry.toroid.terminals import build_terminal_disk
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 from inductor_designer.simulation.maxwell_plan import (
     DESIGN_NAME,
     MATRIX_NAME,
@@ -1386,9 +1386,9 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import LineSegment, Vec3
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 
 CORE = FinishedCore(r_inner_m=0.01, r_outer_m=0.02, half_height_m=0.005, corner_radius_m=0.0)
 

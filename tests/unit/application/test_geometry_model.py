@@ -18,7 +18,7 @@ from inductor_designer.domain.catalog_records import (
     ReviewStatus,
 )
 from inductor_designer.domain.winding import ToroidPlacement
-from inductor_designer.geometry.symmetry import SymmetryRefusal
+from inductor_designer.geometry.toroid.symmetry import SymmetryRefusal
 from tests.unit.domain.test_catalog_records import make_core
 from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
 

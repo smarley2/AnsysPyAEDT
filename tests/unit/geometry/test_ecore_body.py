@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from inductor_designer.geometry.core_solid import CoreGeometryError
 from inductor_designer.geometry.ecore.body import FinishedECore
+from inductor_designer.geometry.toroid.core_solid import CoreGeometryError
 
 # A plausible ferrite E core pair, in metres: E55/28/21-ish proportions.
 _DIMENSIONS = {

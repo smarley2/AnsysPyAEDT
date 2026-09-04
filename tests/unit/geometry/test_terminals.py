@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import Vec3
-from inductor_designer.geometry.terminals import build_terminal_disk
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.terminals import build_terminal_disk
 
 CORE = FinishedCore(r_inner_m=0.01, r_outer_m=0.02, half_height_m=0.005, corner_radius_m=0.0)
 

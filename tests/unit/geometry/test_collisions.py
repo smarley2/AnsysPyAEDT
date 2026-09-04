@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from inductor_designer.geometry.collisions import check_clearances, occupancy_summary
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.collisions import check_clearances, occupancy_summary
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)

@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, path_length
-from inductor_designer.geometry.turn_path import (
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.turn_path import (
     TurnGeometryError,
     build_connector,
     build_lead,

@@ -7,8 +7,8 @@ from inductor_designer.domain.winding import (
     CurrentDirection,
     WindingDefinition,
 )
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
-from inductor_designer.geometry.planar import PlanarModel, build_planar_model
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.planar import PlanarModel, build_planar_model
 from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan

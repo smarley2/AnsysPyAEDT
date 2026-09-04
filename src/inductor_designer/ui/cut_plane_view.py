@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from inductor_designer.application.services.geometry_model import GeometryModel
 from inductor_designer.domain.project import InductorProject
-from inductor_designer.geometry.packing import PackedWinding, start_azimuth_deg
+from inductor_designer.geometry.toroid.packing import PackedWinding, start_azimuth_deg
 from inductor_designer.simulation.maxwell_plan import (
     Polarity,
     invert_polarity,

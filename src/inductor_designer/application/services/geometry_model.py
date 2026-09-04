@@ -11,21 +11,21 @@ from inductor_designer.domain.winding import (
     WindingDirection,
     require_toroid_placement,
 )
-from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
-from inductor_designer.geometry.core_solid import (
+from inductor_designer.geometry.toroid.collisions import CollisionIssue, check_clearances
+from inductor_designer.geometry.toroid.core_solid import (
     CoreGeometryError,
     FinishedCore,
     resolve_finished_core,
     resolve_magnetic_core,
 )
-from inductor_designer.geometry.packing import (
+from inductor_designer.geometry.toroid.packing import (
     PackedWinding,
     PackingError,
     WindingSpec,
     pack_winding,
 )
-from inductor_designer.geometry.planar import PlanarModel, build_planar_model
-from inductor_designer.geometry.symmetry import (
+from inductor_designer.geometry.toroid.planar import PlanarModel, build_planar_model
+from inductor_designer.geometry.toroid.symmetry import (
     SymmetryPlan,
     SymmetryRefusal,
     propose_symmetry_plan,

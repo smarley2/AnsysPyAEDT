@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
-from inductor_designer.geometry.planar import build_planar_model
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.planar import build_planar_model
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)

@@ -4,8 +4,8 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding
 
 
 @dataclass(frozen=True, slots=True)

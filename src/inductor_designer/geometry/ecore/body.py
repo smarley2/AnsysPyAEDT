@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 
-from inductor_designer.geometry.core_solid import CoreGeometryError
+from inductor_designer.geometry.toroid.core_solid import CoreGeometryError
 
 _DIMENSION_FIELDS = (
     "centre_leg_width_m",

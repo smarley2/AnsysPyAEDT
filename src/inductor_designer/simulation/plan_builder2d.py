@@ -8,7 +8,7 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
 )
 from inductor_designer.geometry.naming import core_name, unique_identifiers
-from inductor_designer.geometry.planar import PlanarModel
+from inductor_designer.geometry.toroid.planar import PlanarModel
 from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision
 from inductor_designer.simulation.maxwell2d_plan import (

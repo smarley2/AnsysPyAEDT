@@ -25,7 +25,7 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
 from tests.unit.simulation.test_magnetic_estimate import make_bh_series, make_material_selection

@@ -4,8 +4,8 @@ import math
 from dataclasses import dataclass
 
 from inductor_designer.domain.winding import WindingDirection
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.turn_path import radial_build_m, turn_loop_length_m
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.turn_path import radial_build_m, turn_loop_length_m
 
 
 class PackingError(ValueError):

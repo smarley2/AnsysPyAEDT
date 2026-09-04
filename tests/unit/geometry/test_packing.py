@@ -6,14 +6,14 @@ import threading
 import pytest
 
 from inductor_designer.domain.project import ManualCoreSelection
-from inductor_designer.geometry.core_solid import FinishedCore, resolve_finished_core
-from inductor_designer.geometry.packing import (
+from inductor_designer.geometry.toroid.core_solid import FinishedCore, resolve_finished_core
+from inductor_designer.geometry.toroid.packing import (
     PackedWinding,
     PackingError,
     WindingSpec,
     pack_winding,
 )
-from inductor_designer.geometry.turn_path import turn_loop_length_m
+from inductor_designer.geometry.toroid.turn_path import turn_loop_length_m
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)

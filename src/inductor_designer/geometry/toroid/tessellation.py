@@ -5,10 +5,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection, mmf_sign
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedLayer, PackedWinding, start_azimuth_deg
 from inductor_designer.geometry.primitives import Vec3, half_plane_point, sample_path
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedLayer, PackedWinding, start_azimuth_deg
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)

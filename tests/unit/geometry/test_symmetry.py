@@ -4,7 +4,7 @@ import dataclasses
 
 from inductor_designer.domain.project import WindingOperatingPoint
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection
-from inductor_designer.geometry.symmetry import (
+from inductor_designer.geometry.toroid.symmetry import (
     SymmetryPlan,
     SymmetryRefusal,
     propose_symmetry_plan,

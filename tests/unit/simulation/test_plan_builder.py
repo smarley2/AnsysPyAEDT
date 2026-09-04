@@ -12,8 +12,8 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding, WindingSpec, pack_winding
 from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (

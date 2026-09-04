@@ -23,8 +23,8 @@ from inductor_designer.domain.winding import (  # noqa: E402
     ToroidPlacement,
     WindingDirection,
 )
-from inductor_designer.geometry.packing import start_azimuth_deg  # noqa: E402
-from inductor_designer.geometry.tessellation import start_bead  # noqa: E402
+from inductor_designer.geometry.toroid.packing import start_azimuth_deg  # noqa: E402
+from inductor_designer.geometry.toroid.tessellation import start_bead  # noqa: E402
 from inductor_designer.simulation.maxwell_plan import Polarity  # noqa: E402
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan  # noqa: E402
 from inductor_designer.simulation.run_contracts import effective_winding_inputs  # noqa: E402

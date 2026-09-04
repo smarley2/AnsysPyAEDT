@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from inductor_designer.geometry.core_profile import build_core_profile
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, Vec3
+from inductor_designer.geometry.toroid.core_profile import build_core_profile
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 
 
 def _endpoint(segment: LineSegment | ArcSegment) -> Vec3:

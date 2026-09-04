@@ -22,7 +22,7 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     mmf_sign,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.inductance_estimate import (
     AL_TOLERANCE_NOTE,

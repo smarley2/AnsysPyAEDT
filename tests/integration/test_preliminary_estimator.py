@@ -30,7 +30,7 @@ from inductor_designer.domain.winding import (
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.simulation.core_loss_estimate import _ZERO_BIAS_APPROXIMATION_NOTE
 from inductor_designer.simulation.preliminary import (

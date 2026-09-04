@@ -7,7 +7,7 @@ from PySide6.QtGui import QVector3D
 from PySide6.QtQuick3D import QQuick3DGeometry
 
 from inductor_designer.application.services.geometry_model import GeometryModel
-from inductor_designer.geometry.tessellation import (
+from inductor_designer.geometry.toroid.tessellation import (
     Mesh,
     start_bead,
     tessellate_core,

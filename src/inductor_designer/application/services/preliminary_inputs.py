@@ -18,7 +18,7 @@ from inductor_designer.domain.project import (
     InductorProject,
     ManualCoreSelection,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
 
