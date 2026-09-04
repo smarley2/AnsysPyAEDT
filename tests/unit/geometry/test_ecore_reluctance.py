@@ -15,6 +15,7 @@ import pytest
 
 from inductor_designer.geometry.ecore.body import FinishedECore
 from inductor_designer.geometry.ecore.reluctance import referred_lengths
+from inductor_designer.simulation.magnetic_estimate import MU_0
 
 _DIMENSIONS = {
     "centre_leg_width_m": 0.0170,
@@ -30,9 +31,16 @@ _DIMENSIONS = {
 #   A_o = 0.0085*0.0210 = 1.7850e-4   yoke_run = 0.0092 + 0.0085 + 0.00425
 #                                              = 0.02195
 #   centre iron = outer iron = 2*0.0187 = 0.0374
-#   iron_m = A_c*(0.0374/A_c + 2*0.02195/A_y + 0.0374/(2*A_o))
-#          = 0.15504731182795703
-_UNGAPPED_IRON_M = 0.15504731182795703
+#
+# ONE yoke run, not two: the flux splits at the yoke, so each yoke is two runs
+# in parallel and two yokes in series contribute 2*(run/2) = one run. The first
+# version of this file counted two and pinned 0.15504731182795703, which was
+# 1.349x the true reluctance -- see `test_the_network_matches_a_brute_force_
+# node_analysis`, which is the check that would have caught it.
+#
+#   iron_m = A_c*(0.0374/A_c + 0.02195/A_y + 0.0374/(2*A_o))
+#          = 0.1149236559139785
+_UNGAPPED_IRON_M = 0.1149236559139785
 _AREA_M2 = 0.000357
 
 
@@ -118,6 +126,67 @@ def test_the_referred_form_reproduces_a_plain_reluctance_for_a_uniform_core() ->
     )
     lengths = referred_lengths(uniform)
     yoke_run = 0.0050 + 0.0100 / 2.0 + 0.0100 / 2.0
-    # The outer branch is two legs in parallel, so it contributes half.
-    expected = 2 * 0.0200 + 2 * yoke_run + (2 * 0.0200) / 2.0
+    # One yoke run (two runs per yoke in parallel, two yokes in series), and
+    # the outer branch is two legs in parallel, so it contributes half.
+    expected = 2 * 0.0200 + yoke_run + (2 * 0.0200) / 2.0
     assert lengths.iron_m == pytest.approx(expected, rel=1e-12)
+
+
+def test_the_network_matches_a_brute_force_node_analysis() -> None:
+    """The referred form against the network written out branch by branch.
+
+    This is the test the first version of this file did not have, and its
+    absence is why a doubled yoke term shipped: every other test here compares
+    the implementation against the same expression evaluated by hand, so an
+    error in the expression itself was invisible. This one builds the network
+    independently -- centre-leg branch in series with two side branches in
+    parallel, each side branch being top yoke run, outer leg, bottom yoke run
+    -- and compares reluctances.
+    """
+    mu_r = 2000.0
+    core = _core()
+    area_c = 0.0170 * 0.0210
+    area_y = 0.0093 * 0.0210
+    area_o = 0.0085 * 0.0210
+    yoke_run = 0.0092 + 0.0170 / 2.0 + 0.0085 / 2.0
+    leg = 2 * 0.0187
+
+    def reluctance(length: float, area: float) -> float:
+        return length / (mu_r * MU_0 * area)
+
+    side = reluctance(yoke_run, area_y) * 2.0 + reluctance(leg, area_o)
+    brute = reluctance(leg, area_c) + side / 2.0
+
+    lengths = referred_lengths(core)
+    referred = lengths.iron_m / (mu_r * MU_0 * lengths.effective_area_m2)
+    assert referred == pytest.approx(brute, rel=1e-12)
+
+
+def test_the_referred_length_is_shorter_than_the_all_series_sum() -> None:
+    """A guard against the specific error this file shipped once.
+
+    Counting the yoke twice -- treating each yoke as one series run rather
+    than two parallel ones -- inflates the referred length. So does dropping
+    the outer branch's halving. Both make the result approach the naive "every
+    section in series at its own area" sum, which is a strict upper bound on
+    any network with a parallel branch in it. The bound is crude, and it is
+    exactly the class of mistake that got here.
+
+    No datasheet numbers: a manufacturer's measured `l_e` includes corner
+    effects this centreline model has no term for, and encoding dimensions
+    from a datasheet nobody in this repository has read would be the invented
+    physical assumption `AGENTS.md` forbids. The brute-force node analysis
+    above is the rigorous check; during review a real E42/21/15 was compared
+    by hand and the corrected model landed within 1 mm of its published 97 mm.
+    """
+    core = _core()
+    area_c = core.centre_leg_area_m2
+    all_series = area_c * (
+        core.centre_leg_length_m / area_c
+        + 2.0 * core.yoke_run_m / core.yoke_area_m2
+        + core.centre_leg_length_m / core.outer_leg_area_m2
+    )
+    assert referred_lengths(core).iron_m < all_series
+    # And by a wide margin, not a rounding: the parallel branches halve two of
+    # the three terms.
+    assert referred_lengths(core).iron_m < 0.75 * all_series

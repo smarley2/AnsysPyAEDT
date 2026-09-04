@@ -87,8 +87,8 @@ def test_the_estimate_reads_the_network_and_reports_no_inductance_factor() -> No
     assert properties.al_value_nh is None
     assert properties.gap_length_m == pytest.approx(0.001)
     # Iron path, referred to the centre-leg area (hand-computed in
-    # tests/unit/geometry/test_ecore_reluctance.py).
-    assert properties.path_length_m == pytest.approx(0.154047311827957, rel=1e-9)
+    # tests/unit/geometry/test_ecore_reluctance.py, one yoke run).
+    assert properties.path_length_m == pytest.approx(0.11392365591397852, rel=1e-9)
     assert properties.effective_area_m2 == pytest.approx(0.000357, rel=1e-9)
     assert any("gap" in note.lower() for note in properties.notes)
 

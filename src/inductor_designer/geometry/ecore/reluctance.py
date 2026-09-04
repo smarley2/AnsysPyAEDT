@@ -58,11 +58,18 @@ def referred_lengths(core: FinishedECore) -> ReferredLengths:
     centre_iron = core.centre_leg_length_m - gap_total
     outer_iron = core.centre_leg_length_m - outer_gap_total
 
-    # Series along the loop: centre leg, both yokes, then the outer legs --
-    # two of them in parallel, hence the halved term.
+    # The network is the centre-leg branch in series with two identical side
+    # branches in parallel, each side branch being top yoke run + outer leg +
+    # bottom yoke run. So each yoke's two runs are in PARALLEL -- the flux
+    # leaving the centre leg splits toward the two outer legs -- and two yokes
+    # in series contribute 2 * (run/2) = one run's worth, not two.
+    #
+    # Counting two runs here (the first version of this, and of the spec)
+    # returned 1.349x the true reluctance and put a TDK E42/21/15 at a 135 mm
+    # effective path against its published 97 mm.
     iron_m = area * (
         centre_iron / area
-        + 2.0 * core.yoke_run_m / yoke_area
+        + core.yoke_run_m / yoke_area
         + outer_iron / (2.0 * outer_area)
     )
     gap_m = area * (gap_total / area + outer_gap_total / (2.0 * outer_area))

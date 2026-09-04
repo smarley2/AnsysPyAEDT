@@ -116,19 +116,34 @@ and 11b's solve is what shows the difference.
 An E core's sections have genuinely different areas, so collapsing them into
 one `l_e / A_e` would bury the assumption. Sections, for the pair:
 
-| Section | Area | Centreline length |
-| --- | --- | --- |
-| Centre leg (iron) | `A_c = F·C` | `2D - g_total` |
-| Centre gaps | `A_c` | each `g_i` |
-| Each yoke (2 in series) | `A_y = H·C` | `E + F/2 + G/2` |
-| Each outer leg (2 in parallel) | `A_o = G·C` | `2D - g_outer_total` |
-| Outer gaps, when `outer_legs_gapped` | `A_o` | each `g_i` |
+| Section | Area | Centreline length | Flux it carries |
+| --- | --- | --- | --- |
+| Centre leg (iron) | `A_c = F·C` | `2D - g_total` | all of it |
+| Centre gaps | `A_c` | each `g_i` | all of it |
+| Yoke run, 2 per yoke, 2 yokes | `A_y = H·C` | `E + F/2 + G/2` | half |
+| Each outer leg (2 in parallel) | `A_o = G·C` | `2D - g_outer_total` | half |
+| Outer gaps, when `outer_legs_gapped` | `A_o` | each `g_i` | half |
 
-Series along the loop, the two outer legs in parallel:
+**Corrected 2026-09-04, after review**: the first version of this table
+described "each yoke (2 in series)" and summed `2*(E + F/2 + G/2)/A_y`. That
+double counts. The flux leaving the centre leg **splits** at the yoke, so each
+yoke consists of two runs in parallel -- one toward each outer leg -- and two
+yokes in series therefore contribute `2 * (run/2) = one run`, not two. The
+network is a centre-leg branch in series with two identical side branches in
+parallel, each side branch being top run + outer leg + bottom run:
+
+```
+R_side  = 2*(E + F/2 + G/2)/(mu_r*mu_0*A_y) + (2D - g_outer_total)/(mu_r*mu_0*A_o)
+          + sum_i g_outer_i/(mu_0*A_o)
+
+R_total = (2D - g_total)/(mu_r*mu_0*A_c) + sum_i g_i/(mu_0*A_c) + R_side/2
+```
+
+which expands to
 
 ```
 R_iron  = (2D - g_total)/(mu_r*mu_0*A_c)
-        + 2*(E + F/2 + G/2)/(mu_r*mu_0*A_y)
+        + (E + F/2 + G/2)/(mu_r*mu_0*A_y)
         + (2D - g_outer_total)/(2*mu_r*mu_0*A_o)
 
 R_gap   = sum_i g_i/(mu_0*A_c)
@@ -136,6 +151,21 @@ R_gap   = sum_i g_i/(mu_0*A_c)
 
 L = N^2 / (R_iron + R_gap)
 ```
+
+The uncorrected form returned 1.349x the true reluctance for the geometry in
+`tests/unit/geometry/test_ecore_reluctance.py`. The corrected form matches a
+brute-force node analysis exactly, and during review a real TDK E42/21/15 was
+checked by hand: the corrected model lands within about a millimetre of its
+published `l_e = 97 mm`, where the uncorrected one gave 135 mm.
+
+The lesson is encoded rather than the datasheet. Every other test in that file
+compared the implementation against the same expression evaluated by hand, so
+an error in the expression itself was invisible; there is now a brute-force
+node analysis that builds the network independently, and a crude upper-bound
+check. A datasheet cross-check is deliberately NOT encoded: a manufacturer's
+measured `l_e` includes corner effects this centreline model has no term for,
+and hardcoding dimensions from a datasheet nobody in this repository has read
+would be the invented physical assumption `AGENTS.md` forbids.
 
 ### Why this needs only one new number downstream
 
