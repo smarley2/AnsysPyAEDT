@@ -1,8 +1,20 @@
-# PyAEDT Inductor Designer 0.3.0
+# PyAEDT Inductor Designer 0.4.0
 
 Windows installer. This file is edited in place for each release rather than
 starting a new one, so the version and the artifact hashes below always
 describe what is actually attached to the current GitHub release.
+
+## What changed in 0.4.0
+
+- **Conductor sizes now show their review status.** All 35 shipped conductor
+  sizes are draft transcriptions of IEC 60317 and AWG tables, never checked
+  against the source by a second person, and every winding is sized on one of
+  them. The Windings screen says so, and Review states it for the core and
+  each winding's conductor.
+- **You can mark an imported core reviewed** once you have checked its
+  numbers against the datasheet -- see "Adding your own cores".
+- **`--check-solver-imports`** reports whether this installed build can
+  import the PyAEDT and FEMM modules it needs, without starting AEDT.
 
 ## What changed in 0.3.0
 
@@ -271,7 +283,7 @@ only -- never by a download link. Verify what you downloaded actually
 matches before you run it:
 
 ```powershell
-Get-FileHash .\inductor-designer-0.3.0-setup.exe -Algorithm SHA256
+Get-FileHash .\inductor-designer-0.4.0-setup.exe -Algorithm SHA256
 ```
 
 Compare the printed hash, case-insensitively, against the matching line in
