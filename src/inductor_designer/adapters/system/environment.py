@@ -12,6 +12,7 @@ import contextlib
 import getpass
 import os
 import platform
+import shutil
 from pathlib import Path
 
 from inductor_designer.application.services.redaction import RedactionContext
@@ -46,6 +47,52 @@ def recovery_directory() -> Path:
 
 def log_directory() -> Path:
     return application_data_directory() / "logs"
+
+
+def catalog_overlay_directory() -> Path:
+    """Where a user's own imported cores live.
+
+    Beside `logs/` and `recovery/`, deliberately NOT beside the shipped
+    catalog index: the index lives inside the installed bundle, which an
+    upgrade rewrites, and the uninstaller only removes what it installed
+    (`packaging/installer.iss`), so it cannot reach this directory at all.
+    A core someone transcribed from a datasheet must survive both.
+    """
+    return application_data_directory() / "catalog-overlay"
+
+
+def user_material_overlay_directory() -> Path:
+    """Where a user's own imported materials live, for the same reason.
+
+    Until 2026-09-04 this was the shipped `materials-overlay` inside the
+    bundle, which both held the seed material and received every user import
+    -- an upgrade rewrote the tree that held them.
+    """
+    return application_data_directory() / "materials-overlay"
+
+
+def seed_material_overlay(seed_root: Path) -> bool:
+    """Copy the shipped seed materials into the per-user overlay, once.
+
+    Returns True only when the copy actually ran. The destination existing at
+    all is the guard, and it is the entire safety of this approach: copying a
+    second time would overwrite a material the user imported with the shipped
+    seed.
+
+    ponytail: one-time seeding, not read-both layering. The ceiling is that a
+    later release shipping a CORRECTED seed material never reaches a user who
+    already has the copy. Acceptable while the seed is one reviewed material,
+    and support can still re-import or point `INDUCTOR_DESIGNER_RESOURCES` at
+    a corrected tree. If a corrected seed ever has to ship, the upgrade path
+    is layering the seed read-only under the writable root -- six methods of
+    `FileOverlayMaterialRepository`, which is why it is not the first move.
+    """
+    destination = user_material_overlay_directory()
+    if destination.exists() or not seed_root.is_dir():
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(seed_root, destination)
+    return True
 
 
 def _usable(name: str | None) -> str | None:
