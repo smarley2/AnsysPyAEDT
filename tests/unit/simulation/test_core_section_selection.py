@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.domain.winding import ToroidPlacement, WindingDefinition
 from inductor_designer.simulation.section_selection import select_core_sections
 from tests.unit.domain.test_project import make_project
 
@@ -10,7 +10,10 @@ from tests.unit.domain.test_project import make_project
 def windings(*spans: tuple[float, float]) -> tuple[WindingDefinition, ...]:
     base = make_project().design.windings[0]
     return tuple(
-        replace(base, winding_id=f"w{index}", start_angle_deg=start, sector_deg=sector)
+        replace(base, winding_id=f"w{index}", placement=ToroidPlacement(
+            start_angle_deg=start,
+            sector_deg=sector,
+        ))
         for index, (start, sector) in enumerate(spans, start=1)
     )
 

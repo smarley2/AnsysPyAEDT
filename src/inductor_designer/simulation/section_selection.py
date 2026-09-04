@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.domain.winding import ToroidPlacement, WindingDefinition
 from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import half_plane_point
 from inductor_designer.geometry.turn_path import radial_build_m
@@ -38,8 +38,9 @@ def _spans(
 ) -> tuple[tuple[float, float], ...]:
     """Each winding as ``(start, sector)`` with the start normalized."""
     return tuple(
-        (_normalize(winding.start_angle_deg), winding.sector_deg)
+        (_normalize(placement.start_angle_deg), placement.sector_deg)
         for winding in windings
+        if isinstance(placement := winding.placement, ToroidPlacement)
     )
 
 
@@ -82,10 +83,16 @@ def select_core_sections(
     """
     candidates: list[tuple[float, str]] = []
     for winding in windings:
-        start = _normalize(winding.start_angle_deg)
+        # Azimuthal cut sections are a toroid concept: a leg-placed winding
+        # has no start angle, and a section through it is a different feature
+        # this selector does not describe.
+        placement = winding.placement
+        if not isinstance(placement, ToroidPlacement):
+            continue
+        start = _normalize(placement.start_angle_deg)
         candidates.append((start, "span-start"))
-        candidates.append((_normalize(start + winding.sector_deg / 2.0), "span-mid"))
-        candidates.append((_normalize(start + winding.sector_deg), "span-end"))
+        candidates.append((_normalize(start + placement.sector_deg / 2.0), "span-mid"))
+        candidates.append((_normalize(start + placement.sector_deg), "span-end"))
     candidates.extend((azimuth, "gap-mid") for azimuth in _gap_midpoints(_spans(windings)))
 
     kept: list[tuple[float, str]] = []

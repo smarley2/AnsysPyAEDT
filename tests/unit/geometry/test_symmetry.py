@@ -56,7 +56,10 @@ def test_unequal_turns_refused() -> None:
 
 def test_unequal_spacing_refused() -> None:
     w1, w2, w3 = trio()
-    w2 = dataclasses.replace(w2, start_angle_deg=100.0)  # type: ignore[type-var]
+    w2 = dataclasses.replace(  # type: ignore[type-var]
+        w2,
+        placement=dataclasses.replace(w2.placement, start_angle_deg=100.0),
+    )
     refusal = propose_symmetry_plan([w1, w2, w3], operating_trio())
     assert isinstance(refusal, SymmetryRefusal)
     assert refusal.code == "unequal-spacing"

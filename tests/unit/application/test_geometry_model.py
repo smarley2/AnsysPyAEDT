@@ -17,6 +17,7 @@ from inductor_designer.domain.catalog_records import (
     CoreRecord,
     ReviewStatus,
 )
+from inductor_designer.domain.winding import ToroidPlacement
 from inductor_designer.geometry.symmetry import SymmetryRefusal
 from tests.unit.domain.test_catalog_records import make_core
 from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
@@ -70,8 +71,14 @@ def test_build_model_end_to_end() -> None:
         design=replace(
             make_project().design,
             windings=(
-                make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
-                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
+                make_winding(winding_id="w1", placement=ToroidPlacement(
+            start_angle_deg=0.0,
+            sector_deg=150.0,
+        ), turns=10),
+                make_winding(winding_id="w2", placement=ToroidPlacement(
+            start_angle_deg=180.0,
+            sector_deg=150.0,
+        ), turns=10),
             ),
         ),
         operating_point=make_operating_point(
@@ -116,7 +123,10 @@ def test_asymmetric_project_gets_refusal_not_error() -> None:
             make_project().design,
             windings=(
                 make_winding(winding_id="w1", sector_deg=150.0, turns=10),
-                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=100.0, turns=10),
+                make_winding(winding_id="w2", placement=ToroidPlacement(
+            start_angle_deg=180.0,
+            sector_deg=100.0,
+        ), turns=10),
             ),
         ),
         operating_point=make_operating_point(

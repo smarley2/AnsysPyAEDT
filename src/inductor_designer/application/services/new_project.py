@@ -24,6 +24,7 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
 )
@@ -56,11 +57,10 @@ def new_project() -> InductorProject:
         turns=1,
         conductor_name=BLANK_CONDUCTOR_NAME,
         mode=ConductorMode.SOLID,
-        start_angle_deg=0.0,
         # One winding around the whole toroid, which is what a single-winding
         # inductor is. `addWinding` then refuses a second winding until this
         # sector is reduced, and its refusal says exactly that.
-        sector_deg=360.0,
+        placement=ToroidPlacement(start_angle_deg=0.0, sector_deg=360.0),
         min_spacing_m=0.0002,
         min_clearance_m=0.001,
         winding_direction=WindingDirection.CLOCKWISE,

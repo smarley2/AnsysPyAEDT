@@ -26,6 +26,7 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
 )
@@ -84,8 +85,7 @@ def _real_project_request(tmp_path: Path) -> PreliminaryRequest:
                     turns=10,
                     conductor_name="AWG 18",
                     mode=ConductorMode.SOLID,
-                    start_angle_deg=0.0,
-                    sector_deg=150.0,
+                    placement=ToroidPlacement(start_angle_deg=0.0, sector_deg=150.0),
                     min_spacing_m=0.0002,
                     min_clearance_m=0.001,
                     winding_direction=WindingDirection.CLOCKWISE,

@@ -10,7 +10,7 @@ from inductor_designer.domain.project import (
     InductorProject,
     ManualCoreSelection,
 )
-from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.domain.winding import ToroidPlacement, WindingDefinition
 
 
 class ValidationCategory(str, Enum):
@@ -39,15 +39,34 @@ def _segments(start_deg: float, sector_deg: float) -> tuple[tuple[float, float],
 
 
 def _sectors_overlap(first: WindingDefinition, second: WindingDefinition) -> bool:
+    """Whether two toroid-placed windings claim the same arc.
+
+    Two windings on a leg cannot overlap by angle -- they share a window by
+    span instead -- so a pair that is not both toroid-placed is simply not
+    this rule's business and reports no overlap.
+    """
+    if not isinstance(first.placement, ToroidPlacement) or not isinstance(
+        second.placement, ToroidPlacement
+    ):
+        return False
     return any(
         a_start < b_end and b_start < a_end
-        for a_start, a_end in _segments(first.start_angle_deg, first.sector_deg)
-        for b_start, b_end in _segments(second.start_angle_deg, second.sector_deg)
+        for a_start, a_end in _segments(
+            first.placement.start_angle_deg, first.placement.sector_deg
+        )
+        for b_start, b_end in _segments(
+            second.placement.start_angle_deg, second.placement.sector_deg
+        )
     )
 
 
 def _sector_fields_valid(winding: WindingDefinition) -> bool:
-    return 0.0 <= winding.start_angle_deg < 360.0 and 0.0 < winding.sector_deg <= 360.0
+    if not isinstance(winding.placement, ToroidPlacement):
+        return True
+    return (
+        0.0 <= winding.placement.start_angle_deg < 360.0
+        and 0.0 < winding.placement.sector_deg <= 360.0
+    )
 
 
 def _validate_core(project: InductorProject) -> list[ValidationIssue]:
@@ -155,10 +174,11 @@ def _validate_winding(winding: WindingDefinition, path: str) -> list[ValidationI
 
     if winding.turns < 1:
         error("winding.turns", "Turn count must be at least 1.")
-    if not 0.0 <= winding.start_angle_deg < 360.0:
-        error("winding.start_angle", "Start angle must satisfy 0 <= angle < 360 degrees.")
-    if not 0.0 < winding.sector_deg <= 360.0:
-        error("winding.sector", "Sector must satisfy 0 < sector <= 360 degrees.")
+    if isinstance(winding.placement, ToroidPlacement):
+        if not 0.0 <= winding.placement.start_angle_deg < 360.0:
+            error("winding.start_angle", "Start angle must satisfy 0 <= angle < 360 degrees.")
+        if not 0.0 < winding.placement.sector_deg <= 360.0:
+            error("winding.sector", "Sector must satisfy 0 < sector <= 360 degrees.")
     if winding.min_spacing_m < 0 or winding.min_clearance_m < 0:
         error("winding.spacing", "Spacing and clearance must be non-negative.")
     return issues

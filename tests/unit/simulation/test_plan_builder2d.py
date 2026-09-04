@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.domain.project import RequestedOutput, SimulationRecipe
-from inductor_designer.domain.winding import CurrentDirection, WindingDefinition
+from inductor_designer.domain.winding import (
+    CurrentDirection,
+    WindingDefinition,
+)
 from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.planar import PlanarModel, build_planar_model
 from inductor_designer.materials.records import MaterialRecord
@@ -33,8 +36,8 @@ def planar_for(definitions: tuple[WindingDefinition, ...]) -> PlanarModel:
                 winding_id=definition.winding_id,
                 turns=definition.turns,
                 insulated_diameter_m=0.0011,
-                start_deg=definition.start_angle_deg,
-                sector_deg=definition.sector_deg,
+                start_deg=definition.placement.start_angle_deg,
+                sector_deg=definition.placement.sector_deg,
                 min_spacing_m=definition.min_spacing_m,
                 min_clearance_m=definition.min_clearance_m,
             ),

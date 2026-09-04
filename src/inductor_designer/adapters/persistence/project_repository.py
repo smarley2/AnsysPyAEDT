@@ -19,6 +19,7 @@ from inductor_designer.domain.project import (
     Design,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
     MaterialRevisionSelection,
     MeshIntent,
     OperatingPoint,
@@ -29,14 +30,51 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    LegPlacement,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
+    WindingLeg,
+    WindingPlacement,
 )
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.serde import (
     material_record_from_json,
     material_record_to_json,
 )
+
+
+def _placement_to_json(placement: WindingPlacement) -> dict[str, object]:
+    """Tagged by family, so a reader never has to guess what the numbers mean.
+
+    A toroid's angles and a leg's window span are different quantities in
+    different units; storing them under one pair of names is how a document
+    stops being auditable.
+    """
+    if isinstance(placement, ToroidPlacement):
+        return {
+            "kind": "toroid",
+            "startAngleDeg": placement.start_angle_deg,
+            "sectorDeg": placement.sector_deg,
+        }
+    return {
+        "kind": "leg",
+        "leg": placement.leg.value,
+        "windowStartM": placement.window_start_m,
+        "windowSpanM": placement.window_span_m,
+    }
+
+
+def _placement_from_json(data: Mapping[str, Any]) -> WindingPlacement:
+    if data["kind"] == "toroid":
+        return ToroidPlacement(
+            start_angle_deg=data["startAngleDeg"], sector_deg=data["sectorDeg"]
+        )
+    return LegPlacement(
+        leg=WindingLeg(data["leg"]),
+        window_start_m=data["windowStartM"],
+        window_span_m=data["windowSpanM"],
+    )
 
 
 def _winding_to_json(winding: WindingDefinition) -> dict[str, object]:
@@ -46,8 +84,7 @@ def _winding_to_json(winding: WindingDefinition) -> dict[str, object]:
         "turns": winding.turns,
         "conductor": winding.conductor_name,
         "mode": winding.mode.value,
-        "startAngleDeg": winding.start_angle_deg,
-        "sectorDeg": winding.sector_deg,
+        "placement": _placement_to_json(winding.placement),
         "minSpacingM": winding.min_spacing_m,
         "minClearanceM": winding.min_clearance_m,
         "windingDirection": winding.winding_direction.value,
@@ -62,8 +99,7 @@ def _winding_from_json(data: Mapping[str, Any]) -> WindingDefinition:
         turns=data["turns"],
         conductor_name=data["conductor"],
         mode=ConductorMode(data["mode"]),
-        start_angle_deg=data["startAngleDeg"],
-        sector_deg=data["sectorDeg"],
+        placement=_placement_from_json(data["placement"]),
         min_spacing_m=data["minSpacingM"],
         min_clearance_m=data["minClearanceM"],
         winding_direction=WindingDirection(data["windingDirection"]),
@@ -74,6 +110,19 @@ def _winding_from_json(data: Mapping[str, Any]) -> WindingDefinition:
 def _core_to_json(core: CoreSelection | None) -> dict[str, object] | None:
     if core is None:
         return None
+    if isinstance(core, ManualECoreSelection):
+        return {
+            "kind": "manual-e",
+            "centreLegWidthM": core.centre_leg_width_m,
+            "depthM": core.depth_m,
+            "windowWidthM": core.window_width_m,
+            "windowHeightM": core.window_height_m,
+            "outerLegWidthM": core.outer_leg_width_m,
+            "yokeThicknessM": core.yoke_thickness_m,
+            "gapsM": list(core.gaps_m),
+            "gapSpacingsM": list(core.gap_spacings_m),
+            "outerLegsGapped": core.outer_legs_gapped,
+        }
     if isinstance(core, ManualCoreSelection):
         return {
             "kind": "manual",
@@ -95,6 +144,18 @@ def _core_to_json(core: CoreSelection | None) -> dict[str, object] | None:
 def _core_from_json(data: Mapping[str, Any] | None) -> CoreSelection | None:
     if data is None:
         return None
+    if data["kind"] == "manual-e":
+        return ManualECoreSelection(
+            centre_leg_width_m=data["centreLegWidthM"],
+            depth_m=data["depthM"],
+            window_width_m=data["windowWidthM"],
+            window_height_m=data["windowHeightM"],
+            outer_leg_width_m=data["outerLegWidthM"],
+            yoke_thickness_m=data["yokeThicknessM"],
+            gaps_m=tuple(data["gapsM"]),
+            gap_spacings_m=tuple(data["gapSpacingsM"]),
+            outer_legs_gapped=data["outerLegsGapped"],
+        )
     if data["kind"] == "manual":
         return ManualCoreSelection(
             outer_diameter_m=data["outerDiameterM"],
@@ -220,7 +281,7 @@ def _simulation_recipe_from_json(data: Mapping[str, Any]) -> SimulationRecipe:
 
 def project_to_document(project: InductorProject) -> dict[str, object]:
     return {
-        "schemaVersion": 5,
+        "schemaVersion": 6,
         "projectId": project.project_id,
         "metadata": {"name": project.name, "description": project.description},
         "design": _design_to_json(project.design),

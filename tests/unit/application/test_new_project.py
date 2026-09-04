@@ -22,6 +22,7 @@ from inductor_designer.application.services.new_project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDirection,
 )
 
@@ -47,8 +48,10 @@ def test_the_blank_project_carries_exactly_one_winding() -> None:
     assert winding.turns == 1
     assert winding.conductor_name == BLANK_CONDUCTOR_NAME
     assert winding.mode is ConductorMode.SOLID
-    assert winding.start_angle_deg == 0.0
-    assert winding.sector_deg == 360.0
+    placement = winding.placement
+    assert isinstance(placement, ToroidPlacement)
+    assert placement.start_angle_deg == 0.0
+    assert placement.sector_deg == 360.0
     # The repository's existing convention, from `make_winding`.
     assert winding.min_spacing_m == 0.0002
     assert winding.min_clearance_m == 0.001

@@ -20,6 +20,7 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
 )
@@ -38,20 +39,36 @@ from tests.unit.domain.test_catalog_records import make_core
 
 
 def make_winding(**overrides: object) -> WindingDefinition:
+    """A toroid-placed winding by default.
+
+    `start_angle_deg` / `sector_deg` are accepted as overrides and folded
+    into a `ToroidPlacement`, so the dozens of existing tests that say
+    `make_winding(sector_deg=90.0)` keep reading as they did. Test sugar
+    only: production code has exactly one way to express placement, which is
+    the point of the union.
+    """
+    angles = {
+        name: overrides.pop(name)
+        for name in ("start_angle_deg", "sector_deg")
+        if name in overrides
+    }
     values: dict[str, object] = {
         "winding_id": "w1",
         "label": "Primary",
         "turns": 20,
         "conductor_name": "AWG 18",
         "mode": ConductorMode.SOLID,
-        "start_angle_deg": 0.0,
-        "sector_deg": 150.0,
+        "placement": ToroidPlacement(start_angle_deg=0.0, sector_deg=150.0),
         "min_spacing_m": 0.0002,
         "min_clearance_m": 0.001,
         "winding_direction": WindingDirection.CLOCKWISE,
         "terminal_intent": "",
     }
     values.update(overrides)
+    if angles:
+        base = values["placement"]
+        assert isinstance(base, ToroidPlacement)
+        values["placement"] = replace(base, **angles)  # type: ignore[arg-type]
     return WindingDefinition(**values)  # type: ignore[arg-type]
 
 
@@ -195,8 +212,7 @@ def test_project_aggregate_holds_design_operating_point_and_recipe() -> None:
         "turns",
         "conductor_name",
         "mode",
-        "start_angle_deg",
-        "sector_deg",
+        "placement",
         "min_spacing_m",
         "min_clearance_m",
         "winding_direction",

@@ -12,6 +12,7 @@ from inductor_designer.application.ports.maxwell_exporter import (
     Maxwell3dGeometryOnlyRequest,
 )
 from inductor_designer.domain.aedt_target import AedtEdition, AedtRelease
+from inductor_designer.domain.winding import ToroidPlacement
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import SOLUTION_TYPE_DC
 from inductor_designer.simulation.plan_builder import build_geometry_only_maxwell3d_plan
@@ -359,7 +360,7 @@ def test_native_dc_only_applies_to_nonzero_windings(tmp_path: Path) -> None:
         (
             make_definition(winding_id="w1", sector_deg=100.0),
             make_definition(
-                winding_id="w2", start_angle_deg=180.0, sector_deg=100.0
+                winding_id="w2", placement=ToroidPlacement(start_angle_deg=180.0, sector_deg=100.0)
             ),
         ),
         (

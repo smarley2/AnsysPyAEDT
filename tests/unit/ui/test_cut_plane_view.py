@@ -18,7 +18,11 @@ from inductor_designer.application.services.geometry_model import (  # noqa: E40
     build_geometry_model,
 )
 from inductor_designer.domain.project import WindingOperatingPoint  # noqa: E402
-from inductor_designer.domain.winding import CurrentDirection, WindingDirection  # noqa: E402
+from inductor_designer.domain.winding import (  # noqa: E402
+    CurrentDirection,
+    ToroidPlacement,
+    WindingDirection,
+)
 from inductor_designer.geometry.packing import start_azimuth_deg  # noqa: E402
 from inductor_designer.geometry.tessellation import start_bead  # noqa: E402
 from inductor_designer.simulation.maxwell_plan import Polarity  # noqa: E402
@@ -109,8 +113,14 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
         design=replace(
             make_project().design,
             windings=(
-                make_winding(winding_id="w2", start_angle_deg=0.0, sector_deg=150.0),
-                make_winding(winding_id="w1", start_angle_deg=180.0, sector_deg=150.0),
+                make_winding(winding_id="w2", placement=ToroidPlacement(
+            start_angle_deg=0.0,
+            sector_deg=150.0,
+        )),
+                make_winding(winding_id="w1", placement=ToroidPlacement(
+            start_angle_deg=180.0,
+            sector_deg=150.0,
+        )),
             ),
         ),
         operating_point=make_operating_point(

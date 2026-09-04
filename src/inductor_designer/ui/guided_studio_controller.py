@@ -16,7 +16,9 @@ from inductor_designer.domain.project import WindingOperatingPoint
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDirection,
+    require_toroid_placement,
 )
 from inductor_designer.ui.cut_plane_view import CutPlaneDrawing, build_cut_plane_drawing
 from inductor_designer.ui.preview_geometry import PreviewEntry, build_preview_entries
@@ -143,7 +145,11 @@ class GuidedStudioController(QObject):
         """
         windings = self._session.project.design.windings
         occupied_end = max(
-            (winding.start_angle_deg + winding.sector_deg for winding in windings),
+            (
+                require_toroid_placement(winding).start_angle_deg
+                + require_toroid_placement(winding).sector_deg
+                for winding in windings
+            ),
             default=0.0,
         )
         if occupied_end >= 360.0 - self._MINIMUM_NEW_SECTOR_DEG:
@@ -164,8 +170,11 @@ class GuidedStudioController(QObject):
                 "conductor": winding.conductor_name,
                 "acRmsCurrentA": points_by_id[winding.winding_id].ac_rms_current_a,
                 "acPhaseDeg": points_by_id[winding.winding_id].ac_phase_deg,
-                "startAngleDeg": winding.start_angle_deg,
-                "sectorDeg": winding.sector_deg,
+                # The Windings screen is the toroid's own editor today, so it
+                # reads the toroid placement directly. An E-core project
+                # reaches a different panel (M11a task 8), not this row shape.
+                "startAngleDeg": require_toroid_placement(winding).start_angle_deg,
+                "sectorDeg": require_toroid_placement(winding).sector_deg,
                 "spacingMm": winding.min_spacing_m * 1000.0,
                 "clearanceMm": winding.min_clearance_m * 1000.0,
                 "direction": winding.winding_direction.value,
@@ -332,9 +341,21 @@ class GuidedStudioController(QObject):
         if field == "conductor":
             return replace(winding, conductor_name=value.strip())
         if field == "startAngleDeg":
-            return replace(winding, start_angle_deg=cls._number(value, "Start angle"))
+            return replace(
+                winding,
+                placement=replace(
+                    require_toroid_placement(winding),
+                    start_angle_deg=cls._number(value, "Start angle"),
+                ),
+            )
         if field == "sectorDeg":
-            return replace(winding, sector_deg=cls._number(value, "Sector"))
+            return replace(
+                winding,
+                placement=replace(
+                    require_toroid_placement(winding),
+                    sector_deg=cls._number(value, "Sector"),
+                ),
+            )
         if field == "spacingMm":
             return replace(
                 winding,
@@ -519,8 +540,9 @@ class GuidedStudioController(QObject):
             winding_id=winding_id,
             label=f"Winding {len(windings) + 1}",
             turns=1,
-            start_angle_deg=start_deg,
-            sector_deg=sector_deg,
+            placement=ToroidPlacement(
+                start_angle_deg=start_deg, sector_deg=sector_deg
+            ),
             terminal_intent="",
         )
         excitation = WindingOperatingPoint(

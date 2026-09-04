@@ -6,7 +6,11 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.domain.validation import ValidationCategory, validate_project
-from inductor_designer.domain.winding import CurrentDirection, WindingDirection
+from inductor_designer.domain.winding import (
+    CurrentDirection,
+    WindingDirection,
+    require_toroid_placement,
+)
 from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
 from inductor_designer.geometry.core_solid import (
     CoreGeometryError,
@@ -111,8 +115,8 @@ def build_geometry_model(project: InductorProject, catalog: CatalogRepository) -
             winding_id=winding.winding_id,
             turns=winding.turns,
             insulated_diameter_m=d_ins,
-            start_deg=winding.start_angle_deg,
-            sector_deg=winding.sector_deg,
+            start_deg=require_toroid_placement(winding).start_angle_deg,
+            sector_deg=require_toroid_placement(winding).sector_deg,
             min_spacing_m=winding.min_spacing_m,
             min_clearance_m=winding.min_clearance_m,
         )

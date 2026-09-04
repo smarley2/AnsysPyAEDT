@@ -14,9 +14,9 @@ from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 from inductor_designer.domain.catalog_records import Dimension  # noqa: E402
 from inductor_designer.domain.project import CatalogCoreSelection  # noqa: E402
-from inductor_designer.domain.winding import (  # noqa: E402
+from inductor_designer.domain.winding import (
     ConductorMode,
-    CurrentDirection,
+    CurrentDirection,  # noqa: E402
 )
 from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
     GuidedStudioController,
@@ -229,8 +229,11 @@ def test_a_new_winding_does_not_overlap_an_existing_sector() -> None:
     assert controller.addWinding() is True
 
     first, second = session.project.design.windings
-    assert second.start_angle_deg >= first.start_angle_deg + first.sector_deg
-    assert second.start_angle_deg + second.sector_deg <= 360.0
+    assert (
+        second.placement.start_angle_deg
+        >= first.placement.start_angle_deg + first.placement.sector_deg
+    )
+    assert second.placement.start_angle_deg + second.placement.sector_deg <= 360.0
 
 
 def test_a_full_core_refuses_another_winding() -> None:

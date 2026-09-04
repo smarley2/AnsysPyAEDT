@@ -8,7 +8,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-LATEST_PROJECT_SCHEMA_VERSION = 5
+LATEST_PROJECT_SCHEMA_VERSION = 6
 
 
 def _validate_finite_numbers(value: object, path: str = "") -> None:

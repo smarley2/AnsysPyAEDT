@@ -8,6 +8,7 @@ from inductor_designer.adapters.catalog.sqlite_repository import SqliteCatalogRe
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
 from inductor_designer.application.services.geometry_model import build_geometry_model
+from inductor_designer.domain.winding import ToroidPlacement
 from inductor_designer.geometry.manifest import build_manifest, manifest_json
 from tests.unit.application.test_geometry_model import CATALOG
 from tests.unit.domain.test_project import make_operating_point, make_project, make_winding
@@ -23,8 +24,14 @@ def two_winding_project() -> object:
         design=replace(
             make_project().design,
             windings=(
-                make_winding(winding_id="w1", start_angle_deg=0.0, sector_deg=150.0, turns=10),
-                make_winding(winding_id="w2", start_angle_deg=180.0, sector_deg=150.0, turns=10),
+                make_winding(winding_id="w1", placement=ToroidPlacement(
+            start_angle_deg=0.0,
+            sector_deg=150.0,
+        ), turns=10),
+                make_winding(winding_id="w2", placement=ToroidPlacement(
+            start_angle_deg=180.0,
+            sector_deg=150.0,
+        ), turns=10),
             ),
         ),
         operating_point=make_operating_point(

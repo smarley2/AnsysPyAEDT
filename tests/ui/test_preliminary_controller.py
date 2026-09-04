@@ -84,7 +84,10 @@ def test_a_second_winding_adds_mutual_and_the_two_mode_rows() -> None:
     design = project.design
     operating_point = project.operating_point
     second = replace(
-        design.windings[0], winding_id="w2", label="w2", start_angle_deg=180.0
+        design.windings[0],
+        winding_id="w2",
+        label="w2",
+        placement=replace(design.windings[0].placement, start_angle_deg=180.0),
     )
     second_point = replace(operating_point.windings[0], winding_id="w2")
     session = ProjectSession(
