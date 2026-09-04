@@ -395,3 +395,40 @@ def test_screen_content_fits_the_scroll_view_after_visiting_others(
     assert not violations, (
         f"{STEP_NAMES[index]} at width={width}, height={height}, visited after others: {violations}"
     )
+
+
+def test_the_core_screen_offers_a_template_and_an_import() -> None:
+    """The screen that showed an empty core list is where a user has to be
+    able to add one -- both controls live here rather than in a second window
+    (spec 2026-09-04). Their absence is the whole defect, so their presence is
+    worth pinning."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    template_button = root.findChild(QObject, "coreTemplateButton")
+    import_button = root.findChild(QObject, "importCoresButton")
+    template_dialog = root.findChild(QObject, "coreTemplateDialog")
+    import_dialog = root.findChild(QObject, "importCoresDialog")
+    for item in (template_button, import_button, template_dialog, import_dialog):
+        assert item is not None
+    assert template_button.property("enabled") is True
+    assert import_button.property("enabled") is True
+
+
+def test_every_rendered_core_row_states_its_review_status() -> None:
+    """A `draft` core is a transcription nobody has checked against the cited
+    page. Reading `coreOptions` from Python would pass with the label deleted
+    from the delegate, so this asserts on the rendered row text."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+    core_list = root.findChild(QObject, "coreOptionList")
+    assert core_list is not None
+    assert core_list.property("count") > 0
+
+    rendered = [
+        item.property("text")
+        for item in _walk_items(core_list)
+        if item.property("text") is not None and "0077" in str(item.property("text"))
+    ]
+    assert rendered
+    assert all("reviewed" in text or "draft" in text for text in rendered), rendered

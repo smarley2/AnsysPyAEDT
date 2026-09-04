@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 Pane {
@@ -88,13 +89,84 @@ Pane {
                     activeFocusOnTab: true
                     highlighted: coreMaterialPanel.controller !== null
                         && coreMaterialPanel.controller.selectedCore.partNumber === modelData.partNumber
-                    text: qsTr("%1  ·  %2  ·  %3")
+                    // The review status is part of the row, not a tooltip: a
+                    // `draft` core is a transcription nobody has checked
+                    // against the cited source page, and an imported one was
+                    // typed in by a user. Neither may read as a verified part.
+                    text: qsTr("%1  ·  %2  ·  %3  ·  %4")
                         .arg(modelData.partNumber)
                         .arg(modelData.manufacturer)
                         .arg(modelData.materialLabel)
+                        .arg(modelData.origin === "imported"
+                            ? qsTr("imported, %1").arg(modelData.reviewStatus)
+                            : modelData.reviewStatus)
                     Accessible.name: qsTr("Select core %1").arg(modelData.partNumber)
                     onClicked: coreMaterialPanel.controller.selectCatalogCore(modelData.partNumber)
                     Keys.onReturnPressed: coreMaterialPanel.controller.selectCatalogCore(modelData.partNumber)
+                }
+            }
+
+            // `Flow`, not `RowLayout`: two side-by-side buttons impose a
+            // minimum width that pushed the whole panel past the scroll view
+            // at the narrowest supported window (caught by
+            // tests/ui/test_panel_layout_containment.py). Flow wraps them
+            // onto a second line instead.
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Button {
+                    id: coreTemplateButton
+                    objectName: "coreTemplateButton"
+                    text: qsTr("Core template…")
+                    enabled: coreMaterialPanel.controller !== null
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Save an empty table to fill in from a core datasheet."
+                    )
+                    onClicked: coreTemplateDialog.open()
+                }
+                Button {
+                    id: importCoresButton
+                    objectName: "importCoresButton"
+                    text: qsTr("Import cores…")
+                    enabled: coreMaterialPanel.controller !== null
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Add cores from a filled template. Imported cores stay "
+                        + "draft until a reviewer checks them against the datasheet."
+                    )
+                    onClicked: importCoresDialog.open()
+                }
+            }
+
+            FileDialog {
+                id: coreTemplateDialog
+                objectName: "coreTemplateDialog"
+                title: qsTr("Save core template")
+                fileMode: FileDialog.SaveFile
+                currentFile: "file:core-import-template.csv"
+                nameFilters: [qsTr("Comma-separated values (*.csv)"),
+                              qsTr("Excel workbook (*.xlsx)")]
+                onAccepted: {
+                    if (coreMaterialPanel.controller !== null) {
+                        coreMaterialPanel.controller.downloadCoreTemplate(
+                            selectedFile.toString().toLowerCase().endsWith(".xlsx")
+                                ? "xlsx" : "csv",
+                            selectedFile)
+                    }
+                }
+            }
+
+            FileDialog {
+                id: importCoresDialog
+                objectName: "importCoresDialog"
+                title: qsTr("Import cores")
+                nameFilters: [qsTr("Core table (*.csv *.xlsx)")]
+                onAccepted: {
+                    if (coreMaterialPanel.controller !== null) {
+                        coreMaterialPanel.controller.importCores(selectedFile)
+                    }
                 }
             }
 

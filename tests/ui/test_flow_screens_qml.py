@@ -367,3 +367,4 @@ def test_review_page_lists_sections_and_disabled_open_actions() -> None:
     assert root.findChild(QObject, "reviewSections").property("count") == 5
     assert root.findChild(QObject, "openGeneratedFileButton").property("enabled") is False
     assert root.findChild(QObject, "openRunFolderButton").property("enabled") is False
+
