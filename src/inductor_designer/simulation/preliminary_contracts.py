@@ -109,6 +109,13 @@ class CoreMagneticProperties:
     volume_m3: float
     effective_area_m2: float
     al_value_nh: float | None
+    #: The gap in the flux path, referred to `effective_area_m2`, or 0.0 for
+    #: an ungapped core -- which is every core this application handled before
+    #: the E-core family. It defaults to zero so no existing caller changes
+    #: and no existing number moves; a non-zero value switches the estimate
+    #: from `H = NI/l` to the loadline `NI = H*l_iron + (B/mu_0)*l_gap`,
+    #: because with a gap most of the ampere-turns drop across it.
+    gap_length_m: float = 0.0
     notes: tuple[str, ...] = field(default_factory=tuple)
 
 
