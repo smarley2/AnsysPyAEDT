@@ -1,9 +1,29 @@
-# PyAEDT Inductor Designer 0.1.0
+# PyAEDT Inductor Designer 0.2.0
 
-Windows installer, first release. This file is the template filled in for
-this release; the next release edits it in place rather than starting a new
-one, so the version and the artifact hashes below always describe what is
-actually attached to the current GitHub release.
+Windows installer. This file is edited in place for each release rather than
+starting a new one, so the version and the artifact hashes below always
+describe what is actually attached to the current GitHub release.
+
+## What changed since 0.1.0
+
+**0.1.0 could not be used from its own shortcut.** It opened with no project,
+and without one every screen was empty -- the Core & Material screen offered
+no cores to select -- while `File > Open`, the only way to load a project,
+was disabled precisely because no project was loaded. There was no
+`File > New`. The catalog was never at fault: 0.1.0 shipped all 15 core
+records and could not show you any of them. If you installed 0.1.0, replace
+it with this build.
+
+- A launch with no project now opens a blank, unsaved project, so every
+  screen is live from the first click (see "No sample project is shipped").
+- **File > New** starts another blank project, warning first if the current
+  one has unsaved edits.
+- **File > Save** asks for a filename when the project does not have one yet,
+  instead of reporting that it cannot save.
+- The winding cross-section now says why it is empty. Picking a core whose
+  bore cannot hold the winding's conductor reports that ("Wire does not fit
+  the core bore at layer 1") rather than showing nothing.
+- **Ctrl+Shift+Z** redoes. Only Ctrl+Y was wired up before.
 
 ## Supported target
 
@@ -174,7 +194,7 @@ only -- never by a download link. Verify what you downloaded actually
 matches before you run it:
 
 ```powershell
-Get-FileHash .\inductor-designer-0.1.0-setup.exe -Algorithm SHA256
+Get-FileHash .\inductor-designer-0.2.0-setup.exe -Algorithm SHA256
 ```
 
 Compare the printed hash, case-insensitively, against the matching line in
