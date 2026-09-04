@@ -464,6 +464,9 @@ def main() -> int:
 
         project = new_project()
 
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
     from inductor_designer.adapters.materials import FileOverlayMaterialRepository
     from inductor_designer.adapters.persistence.project_repository import (
         ProjectRepository,
@@ -473,7 +476,12 @@ def main() -> int:
         SchemaRepository,
     )
     from inductor_designer.adapters.system import resources
-    from inductor_designer.adapters.system.environment import recovery_directory
+    from inductor_designer.adapters.system.environment import (
+        catalog_overlay_directory,
+        recovery_directory,
+        seed_material_overlay,
+        user_material_overlay_directory,
+    )
     from inductor_designer.ui.diagnostics_controller import DiagnosticsController
     from inductor_designer.ui.material_studio_controller import MaterialStudioController
     from inductor_designer.ui.project_session import ProjectSession
@@ -550,7 +558,14 @@ def main() -> int:
         session, app_log_path, redaction_context
     )
 
-    material_repository = FileOverlayMaterialRepository(resources.material_overlay_directory())
+    # The user's own materials live under the per-user data directory, not
+    # inside the installed bundle: an upgrade rewrites the bundle, and until
+    # 2026-09-04 that is where every imported material was written. The
+    # shipped seed is copied across once, guarded on the destination not
+    # existing, so a second launch can never overwrite a user's own material
+    # with the seed.
+    seed_material_overlay(resources.material_overlay_directory())
+    material_repository = FileOverlayMaterialRepository(user_material_overlay_directory())
     material_studio_controller = MaterialStudioController(
         material_repository,
         pinned_revision=lambda: session.project.design.core_material,
@@ -582,7 +597,13 @@ def main() -> int:
         # screen: a material imported in the Material Studio window (which
         # shares `material_repository` above) is visible to the Core &
         # Material selector without a process restart.
-        catalog_repository = SqliteCatalogRepository(args.catalog)
+        # Shipped index plus the user's own imported cores, behind the one
+        # catalog port every screen already reads. Cores the user imports are
+        # therefore visible to Windings, Preliminary, Simulation and the
+        # exporters without any of them knowing an overlay exists.
+        catalog_repository = OverlayCatalogRepository(
+            SqliteCatalogRepository(args.catalog), catalog_overlay_directory()
+        )
         capabilities = MatrixCapabilityRepository(args.matrix).snapshot_for(
             SUPPORTED_AEDT_RELEASE, SUPPORTED_AEDT_EDITION
         )

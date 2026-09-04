@@ -7,9 +7,10 @@ never-substituting clear stay testable without Qt.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
 from inductor_designer.application.services.core_material_selection import (
     ClearedSelection,
@@ -59,9 +60,24 @@ class CoreMaterialController(QObject):
             session.project.design.manual_material_compatibility_acknowledged
         )
 
+    def _overlay_part_numbers(self) -> tuple[str, ...]:
+        """Which offered cores came from the user's own overlay, if any.
+
+        Asked of the repository by duck typing rather than by importing the
+        overlay adapter: this controller is handed whatever satisfies the
+        catalog port, and a plain SQLite repository (every unit test, and a
+        launch before the first import) simply has no overlay to report.
+        """
+        reader = getattr(self._catalog, "overlay_part_numbers", None)
+        return tuple(reader()) if callable(reader) else ()
+
     def _get_core_options(self) -> list[dict[str, object]]:
         pinned = self._session.project.design.core_material
-        options = core_options(self._catalog, pinned.ref if pinned else None)
+        options = core_options(
+            self._catalog,
+            pinned.ref if pinned else None,
+            overlay_part_numbers=self._overlay_part_numbers(),
+        )
         return [
             {
                 "partNumber": option.part_number,
@@ -74,6 +90,11 @@ class CoreMaterialController(QObject):
                 "outerDiameterMm": option.outer_diameter_m * 1000.0,
                 "innerDiameterMm": option.inner_diameter_m * 1000.0,
                 "heightMm": option.height_m * 1000.0,
+                # Provenance, on every row: a `draft` core is a transcription
+                # nobody has checked against the cited source page, and an
+                # imported one is a datasheet the user typed in themselves.
+                "reviewStatus": option.review_status.value,
+                "origin": option.origin.value,
             }
             for option in options
         ]
@@ -268,6 +289,78 @@ class CoreMaterialController(QObject):
         self._acknowledged = acknowledged
         self.selectionChanged.emit()
         return True
+
+    @Slot(str, str, result=bool)
+    def downloadCoreTemplate(self, file_format: str, destination_url: str) -> bool:
+        """Write an empty core table for the user to fill in from a datasheet.
+
+        Same shape as Material Studio's `downloadTemplate`, deliberately: the
+        two import flows should not be two different habits to learn.
+        """
+        from inductor_designer.adapters.catalog.core_table import core_import_template
+
+        try:
+            template = core_import_template(file_format)
+            destination = Path(QUrl(destination_url).toLocalFile())
+            destination.write_bytes(template.data)
+        except (OSError, ValueError) as error:
+            self._set_message(f"Unable to save the core template: {error}")
+            return False
+        self._set_message(
+            f"Core template saved to {destination.name}. Fill one row per part "
+            "number, then use Import cores."
+        )
+        return True
+
+    @Slot(str, result=bool)
+    def importCores(self, source_url: str) -> bool:
+        """Read a filled core table and add every row that stands on its own.
+
+        Returns False when nothing was imported, so the caller can tell "your
+        file had problems" from "your cores are in". Both cases report what
+        happened per row: a datasheet family is ten rows off one page, and the
+        user needs to know which one to go and fix.
+        """
+        from inductor_designer.adapters.catalog.core_table import (
+            CoreTableError,
+            import_core_file,
+        )
+        from inductor_designer.adapters.catalog.overlay_repository import (
+            CoreOverlayError,
+            write_overlay_core,
+        )
+        from inductor_designer.adapters.system.environment import (
+            catalog_overlay_directory,
+        )
+
+        source = Path(QUrl(source_url).toLocalFile())
+        try:
+            result = import_core_file(source.name, source.read_bytes())
+        except (OSError, CoreTableError) as error:
+            self._set_message(f"Unable to import cores: {error}")
+            return False
+
+        overlay_root = catalog_overlay_directory()
+        imported = 0
+        problems = [
+            f"row {rejection.row}: {rejection.reason}" for rejection in result.rejections
+        ]
+        for record in result.records:
+            try:
+                write_overlay_core(overlay_root, record, shipped=self._catalog)
+            except (OSError, CoreOverlayError) as error:
+                problems.append(f"{record.part_number}: {error}")
+                continue
+            imported += 1
+
+        self.optionsChanged.emit()
+        summary = f"Imported {imported} core(s); {len(problems)} refused."
+        if problems:
+            # Every refusal, not a count: the user has to fix each one, and a
+            # count tells them only that something is wrong somewhere.
+            summary = summary + " " + " | ".join(problems)
+        self._set_message(summary)
+        return imported > 0
 
     @Slot()
     def openMaterialStudio(self) -> None:

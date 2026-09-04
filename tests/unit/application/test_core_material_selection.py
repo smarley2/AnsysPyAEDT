@@ -363,3 +363,32 @@ def test_an_unselectable_revision_is_refused_without_changing_the_project() -> N
         apply_material_revision(
             project, repository, draft.ref, draft.revision_id, bh_series_id=None
         )
+
+
+def test_every_core_option_carries_its_review_status_and_origin() -> None:
+    """A `draft` core is a transcription nobody has checked against the cited
+    source page, and an imported core is one a user typed. Neither may be
+    indistinguishable from a reviewed shipped part in the list you pick from
+    -- this is a design tool whose output goes into a decision.
+    """
+    from inductor_designer.application.services.core_material_selection import CoreOrigin
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    options = core_options(CATALOG, None, overlay_part_numbers=())
+    assert options
+    for option in options:
+        assert option.review_status in (ReviewStatus.DRAFT, ReviewStatus.REVIEWED)
+        assert option.origin is CoreOrigin.SHIPPED
+
+
+def test_a_core_named_as_an_overlay_one_reports_itself_imported() -> None:
+    """The origin is passed in rather than sniffed from the repository type:
+    this service must not know that a file-backed catalog adapter exists."""
+    from inductor_designer.application.services.core_material_selection import CoreOrigin
+
+    first = CATALOG.list_cores()[0].part_number
+    options = core_options(CATALOG, None, overlay_part_numbers=(first,))
+    by_part = {option.part_number: option for option in options}
+    assert by_part[first].origin is CoreOrigin.IMPORTED
+    others = [option for part, option in by_part.items() if part != first]
+    assert all(option.origin is CoreOrigin.SHIPPED for option in others)

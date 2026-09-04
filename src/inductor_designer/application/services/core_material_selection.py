@@ -16,7 +16,7 @@ from inductor_designer.application.services.catalog_revisions import select_core
 from inductor_designer.application.services.material_selection import (
     pin_material_revision,
 )
-from inductor_designer.domain.catalog_records import CoreFamily
+from inductor_designer.domain.catalog_records import CoreFamily, ReviewStatus
 from inductor_designer.domain.project import (
     CatalogCoreSelection,
     InductorProject,
@@ -38,6 +38,20 @@ class ClearedSelection(str, Enum):
     MATERIAL = "material"
 
 
+class CoreOrigin(str, Enum):
+    """Where an offered core came from.
+
+    A shipped core was compiled from this repository's reviewed catalog
+    source; an imported one is a datasheet transcription from the user's own
+    overlay. Both are real choices, and the screen has to say which is which
+    -- an imported core is always `draft`, and a `draft` that looks like a
+    reviewed part is a number nobody checked presented as one that was.
+    """
+
+    SHIPPED = "shipped"
+    IMPORTED = "imported"
+
+
 @dataclass(frozen=True, slots=True)
 class CoreOption:
     part_number: str
@@ -47,6 +61,8 @@ class CoreOption:
     outer_diameter_m: float
     inner_diameter_m: float
     height_m: float
+    review_status: ReviewStatus
+    origin: CoreOrigin
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +88,18 @@ def required_material_ref(project: InductorProject) -> MaterialRef | None:
 
 
 def core_options(
-    catalog: CatalogRepository, material_ref: MaterialRef | None
+    catalog: CatalogRepository,
+    material_ref: MaterialRef | None,
+    overlay_part_numbers: tuple[str, ...] = (),
 ) -> tuple[CoreOption, ...]:
+    """Every core the project may choose from, with its provenance.
+
+    `overlay_part_numbers` names the cores that came from the user's own
+    overlay. Passed in rather than read off the repository, so this service
+    keeps knowing nothing about which adapter is behind the port -- the
+    dependency direction the architecture check enforces.
+    """
+    imported = frozenset(overlay_part_numbers)
     return tuple(
         CoreOption(
             part_number=record.part_number,
@@ -83,6 +109,12 @@ def core_options(
             outer_diameter_m=record.outer_diameter.nominal_m,
             inner_diameter_m=record.inner_diameter.nominal_m,
             height_m=record.height.nominal_m,
+            review_status=record.review_status,
+            origin=(
+                CoreOrigin.IMPORTED
+                if record.part_number in imported
+                else CoreOrigin.SHIPPED
+            ),
         )
         for record in catalog.list_cores()
         if material_ref is None or record.material == material_ref

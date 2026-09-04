@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -398,3 +399,112 @@ def test_opening_material_studio_only_emits_a_request() -> None:
     controller.openMaterialStudio()
 
     assert requests == [1]
+
+
+def _filled_core_csv(part_numbers: tuple[str, ...]) -> bytes:
+    """A template filled the way a user fills it: one row per part number."""
+    import csv
+    import io
+
+    from inductor_designer.adapters.catalog.core_table import CORE_TEMPLATE_COLUMNS
+
+    values = {
+        "manufacturer": "BRUSA",
+        "family": "powder-toroid",
+        "materialManufacturer": "Magnetics",
+        "materialName": "Kool Mu",
+        "materialGrade": "60",
+        "coating": "parylene",
+        "catalogRevision": "brusa-lab-2026",
+        "sourceUrl": "https://example.invalid/datasheet.pdf",
+        "sourcePage": "4",
+        "outerDiameterNominalM": "0.0267",
+        "innerDiameterNominalM": "0.0147",
+        "heightNominalM": "0.0112",
+        "effectiveAreaM2": "6.55e-5",
+        "pathLengthM": "0.0635",
+        "volumeM3": "4.16e-6",
+        "alValueNh": "75.0",
+        "reviewStatus": "draft",
+    }
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(CORE_TEMPLATE_COLUMNS))
+    writer.writeheader()
+    for part_number in part_numbers:
+        writer.writerow({**{name: "" for name in CORE_TEMPLATE_COLUMNS},
+                         **values, "partNumber": part_number})
+    return buffer.getvalue().encode("utf-8")
+
+
+def test_importing_cores_offers_them_and_stores_them_outside_the_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point of the storage location: an upgrade rewrites the
+    installed bundle, so an imported core written there is on a countdown.
+    Asserted against both paths, not just the happy one."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+    before = len(controller.coreOptions)
+
+    source = tmp_path / "two-cores.csv"
+    source.write_bytes(_filled_core_csv(("BRUSA-A", "BRUSA-B")))
+    assert controller.importCores(source.as_uri()) is True
+
+    parts = {row["partNumber"]: row for row in controller.coreOptions}
+    assert len(controller.coreOptions) == before + 2
+    assert parts["BRUSA-A"]["origin"] == "imported"
+    assert parts["BRUSA-A"]["reviewStatus"] == "draft"
+    assert "2" in controller.message and "0" in controller.message
+
+    # Two files, under the per-user data directory -- the filenames are
+    # sanitized (`BRUSA-A` -> `BRUSA_A.json`), so the part number is the one
+    # inside the record, which `coreOptions` above already read back.
+    written = catalog_overlay_directory() / "cores"
+    assert len(list(written.glob("*.json"))) == 2
+    assert catalog_overlay_directory().is_relative_to(tmp_path / "data")
+
+
+def test_importing_a_core_the_catalog_already_ships_is_refused_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shadowing a shipped part would make Review cite a part number whose
+    numbers are someone's edit."""
+    from inductor_designer.adapters.catalog.overlay_repository import (
+        OverlayCatalogRepository,
+    )
+    from inductor_designer.adapters.system.environment import catalog_overlay_directory
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    catalog = OverlayCatalogRepository(CATALOG, catalog_overlay_directory())
+    shipped = CATALOG.list_cores()[0].part_number
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, catalog, InMemoryMaterialRepository())
+
+    source = tmp_path / "clash.csv"
+    source.write_bytes(_filled_core_csv((shipped,)))
+    assert controller.importCores(source.as_uri()) is False
+
+    assert shipped in controller.message
+    assert not (catalog_overlay_directory() / "cores").exists()
+
+
+def test_the_core_template_downloads_with_its_header(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project())
+    controller = CoreMaterialController(session, CATALOG, InMemoryMaterialRepository())
+
+    target = tmp_path / "template.csv"
+    assert controller.downloadCoreTemplate("csv", target.as_uri()) is True
+    assert target.read_text(encoding="utf-8").startswith("manufacturer,family,partNumber")
