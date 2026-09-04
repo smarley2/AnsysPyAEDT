@@ -196,6 +196,19 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     # the flag is absent.
     parser.add_argument("--catalog", type=Path, default=resources.catalog_index_path())
     parser.add_argument("--matrix", type=Path, default=resources.compatibility_matrix_path())
+    # Answers known risk 2 of the M10 release record on the machine that has
+    # the problem: a frozen bundle can miss a lazily imported solver module or
+    # a data file PyAEDT reads off disk, and neither shows up until a run is
+    # already in flight. Imports only -- no AEDT session, no license, no
+    # solve, so it is safe to run anywhere the application is installed.
+    parser.add_argument(
+        "--check-solver-imports",
+        action="store_true",
+        help=(
+            "Report whether this build can import the solver stack and find "
+            "its data files, then exit. Does not start AEDT or solve."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -358,6 +371,17 @@ def main() -> int:
     aedt_installation, unsupported_aedt_installation = log_detected_installations(logger)
 
     args = _parse_args(sys.argv[1:])
+    if args.check_solver_imports:
+        # Before the QGuiApplication: this is a console report about this
+        # build, and it must work with no display at all.
+        from inductor_designer.adapters.system.solver_imports import (
+            check_solver_imports,
+            format_solver_import_report,
+        )
+
+        report, ok = format_solver_import_report(check_solver_imports())
+        print(report, file=sys.stderr, flush=True)
+        return 0 if ok else 6
     _install_qml_logging()
     app = QGuiApplication(sys.argv)
 

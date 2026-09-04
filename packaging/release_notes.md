@@ -169,6 +169,20 @@ your logs and recovery snapshots, outside the installed program folder, so
 upgrading or uninstalling the application does not touch them. To remove an
 imported core, delete its file.
 
+## Checking the solver stack without solving
+
+```
+"%LOCALAPPDATA%\Programs\PyAEDT Inductor Designer\inductor-designer.exe" --check-solver-imports
+```
+
+Reports whether this installed build can import the PyAEDT and FEMM modules
+it needs and find the data files PyAEDT reads off disk, then exits. It does
+not start AEDT, does not need a license and does not solve, so it is safe to
+run anywhere -- useful when a run fails and the question is whether the
+installation is incomplete or the solver itself refused. `FEMM absent` is a
+normal result; a `FAILED` line naming an `ansys.aedt.core` module is not, and
+belongs in a support report with the application log.
+
 ## `INDUCTOR_DESIGNER_RESOURCES`
 
 The application ships four resources beside its executable: the JSON

@@ -387,3 +387,23 @@ def test_a_launch_with_no_project_refuses_to_generate_until_it_is_saved(
 
     assert simulation.canGenerate is False
     assert "no document path" in simulation.blockedReason
+
+
+def test_the_solver_import_check_reports_and_exits_without_a_window(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check-solver-imports` answers known risk 2 on the machine that has
+    the problem, so it must not need a display, a project, or AEDT: no window
+    is created, nothing is solved, and the exit code carries the answer."""
+    engines_before = len(_ENGINES)
+    monkeypatch.setattr(sys, "argv", ["inductor-designer", "--check-solver-imports"])
+
+    assert main_module.main() == 0
+
+    printed = capsys.readouterr().err
+    assert "ansys.aedt.core" in printed
+    assert "expression_catalog.toml" in printed
+    # The report has to say what it did not check, or it reads as proof a
+    # solve works.
+    assert "not exercised here" in printed
+    assert len(_ENGINES) == engines_before

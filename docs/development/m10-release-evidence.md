@@ -569,9 +569,24 @@ task and Fabio Posser's walk is what tests most of them directly:
    plugin. Task 3's post-prune re-launch found no such error, but see "What
    is NOT verified on this machine" above -- the window itself was not
    re-screenshotted after the prune.
-2. **PyAEDT inside a frozen bundle.** Whether it works frozen at all remains
-   unverified; the M8 live-solve evidence is exercised only from source.
-   Step 6/7 of the walk above is the first real test of this.
+2. **PyAEDT inside a frozen bundle.** Narrowed on 2026-09-04, not closed.
+   `inductor-designer.exe --check-solver-imports` runs inside the bundle and
+   reported every solver module importable and the data file present:
+
+   ```
+                   ok  ansys.aedt.core  ...\_internalnsysedt\core\__init__.py
+                   ok  ansys.aedt.core.modules.boundary.maxwell_boundary  ...
+                   ok  ansys.aedt.core.internal.desktop_sessions  ...
+                   ok  femm  ...\_internalemm\__init__.py
+                   ok  ansys.aedt.core:expression_catalog.toml  ...
+   ```
+
+   That covers the two failures a source run cannot reveal: a lazily imported
+   module PyInstaller never saw, and the expression catalog `FieldsCalculator`
+   reads off disk on every result read. What remains unverified is a **solve**
+   -- it needs AEDT 2025 R2 Commercial on the machine, and the check says so
+   in its own output rather than letting a green report imply more than it
+   tested. Step 6/7 of the walk above is still the first real test of that.
 3. **Antivirus on an unsigned one-folder bundle.** BRUSA endpoint protection
    may quarantine an unsigned executable; outside this application's
    control, and worth knowing if step 2 or 3 of the walk behaves
