@@ -1,10 +1,27 @@
-# PyAEDT Inductor Designer 0.2.0
+# PyAEDT Inductor Designer 0.3.0
 
 Windows installer. This file is edited in place for each release rather than
 starting a new one, so the version and the artifact hashes below always
 describe what is actually attached to the current GitHub release.
 
-## What changed since 0.1.0
+## What changed in 0.3.0
+
+**You can add your own cores.** The shipped catalog carries 15 toroids; a core
+it does not have used to require the source tree and a rebuilt installer.
+Download a template on **Core & Material**, fill one row per part number from
+the datasheet, and import it -- see "Adding your own cores" below.
+
+Every core row now states whether it is `reviewed` or `draft`, and whether it
+was shipped or imported. Five of the shipped ferrite cores are `draft`
+transcriptions; they always were, and now the list says so.
+
+Your imported cores and materials are kept under
+`%LOCALAPPDATA%\InductorDesigner`, outside the program folder. Imported
+materials previously lived inside the installed folder, where upgrading the
+application could remove them -- if you imported materials into 0.1.0, copy
+them out of the old program folder before uninstalling it.
+
+## What changed in 0.2.0
 
 **0.1.0 could not be used from its own shortcut.** It opened with no project,
 and without one every screen was empty -- the Core & Material screen offered
@@ -231,7 +248,7 @@ only -- never by a download link. Verify what you downloaded actually
 matches before you run it:
 
 ```powershell
-Get-FileHash .\inductor-designer-0.2.0-setup.exe -Algorithm SHA256
+Get-FileHash .\inductor-designer-0.3.0-setup.exe -Algorithm SHA256
 ```
 
 Compare the printed hash, case-insensitively, against the matching line in
