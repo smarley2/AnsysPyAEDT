@@ -106,6 +106,43 @@ writes its directory beside the project document.
 **File > New** starts another blank project at any time, and **File > Open**
 loads an existing `.inductor.json` from anywhere it already exists.
 
+## Adding your own cores
+
+The shipped catalog carries 15 toroids. To use one it does not have:
+
+1. On **Core & Material**, click **Core template…** and save the empty table
+   (`.csv`, or `.xlsx` if you name it that way).
+2. Fill one row per part number, straight from the datasheet. Every column is
+   required except the tolerance bounds (`...MinM`, `...MaxM`) and
+   `reviewedBy`, which may be left blank. Dimensions are in **meters**, areas
+   in m2, volumes in m3, and `alValueNh` in nH per turn squared.
+3. `sourceUrl` and `sourcePage` are required on purpose: a core whose numbers
+   cannot be traced back to a page is a core nobody can check.
+4. Click **Import cores…** and choose the filled file.
+
+Every row that stands on its own is imported; the rest are reported by row
+number and reason, so a single typo does not cost you the other nine rows of
+a family. Imported cores appear in the core list marked **imported, draft**
+and can be used immediately -- `draft` means the numbers have not been
+checked against the cited page by a second person, not that they are
+unusable.
+
+A part number the shipped catalog already carries is refused rather than
+replaced, so a project's Review page can never cite a catalog part while
+using someone's edited numbers. Rename yours, or use the shipped core.
+
+Formulas in a spreadsheet cell are refused. Every value has to be a number
+read from the datasheet, because a formula is a value this application cannot
+show you or cite.
+
+### Where your cores and materials are kept
+
+`%LOCALAPPDATA%\InductorDesigner\catalog-overlay\cores` (one file per core)
+and `%LOCALAPPDATA%\InductorDesigner\materials-overlay`. Both sit beside
+your logs and recovery snapshots, outside the installed program folder, so
+upgrading or uninstalling the application does not touch them. To remove an
+imported core, delete its file.
+
 ## `INDUCTOR_DESIGNER_RESOURCES`
 
 The application ships four resources beside its executable: the JSON
