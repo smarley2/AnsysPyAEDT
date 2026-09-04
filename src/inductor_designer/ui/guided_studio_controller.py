@@ -112,8 +112,7 @@ class GuidedStudioController(QObject):
         return _PreviewState(
             entries=[],
             drawing=CutPlaneDrawing(
-                r_inner_mm=0.0,
-                r_outer_mm=0.0,
+                outline=(),
                 depth_mm=0.0,
                 extent_mm=1.0,
                 circles=(),

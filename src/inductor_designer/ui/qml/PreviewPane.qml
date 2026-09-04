@@ -18,7 +18,7 @@ Rectangle {
     property bool showTwoD: previewMode2DButton.checked
     property var cutPlaneDrawing: guidedStudioController !== null
         ? guidedStudioController.cutPlaneDrawing
-        : ({ "r_inner_mm": 0.0, "r_outer_mm": 0.0, "depth_mm": 0.0,
+        : ({ "outline": [], "depth_mm": 0.0,
              "extent_mm": 1.0, "circles": [], "note": "" })
 
     View3D {
@@ -86,7 +86,7 @@ Rectangle {
             visible: showCutPlaneCheck.checked && pane.hasPreviewEntries
             source: "#Rectangle"
             scale: {
-                var size = 2.2 * pane.cutPlaneDrawing.r_outer_mm
+                var size = 2.2 * pane.cutPlaneDrawing.extent_mm
                 return Qt.vector3d(size / 100, size / 100, 1)
             }
             materials: PrincipledMaterial {

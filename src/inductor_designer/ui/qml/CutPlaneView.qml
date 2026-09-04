@@ -7,8 +7,7 @@ Item {
     objectName: "cutPlaneView"
 
     property var drawing: ({
-        "r_inner_mm": 0.0,
-        "r_outer_mm": 0.0,
+        "outline": [],
         "depth_mm": 0.0,
         "extent_mm": 1.0,
         "circles": [],
@@ -49,17 +48,25 @@ Item {
             function px(mm) { return cx + mm * scale }
             function py(mm) { return cy - mm * scale }
 
-            // Annulus: an outer grey disc with the bore painted back out. QML's
-            // Canvas fill is non-zero winding, so a two-arc even-odd path is
-            // not available.
-            ctx.fillStyle = "#b9b6b0"
-            ctx.beginPath()
-            ctx.arc(cx, cy, root.drawing.r_outer_mm * scale, 0, 2 * Math.PI)
-            ctx.fill()
-            ctx.fillStyle = root.background
-            ctx.beginPath()
-            ctx.arc(cx, cy, root.drawing.r_inner_mm * scale, 0, 2 * Math.PI)
-            ctx.fill()
+            // The core's cross-section, painted in the order the drawing
+            // lists it: a `cutout` shape paints the background back over what
+            // came before, which is how the toroid's bore has always been
+            // drawn and how an E core's gaps are drawn now. QML's Canvas fill
+            // is non-zero winding, so an even-odd path is not available.
+            for (var s = 0; s < root.drawing.outline.length; ++s) {
+                var shape = root.drawing.outline[s]
+                ctx.fillStyle = shape.cutout ? root.background : "#b9b6b0"
+                ctx.beginPath()
+                if (shape.radius_mm !== undefined) {
+                    ctx.arc(px(shape.x_mm), py(shape.y_mm),
+                            shape.radius_mm * scale, 0, 2 * Math.PI)
+                } else {
+                    ctx.rect(px(shape.x_mm) - shape.width_mm * scale / 2,
+                             py(shape.y_mm) - shape.height_mm * scale / 2,
+                             shape.width_mm * scale, shape.height_mm * scale)
+                }
+                ctx.fill()
+            }
 
             for (var i = 0; i < root.drawing.circles.length; ++i) {
                 var c = root.drawing.circles[i]
@@ -111,7 +118,8 @@ Item {
 
             // Scale bar: the outer diameter, drawn in the reserved band. It is
             // never wider than the model it sits under, so it always fits.
-            var barMm = 2 * root.drawing.r_outer_mm
+            // The scale bar spans the drawing, whatever shape the core is.
+            var barMm = 2 * root.drawing.extent_mm
             var barPx = barMm * scale
             var barY = usable + barBand - 5
             ctx.strokeStyle = "#5b5852"

@@ -51,8 +51,12 @@ def test_every_planar_conductor_becomes_one_circle_in_millimetres() -> None:
         for conductor in winding.conductors
     ]
     assert len(drawing.circles) == len(planar_conductors)
-    assert drawing.r_inner_mm == model.planar.r_inner_m * 1000.0
-    assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
+    # The annulus, as the two shapes the renderer paints in order.
+    outer, bore = drawing.outline
+    assert outer.radius_mm == model.planar.r_outer_m * 1000.0
+    assert outer.cutout is False
+    assert bore.radius_mm == model.planar.r_inner_m * 1000.0
+    assert bore.cutout is True
     assert drawing.depth_mm == model.planar.depth_m * 1000.0
 
     by_position = {
@@ -90,8 +94,9 @@ def test_the_two_legs_of_a_turn_carry_opposite_glyphs() -> None:
 
     drawing = build_cut_plane_drawing(model, project)
 
-    inner = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) < drawing.r_inner_mm]
-    outer = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) > drawing.r_outer_mm]
+    r_outer_mm, r_inner_mm = (shape.radius_mm for shape in drawing.outline)
+    inner = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) < r_inner_mm]
+    outer = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) > r_outer_mm]
     assert inner and outer
     assert len({c.into_plane for c in inner}) == 1
     assert len({c.into_plane for c in outer}) == 1
@@ -244,7 +249,7 @@ def test_extent_covers_the_outermost_conductor_edge() -> None:
         math.hypot(c.x_mm, c.y_mm) + c.radius_mm for c in drawing.circles
     )
     assert drawing.extent_mm >= furthest
-    assert drawing.extent_mm >= drawing.r_outer_mm
+    assert drawing.extent_mm >= drawing.outline[0].radius_mm
 
 
 def test_a_design_without_conductors_still_draws_the_annulus() -> None:
@@ -258,8 +263,8 @@ def test_a_design_without_conductors_still_draws_the_annulus() -> None:
 
     assert drawing.circles == ()
     assert drawing.starts == ()
-    assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
-    assert drawing.extent_mm == drawing.r_outer_mm
+    assert drawing.outline[0].radius_mm == model.planar.r_outer_m * 1000.0
+    assert drawing.extent_mm == drawing.outline[0].radius_mm
     assert "no conductors" in drawing.note
 
 
