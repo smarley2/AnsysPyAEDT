@@ -21,7 +21,9 @@ from inductor_designer.domain.project import (
     CatalogCoreSelection,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
 )
+from inductor_designer.geometry.ecore.body import FinishedECore
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     MaterialRecord,
@@ -235,6 +237,75 @@ def apply_manual_core(
         ),
         cleared=None,
         message=f"Applied manual core dimensions.{reconfirm}",
+    )
+
+
+def apply_manual_ecore(
+    project: InductorProject,
+    *,
+    centre_leg_width_m: float,
+    depth_m: float,
+    window_width_m: float,
+    window_height_m: float,
+    outer_leg_width_m: float,
+    yoke_thickness_m: float,
+    gaps_m: tuple[float, ...],
+    gap_spacings_m: tuple[float, ...],
+    outer_legs_gapped: bool,
+) -> SelectionOutcome:
+    """Select a manual gapped E core, on the same terms as a manual toroid.
+
+    It carries no material identity, so nothing is ever cleared, and new
+    dimensions are new geometry, so a compatibility attestation the user made
+    about the previous shape is dropped -- both for the reasons
+    `apply_manual_core` documents.
+    """
+    core = ManualECoreSelection(
+        centre_leg_width_m=centre_leg_width_m,
+        depth_m=depth_m,
+        window_width_m=window_width_m,
+        window_height_m=window_height_m,
+        outer_leg_width_m=outer_leg_width_m,
+        yoke_thickness_m=yoke_thickness_m,
+        gaps_m=gaps_m,
+        gap_spacings_m=gap_spacings_m,
+        outer_legs_gapped=outer_legs_gapped,
+    )
+    # The body's own rules -- gaps that fit the leg, N-1 segments for N gaps --
+    # live in `FinishedECore` and are checked here, at the point of entry, so
+    # a project never holds a stack nobody could grind.
+    FinishedECore(
+        centre_leg_width_m=centre_leg_width_m,
+        depth_m=depth_m,
+        window_width_m=window_width_m,
+        window_height_m=window_height_m,
+        outer_leg_width_m=outer_leg_width_m,
+        yoke_thickness_m=yoke_thickness_m,
+        gaps=gaps_m,
+        gap_spacings_m=gap_spacings_m,
+        outer_legs_gapped=outer_legs_gapped,
+    )
+    reconfirm = (
+        " Confirm material compatibility again for the new dimensions."
+        if project.design.manual_material_compatibility_acknowledged
+        else ""
+    )
+    gap_note = (
+        f" {len(gaps_m)} gap(s), {sum(gaps_m) * 1000.0:.2f} mm total."
+        if gaps_m
+        else " Ungapped."
+    )
+    return SelectionOutcome(
+        project=replace(
+            project,
+            design=replace(
+                project.design,
+                core=core,
+                manual_material_compatibility_acknowledged=False,
+            ),
+        ),
+        cleared=None,
+        message=f"Applied manual E-core dimensions.{gap_note}{reconfirm}",
     )
 
 

@@ -640,3 +640,85 @@ def test_promoting_a_core_leaves_the_project_snapshot_alone(
     assert isinstance(pinned, CatalogCoreSelection)
     assert pinned.snapshot.review_status is ReviewStatus.DRAFT
     assert controller.selectedCore["reviewStatus"] == "reviewed"
+
+
+# --- Manual gapped E core (M11a task 8) -----------------------------------
+
+
+def _ecore_controller() -> tuple[ProjectSession, CoreMaterialController]:
+    QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project())
+    return session, CoreMaterialController(
+        session, CATALOG, InMemoryMaterialRepository()
+    )
+
+
+def test_applying_a_manual_e_core_selects_it_with_its_gap_stack() -> None:
+    """Millimetres in, metres stored -- the same boundary the manual toroid
+    fields already cross, so a user never types a number in metres."""
+    from inductor_designer.domain.project import ManualECoreSelection
+
+    session, controller = _ecore_controller()
+
+    assert (
+        controller.applyManualECore(17.0, 21.0, 9.2, 18.7, 8.5, 9.3, "0.5, 0.5", "4", False)
+        is True
+    )
+
+    core = session.project.design.core
+    assert isinstance(core, ManualECoreSelection)
+    assert core.centre_leg_width_m == pytest.approx(0.017)
+    assert core.window_height_m == pytest.approx(0.0187)
+    assert core.gaps_m == (pytest.approx(0.0005), pytest.approx(0.0005))
+    assert core.gap_spacings_m == (pytest.approx(0.004),)
+    assert core.outer_legs_gapped is False
+
+
+def test_an_ungapped_e_core_takes_an_empty_gap_list() -> None:
+    from inductor_designer.domain.project import ManualECoreSelection
+
+    session, controller = _ecore_controller()
+
+    assert controller.applyManualECore(17.0, 21.0, 9.2, 18.7, 8.5, 9.3, "", "", True) is True
+
+    core = session.project.design.core
+    assert isinstance(core, ManualECoreSelection)
+    assert core.gaps_m == ()
+    assert core.outer_legs_gapped is True
+
+
+def test_a_gap_list_that_is_not_numbers_is_refused_and_changes_nothing() -> None:
+    """A typed field is where a NaN gets in, so the refusal names the text
+    rather than storing a gap nobody can grind."""
+    session, controller = _ecore_controller()
+    before = session.project.design.core
+
+    applied = controller.applyManualECore(
+        17.0, 21.0, 9.2, 18.7, 8.5, 9.3, "0.5, x", "", False
+    )
+    assert applied is False
+
+    assert session.project.design.core == before
+    assert "gap" in controller.message.lower()
+
+
+def test_a_gap_stack_that_does_not_fit_the_leg_is_refused_with_the_reason() -> None:
+    """The body's own rule, surfaced where the user typed it: two 20 mm gaps
+    cannot be ground into a 37.4 mm leg with a segment between them."""
+    session, controller = _ecore_controller()
+
+    assert (
+        controller.applyManualECore(17.0, 21.0, 9.2, 18.7, 8.5, 9.3, "20, 20", "1", False)
+        is False
+    )
+    assert "centre leg" in controller.message
+
+
+def test_the_wrong_number_of_gap_spacings_is_refused() -> None:
+    session, controller = _ecore_controller()
+
+    assert (
+        controller.applyManualECore(17.0, 21.0, 9.2, 18.7, 8.5, 9.3, "0.5, 0.5, 0.5", "4", False)
+        is False
+    )
+    assert "spacing" in controller.message

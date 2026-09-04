@@ -17,6 +17,7 @@ from inductor_designer.application.services.core_material_selection import (
     SelectionOutcome,
     apply_catalog_core,
     apply_manual_core,
+    apply_manual_ecore,
     apply_material_revision,
     clear_material_selection,
     core_options,
@@ -248,6 +249,66 @@ class CoreMaterialController(QObject):
             # `ManualCoreSelection` refuses non-finite and non-positive
             # dimensions, and QML `Number("")` yields NaN.
             self._set_message(f"Unable to apply manual core dimensions: {error}")
+            return False
+        return self._publish(outcome)
+
+    @staticmethod
+    def _lengths_mm(text: str, label: str) -> tuple[float, ...]:
+        """A comma-separated list of millimetre lengths, as metres.
+
+        A typed field is where a NaN gets in, so this refuses the text rather
+        than passing `float("nan")` into a core nobody could grind.
+        """
+        entries = [part.strip() for part in text.split(",") if part.strip()]
+        values: list[float] = []
+        for entry in entries:
+            try:
+                values.append(float(entry) / 1000.0)
+            except ValueError as error:
+                raise ValueError(f"{label} must be numbers in mm, got {entry!r}") from error
+        return tuple(values)
+
+    @Slot(float, float, float, float, float, float, str, str, bool, result=bool)
+    def applyManualECore(
+        self,
+        centre_leg_width_mm: float,
+        depth_mm: float,
+        window_width_mm: float,
+        window_height_mm: float,
+        outer_leg_width_mm: float,
+        yoke_thickness_mm: float,
+        gaps_mm: str,
+        gap_spacings_mm: str,
+        outer_legs_gapped: bool,
+    ) -> bool:
+        """Select a manual gapped E core from the entered dimensions.
+
+        Gaps arrive as text because there can be several of them; every other
+        field is a number, and all of them are millimetres in, metres stored --
+        the same boundary the manual toroid fields already cross, so a user
+        never types a number in metres.
+        """
+        # New dimensions are new geometry, so a compatibility attestation the
+        # user made about the previous shape must not carry over.
+        self._acknowledged = False
+        try:
+            outcome = apply_manual_ecore(
+                self._session.project,
+                centre_leg_width_m=centre_leg_width_mm / 1000.0,
+                depth_m=depth_mm / 1000.0,
+                window_width_m=window_width_mm / 1000.0,
+                window_height_m=window_height_mm / 1000.0,
+                outer_leg_width_m=outer_leg_width_mm / 1000.0,
+                yoke_thickness_m=yoke_thickness_mm / 1000.0,
+                gaps_m=self._lengths_mm(gaps_mm, "Gap lengths"),
+                gap_spacings_m=self._lengths_mm(gap_spacings_mm, "Gap spacings"),
+                outer_legs_gapped=outer_legs_gapped,
+            )
+        except ValueError as error:
+            # `FinishedECore` refuses a stack that does not fit the leg and a
+            # spacing count that does not separate the gaps; `ManualECoreSelection`
+            # refuses non-finite dimensions, and QML `Number("")` yields NaN.
+            self._set_message(f"Unable to apply manual E-core dimensions: {error}")
             return False
         return self._publish(outcome)
 

@@ -447,3 +447,35 @@ def test_the_mark_reviewed_control_is_hidden_for_a_shipped_core() -> None:
     assert button is not None
     assert field is not None
     assert button.property("visible") is False
+
+
+def test_the_manual_e_core_fields_are_present_and_contained() -> None:
+    """Six dimensions, two gap lists and the shim checkbox, beside the manual
+    toroid on the same panel.
+
+    It lives in this module deliberately: the containment assertions here are
+    what caught the last panel addition pushing every element past its scroll
+    view at the narrowest supported window, and only a rendered check could
+    have caught that.
+    """
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    for name in (
+        "ecoreLegField",
+        "ecoreDepthField",
+        "ecoreWindowWidthField",
+        "ecoreWindowHeightField",
+        "ecoreOuterLegField",
+        "ecoreYokeField",
+        "ecoreGapsField",
+        "ecoreSpacingsField",
+        "ecoreOuterGappedBox",
+        "applyManualECoreButton",
+    ):
+        assert root.findChild(QObject, name) is not None, name
+
+    # Nothing to apply until the six dimensions are typed: a partly filled
+    # form would otherwise reach the service as NaN.
+    button = root.findChild(QObject, "applyManualECoreButton")
+    assert button.property("enabled") is False
