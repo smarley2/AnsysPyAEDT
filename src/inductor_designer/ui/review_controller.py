@@ -74,7 +74,18 @@ class ReviewController(QObject):
         core = design.core
         rows: list[dict[str, str]] = []
         if isinstance(core, CatalogCoreSelection):
-            rows.append({"label": "Core", "text": f"Catalog {core.part_number}"})
+            # The review status belongs on this page above all: a `draft`
+            # record is a transcription nobody has checked against the cited
+            # source page, and its numbers look exactly like a reviewed one's.
+            rows.append(
+                {
+                    "label": "Core",
+                    "text": (
+                        f"Catalog {core.part_number} "
+                        f"({core.snapshot.review_status.value} catalog data)"
+                    ),
+                }
+            )
             rows.append(
                 {
                     "label": "Core material identity",
@@ -147,11 +158,18 @@ class ReviewController(QObject):
                     {"label": winding.winding_id, "text": "no excitation recorded"}
                 )
                 continue
+            conductor = self._catalog.get_conductor(winding.conductor_name)
+            provenance = (
+                f" ({conductor.review_status.value} conductor data)"
+                if conductor is not None
+                else " (conductor not in the catalog)"
+            )
             rows.append(
                 {
                     "label": f"{winding.winding_id} ({winding.label})",
                     "text": (
-                        f"{winding.turns} turns of {winding.conductor_name}; "
+                        f"{winding.turns} turns of {winding.conductor_name}"
+                        f"{provenance}; "
                         f"AC {excitation.ac_rms_current_a:g} A RMS at "
                         f"{excitation.ac_phase_deg:g} deg; DC "
                         f"{excitation.dc_current_a:g} A; "

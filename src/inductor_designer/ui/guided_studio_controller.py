@@ -11,6 +11,7 @@ from inductor_designer.application.services.geometry_model import (
     GeometryModelError,
     build_geometry_model,
 )
+from inductor_designer.domain.catalog_records import ReviewStatus
 from inductor_designer.domain.project import WindingOperatingPoint
 from inductor_designer.domain.winding import (
     ConductorMode,
@@ -241,6 +242,45 @@ class GuidedStudioController(QObject):
         return list(self._catalog.list_conductor_names())
 
     conductorNames = Property(list, _get_conductor_names, constant=True)
+
+    def _get_conductor_review_notice(self) -> str:
+        """Which offered conductors are unreviewed transcriptions, if any.
+
+        Every winding is sized on a conductor diameter, and every conductor in
+        the shipped index is `draft` -- transcribed from IEC 60317 or an AWG
+        table, not yet checked against the source by a second person. Sizing a
+        winding on that silently is the wrong default for a tool whose output
+        goes into a design decision.
+
+        Computed rather than written, so it tells the truth in all three
+        states: empty once every wire is reviewed, a plain statement when none
+        are, and naming the drafts when the catalog is mixed. A notice that
+        cannot go away is decoration.
+        """
+        drafts = [
+            name
+            for name in self._catalog.list_conductor_names()
+            if (record := self._catalog.get_conductor(name)) is not None
+            and record.review_status is ReviewStatus.DRAFT
+        ]
+        if not drafts:
+            return ""
+        total = len(self._catalog.list_conductor_names())
+        if len(drafts) == total:
+            return (
+                f"All {total} conductor sizes are draft transcriptions of "
+                "their standard, not yet checked against the source. Verify "
+                "the diameter before trusting a result that depends on it."
+            )
+        return (
+            "Draft conductor sizes, not yet checked against their standard: "
+            + ", ".join(drafts)
+            + "."
+        )
+
+    conductorReviewNotice = Property(
+        str, _get_conductor_review_notice, constant=True
+    )
 
     def _get_conductor_modes(self) -> list[str]:
         return [item.value for item in ConductorMode]

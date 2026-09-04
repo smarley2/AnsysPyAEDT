@@ -314,6 +314,22 @@ Pane {
                     Accessible.name: qsTr("Conductor")
                     onActivated: windingsPanel.applyChoice("conductor", currentText)
                 }
+                // Empty and invisible once the catalog's wires are reviewed:
+                // the controller computes this from the records, so it is not
+                // a permanent banner nobody can clear.
+                Item { Layout.minimumWidth: 0; Layout.preferredWidth: 0 }
+                Label {
+                    objectName: "conductorReviewNotice"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    color: "#8a5a00"
+                    font.pixelSize: 12
+                    text: windingsPanel.controller !== null
+                        ? windingsPanel.controller.conductorReviewNotice : ""
+                    visible: text !== ""
+                    Accessible.name: text
+                }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Conductor mode") }
                 ComboBox {
                     id: modeCombo

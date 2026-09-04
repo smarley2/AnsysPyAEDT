@@ -436,3 +436,91 @@ def test_a_core_that_cannot_hold_the_wire_says_so_on_the_empty_cut_plane() -> No
     note = controller.cutPlaneDrawing["note"]
     assert "Select a core" not in note
     assert "fit" in note
+
+
+def test_the_conductor_notice_says_when_the_offered_wires_are_unreviewed() -> None:
+    """Every conductor in the shipped index is `draft`: transcribed from a
+    standard but not yet checked against the source. Windings are sized on
+    those diameters, so being told nothing is the wrong default -- and the
+    notice has to stay true when the catalog is reviewed later, which is why
+    it is computed rather than written."""
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+
+    notice = controller.conductorReviewNotice
+    assert "draft" in notice
+    # All of them, so the count carries it -- naming 35 wires would be noise.
+    # The mixed case, where naming IS the point, is the next test.
+    assert str(len(controller.conductorNames)) in notice
+
+
+def test_a_mixed_catalog_names_the_draft_wires_rather_than_counting_them() -> None:
+    """Once some wires are reviewed, a count is useless: the user needs to
+    know whether the one they picked is the unchecked one."""
+    from dataclasses import replace as replace_record
+
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    # The unit-test catalog carries one conductor, so "mixed" needs a second:
+    # `AWG 18` stays draft, `AWG 20` is reviewed.
+    template = CATALOG.get_conductor("AWG 18")
+    assert template is not None
+
+    class _MostlyReviewedCatalog:
+        def get_core(self, part_number: str) -> object:
+            return CATALOG.get_core(part_number)
+
+        def list_cores(self) -> tuple[object, ...]:
+            return CATALOG.list_cores()
+
+        def get_conductor(self, name: str) -> object:
+            if name == "AWG 20":
+                return replace_record(
+                    template,
+                    name="AWG 20",
+                    review_status=ReviewStatus.REVIEWED,
+                    reviewed_by="a reviewer",
+                )
+            return CATALOG.get_conductor(name)
+
+        def list_conductor_names(self) -> tuple[str, ...]:
+            return ("AWG 18", "AWG 20")
+
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, _MostlyReviewedCatalog())
+
+    notice = controller.conductorReviewNotice
+    assert "AWG 18" in notice
+    assert "AWG 20" not in notice
+
+
+def test_the_conductor_notice_is_empty_once_every_wire_is_reviewed() -> None:
+    """A notice that cannot go away is decoration. This is what proves it
+    reads the catalog instead of asserting a permanent state of the world."""
+    from dataclasses import replace as replace_record
+
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    class _ReviewedCatalog:
+        def get_core(self, part_number: str) -> object:
+            return CATALOG.get_core(part_number)
+
+        def list_cores(self) -> tuple[object, ...]:
+            return CATALOG.list_cores()
+
+        def get_conductor(self, name: str) -> object:
+            record = CATALOG.get_conductor(name)
+            return (
+                None
+                if record is None
+                else replace_record(
+                    record, review_status=ReviewStatus.REVIEWED, reviewed_by="a reviewer"
+                )
+            )
+
+        def list_conductor_names(self) -> tuple[str, ...]:
+            return CATALOG.list_conductor_names()
+
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, _ReviewedCatalog())
+    assert controller.conductorReviewNotice == ""
