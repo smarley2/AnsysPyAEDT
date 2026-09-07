@@ -59,14 +59,43 @@ def _write_lock(
     return document
 
 
+#: Pids are allocated from a small space -- a few million on Windows, 4 194 304
+#: by default on Linux -- so nothing is ever assigned a value up here, and
+#: nothing can recycle into one while a test is running.
+_UNALLOCATABLE_PID_BASE = 2**31
+
+
 def _a_pid_that_is_not_running() -> int:
-    """Spawn a trivial subprocess, let it exit, and hand back its pid. The
-    pid is guaranteed free at the moment this returns (barring the
-    documented pid-reuse risk, which is rare enough on a test's timescale to
-    accept -- the same risk the brief calls out for production)."""
-    completed = subprocess.Popen([sys.executable, "-c", "pass"])
-    completed.wait()
-    return completed.pid
+    """A pid the lock's own liveness check reports dead, verified right now.
+
+    This used to spawn a subprocess, wait for it, and return its pid as
+    "guaranteed free". It is not, in two ways, and both made this file and
+    `tests/ui/test_project_lock_wiring.py` fail intermittently under
+    `pytest -n 8`:
+
+    * `subprocess.Popen` keeps a handle to the process it started, and on
+      Windows `OpenProcess` succeeds for a *terminated* process for as long as
+      any handle to it is open. So the pid read as alive until CPython
+      finalised the `Popen`, and the lock reported `HELD_BY_LIVE_PROCESS`
+      where the test wanted `TAKEN_FROM_STALE`.
+    * Pids are recycled. The old docstring called that risk "rare enough on a
+      test's timescale to accept"; eight workers spawning subprocesses is what
+      made it not rare.
+
+    So: no real process, a pid from a range nothing can be assigned, and
+    deadness *checked* with the same function the lock uses rather than
+    assumed. Whether a genuinely exited process is treated as stale is not
+    testable without the race above -- it is the production behaviour
+    `_pid_alive_windows` documents, and it is exercised by the check here.
+    """
+    for offset in range(256):
+        candidate = _UNALLOCATABLE_PID_BASE + offset
+        if not _pid_alive(candidate):
+            return candidate
+    raise AssertionError(
+        "no pid above 2**31 reported dead; the liveness check or this "
+        "assumption about the pid space has changed"
+    )
 
 
 def test_a_free_document_is_acquired(tmp_path: Path) -> None:
@@ -214,3 +243,36 @@ def test_releasing_does_not_remove_a_lock_with_our_pid_on_a_foreign_host(
     assert (
         json.loads(lock.path.read_text(encoding="utf-8"))["host"] == "someone-elses-window"
     )
+
+
+def test_the_dead_pid_helper_stays_dead_while_exited_processes_are_held() -> None:
+    """The premise both lock suites rest on, pinned against the exact state
+    that broke its previous version.
+
+    A spawned-and-waited process's pid reads as ALIVE for as long as anything
+    holds a handle to it -- `subprocess.Popen` does -- so the old helper handed
+    out a live-looking pid and the lock reported `HELD_BY_LIVE_PROCESS` where
+    the caller wanted `TAKEN_FROM_STALE`. This reproduces that state and
+    requires the helper to be unaffected by it.
+    """
+    held = [subprocess.Popen([sys.executable, "-c", "pass"]) for _ in range(3)]
+    try:
+        for process in held:
+            process.wait()
+        # The state that broke the old helper: exited, handle still open.
+        assert all(_pid_alive(process.pid) for process in held)
+
+        pid = _a_pid_that_is_not_running()
+        assert not _pid_alive(pid)
+        assert pid not in {process.pid for process in held}
+    finally:
+        for process in held:
+            process.__exit__(None, None, None)
+
+
+def test_a_stale_lock_is_taken_over_with_the_helper_pid(tmp_path: Path) -> None:
+    """End to end through the public API, which is what the wiring test does
+    with a window: a lock naming a dead pid is taken, not refused."""
+    document = _write_lock(tmp_path, pid=_a_pid_that_is_not_running())
+
+    assert ProjectLock(document).acquire() is LockOutcome.TAKEN_FROM_STALE

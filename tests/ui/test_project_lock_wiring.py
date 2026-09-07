@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import platform
-import subprocess
 import sys
 from pathlib import Path
 
@@ -44,6 +43,9 @@ from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
 )
 from inductor_designer.ui.main import create_engine  # noqa: E402
 from inductor_designer.ui.project_session import ProjectSession  # noqa: E402
+from tests.unit.adapters.system.test_project_lock import (  # noqa: E402
+    _a_pid_that_is_not_running,
+)
 from tests.unit.application.test_geometry_model import CATALOG  # noqa: E402
 from tests.unit.domain.test_project import make_project  # noqa: E402
 from tools.build_catalog import build  # noqa: E402
@@ -63,15 +65,20 @@ def _lock_path(document_path: Path) -> Path:
 
 
 def _write_dead_lock(document_path: Path) -> None:
-    """A lock file recording a pid that is guaranteed not running, written
-    by hand rather than through `ProjectLock` -- as if left by a previous
-    build's crashed process."""
-    completed = subprocess.Popen([sys.executable, "-c", "pass"])
-    completed.wait()
+    """A lock file recording a pid that is not running, written by hand rather
+    than through `ProjectLock` -- as if left by a previous build's crashed
+    process.
+
+    The pid comes from `_a_pid_that_is_not_running`, which verifies deadness
+    against the lock's own check. It used to be a spawned-and-exited process's
+    pid, which read as *alive* while `Popen` still held a handle to it and made
+    this test fail intermittently under `pytest -n 8`; that helper's docstring
+    has the detail.
+    """
     _lock_path(document_path).write_text(
         json.dumps(
             {
-                "pid": completed.pid,
+                "pid": _a_pid_that_is_not_running(),
                 "host": platform.node(),
                 "startedAtUtc": "2026-01-01T00:00:00+00:00",
             }
