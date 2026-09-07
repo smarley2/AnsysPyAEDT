@@ -224,19 +224,28 @@ def build_ecore_cut_plane_drawing(
         )
 
     # The gap stack sits where the two halves meet, centred on the joint, with
-    # the user's segments of core between the breaks.
-    stack_mm = (body.total_gap_m + sum(body.gap_spacings_m)) * _MM_PER_M
-    cursor = -stack_mm / 2.0
-    for index, gap in enumerate(body.gaps):
-        gap_mm = gap * _MM_PER_M
-        outline.append(
-            CutPlaneRect(
-                0.0, cursor + gap_mm / 2.0, leg_half * 2.0, gap_mm, cutout=True
-            )
+    # the user's segments of core between the breaks. Drawn in the outer legs
+    # too when the shim build gaps all three: the network models those gaps,
+    # so a drawing that showed the outer legs continuous would disagree with
+    # the numbers beside it.
+    gapped_x = [(0.0, leg_half * 2.0)]
+    if body.outer_legs_gapped:
+        gapped_x.extend(
+            [(outer_centre, outer), (-outer_centre, outer)]
         )
-        cursor += gap_mm
-        if index < len(body.gap_spacings_m):
-            cursor += body.gap_spacings_m[index] * _MM_PER_M
+    stack_mm = (body.total_gap_m + sum(body.gap_spacings_m)) * _MM_PER_M
+    for centre_x, width in gapped_x:
+        cursor = -stack_mm / 2.0
+        for index, gap in enumerate(body.gaps):
+            gap_mm = gap * _MM_PER_M
+            outline.append(
+                CutPlaneRect(
+                    centre_x, cursor + gap_mm / 2.0, width, gap_mm, cutout=True
+                )
+            )
+            cursor += gap_mm
+            if index < len(body.gap_spacings_m):
+                cursor += body.gap_spacings_m[index] * _MM_PER_M
 
     directions = {
         point.winding_id: point.current_direction

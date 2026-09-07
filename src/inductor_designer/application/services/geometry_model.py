@@ -222,6 +222,35 @@ def build_ecore_geometry_model(
     except CoreGeometryError as error:
         raise GeometryModelError((str(error),)) from error
 
+    leg_length_m = body.centre_leg_length_m
+    claimed: list[tuple[str, float, float]] = []
+    for winding in project.design.windings:
+        placement = winding.placement
+        if not isinstance(placement, LegPlacement):
+            continue
+        end = placement.window_start_m + placement.window_span_m
+        if end > leg_length_m:
+            raise GeometryModelError(
+                (
+                    f"Winding {winding.winding_id} runs to "
+                    f"{end * 1000.0:.1f} mm along a centre leg only "
+                    f"{leg_length_m * 1000.0:.1f} mm long.",
+                )
+            )
+        for other_id, other_start, other_end in claimed:
+            # The window analogue of the toroid's sector-overlap rule, which
+            # `domain/validation._sectors_overlap` cannot express for a leg:
+            # two windings sharing a span would pack to identical stations and
+            # occupy the same copper.
+            if placement.window_start_m < other_end and other_start < end:
+                raise GeometryModelError(
+                    (
+                        f"Windings {other_id} and {winding.winding_id} claim "
+                        "the same span of the winding window.",
+                    )
+                )
+        claimed.append((winding.winding_id, placement.window_start_m, end))
+
     packings: list[PackedLegWinding] = []
     insulated: dict[str, float] = {}
     bare: dict[str, float] = {}

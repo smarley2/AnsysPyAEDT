@@ -9,6 +9,7 @@ from inductor_designer.domain.project import (
     CatalogCoreSelection,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
 )
 from inductor_designer.domain.winding import ToroidPlacement, WindingDefinition
 
@@ -73,6 +74,53 @@ def _validate_core(project: InductorProject) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     design = project.design
     core = design.core
+    def core_error(code: str, message: str) -> None:
+        issues.append(
+            ValidationIssue(ValidationCategory.ERROR, code, message, "design.core")
+        )
+
+    if isinstance(core, ManualECoreSelection):
+        # `ManualECoreSelection` checks finiteness only, exactly as
+        # `ManualCoreSelection` does, and its docstring says positivity is
+        # "reported as diagnostics by validation" -- which was not true until
+        # this branch existed: a negative centre leg validated clean.
+        named = (
+            ("centre_leg_width_m", core.centre_leg_width_m),
+            ("depth_m", core.depth_m),
+            ("window_width_m", core.window_width_m),
+            ("window_height_m", core.window_height_m),
+            ("outer_leg_width_m", core.outer_leg_width_m),
+            ("yoke_thickness_m", core.yoke_thickness_m),
+        )
+        for name, value in named:
+            if not value > 0.0:
+                core_error(
+                    "core.ecore_dimension",
+                    f"E-core {name} must be positive; got {value:g} m.",
+                )
+        for index_, gap in enumerate(core.gaps_m):
+            if not gap > 0.0:
+                core_error(
+                    "core.ecore_gap",
+                    f"E-core gap {index_ + 1} must be positive; got {gap:g} m.",
+                )
+        if len(core.gap_spacings_m) != max(len(core.gaps_m) - 1, 0):
+            core_error(
+                "core.ecore_gap_spacing",
+                f"{len(core.gaps_m)} gap(s) need "
+                f"{max(len(core.gaps_m) - 1, 0)} spacing(s); got "
+                f"{len(core.gap_spacings_m)}.",
+            )
+        occupied = sum(core.gaps_m) + sum(core.gap_spacings_m)
+        leg = 2.0 * core.window_height_m
+        if core.window_height_m > 0.0 and occupied > leg:
+            core_error(
+                "core.ecore_gap_stack",
+                f"Gaps and their spacings occupy {occupied:g} m of a centre "
+                f"leg {leg:g} m long.",
+            )
+        return issues
+
     if core is None:
         issues.append(
             ValidationIssue(

@@ -350,7 +350,19 @@ def _solve_loadline(
         if upper >= ungapped_h:
             return sign * upper, sign * (_interpolate(series, upper) or 0.0)
         return None
-    low, high = 0.0, upper
+    # From the curve's lowest recorded field strength, not from zero: a series
+    # transcribed without the origin has no value below its first point, and
+    # bisecting from zero made every probe there return None -- refusing roots
+    # that were inside the recorded range. A gapped core's iron field lands in
+    # exactly that region.
+    low, high = min(point.x for point in series.points), upper
+    if low >= upper:
+        low = 0.0
+    lowest = excess(low)
+    if lowest is None or lowest > 0.0:
+        # The root is below the recorded data, so the curve does not describe
+        # this operating point; reported rather than extrapolated.
+        return None
     for _ in range(_GAP_BISECTION_STEPS):
         middle = (low + high) / 2.0
         value = excess(middle)

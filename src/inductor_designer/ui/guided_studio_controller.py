@@ -9,19 +9,28 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from inductor_designer.application.services.geometry_model import (
     GeometryModelError,
+    build_ecore_geometry_model,
     build_geometry_model,
 )
 from inductor_designer.domain.catalog_records import ReviewStatus
-from inductor_designer.domain.project import WindingOperatingPoint
+from inductor_designer.domain.project import (
+    ManualECoreSelection,
+    WindingOperatingPoint,
+)
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    LegPlacement,
     ToroidPlacement,
     WindingDirection,
+    WindingLeg,
     WindingPlacement,
-    require_toroid_placement,
 )
-from inductor_designer.ui.cut_plane_view import CutPlaneDrawing, build_cut_plane_drawing
+from inductor_designer.ui.cut_plane_view import (
+    CutPlaneDrawing,
+    build_cut_plane_drawing,
+    build_ecore_cut_plane_drawing,
+)
 from inductor_designer.ui.preview_geometry import PreviewEntry, build_preview_entries
 
 if TYPE_CHECKING:
@@ -84,6 +93,9 @@ class GuidedStudioController(QObject):
     operatingPointChanged = Signal()
 
     _MINIMUM_NEW_SECTOR_DEG = 10.0
+    #: The shortest span worth starting a leg winding in: below this the
+    #: window holds no turn of any wire this catalog carries.
+    _MINIMUM_NEW_WINDOW_M = 0.002
     _PREFERRED_NEW_SECTOR_DEG = 90.0
 
     def __init__(
@@ -146,6 +158,20 @@ class GuidedStudioController(QObject):
         )
 
     def _build_preview(self, project: InductorProject) -> _PreviewState:
+        """The preview for whichever family this project's core belongs to.
+
+        An E core has no 3D mesh builder yet (that is M11b, with the export),
+        so it draws the cut plane and no entries -- but it does draw, which is
+        the whole point: dispatching only to the toroid builder left every
+        E-core project with an empty canvas saying "Select a core" while a
+        core was selected.
+        """
+        if isinstance(project.design.core, ManualECoreSelection):
+            ecore_model = build_ecore_geometry_model(project, self._catalog)
+            return _PreviewState(
+                entries=[],
+                drawing=build_ecore_cut_plane_drawing(ecore_model, project),
+            )
         model = build_geometry_model(project, self._catalog)
         return _PreviewState(
             entries=build_preview_entries(model),
@@ -167,17 +193,45 @@ class GuidedStudioController(QObject):
         when the remaining gap is too small to be useful.
         """
         windings = self._session.project.design.windings
+        placements = [
+            winding.placement
+            for winding in windings
+            if isinstance(winding.placement, ToroidPlacement)
+        ]
         occupied_end = max(
             (
-                require_toroid_placement(winding).start_angle_deg
-                + require_toroid_placement(winding).sector_deg
-                for winding in windings
+                placement.start_angle_deg + placement.sector_deg
+                for placement in placements
             ),
             default=0.0,
         )
         if occupied_end >= 360.0 - self._MINIMUM_NEW_SECTOR_DEG:
             return None
         return (occupied_end, min(self._PREFERRED_NEW_SECTOR_DEG, 360.0 - occupied_end))
+
+    def _free_window(self) -> tuple[float, float] | None:
+        """The unclaimed span of the centre leg's window, in metres.
+
+        The leg analogue of `_free_sector`: a new winding goes after the
+        existing ones along the leg rather than on top of them. None when what
+        is left is too short to wind.
+        """
+        core = self._session.project.design.core
+        if not isinstance(core, ManualECoreSelection):
+            return None
+        leg = 2.0 * core.window_height_m
+        occupied_end = max(
+            (
+                placement.window_start_m + placement.window_span_m
+                for winding in self._session.project.design.windings
+                if isinstance(placement := winding.placement, LegPlacement)
+            ),
+            default=0.0,
+        )
+        remaining = leg - occupied_end
+        if remaining < self._MINIMUM_NEW_WINDOW_M:
+            return None
+        return (occupied_end, remaining)
 
     @staticmethod
     def _winding_rows(
@@ -553,14 +607,36 @@ class GuidedStudioController(QObject):
                 "placement defaults from."
             )
             return False
-        placement = self._free_sector()
-        if placement is None:
-            self._session.set_status(
-                "Unable to add a winding: no free sector remains on the core. "
-                "Reduce an existing winding's sector first."
+        # Placed in whichever family's coordinates this design uses. Building
+        # a `ToroidPlacement` unconditionally -- and reading the free sector
+        # through `require_toroid_placement` -- made this slot raise
+        # `ValueError` for an E-core project, and left no UI path at all that
+        # could produce a leg placement.
+        if isinstance(self._session.project.design.core, ManualECoreSelection):
+            window = self._free_window()
+            if window is None:
+                self._session.set_status(
+                    "Unable to add a winding: no free span remains on the "
+                    "centre leg. Reduce an existing winding's window span "
+                    "first."
+                )
+                return False
+            start_m, span_m = window
+            new_placement: WindingPlacement = LegPlacement(
+                leg=WindingLeg.CENTRE, window_start_m=start_m, window_span_m=span_m
             )
-            return False
-        start_deg, sector_deg = placement
+        else:
+            placement = self._free_sector()
+            if placement is None:
+                self._session.set_status(
+                    "Unable to add a winding: no free sector remains on the core. "
+                    "Reduce an existing winding's sector first."
+                )
+                return False
+            start_deg, sector_deg = placement
+            new_placement = ToroidPlacement(
+                start_angle_deg=start_deg, sector_deg=sector_deg
+            )
         template = windings[-1]
         winding_id = self._next_winding_id()
         definition = replace(
@@ -568,9 +644,7 @@ class GuidedStudioController(QObject):
             winding_id=winding_id,
             label=f"Winding {len(windings) + 1}",
             turns=1,
-            placement=ToroidPlacement(
-                start_angle_deg=start_deg, sector_deg=sector_deg
-            ),
+            placement=new_placement,
             terminal_intent="",
         )
         excitation = WindingOperatingPoint(

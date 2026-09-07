@@ -527,3 +527,107 @@ def test_the_conductor_notice_is_empty_once_every_wire_is_reviewed() -> None:
     session = ProjectSession(make_project())
     controller = GuidedStudioController(session, _ReviewedCatalog())
     assert controller.conductorReviewNotice == ""
+
+
+def test_an_e_core_project_draws_its_cut_plane_in_the_controller() -> None:
+    """Found by review: the controller dispatched only to the toroid builder,
+    so an E-core project rendered an empty canvas saying "Select a core" while
+    a core was selected. The E-core geometry model and cut plane existed and
+    had no callers at all in `src/`.
+
+    No 3D entries: an E core has no mesh builder yet (M11b, with the export).
+    The cut plane is what makes the winding placement checkable, and it draws.
+    """
+    from inductor_designer.application.services.new_project import new_project
+    from inductor_designer.domain.project import ManualECoreSelection
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+    project = new_project()
+    session = ProjectSession(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core=ManualECoreSelection(
+                    centre_leg_width_m=0.0170,
+                    depth_m=0.0210,
+                    window_width_m=0.0092,
+                    window_height_m=0.0187,
+                    outer_leg_width_m=0.0085,
+                    yoke_thickness_m=0.0093,
+                    gaps_m=(0.001,),
+                ),
+                windings=(
+                    replace(
+                        project.design.windings[0],
+                        turns=12,
+                        placement=LegPlacement(
+                            leg=WindingLeg.CENTRE,
+                            window_start_m=0.0,
+                            window_span_m=0.0187,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    controller = GuidedStudioController(session, CATALOG)
+
+    drawing = controller.cutPlaneDrawing
+    assert controller.previewEntries == []
+    assert "Select a core" not in drawing["note"]
+    # `cutPlaneDrawing` hands QML dicts, not dataclasses, so this asserts on
+    # the shape the canvas actually receives: a rectangle carries a width, a
+    # circle carries a radius.
+    assert any("width_mm" in shape for shape in drawing["outline"])
+    assert not any("radius_mm" in shape for shape in drawing["outline"])
+    # 12 turns, cut twice each by a plane through the leg.
+    assert len(drawing["circles"]) == 24
+
+
+def test_adding_a_winding_to_an_e_core_places_it_on_the_leg() -> None:
+    """Found by review: `addWinding` built a `ToroidPlacement` unconditionally
+    and read the free sector through `require_toroid_placement`, so it raised
+    `ValueError` out of a Qt slot for an E-core project -- and no UI path
+    existed that could produce a leg placement at all."""
+    from inductor_designer.application.services.new_project import new_project
+    from inductor_designer.domain.project import ManualECoreSelection
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+
+    project = new_project()
+    session = ProjectSession(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core=ManualECoreSelection(
+                    centre_leg_width_m=0.0170,
+                    depth_m=0.0210,
+                    window_width_m=0.0092,
+                    window_height_m=0.0187,
+                    outer_leg_width_m=0.0085,
+                    yoke_thickness_m=0.0093,
+                ),
+                windings=(
+                    replace(
+                        project.design.windings[0],
+                        turns=6,
+                        placement=LegPlacement(
+                            leg=WindingLeg.CENTRE,
+                            window_start_m=0.0,
+                            window_span_m=0.009,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    controller = GuidedStudioController(session, CATALOG)
+
+    assert controller.addWinding() is True
+
+    first, second = session.project.design.windings
+    assert isinstance(second.placement, LegPlacement)
+    # After the first winding's span, not on top of it.
+    assert second.placement.window_start_m >= (
+        first.placement.window_start_m + first.placement.window_span_m
+    )

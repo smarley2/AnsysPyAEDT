@@ -598,3 +598,101 @@ def test_the_gap_length_defaults_to_zero_on_the_core_properties() -> None:
         al_value_nh=None,
     )
     assert properties.gap_length_m == 0.0
+
+
+def test_the_gapped_solve_is_odd_symmetric_in_the_ampere_turns() -> None:
+    """Found by review: forcing `sign = 1.0` in `_solve_loadline` passed every
+    test, so negative ampere-turns were unconstrained. Reversing the current
+    must reverse B and H and change nothing else -- the same odd symmetry the
+    ungapped path applies through `_interpolate`."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    material = make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c")
+    forward = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 4.0, CurrentDirection.FORWARD),),
+    )
+    reverse = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 4.0, CurrentDirection.REVERSE),),
+    )
+    solved = []
+    for point in (forward, reverse):
+        fields = field_strengths(point, {"w1": 30}, 0.15)
+        assert isinstance(fields, FieldStrengths)
+        result = gapped_fields_and_flux(
+            material,
+            fields,
+            iron_length_m=0.15,
+            gap_length_m=0.001,
+            effective_area_m2=3.57e-4,
+            core_temperature_c=25.0,
+        )
+        assert not isinstance(result, PreliminaryValue), result
+        solved.append(result)
+
+    (forward_fields, forward_flux), (reverse_fields, reverse_flux) = solved
+    assert math.isclose(
+        reverse_fields.h_dc_a_per_m, -forward_fields.h_dc_a_per_m, rel_tol=1e-9
+    )
+    assert math.isclose(reverse_flux.b_dc_t, -forward_flux.b_dc_t, rel_tol=1e-9)
+
+
+def test_the_solved_triple_keeps_min_below_max() -> None:
+    """Found by review: swapping `h_min` and `h_max` in the solved triple
+    passed every test, leaving the AC peak's sign unconstrained. With ripple
+    on a DC bias the ordering is what makes `b_ac_peak` positive."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 1.0, 0.0, 3.0, CurrentDirection.FORWARD),),
+    )
+    fields = field_strengths(point, {"w1": 30}, 0.15)
+    assert isinstance(fields, FieldStrengths)
+    result = gapped_fields_and_flux(
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        fields,
+        iron_length_m=0.15,
+        gap_length_m=0.001,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(result, PreliminaryValue), result
+    solved_fields, flux = result
+
+    assert solved_fields.h_min_a_per_m < solved_fields.h_dc_a_per_m
+    assert solved_fields.h_dc_a_per_m < solved_fields.h_max_a_per_m
+    assert solved_fields.h_ac_peak_a_per_m > 0.0
+    assert flux.b_ac_peak_t > 0.0
+
+
+def test_a_curve_that_does_not_start_at_the_origin_still_solves() -> None:
+    """Found by review: the bisection bracketed from H = 0, and a series
+    transcribed without the origin has no value below its first point -- so
+    every probe there returned None and roots inside the recorded range were
+    refused. A gapped core's iron field lands in exactly that region."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    material = make_material_selection(
+        series=(make_bh_series(points=((10.0, 0.05), (200.0, 0.5), (700.0, 0.8))),),
+        bh_series_id="bh-25c",
+    )
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 2.0, CurrentDirection.FORWARD),),
+    )
+    fields = field_strengths(point, {"w1": 30}, 0.15)
+    assert isinstance(fields, FieldStrengths)
+
+    result = gapped_fields_and_flux(
+        material,
+        fields,
+        iron_length_m=0.15,
+        gap_length_m=0.0005,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(result, PreliminaryValue), result
+    solved_fields, _flux = result
+    assert solved_fields.h_dc_a_per_m > 0.0

@@ -109,3 +109,84 @@ def test_the_wire_length_counts_every_turn_around_the_leg() -> None:
     # And not absurdly more: the corner arcs add a wire circumference or so
     # per turn, not a factor.
     assert packed.wire_length_m < 10 * (perimeter + 0.02)
+
+
+def test_a_winding_running_past_the_leg_is_refused_by_the_model() -> None:
+    """Found by review: `LegPlacement` and the schema bound the span below but
+    not above, and nothing checked `start + span` against the leg, so turns
+    were placed -- and drawn -- inside the yoke."""
+    from dataclasses import replace
+
+    from inductor_designer.application.services.geometry_model import (
+        GeometryModelError,
+        build_ecore_geometry_model,
+    )
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+    from tests.unit.application.test_geometry_model import CATALOG
+    from tests.unit.application.test_geometry_model_ecore import _ecore_project
+
+    project = _ecore_project()
+    winding = replace(
+        project.design.windings[0],
+        placement=LegPlacement(
+            # The leg is 2 * 18.7 = 37.4 mm; this runs to 48.7 mm.
+            leg=WindingLeg.CENTRE,
+            window_start_m=0.030,
+            window_span_m=0.0187,
+        ),
+    )
+    project = replace(project, design=replace(project.design, windings=(winding,)))
+
+    with pytest.raises(GeometryModelError, match="centre leg"):
+        build_ecore_geometry_model(project, CATALOG)
+
+
+def test_two_windings_claiming_the_same_span_are_refused() -> None:
+    """The window analogue of the toroid's sector-overlap rule, which
+    `domain/validation._sectors_overlap` cannot express for a leg. Without it
+    both windings packed to identical stations and occupied the same copper."""
+    from dataclasses import replace
+
+    from inductor_designer.application.services.geometry_model import (
+        GeometryModelError,
+        build_ecore_geometry_model,
+    )
+    from inductor_designer.domain.project import WindingOperatingPoint
+    from inductor_designer.domain.winding import CurrentDirection
+    from tests.unit.application.test_geometry_model import CATALOG
+    from tests.unit.application.test_geometry_model_ecore import _ecore_project
+
+    project = _ecore_project(turns=6)
+    first = project.design.windings[0]
+    second = replace(first, winding_id="w2", turns=6)
+    project = replace(
+        project,
+        design=replace(project.design, windings=(first, second)),
+        operating_point=replace(
+            project.operating_point,
+            windings=(
+                project.operating_point.windings[0],
+                WindingOperatingPoint("w2", 0.0, 0.0, 0.0, CurrentDirection.FORWARD),
+            ),
+        ),
+    )
+
+    with pytest.raises(GeometryModelError, match="same span"):
+        build_ecore_geometry_model(project, CATALOG)
+
+
+def test_the_clearance_is_taken_out_of_the_usable_window() -> None:
+    """Found by review: setting `usable = window_width_m` (ignoring the
+    clearance entirely) passed every test in this file. The clearance is the
+    gap the wire must keep from the outer leg it faces, so it costs layers."""
+    # 9.2 mm of window less 1 mm of clearance leaves 8.2 mm: 7 layers of
+    # 1.1 mm wire, 14 turns each, 98 in all. Less 6 mm of clearance leaves
+    # 3.2 mm: 2 layers, so 28.
+    assert len(pack_leg_winding(CORE, _spec(turns=28, min_clearance_m=0.006)).layers) == 2
+    with pytest.raises(LegPackingError, match="window"):
+        pack_leg_winding(CORE, _spec(turns=29, min_clearance_m=0.006))
+
+    # The same 29 turns fit when the clearance is small, so the refusal above
+    # is the clearance doing its job and not the window width alone -- which
+    # is the mutation (`usable = window_width_m`) this test exists to catch.
+    assert pack_leg_winding(CORE, _spec(turns=29, min_clearance_m=0.001)) is not None

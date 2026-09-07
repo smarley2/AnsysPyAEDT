@@ -23,6 +23,12 @@ from inductor_designer.domain.project import (
     ManualCoreSelection,
     ManualECoreSelection,
 )
+from inductor_designer.domain.winding import (
+    LegPlacement,
+    ToroidPlacement,
+    WindingDefinition,
+    WindingLeg,
+)
 from inductor_designer.geometry.ecore.body import FinishedECore
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
@@ -81,6 +87,64 @@ class SelectionOutcome:
     project: InductorProject
     cleared: ClearedSelection | None
     message: str
+
+
+def _reshare(
+    windings: tuple[WindingDefinition, ...], leg_length_m: float | None
+) -> tuple[WindingDefinition, ...]:
+    """Re-place every winding in the coordinates its new core family uses.
+
+    Changing family changes what "where" means: a toroid places turns by angle
+    about its axis, an E core along a leg inside a window, and neither set of
+    numbers survives the switch. Leaving them alone produced a design no
+    geometry model would accept and no screen could draw, with no way back
+    except editing the placements one at a time.
+
+    The share-out is the same rule in both directions: each winding takes an
+    equal, non-overlapping slice in its existing order -- the sectors a toroid
+    would have shared, or the spans of the leg window. Deliberately even
+    rather than clever: it is a starting point the user then edits, and any
+    weighting would be a guess about intent.
+
+    `leg_length_m` None means the target is a toroid.
+    """
+    count = len(windings)
+    if count == 0:
+        return windings
+    if leg_length_m is None:
+        sector = 360.0 / count
+        return tuple(
+            replace(
+                winding,
+                placement=ToroidPlacement(
+                    start_angle_deg=index * sector, sector_deg=sector
+                ),
+            )
+            for index, winding in enumerate(windings)
+        )
+    span = leg_length_m / count
+    return tuple(
+        replace(
+            winding,
+            placement=LegPlacement(
+                leg=WindingLeg.CENTRE,
+                window_start_m=index * span,
+                window_span_m=span,
+            ),
+        )
+        for index, winding in enumerate(windings)
+    )
+
+
+def _reshared_note(windings: tuple[WindingDefinition, ...], changed: bool) -> str:
+    if not changed:
+        return ""
+    if len(windings) == 1:
+        return " The winding was re-placed for the new core shape."
+    return (
+        f" The {len(windings)} windings were re-placed for the new core "
+        "shape, sharing it equally; adjust them as you need."
+    )
 
 
 def required_material_ref(project: InductorProject) -> MaterialRef | None:
@@ -194,10 +258,24 @@ def apply_catalog_core(
                 "Select a compatible material revision."
             ),
         )
+    windings = selected.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, ToroidPlacement) for winding in windings
+    )
+    if needs_reshare:
+        # Every catalog core is a toroid until 11c adds E-core records, so
+        # switching from a manual E core has to bring the windings back.
+        selected = replace(
+            selected,
+            design=replace(selected.design, windings=_reshare(windings, None)),
+        )
     return SelectionOutcome(
         project=selected,
         cleared=None,
-        message=f"Selected catalog core {part_number}.",
+        message=(
+            f"Selected catalog core {part_number}."
+            f"{_reshared_note(selected.design.windings, needs_reshare)}"
+        ),
     )
 
 
@@ -226,17 +304,26 @@ def apply_manual_core(
         if project.design.manual_material_compatibility_acknowledged
         else ""
     )
+    windings = project.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, ToroidPlacement) for winding in windings
+    )
+    reshared = _reshare(windings, None) if needs_reshare else windings
     return SelectionOutcome(
         project=replace(
             project,
             design=replace(
                 project.design,
                 core=core,
+                windings=reshared,
                 manual_material_compatibility_acknowledged=False,
             ),
         ),
         cleared=None,
-        message=f"Applied manual core dimensions.{reconfirm}",
+        message=(
+            f"Applied manual core dimensions."
+            f"{_reshared_note(reshared, needs_reshare)}{reconfirm}"
+        ),
     )
 
 
@@ -295,17 +382,30 @@ def apply_manual_ecore(
         if gaps_m
         else " Ungapped."
     )
+    # Windings placed by angle mean nothing on a leg, so they are re-placed
+    # rather than left for the geometry model to refuse.
+    windings = project.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, LegPlacement) for winding in windings
+    )
+    reshared = (
+        _reshare(windings, 2.0 * window_height_m) if needs_reshare else windings
+    )
     return SelectionOutcome(
         project=replace(
             project,
             design=replace(
                 project.design,
                 core=core,
+                windings=reshared,
                 manual_material_compatibility_acknowledged=False,
             ),
         ),
         cleared=None,
-        message=f"Applied manual E-core dimensions.{gap_note}{reconfirm}",
+        message=(
+            f"Applied manual E-core dimensions.{gap_note}"
+            f"{_reshared_note(reshared, needs_reshare)}{reconfirm}"
+        ),
     )
 
 

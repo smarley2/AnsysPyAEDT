@@ -199,6 +199,31 @@ flux density quoted against the centre leg), `volume_m3` = the iron volume
 the A_L cross-check reports itself unavailable exactly as it does for a
 manual toroid.
 
+### The flux solve is nonlinear, which this spec originally understated
+
+The paragraph above says the estimate needs "one new term rather than a new
+model". That holds for a linear-permeability core and not for this pipeline,
+which maps H to B through a **recorded B-H curve**. With a gap the ordering
+that pipeline assumes breaks: the iron's share of the ampere-turns depends on
+the flux density, which depends on the material. So a gapped core solves the
+loadline
+
+```
+NI = H*l_iron + (B/mu_0)*l_gap        intersected with the recorded B(H)
+```
+
+by bisection -- field strength and flux density together, against the same
+curve the ungapped path uses. `gap_length_m` is still the only new field, and
+the exact iron/gap separation above is what makes the loadline expressible at
+all; it is the *integration* that is bigger than one term, not the maths.
+
+A material with only a `relative_permeability` and no recorded curve has no
+loadline to intersect, and is reported as unavailable rather than linearised
+silently.
+
+Recorded here rather than left in a commit message, because the plan requires
+a deviation to change the spec first.
+
 ### Fringing is ignored, and says so
 
 `inductance_estimate.INDUCTANCE_EXCLUSION_NOTE` already states that the

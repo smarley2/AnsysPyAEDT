@@ -116,7 +116,7 @@ Item {
                 ctx.stroke()
             }
 
-            // Scale bar: the outer diameter, drawn in the reserved band. It is
+            // The scale bar spans the drawing's extent, whatever shape the core is.
             // never wider than the model it sits under, so it always fits.
             // The scale bar spans the drawing, whatever shape the core is.
             var barMm = 2 * root.drawing.extent_mm

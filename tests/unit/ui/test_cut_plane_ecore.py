@@ -128,3 +128,67 @@ def test_a_gapped_pair_states_the_total_gap_on_the_drawing() -> None:
         build_ecore_geometry_model(project, CATALOG), project
     )
     assert "1.00 mm" in drawing.note
+
+
+def test_the_gap_stack_is_centred_on_the_joint_between_the_halves() -> None:
+    """Found by review: moving the stack's origin to zero (drawing every gap
+    from the leg's centre outward instead of centring the stack on the joint)
+    passed every test here -- the separation was checked, the position was
+    not. The joint is where the halves meet, so that is where a ground gap
+    physically is."""
+    project = _ecore_project(gaps_m=(0.001,))
+    drawing = build_ecore_cut_plane_drawing(
+        build_ecore_geometry_model(project, CATALOG), project
+    )
+    (break_,) = [shape for shape in drawing.outline if shape.cutout]
+    # One gap, so it straddles the joint: centred on y = 0.
+    assert break_.y_mm == pytest.approx(0.0, abs=1e-9)
+
+    two = _ecore_project(gaps_m=(0.001, 0.001), gap_spacings_m=(0.004,))
+    drawing = build_ecore_cut_plane_drawing(
+        build_ecore_geometry_model(two, CATALOG), two
+    )
+    breaks = sorted(
+        (shape for shape in drawing.outline if shape.cutout),
+        key=lambda shape: shape.y_mm,
+    )
+    # Two gaps and the segment between them, symmetric about the joint.
+    assert breaks[0].y_mm == pytest.approx(-breaks[1].y_mm, rel=1e-9)
+
+
+def test_the_turns_sit_outside_the_iron_not_inside_it() -> None:
+    """Found by review: drawing the conductors at `leg_half - offset - r`
+    (inside the centre leg) passed every test here. Copper inside the iron is
+    not a drawing anyone can check a design against."""
+    project = _ecore_project(turns=6)
+    drawing = build_ecore_cut_plane_drawing(
+        build_ecore_geometry_model(project, CATALOG), project
+    )
+    leg_half_mm = 17.0 / 2.0
+    for circle in drawing.circles:
+        assert abs(circle.x_mm) - circle.radius_mm >= leg_half_mm - 1e-9, circle
+
+
+def test_the_shim_build_draws_breaks_in_the_outer_legs_too() -> None:
+    """Suspected by review, confirmed: `outer_legs_gapped` puts gaps in the
+    network's outer-leg branch, and the drawing showed those legs continuous
+    -- a picture disagreeing with the numbers printed beside it."""
+    project = _ecore_project(gaps_m=(0.001,), outer_legs_gapped=True)
+    drawing = build_ecore_cut_plane_drawing(
+        build_ecore_geometry_model(project, CATALOG), project
+    )
+    breaks = [shape for shape in drawing.outline if shape.cutout]
+    # One in the centre leg, one in each outer leg.
+    assert len(breaks) == 3
+    assert sorted(round(shape.x_mm, 6) for shape in breaks)[1] == 0.0
+    assert all(shape.height_mm == pytest.approx(1.0) for shape in breaks)
+
+
+def test_the_ground_centre_leg_build_leaves_the_outer_legs_whole() -> None:
+    project = _ecore_project(gaps_m=(0.001,), outer_legs_gapped=False)
+    drawing = build_ecore_cut_plane_drawing(
+        build_ecore_geometry_model(project, CATALOG), project
+    )
+    breaks = [shape for shape in drawing.outline if shape.cutout]
+    assert len(breaks) == 1
+    assert breaks[0].x_mm == 0.0

@@ -112,3 +112,25 @@ def test_a_hand_edited_core_the_body_refuses_reports_no_properties() -> None:
     """
     inconsistent = replace(E_CORE, gaps_m=(), gap_spacings_m=(0.004,))
     assert core_magnetic_properties(inconsistent) is None
+
+
+def test_domain_validation_reports_an_impossible_e_core() -> None:
+    """Found by review: `_validate_core` had no E-core branch at all, so a
+    negative centre leg and a 500 mm gap validated clean -- while
+    `ManualECoreSelection`'s own docstring promised that positivity is
+    "reported as diagnostics by validation"."""
+    from inductor_designer.domain.validation import ValidationCategory, validate_project
+
+    project = _ecore_project()
+    broken = replace(
+        project,
+        design=replace(
+            project.design,
+            core=replace(E_CORE, centre_leg_width_m=-0.017, gaps_m=(0.5,)),
+        ),
+    )
+
+    issues = validate_project(broken, known_conductors=("AWG 18",))
+    errors = [issue for issue in issues if issue.category is ValidationCategory.ERROR]
+    assert any("centre_leg_width_m" in issue.message for issue in errors)
+    assert any("centre leg" in issue.message for issue in errors)

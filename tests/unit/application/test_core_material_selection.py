@@ -392,3 +392,140 @@ def test_a_core_named_as_an_overlay_one_reports_itself_imported() -> None:
     assert by_part[first].origin is CoreOrigin.IMPORTED
     others = [option for part, option in by_part.items() if part != first]
     assert all(option.origin is CoreOrigin.SHIPPED for option in others)
+
+
+def test_switching_to_an_e_core_re_places_the_windings_on_its_leg() -> None:
+    """Found by walking only the application's own paths: `applyManualECore`
+    swapped the core and left every winding placed by angle, so the geometry
+    model refused the design, the cut plane drew nothing, and `addWinding`
+    returned False -- there was no route from the blank project to a usable E
+    core at all.
+    """
+    from inductor_designer.application.services.core_material_selection import (
+        apply_manual_ecore,
+    )
+    from inductor_designer.domain.winding import LegPlacement
+
+    project = make_project()
+    outcome = apply_manual_ecore(
+        project,
+        centre_leg_width_m=0.0170,
+        depth_m=0.0210,
+        window_width_m=0.0092,
+        window_height_m=0.0187,
+        outer_leg_width_m=0.0085,
+        yoke_thickness_m=0.0093,
+        gaps_m=(0.001,),
+        gap_spacings_m=(),
+        outer_legs_gapped=False,
+    )
+
+    (winding,) = outcome.project.design.windings
+    assert isinstance(winding.placement, LegPlacement)
+    # One winding takes the whole leg, as a lone toroid winding takes 360 deg.
+    assert winding.placement.window_start_m == 0.0
+    assert winding.placement.window_span_m == pytest.approx(2 * 0.0187)
+    assert "re-placed" in outcome.message
+
+
+def test_two_windings_share_the_leg_equally_and_do_not_overlap() -> None:
+    """Even shares in their existing order: a starting point the user edits,
+    where any weighting would be a guess about intent. Overlapping spans are
+    refused by the geometry model, so they must not be produced here."""
+    from inductor_designer.application.services.core_material_selection import (
+        apply_manual_ecore,
+    )
+    from inductor_designer.domain.winding import LegPlacement
+
+    project = make_project()
+    second = replace(project.design.windings[0], winding_id="w2")
+    project = replace(
+        project,
+        design=replace(
+            project.design, windings=(project.design.windings[0], second)
+        ),
+    )
+
+    outcome = apply_manual_ecore(
+        project,
+        centre_leg_width_m=0.0170,
+        depth_m=0.0210,
+        window_width_m=0.0092,
+        window_height_m=0.0187,
+        outer_leg_width_m=0.0085,
+        yoke_thickness_m=0.0093,
+        gaps_m=(),
+        gap_spacings_m=(),
+        outer_legs_gapped=False,
+    )
+
+    first, other = outcome.project.design.windings
+    assert isinstance(first.placement, LegPlacement)
+    assert isinstance(other.placement, LegPlacement)
+    assert first.placement.window_span_m == pytest.approx(0.0187)
+    assert other.placement.window_start_m == pytest.approx(0.0187)
+    # Butted, not overlapping.
+    assert (
+        first.placement.window_start_m + first.placement.window_span_m
+        == pytest.approx(other.placement.window_start_m)
+    )
+    assert "2 windings" in outcome.message
+
+
+def test_switching_back_to_a_toroid_re_places_the_windings_by_angle() -> None:
+    """The same hole in the other direction: a leg-placed winding on a toroid
+    is a design no toroid function will touch."""
+    from inductor_designer.application.services.core_material_selection import (
+        apply_manual_core,
+        apply_manual_ecore,
+    )
+    from inductor_designer.domain.winding import ToroidPlacement
+
+    project = make_project()
+    on_ecore = apply_manual_ecore(
+        project,
+        centre_leg_width_m=0.0170,
+        depth_m=0.0210,
+        window_width_m=0.0092,
+        window_height_m=0.0187,
+        outer_leg_width_m=0.0085,
+        yoke_thickness_m=0.0093,
+        gaps_m=(),
+        gap_spacings_m=(),
+        outer_legs_gapped=False,
+    ).project
+
+    back = apply_manual_core(
+        on_ecore,
+        outer_diameter_m=0.0254,
+        inner_diameter_m=0.0143,
+        height_m=0.0093,
+        corner_radius_m=0.0,
+    )
+
+    (winding,) = back.project.design.windings
+    assert isinstance(winding.placement, ToroidPlacement)
+    assert winding.placement.sector_deg == pytest.approx(360.0)
+    assert "re-placed" in back.message
+
+
+def test_a_project_already_in_the_target_family_is_left_alone() -> None:
+    """No churn and no message about re-placing when nothing moved: the user's
+    own sectors must survive a dimension edit."""
+    from inductor_designer.application.services.core_material_selection import (
+        apply_manual_core,
+    )
+
+    project = make_project()
+    before = project.design.windings
+
+    outcome = apply_manual_core(
+        project,
+        outer_diameter_m=0.0254,
+        inner_diameter_m=0.0143,
+        height_m=0.0093,
+        corner_radius_m=0.0,
+    )
+
+    assert outcome.project.design.windings == before
+    assert "re-placed" not in outcome.message
