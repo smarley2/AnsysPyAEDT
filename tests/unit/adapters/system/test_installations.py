@@ -5,6 +5,7 @@ unsupported release reported distinctly from no AEDT at all -- see
 
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 
 import pytest
@@ -374,6 +375,10 @@ def test_femm_found_at_its_standard_location(
     assert found.install_root.is_absolute()
 
 
+@pytest.mark.skipif(
+    platform.system() != "Windows",
+    reason="drive-letter paths are absolute only on Windows",
+)
 def test_drive_root_of_a_bare_drive_letter_is_the_absolute_drive_root() -> None:
     """The actual bug (Important 2): `SYSTEMDRIVE` holds a bare "C:", and
     `Path("C:") / "x"` is relative to the current directory, not the drive

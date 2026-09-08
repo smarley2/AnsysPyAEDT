@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 from dataclasses import replace
 from pathlib import Path
 
@@ -244,7 +245,11 @@ def test_a_licence_failure_produces_actionable_redactable_evidence(
     bundle_text = "\n".join(entry.text for entry in entries)
     assert "license.unavailable" in bundle_text
     assert "1055@LICSRV01" not in bundle_text
-    assert str(tmp_path) not in bundle_text
+    # Redaction matches Windows drive and UNC path shapes -- the only ones the
+    # product platform produces (ADR 0004). A POSIX `tmp_path` is not one of
+    # them, so this half of the assertion belongs to the Windows runners.
+    if platform.system() == "Windows":
+        assert str(tmp_path) not in bundle_text
 
 
 def test_undo_restores_the_last_valid_project_after_a_rejected_edit(

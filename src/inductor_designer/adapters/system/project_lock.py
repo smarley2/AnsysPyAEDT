@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import platform
+import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -60,6 +61,14 @@ def _hostname() -> str:
 
 
 def _pid_alive_windows(pid: int) -> bool:
+    if sys.platform != "win32":  # pragma: no cover - see the comment below
+        # `ctypes.WinDLL` and `ctypes.get_last_error` exist in typeshed only
+        # under `sys.platform == "win32"`, and the quality job type-checks this
+        # file on a Linux runner, where the calls below are errors. This guard
+        # is what narrows the platform for the rest of the body -- an explicit
+        # refusal rather than an `ignore` that would also hide a real mistake
+        # in the ctypes calls.
+        raise AssertionError("the Windows liveness probe ran off Windows")
     # PROCESS_QUERY_LIMITED_INFORMATION: the narrowest access right that
     # still lets us learn the process exists, so this never needs privileges
     # beyond what any user process already has.
@@ -92,6 +101,14 @@ def _pid_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    except OverflowError:
+        # `_read_lock` accepts any pid below 2**32, because that is the range
+        # of a Windows DWORD pid -- but POSIX `pid_t` is signed 32-bit, so
+        # `os.kill` raises for anything from 2**31 up instead of returning.
+        # Left unguarded that propagates out of `acquire()` and blocks startup
+        # over a lock file, which is the one thing this module must never do.
+        # Nothing is ever assigned a pid that large, so: dead.
+        return False
     return True
 
 

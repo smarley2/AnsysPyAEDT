@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from inductor_designer.adapters.system import project_lock
 from inductor_designer.adapters.system.project_lock import (
     LockOutcome,
     ProjectLock,
@@ -59,10 +60,13 @@ def _write_lock(
     return document
 
 
-#: Pids are allocated from a small space -- a few million on Windows, 4 194 304
-#: by default on Linux -- so nothing is ever assigned a value up here, and
-#: nothing can recycle into one while a test is running.
-_UNALLOCATABLE_PID_BASE = 2**31
+#: Pids are allocated from a small space -- a few million on Windows, and
+#: 4 194 304 (2**22) at the very most on 64-bit Linux -- so nothing is ever
+#: assigned a value up here, and nothing can recycle into one while a test is
+#: running. Below 2**31 because POSIX `pid_t` is signed 32-bit: `os.kill` raises
+#: `OverflowError` above that rather than reporting the pid dead, and a base of
+#: 2**31 made every test resting on this helper fail on the Linux CI runner.
+_UNALLOCATABLE_PID_BASE = 2**30
 
 
 def _a_pid_that_is_not_running() -> int:
@@ -93,7 +97,7 @@ def _a_pid_that_is_not_running() -> int:
         if not _pid_alive(candidate):
             return candidate
     raise AssertionError(
-        "no pid above 2**31 reported dead; the liveness check or this "
+        "no pid above 2**30 reported dead; the liveness check or this "
         "assumption about the pid space has changed"
     )
 
@@ -259,8 +263,11 @@ def test_the_dead_pid_helper_stays_dead_while_exited_processes_are_held() -> Non
     try:
         for process in held:
             process.wait()
-        # The state that broke the old helper: exited, handle still open.
-        assert all(_pid_alive(process.pid) for process in held)
+        # The state that broke the old helper: exited, handle still open. It
+        # exists only on Windows -- `wait()` on POSIX reaps the child, after
+        # which the pid is genuinely gone and there is nothing to hold.
+        if platform.system() == "Windows":
+            assert all(_pid_alive(process.pid) for process in held)
 
         pid = _a_pid_that_is_not_running()
         assert not _pid_alive(pid)
@@ -276,3 +283,37 @@ def test_a_stale_lock_is_taken_over_with_the_helper_pid(tmp_path: Path) -> None:
     document = _write_lock(tmp_path, pid=_a_pid_that_is_not_running())
 
     assert ProjectLock(document).acquire() is LockOutcome.TAKEN_FROM_STALE
+
+
+def test_a_pid_too_large_for_posix_is_stale_rather_than_a_crash(tmp_path: Path) -> None:
+    """A pid `_read_lock` accepts but `os.kill` cannot take.
+
+    The record validator allows anything below 2**32, the range of a Windows
+    DWORD pid. POSIX `pid_t` is signed 32-bit, so `os.kill` raises
+    `OverflowError` from 2**31 up -- and an exception out of `acquire()` blocks
+    startup over a lock file, the one thing this module must never do. Both
+    platforms are exercised: Windows through `OpenProcess`, POSIX through the
+    guard on that overflow.
+    """
+    document = _write_lock(tmp_path, pid=2**32 - 1)
+
+    assert ProjectLock(document).acquire() is LockOutcome.TAKEN_FROM_STALE
+
+
+def test_the_posix_probe_reports_dead_for_a_pid_os_kill_cannot_take(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The POSIX half of the guard above, reachable from a Windows dev machine.
+
+    `_pid_alive` dispatches to `OpenProcess` here, so the branch that catches
+    `os.kill`'s `OverflowError` would otherwise be pinned only by the Linux CI
+    runner -- which is exactly where it was missing.
+    """
+
+    def raise_overflow(_pid: int, _signal: int) -> None:
+        raise OverflowError("signed integer is greater than maximum")
+
+    monkeypatch.setattr(project_lock.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(project_lock.os, "kill", raise_overflow)
+
+    assert _pid_alive(2**32 - 1) is False
