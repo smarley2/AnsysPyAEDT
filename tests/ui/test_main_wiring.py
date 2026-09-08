@@ -9,7 +9,6 @@ nothing raised.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import platform
 import sys
@@ -33,6 +32,7 @@ from inductor_designer.adapters.persistence.schema_repository import (  # noqa: 
     SchemaRepository,
 )
 from inductor_designer.adapters.system import resources  # noqa: E402
+from tests.optional_extras import needs_pyaedt  # noqa: E402
 from tests.unit.domain.test_project import make_project_with_material  # noqa: E402
 from tools.build_catalog import build  # noqa: E402
 
@@ -394,10 +394,8 @@ def test_a_launch_with_no_project_refuses_to_generate_until_it_is_saved(
     assert "no document path" in simulation.blockedReason
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("ansys.aedt.core") is None,
-    reason='requires the "aedt" extra (pyaedt); exit 6 is the correct answer without it',
-)
+# Exit 6 -- naming the missing module -- is the correct answer without the extra.
+@needs_pyaedt
 def test_the_solver_import_check_reports_and_exits_without_a_window(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

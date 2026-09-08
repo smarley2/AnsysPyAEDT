@@ -18,6 +18,8 @@ from types import ModuleType
 
 import pytest
 
+from tests.optional_extras import needs_pyaedt, needs_pyinstaller
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -119,11 +121,8 @@ def test_resolve_datas_matches_the_resource_seam_layout() -> None:
     )
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("PyInstaller") is None
-    or importlib.util.find_spec("ansys.aedt.core") is None,
-    reason='requires the "packaging" and "aedt" extras, which build the bundle',
-)
+@needs_pyaedt
+@needs_pyinstaller
 def test_spec_bundles_pyaedt_data_files(monkeypatch: pytest.MonkeyPatch) -> None:
     """Executes `inductor-designer.spec`'s `datas=` build the same way
     PyInstaller does -- `Analysis`/`PYZ`/`EXE`/`COLLECT` stubbed out so no

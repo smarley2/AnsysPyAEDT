@@ -13,8 +13,6 @@ whoever has one.
 
 from __future__ import annotations
 
-import importlib.util
-
 import pytest
 
 from inductor_designer.adapters.system.solver_imports import (
@@ -22,6 +20,7 @@ from inductor_designer.adapters.system.solver_imports import (
     check_solver_imports,
     format_solver_import_report,
 )
+from tests.optional_extras import needs_pyaedt
 
 
 def test_every_module_the_solver_adapters_import_is_checked() -> None:
@@ -33,17 +32,7 @@ def test_every_module_the_solver_adapters_import_is_checked() -> None:
     assert "femm" in names
 
 
-#: PyAEDT is an optional extra (`pip install -e ".[aedt]"`), not a runtime
-#: dependency, and the hosted CI runners install only `dev,ui`. These checks
-#: exist for the machine that BUILDS the frozen bundle, which has the extra;
-#: where it is absent there is nothing to check rather than something failing.
-_needs_pyaedt = pytest.mark.skipif(
-    importlib.util.find_spec("ansys.aedt.core") is None,
-    reason='requires the "aedt" extra (pyaedt)',
-)
-
-
-@_needs_pyaedt
+@needs_pyaedt
 def test_a_module_that_imports_reports_ok_with_its_file() -> None:
     checks = {check.module: check for check in check_solver_imports()}
     # `json` stands in for nothing here -- this asserts on a real solver
@@ -53,7 +42,7 @@ def test_a_module_that_imports_reports_ok_with_its_file() -> None:
     assert pyaedt.detail
 
 
-@_needs_pyaedt
+@needs_pyaedt
 def test_the_pyaedt_data_file_is_reported_by_path_and_existence() -> None:
     """The expression catalog PyAEDT reads on every result read. In a bundle
     that did not collect it, importing succeeds and reading a result fails --
