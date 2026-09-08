@@ -395,3 +395,87 @@ def test_screen_content_fits_the_scroll_view_after_visiting_others(
     assert not violations, (
         f"{STEP_NAMES[index]} at width={width}, height={height}, visited after others: {violations}"
     )
+
+
+def test_the_core_screen_offers_a_template_and_an_import() -> None:
+    """The screen that showed an empty core list is where a user has to be
+    able to add one -- both controls live here rather than in a second window
+    (spec 2026-09-04). Their absence is the whole defect, so their presence is
+    worth pinning."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    template_button = root.findChild(QObject, "coreTemplateButton")
+    import_button = root.findChild(QObject, "importCoresButton")
+    template_dialog = root.findChild(QObject, "coreTemplateDialog")
+    import_dialog = root.findChild(QObject, "importCoresDialog")
+    for item in (template_button, import_button, template_dialog, import_dialog):
+        assert item is not None
+    assert template_button.property("enabled") is True
+    assert import_button.property("enabled") is True
+
+
+def test_every_rendered_core_row_states_its_review_status() -> None:
+    """A `draft` core is a transcription nobody has checked against the cited
+    page. Reading `coreOptions` from Python would pass with the label deleted
+    from the delegate, so this asserts on the rendered row text."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+    core_list = root.findChild(QObject, "coreOptionList")
+    assert core_list is not None
+    assert core_list.property("count") > 0
+
+    rendered = [
+        item.property("text")
+        for item in _walk_items(core_list)
+        if item.property("text") is not None and "0077" in str(item.property("text"))
+    ]
+    assert rendered
+    assert all("reviewed" in text or "draft" in text for text in rendered), rendered
+
+
+def test_the_mark_reviewed_control_is_hidden_for_a_shipped_core() -> None:
+    """It exists for one of your own imported drafts and nothing else. The
+    default project pins a shipped catalog core, so the control must be there
+    in the tree and invisible -- offering it would imply the application can
+    promote catalog data, which it cannot."""
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    button = root.findChild(QObject, "markCoreReviewedButton")
+    field = root.findChild(QObject, "coreReviewerField")
+    assert button is not None
+    assert field is not None
+    assert button.property("visible") is False
+
+
+def test_the_manual_e_core_fields_are_present_and_contained() -> None:
+    """Six dimensions, two gap lists and the shim checkbox, beside the manual
+    toroid on the same panel.
+
+    It lives in this module deliberately: the containment assertions here are
+    what caught the last panel addition pushing every element past its scroll
+    view at the narrowest supported window, and only a rendered check could
+    have caught that.
+    """
+    app, root, steps = _build_engine()
+    _go_to(app, steps, root, 0)
+
+    for name in (
+        "ecoreLegField",
+        "ecoreDepthField",
+        "ecoreWindowWidthField",
+        "ecoreWindowHeightField",
+        "ecoreOuterLegField",
+        "ecoreYokeField",
+        "ecoreGapsField",
+        "ecoreSpacingsField",
+        "ecoreOuterGappedBox",
+        "applyManualECoreButton",
+    ):
+        assert root.findChild(QObject, name) is not None, name
+
+    # Nothing to apply until the six dimensions are typed: a partly filled
+    # form would otherwise reach the service as NaN.
+    button = root.findChild(QObject, "applyManualECoreButton")
+    assert button.property("enabled") is False

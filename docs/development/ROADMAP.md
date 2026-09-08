@@ -786,8 +786,8 @@ saved pre-solve project on disk. A cancelled run reports
 
 #### Current state
 
-M8a implementation is **complete and awaiting Fabio Posser's live
-verification** (only he accepts a milestone). The non-live gate is clean:
+M8a is **accepted by Fabio Posser as of 2026-08-18**. The non-live gate is
+clean:
 Ruff, strict mypy across 127 source files, `tools.check_architecture`, and
 1213 tests passing under `pytest -n 8 -m "not aedt and not femm"`.
 
@@ -799,8 +799,7 @@ evidence record is
 
 ### Milestone 8b: Scalar normalized results
 
-Implementation is **complete and awaiting Fabio Posser's live verification**;
-the plan is
+Accepted by Fabio Posser as of 2026-08-18; the plan is
 [2026-08-10 M8b scalar results](../superpowers/plans/2026-08-10-m8b-scalar-results.md)
 and the evidence record is [m8b-results-evidence.md](m8b-results-evidence.md).
 Resistance, inductance and complex impedance per winding, supported matrices,
@@ -820,17 +819,22 @@ Decisions taken with Fabio Posser on 2026-08-10:
    reported parts and a `derived` provenance. It is never presented as a
    solver-reported value.
 
-Known risk recorded in the plan: the Maxwell report-quantity names
-(`SolidLoss`, `CoreLoss`, `Total_Energy`) and the convergence source cannot be
-proven without AEDT. They are isolated behind one pure expression table and
-one adapter method, so the live run corrects them without touching
-normalization, export or the UI. A name AEDT does not recognize yields an
-`unavailable` quantity with a reason, never a wrong number.
+That risk is closed. Live on AEDT 2025 R2 Commercial on 2026-08-18, `SolidLoss`
+and `CoreLoss` and the `Matrix1.L` / `Matrix1.R` entries all returned real
+numbers (21.42 uH, 0.0731 ohm, 292.84 mW, 80.68 mW at 125 kHz), and convergence
+comes from `ExportConvergence`. `Total_Energy` was wrong: AC Magnetic exposes no
+energy quantity at all, so magnetic energy now reports
+`magnetic-energy.not_exposed` instead of being asked for and missed.
+
+The same session found what the risk did not predict: a solve whose solver died
+after the first adaptive pass was reported as a `succeeded` run, publishing that
+pass's losses while every matrix entry read NaN. `analyze_watched` now reads
+AEDT's own profile verdict and refuses `Engine Detected Error`. Both are
+recorded in [m8b-results-evidence.md](m8b-results-evidence.md).
 
 ### Milestone 8c: Field results
 
-Implementation is **complete and awaiting Fabio Posser's live verification**;
-the plan is
+Accepted by Fabio Posser as of 2026-08-18; the plan is
 [2026-08-10 M8c field results](../superpowers/plans/2026-08-10-m8c-field-results.md)
 and the evidence record is [m8c-field-evidence.md](m8c-field-evidence.md). It
 implements the approved
@@ -862,6 +866,64 @@ Decisions taken with Fabio Posser on 2026-08-10:
 Exit criterion: forced UI and solver failures preserve the last valid Project
 document and produce sufficient redacted evidence for diagnosis.
 
+### Current state
+
+Milestone 9 is **accepted by Fabio Posser on 2026-09-01**, after he ran the
+manual forced-failure walk on the Windows workstation: the recovery offer, the
+Discard path and a real diagnostic bundle were exercised on a live build (the
+application log records "Recovered autosaved project changes." and a 21-entry
+bundle), and he confirmed a second window is refused on a locked project. The
+plan is
+[2026-08-18 M9 reliability](../superpowers/plans/2026-08-18-m9-reliability.md)
+and the evidence record is [m9-reliability-evidence.md](m9-reliability-evidence.md),
+which records the non-live gate, four forced-failure scenarios with
+mutation-proven tests, the defects the reviews found (several of them
+redaction leaks, now closed), and a manual forced-kill walk for him to run on
+the Windows workstation.
+
+Four decisions from the plan's open-questions section are already ruled:
+
+- Whether the bundle may contain the Project document: **excluded** (ruled
+  2026-08-18).
+- Whether the bundle may contain AEDT's own log files: **excluded**, with the
+  desktop message channel captured through this application's own redacting
+  logger instead (ruled 2026-08-18).
+- 2D/FEMM proceed AC-only after explicit confirmation rather than being
+  blocked outright, with the omission recorded in `RunManifest.warnings`
+  (ruled 2026-08-07, carried from the M7c follow-up work this milestone
+  builds on).
+- The DC-biased core-loss estimate reuses a zero-bias loss curve with a
+  visible "optimistic" label rather than reporting unavailable (ruled
+  2026-08-03, carried from the same M7c follow-up work).
+
+Eight questions remain open, each with a working default the plan uses until
+ruled otherwise: the autosave debounce interval, the recovery snapshot's
+location outside the project directory, the undo depth, prompting versus
+silently restoring on startup, whether a bundle is also written automatically
+on a failed run, whether interrupted-run reconciliation is automatic,
+retention of interrupted run directories, and the accepted residual where an
+extensionless path whose last component contains a space strands its last
+word in a redacted log line. Full detail on each is in the evidence record.
+
+### Accepted with two follow-ups already delivered
+
+Two defects were found after the whole-branch review, while Fabio Posser was
+walking the milestone, and are fixed on the same branch under
+[2026-09-01 recovery slot and project lock](../superpowers/plans/2026-09-01-recovery-slot-and-project-lock.md):
+
+- The recovery snapshot slot was global, so two windows editing two DIFFERENT
+  projects shared it. The later autosave won, and because a snapshot is only
+  offered when its document path matches, the loser's unsaved work was never
+  even offered. Slots are now keyed per document.
+- Nothing stopped two windows opening one project. An advisory lock now refuses
+  the second, names the process holding it, and shows that on screen rather than
+  only on stderr -- while a STALE lock is always taken rather than blocking,
+  because a dead owner's lock is the ordinary aftermath of the crash this area
+  exists to survive.
+
+Both are recorded here rather than in the M9 record, because they were found
+after that record was reviewed and accepted.
+
 ## Milestone 10: Windows Release
 
 - Resolve packaged resources outside the source checkout.
@@ -874,6 +936,48 @@ Exit criterion: the installed application completes authoring, generation,
 optional solving, result export, save, and reopen against AEDT 2025 R2
 Commercial.
 
+### Current state
+
+Milestone 10 is **accepted** as of 2026-09-04 by Fabio Posser, who installed
+the release and used it. Acceptance covers the installer, the resource
+resolution, the AEDT/FEMM detection and the release artifacts; the live solve
+from a frozen bundle is explicitly NOT part of it (known risk 2 below, still
+open).
+
+Acceptance came with two defects the release itself exposed, both fixed
+before it was granted, and both recorded in
+[m10-release-evidence.md](m10-release-evidence.md): 0.1.0's shortcut launch
+could neither open nor create a project, so every screen was empty and the
+core list showed nothing; and there was no way for an installed user to add a
+core at all. The shipped versions are 0.2.0 (blank project on launch, File >
+New) and 0.3.0 (core import, and user data moved out of the program folder).
+
+The plan is
+[2026-09-01 M10 Windows release](../superpowers/plans/2026-09-01-m10-windows-release.md)
+and the evidence record is
+[m10-release-evidence.md](m10-release-evidence.md), which records the
+non-live gate, the checksum evidence (including a hash independently
+recomputed with a second tool), an honest account of the defects the four
+task reviews found, a section stating plainly what could not be verified on
+this development machine, and the clean-machine walk that alone can close
+the exit criterion above. An unsigned per-user installer WAS compiled on
+2026-09-01 from a fresh end-to-end build (90,354,682 bytes, SHA-256 in the
+evidence record) and inspected, but never executed -- so the
+install/launch/uninstall walk has still never run, and the bundle's window
+was confirmed visually only before the QML/DLL size-pruning pass.
+
+Five open questions from the plan were ruled by Fabio Posser on 2026-09-01:
+per-user install needing no administrator; unsigned for this release
+(with the resulting SmartScreen warning disclosed in the release notes);
+version 0.1.0 (since superseded by 0.2.0 and 0.3.0, each because a build that
+differs must not wear a number already published); no sample project shipped
+-- which 0.2.0 revisited: the first launch now opens a blank project, because
+the alternative turned out to be an application with no way in; and release
+artifacts published on
+the GitHub release at `smarley2/AnsysPyAEDT` for now, identified by checksum
+rather than by download URL alone so a later move to a BRUSA-hosted remote
+does not strand the release notes.
+
 ## Milestone 11: Additional Core Families
 
 - Add E, PQ, EQ, EER, and other approved commercial geometries as independent
@@ -881,6 +985,32 @@ Commercial.
 
 Exit criterion: each family has its own approved design, catalog/schema needs,
 geometry invariants, preview, solver mapping, fixtures, and live evidence.
+
+### Current state
+
+Milestone 11 decomposes: four families, each of which the exit criterion above
+already asks for a separate design. The first family is split again at the
+line this machine can verify.
+
+**M11a (gapped E core, solver-independent) is implementation complete.** Plan:
+[2026-09-04 M11a](../superpowers/plans/2026-09-04-m11a-gapped-e-core.md);
+design:
+[2026-09-04 gapped E core](../superpowers/specs/2026-09-04-m11a-gapped-e-core-design.md).
+Delivered: the family seam (`geometry/toroid/` and `geometry/ecore/`, neither
+knowing the other's coordinates), the E+E body with a distributed gap stack,
+the reluctance network reduced to an iron and a gap length referred to the
+centre-leg area, a gapped flux solve against the recorded B-H curve, project
+schema v6 with placement per family, leg packing, the family-agnostic cut
+plane, and manual E-core entry.
+
+Fringing is deliberately not modelled, which overstates inductance and makes
+distributed gaps indistinguishable from one gap of the same total; one test
+pins that so a later correction cannot change published numbers quietly.
+
+**M11b (Maxwell/FEMM export and live evidence for the E core) is not
+started.** It needs an AEDT session. **M11c** is PQ/EQ/EER against the proven
+seam, plus E-core catalog records -- datasheet transcription, which is human
+work.
 
 ## Deferred beyond the active roadmap
 

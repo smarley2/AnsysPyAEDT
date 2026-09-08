@@ -284,3 +284,167 @@ def _assemble(
         notes=notes,
         bh_series=bh_series,
     )
+
+
+_GAP_LOADLINE_NOTE = (
+    "gapped core: flux from the reluctance loadline "
+    "NI = H*l_iron + (B/mu_0)*l_gap intersected with the recorded B-H curve, "
+    "not from ampere-turns over a path length. Fringing is excluded, which "
+    "understates reluctance and so overstates inductance, by more as the gap "
+    "grows"
+)
+_GAP_BISECTION_STEPS = 80
+
+
+def _solve_loadline(
+    mmf: float,
+    iron_length_m: float,
+    gap_length_m: float,
+    series: PointSeries,
+) -> tuple[float, float] | None:
+    """The (H_iron, B) pair on the curve that carries `mmf`, or None.
+
+    Bisection, because the loadline is monotone: B(H) rises with H on a B-H
+    curve, so `H*l_iron + B(H)/mu_0*l_gap` rises too, and the root is
+    bracketed by zero and the ungapped field strength `mmf/l_iron` (a gap can
+    only reduce the iron's share of the ampere-turns, never raise it).
+
+    None means the curve does not reach the required flux density -- the same
+    condition the ungapped path reports as a field strength outside the
+    recorded range, and reported by the caller in the same way.
+    """
+    sign = 1.0 if mmf >= 0.0 else -1.0
+    magnitude = abs(mmf)
+    if magnitude == 0.0:
+        return 0.0, 0.0
+    if not series.points:
+        return None
+    ungapped_h = magnitude / iron_length_m
+    if gap_length_m == 0.0:
+        # No gap, no loadline: the whole MMF is in the iron. Answered here so
+        # the gapped path is a strict generalisation of the ungapped one, and
+        # so an out-of-range flux density is reported by the same rule rather
+        # than by a bracket that happens to fail.
+        b = _interpolate(series, ungapped_h)
+        return None if b is None else (sign * ungapped_h, sign * b)
+    # Bracket at the recorded curve's own top, not at the ungapped field
+    # strength: with a gap the solution is far below `NI/l_iron`, and asking
+    # the curve for a value at that point is what a gap makes unnecessary. A
+    # gap of zero collapses the bracket back onto it.
+    upper = min(ungapped_h, max(point.x for point in series.points))
+
+    def excess(h: float) -> float | None:
+        b = _interpolate(series, h)
+        if b is None:
+            return None
+        return h * iron_length_m + b / MU_0 * gap_length_m - magnitude
+
+    top = excess(upper)
+    if top is None:
+        return None
+    if top <= 0.0:
+        # Even at the top of the recorded curve the loadline cannot carry
+        # this MMF, so the answer lies outside the data. For a zero gap this
+        # is exactly the ungapped out-of-range case, and it is reported the
+        # same way rather than extrapolated.
+        if upper >= ungapped_h:
+            return sign * upper, sign * (_interpolate(series, upper) or 0.0)
+        return None
+    # From the curve's lowest recorded field strength, not from zero: a series
+    # transcribed without the origin has no value below its first point, and
+    # bisecting from zero made every probe there return None -- refusing roots
+    # that were inside the recorded range. A gapped core's iron field lands in
+    # exactly that region.
+    low, high = min(point.x for point in series.points), upper
+    if low >= upper:
+        low = 0.0
+    lowest = excess(low)
+    if lowest is None or lowest > 0.0:
+        # The root is below the recorded data, so the curve does not describe
+        # this operating point; reported rather than extrapolated.
+        return None
+    for _ in range(_GAP_BISECTION_STEPS):
+        middle = (low + high) / 2.0
+        value = excess(middle)
+        if value is None:
+            return None
+        if value > 0.0:
+            high = middle
+        else:
+            low = middle
+    h_iron = (low + high) / 2.0
+    b = _interpolate(series, h_iron)
+    if b is None:
+        return None
+    return sign * h_iron, sign * b
+
+
+def gapped_fields_and_flux(
+    selection: MaterialRevisionSelection,
+    ungapped: FieldStrengths,
+    iron_length_m: float,
+    gap_length_m: float,
+    effective_area_m2: float,
+    core_temperature_c: float,
+) -> tuple[FieldStrengths, FluxDensities] | PreliminaryValue:
+    """Field strength and flux density for a gapped core, solved together.
+
+    The ungapped pipeline computes H from geometry and then B from the
+    material, in that order. A gap breaks the ordering: the iron's share of
+    the ampere-turns depends on the flux density, which depends on the
+    material -- so both are solved at once here, against the same recorded
+    B-H curve the ungapped path uses.
+
+    `ungapped` carries the ampere-turns: `field_strengths` already applied the
+    winding-sense rule to produce it, and `H * iron_length_m` recovers the MMF
+    exactly. Recovering it rather than re-deriving it keeps one implementation
+    of that sign rule, which matters more here than the last float bit.
+    """
+    if not math.isfinite(gap_length_m) or gap_length_m < 0.0:
+        return unavailable(
+            DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE,
+            "Core gap length is not a finite, non-negative number, so the "
+            "gapped flux cannot be solved.",
+        )
+    if not math.isfinite(effective_area_m2) or effective_area_m2 <= 0.0:
+        return unavailable(
+            DiagnosticCode.FLUX_DENSITY_CORE_PATH_NOT_FINITE,
+            "Core effective area must be a positive number to solve a gapped "
+            f"core; got {effective_area_m2:g} m^2.",
+        )
+    series, _candidates = _select_bh_series(selection, core_temperature_c)
+    if series is None:
+        # No recorded curve: the linear branch of `flux_densities` owns that
+        # case, and it has no loadline to solve against.
+        return unavailable(
+            DiagnosticCode.FLUX_DENSITY_NO_BH_SERIES_FOR_TEMPERATURE,
+            "A gapped core needs a recorded B-H series to solve its "
+            "reluctance loadline; none of the pinned revision's series "
+            "applies at this temperature.",
+        )
+
+    solved: list[tuple[float, float]] = []
+    for h in (ungapped.h_min_a_per_m, ungapped.h_dc_a_per_m, ungapped.h_max_a_per_m):
+        pair = _solve_loadline(h * iron_length_m, iron_length_m, gap_length_m, series)
+        if pair is None:
+            lowest = min(point.x for point in series.points) if series.points else 0.0
+            largest = max(point.x for point in series.points) if series.points else 0.0
+            return unavailable(
+                DiagnosticCode.FLUX_DENSITY_FIELD_OUTSIDE_BH_RANGE,
+                f"Solving the gap loadline needs a point outside the recorded "
+                f"range of series {series.series_id} ({lowest:g} to "
+                f"{largest:g} A/m); extrapolation is not performed.",
+            )
+        solved.append(pair)
+
+    (h_min, b_min), (h_dc, b_dc), (h_max, b_max) = solved
+    fields = FieldStrengths(
+        h_ac_peak_a_per_m=(h_max - h_min) / 2.0,
+        h_dc_a_per_m=h_dc,
+        h_min_a_per_m=h_min,
+        h_max_a_per_m=h_max,
+    )
+    notes: tuple[str, ...] = (_GAP_LOADLINE_NOTE,)
+    if min(h_min, h_dc, h_max) < 0.0:
+        notes = (*notes, _ODD_SYMMETRY_NOTE)
+    return fields, _assemble(b_dc, b_min, b_max, notes, series)

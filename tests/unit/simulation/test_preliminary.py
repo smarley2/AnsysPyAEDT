@@ -639,3 +639,96 @@ def test_a_non_finite_volume_refuses_only_stored_energy_and_core_loss(
         == DiagnosticCode.STORED_ENERGY_NON_FINITE_VOLUME
     )
     assert result.core.al_effective.state is ResultState.ESTIMATED
+
+
+# --- The gapped path, through the public entry point ----------------------
+#
+# The loadline solver and the reluctance network were both unit-tested, and
+# nothing called either from `estimate_preliminary`, so every gapped estimate
+# silently used `H = NI/l_iron` while its own provenance note said the network
+# was used. These tests go through the entry point for exactly that reason.
+
+
+def _ecore_request(sample_request: PreliminaryRequest, gap_mm: float) -> PreliminaryRequest:
+    """`sample_request` with its toroid swapped for an E+E pair.
+
+    The project's pinned material and its recorded B-H series are reused, so
+    the only thing that changes between the gapped and ungapped cases is the
+    core.
+    """
+    from inductor_designer.application.services.preliminary_inputs import (
+        core_magnetic_properties,
+    )
+    from inductor_designer.domain.project import ManualECoreSelection
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+
+    core = ManualECoreSelection(
+        centre_leg_width_m=0.0170,
+        depth_m=0.0210,
+        window_width_m=0.0092,
+        window_height_m=0.0187,
+        outer_leg_width_m=0.0085,
+        yoke_thickness_m=0.0093,
+        gaps_m=(gap_mm / 1000.0,) if gap_mm else (),
+    )
+    windings = tuple(
+        replace(
+            winding,
+            placement=LegPlacement(
+                leg=WindingLeg.CENTRE, window_start_m=0.0, window_span_m=0.0187
+            ),
+        )
+        for winding in sample_request.project.design.windings
+    )
+    project = replace(
+        sample_request.project,
+        design=replace(sample_request.project.design, core=core, windings=windings),
+    )
+    properties = core_magnetic_properties(core)
+    assert properties is not None
+    return replace(sample_request, project=project, core=properties)
+
+
+def test_a_gap_actually_reaches_the_reported_flux_density(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """The defect this pins: with the loadline unwired, a 1 mm gap changed the
+    reported flux density only by the millimetre of iron it removed, because
+    `H = NI/l_iron` never saw the gap at all."""
+    without = estimate_preliminary(_ecore_request(sample_request, 0.0))
+    with_gap = estimate_preliminary(_ecore_request(sample_request, 1.0))
+
+    assert without.core.b_peak_magnitude.value is not None, without.core.b_peak_magnitude
+    assert with_gap.core.b_peak_magnitude.value is not None, with_gap.core.b_peak_magnitude
+    # A 1 mm gap dominates the reluctance of a ~115 mm iron path at mu_r in the
+    # thousands, so flux density must fall by a large factor -- not by the
+    # fraction of a percent that the missing millimetre of iron would give.
+    assert with_gap.core.b_peak_magnitude.value < (
+        without.core.b_peak_magnitude.value / 3.0
+    )
+
+
+def test_the_gap_reaches_the_inductance_factor_too(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """`A_L = mu_abs * A_e / l_iron` carried no gap term, so a gapped core
+    reported the inductance factor of the ungapped one."""
+    values = []
+    for gap_mm in (0.0, 0.5, 1.0):
+        estimate = estimate_preliminary(_ecore_request(sample_request, gap_mm))
+        assert estimate.core.al_effective.value is not None, estimate.core.al_effective
+        values.append(estimate.core.al_effective.value)
+
+    assert values == sorted(values, reverse=True)
+    assert values[2] < values[0] / 3.0
+
+
+def test_the_gapped_estimate_says_it_used_the_loadline(
+    sample_request: PreliminaryRequest,
+) -> None:
+    """A note claiming the network was used must not appear on a number that
+    did not use it -- which is precisely what shipped before this."""
+    estimate = estimate_preliminary(_ecore_request(sample_request, 1.0))
+    notes = " ".join(estimate.core.b_peak_magnitude.notes)
+    assert "loadline" in notes.lower()
+    assert "fringing" in notes.lower()

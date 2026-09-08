@@ -182,7 +182,7 @@ def test_material_sources_reproduce_through_project_and_recording_exports(
         project_path,
     )
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
-    assert persisted_document["schemaVersion"] == 5
+    assert persisted_document["schemaVersion"] == 6
     assert persisted_document["design"]["coreMaterial"]["bhSeriesId"] == "bh"
     fresh_project = project_repository.load(project_path)
     selection = fresh_project.design.core_material

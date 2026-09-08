@@ -22,6 +22,9 @@ from inductor_designer.adapters.pyaedt.material_props import (
 from inductor_designer.adapters.pyaedt.result_reader import read_scalar_results
 from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
 from inductor_designer.adapters.pyaedt.stage_progress import (
+    log_desktop_messages as _log_desktop_messages,
+)
+from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
 from inductor_designer.application.ports.maxwell2d_exporter import Maxwell2dExportRequest
@@ -94,6 +97,8 @@ class Maxwell2dApp(Protocol):
 
     def setup_convergence(self, name: str) -> str: ...
 
+    def solve_status(self, name: str) -> str: ...
+
     def solution_values(self, expressions: tuple[str, ...]) -> Any: ...
 
     def field_value(
@@ -109,6 +114,8 @@ class Maxwell2dApp(Protocol):
     def save_project(self, path: str) -> bool: ...
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None: ...
+
+    def desktop_messages(self) -> tuple[str, ...]: ...
 
 
 class Maxwell2dAppFactory(Protocol):
@@ -454,6 +461,9 @@ class PyaedtMaxwell2dExporter:
                         stages.append(
                             StageRecord(name="save", succeeded=False, message=str(save_error))
                         )
+                    # After the save, so anything the save itself told AEDT's
+                    # channel is captured too; still before the release.
+                    _log_desktop_messages(app, name)
                     return result()
                 stages.append(StageRecord(name=name, succeeded=True, message=message))
                 _emit(request.progress, name, StagePhase.SUCCEEDED, message)
@@ -475,6 +485,7 @@ class PyaedtMaxwell2dExporter:
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
                 _emit(request.progress, "save", StagePhase.FAILED, str(error))
+                _log_desktop_messages(app, "save")
                 return result()
             if cancelled_before is None and request.solve:
                 if _cancelled(request.cancellation):
@@ -492,6 +503,7 @@ class PyaedtMaxwell2dExporter:
                             StageRecord(name="analyze", succeeded=False, message=str(error))
                         )
                         _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
+                        _log_desktop_messages(app, "analyze")
                         return result()
                     else:
                         stages.append(

@@ -4,7 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from inductor_designer.domain.project import WindingOperatingPoint
-from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.domain.winding import (
+    WindingDefinition,
+    require_toroid_placement,
+)
 
 _ANGLE_TOL_DEG = 1e-6
 
@@ -27,7 +30,7 @@ def _geometry_key(w: WindingDefinition) -> tuple[object, ...]:
         w.turns,
         w.conductor_name,
         w.mode,
-        w.sector_deg,
+        require_toroid_placement(w).sector_deg,
         w.min_spacing_m,
         w.min_clearance_m,
         w.winding_direction,
@@ -69,7 +72,7 @@ def propose_symmetry_plan(
         return SymmetryRefusal(
             "unequal-excitation", "Windings differ in AC/DC excitation values."
         )
-    starts = sorted(w.start_angle_deg for w in windings)
+    starts = sorted(require_toroid_placement(w).start_angle_deg for w in windings)
     pitch = 360.0 / m
     if any(
         abs((starts[i] - starts[0]) - i * pitch) > _ANGLE_TOL_DEG for i in range(m)
@@ -77,7 +80,7 @@ def propose_symmetry_plan(
         return SymmetryRefusal(
             "unequal-spacing", f"Winding start angles are not spaced by {pitch} degrees."
         )
-    gap = pitch - first.sector_deg
+    gap = pitch - require_toroid_placement(first).sector_deg
     cut0 = (starts[0] - gap / 2.0) % 360.0
     cut1 = (cut0 + pitch) % 360.0
     return SymmetryPlan(

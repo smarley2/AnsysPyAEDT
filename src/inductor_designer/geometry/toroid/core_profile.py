@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, PathSegment, Vec3
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 
 
 def build_core_profile(core: FinishedCore) -> tuple[PathSegment, ...]:

@@ -174,6 +174,9 @@ class FakeMaxwell3dApp:
         self.analyzed_setups: tuple[str, ...] = ()
         self.analyze_blocking: list[Any] = []
         self.fail_analyze = False
+        # AEDT's verdict on a finished solve. A solver that dies mid-way also
+        # stops running, so the fake has to be able to say so.
+        self.status = "Normal Completion"
         # What the desktop reports on each `are_there_simulations_running`
         # poll; an exhausted list reads as idle, so a plain fake solves
         # instantly. `on_poll` lets a test cancel mid-solve.
@@ -184,6 +187,10 @@ class FakeMaxwell3dApp:
         self.fail_solution_values = False
         self.fail_field_value_for: str | None = None
         self.created_sheets: list[_FakeSheet] = []
+        # AEDT's message channel for this design. `fail_desktop_messages`
+        # lets a test prove a raising channel never masks the real failure.
+        self.desktop_message_lines: tuple[str, ...] = ()
+        self.fail_desktop_messages = False
         # Lets a test act (cancel a run, for example) exactly when the design
         # reaches a named call, without patching the adapter.
         self.on_call: dict[str, Callable[[], None]] = {}
@@ -276,14 +283,22 @@ class FakeMaxwell3dApp:
     def setup_convergence(self, name: str) -> str:
         return "3 passes, 0.42% error"
 
+    def solve_status(self, name: str) -> str:
+        """AEDT's verdict on the finished solve; scripted so a run that died
+        mid-solve can be exercised without a solver."""
+        return self.status
+
     def solution_values(self, expressions: tuple[str, ...]) -> dict[str, complex]:
         if self.fail_solution_values:
             raise RuntimeError("Solution data is not available for this setup.")
         values: dict[str, complex] = {
             "SolidLoss": 3.0 + 0j,
             "CoreLoss": 1.25 + 0j,
-            "Total_Energy": 4.2e-4 + 0j,
         }
+        # No energy value. An AC Magnetic design exposes no energy report
+        # quantity (enumerated live on AEDT 2025 R2 Commercial, 2026-08-18), so
+        # answering one here would let the tests assert a capability AEDT does
+        # not have.
         for expression in expressions:
             if ".L(" in expression:
                 values[expression] = 1e-4 + 0j
@@ -344,6 +359,11 @@ class FakeMaxwell3dApp:
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None:
         self.released.append((close_projects, close_desktop))
+
+    def desktop_messages(self) -> tuple[str, ...]:
+        if self.fail_desktop_messages:
+            raise RuntimeError("boom in desktop_messages")
+        return self.desktop_message_lines
 
 
 class FakeMaxwell3dAppFactory:

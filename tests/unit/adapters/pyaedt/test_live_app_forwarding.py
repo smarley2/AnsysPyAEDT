@@ -197,6 +197,50 @@ def test_an_unknown_setup_name_is_refused() -> None:
     assert app.exports == []
 
 
+class _Profiled:
+    """A setup whose profile carries AEDT's verdict, as PyAEDT exposes it."""
+
+    def __init__(self, status: object, *, raises: bool = False) -> None:
+        self.name = "Setup1"
+        self._status = status
+        self._raises = raises
+
+    def get_profile(self) -> object:
+        if self._raises:
+            raise RuntimeError("no profile for this setup")
+        entry = type("Entry", (), {"status": self._status})()
+        return {"Setup1": entry}
+
+
+class _ProfiledApp(_App):
+    def __init__(self, setup: object) -> None:
+        super().__init__()
+        self.setups = [setup]
+
+
+def test_the_solve_status_is_aedt_s_own_verdict_on_the_finished_solve() -> None:
+    """`Setup.is_solved` was True for a run whose solver died after one adaptive
+    pass, so it cannot separate a completed solve from a broken one. The profile
+    status can: `Normal Completion` against `Engine Detected Error`, both read
+    live on 2026-08-18."""
+    completed = LiveAppExtraction(_ProfiledApp(_Profiled("Normal Completion")))
+    broken = LiveAppExtraction(_ProfiledApp(_Profiled("Engine Detected Error")))
+
+    assert completed.solve_status("Setup1") == "Normal Completion"
+    assert broken.solve_status("Setup1") == "Engine Detected Error"
+
+
+def test_a_setup_that_states_no_status_reads_as_empty_not_as_a_failure() -> None:
+    """Absent, unnamed and unreadable profiles all mean "AEDT did not say".
+    Reporting them as a failure would fail runs that are fine."""
+    assert LiveAppExtraction(_ProfiledApp(_Profiled(None))).solve_status("Setup1") == ""
+    assert (
+        LiveAppExtraction(_ProfiledApp(_Profiled("x", raises=True))).solve_status("Setup1")
+        == ""
+    )
+    assert LiveAppExtraction(_ProfiledApp(_Profiled("x"))).solve_status("Setup2") == ""
+
+
 def test_private_attributes_stay_on_the_wrapper() -> None:
     app = _App()
     wrapper = LiveAppExtraction(app)
@@ -261,3 +305,49 @@ def test_an_axial_disc_is_placed_directly_and_never_rotated() -> None:
     assert modeler.circles[0]["orientation"] == "XY"
     assert modeler.circles[0]["origin"] == [0.008, 0.011, 0.004]
     assert modeler.rotations == []
+
+
+class _ODesktop:
+    """Records the GetMessages call, as AEDT's COM desktop object receives it."""
+
+    def __init__(self, messages: Any) -> None:
+        self._messages = messages
+        self.calls: list[tuple[Any, ...]] = []
+
+    def GetMessages(self, project: str, design: str, level: int) -> Any:  # noqa: N802 - AEDT's COM name
+        self.calls.append((project, design, level))
+        return self._messages
+
+
+class _MessagingApp:
+    def __init__(self, messages: Any) -> None:
+        self.odesktop = _ODesktop(messages)
+        self.project_name = "Boost_inductor"
+        self.design_name = "Boost_inductor_3D"
+
+
+def test_the_desktop_channel_is_read_for_this_project_and_design() -> None:
+    """The whole channel, oldest first, at severity 0 so nothing is filtered.
+
+    Without this, the real read had no coverage at all: the capture tests drive
+    the fake's channel, so a wrong `GetMessages` arity would have shipped.
+    """
+    app = _MessagingApp(["Unable to create child process: 3dedy", 42])
+
+    lines = LiveAppExtraction(app).desktop_messages()
+
+    assert app.odesktop.calls == [("Boost_inductor", "Boost_inductor_3D", 0)]
+    assert lines == ("Unable to create child process: 3dedy", "42")
+
+
+def test_a_channel_that_says_nothing_reads_as_an_empty_tuple() -> None:
+    assert LiveAppExtraction(_MessagingApp(None)).desktop_messages() == ()
+
+
+def test_an_unreadable_channel_raises_so_the_caller_can_log_the_reason() -> None:
+    """Swallowing it here would make an unreachable AEDT look like a quiet one."""
+    app = _MessagingApp(())
+    del app.odesktop
+
+    with pytest.raises(AttributeError):
+        LiveAppExtraction(app).desktop_messages()

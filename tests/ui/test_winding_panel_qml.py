@@ -156,3 +156,14 @@ def test_remove_is_disabled_for_the_last_winding() -> None:
     _, root, _ = open_windings()
 
     assert root.findChild(QObject, "removeWindingButton").property("enabled") is False
+
+
+def test_the_conductor_review_notice_is_on_screen_while_the_wires_are_draft() -> None:
+    """Every shipped conductor is a draft transcription, and every winding is
+    sized on one. The notice is rendered rather than only exposed on the
+    controller, because a property nobody displays warns nobody."""
+    _app, root, _session = open_windings()
+    notice = root.findChild(QObject, "conductorReviewNotice")
+    assert notice is not None
+    assert notice.property("visible") is True
+    assert "draft" in notice.property("text")

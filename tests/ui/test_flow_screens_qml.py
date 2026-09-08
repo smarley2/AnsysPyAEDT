@@ -252,9 +252,30 @@ def test_simulation_panel_exposes_every_run_choice() -> None:
         "simulationRequestedOutputs",
         "showSolverWindowCheckBox",
         "simulationGenerateButton",
+        "aedtStatusNotice",
     ):
         assert root.findChild(QObject, name) is not None, name
     assert root.findChild(QObject, "showSolverWindowCheckBox").property("enabled") is True
+
+
+def test_aedt_status_notice_is_visible_when_no_installation_was_passed_in() -> None:
+    """`open_flow()` builds `SimulationController` the same way the other
+    tests in this module do, with no AEDT installation supplied -- the
+    default backend (Maxwell 3D) must then show a notice, not stay silent,
+    since Task 2's whole point is that this is visible before Generate is
+    clicked."""
+    _, root, _ = open_flow(3)
+
+    notice = root.findChild(QObject, "aedtStatusNotice")
+    assert notice.property("visible") is True
+    assert notice.property("text") != ""
+
+    controller = root.findChild(QObject, "simulationPanel").property("controller")
+    assert controller.setBackend("FEMM 2D") is True
+
+    # FEMM needs no AEDT at all, so switching to it must clear the notice.
+    assert notice.property("visible") is False
+    assert notice.property("text") == ""
 
 
 @pytest.mark.parametrize("width", (1000, 1786))
@@ -346,3 +367,4 @@ def test_review_page_lists_sections_and_disabled_open_actions() -> None:
     assert root.findChild(QObject, "reviewSections").property("count") == 5
     assert root.findChild(QObject, "openGeneratedFileButton").property("enabled") is False
     assert root.findChild(QObject, "openRunFolderButton").property("enabled") is False
+

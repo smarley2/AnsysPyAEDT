@@ -137,3 +137,18 @@ def test_the_results_section_comes_after_the_run_request() -> None:
 
     titles = [section["title"] for section in sections(review)]
     assert titles.index("Results") == len(titles) - 1
+
+
+def test_review_states_whether_the_core_and_conductor_data_was_reviewed() -> None:
+    """Review is where a run's provenance is reported. A `draft` core or wire
+    is a number nobody has checked against the cited source page, and a
+    reviewer reading this page has no other way to learn that -- the numbers
+    themselves look identical either way."""
+    _app, review, _generation = build(None)
+    sections = {section["title"]: section["rows"] for section in review.sections}
+
+    core_text = " ".join(row["text"] for row in sections["Core and material"])
+    assert "reviewed" in core_text or "draft" in core_text
+
+    winding_text = " ".join(row["text"] for row in sections["Winding excitations"])
+    assert "draft" in winding_text or "reviewed" in winding_text

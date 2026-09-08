@@ -29,12 +29,20 @@ _POLL_SECONDS = 2.0
 _IDLE_POLLS_TO_FINISH = 5
 
 
+# AEDT's own verdict on a finished solve, from the setup profile. Anything
+# else -- "Engine Detected Error" is the one seen live -- means the solver
+# stopped early.
+NORMAL_COMPLETION = "Normal Completion"
+
+
 class WatchableApp(Protocol):
     are_there_simulations_running: object
 
     def analyze_setup(self, name: str, *, blocking: bool = True) -> bool: ...
 
     def stop_simulations(self, clean_stop: bool = True) -> object: ...
+
+    def solve_status(self, name: str) -> str: ...
 
 
 def analyze_watched(
@@ -43,10 +51,19 @@ def analyze_watched(
     *,
     cancellation: CancellationToken | None = None,
 ) -> None:
-    """Solve `setup_name`, returning once the desktop reports no solver running.
+    """Solve `setup_name`, returning once AEDT reports the solve completed.
 
     Raises `RunCancelled` after stopping the solver when the run is cancelled,
-    and `RuntimeError` when the solve refuses to start.
+    and `RuntimeError` when the solve refuses to start or ends badly.
+
+    "No solver running" is not the same as "solved": a solver that dies mid-way
+    also stops running. On 2026-08-18 a live Maxwell 3D run lost its eddy-current
+    child process after the first adaptive pass ("Unable to create child
+    process: 3dedy", then "Simulation completed with execution error"). The poll
+    loop saw an idle desktop and the run was recorded `succeeded`, publishing
+    the losses that pass had produced while every matrix entry read NaN. AEDT's
+    profile said `Engine Detected Error` the whole time, so that verdict is now
+    what ends the wait.
     """
     if not app.analyze_setup(setup_name, blocking=False):
         raise RuntimeError(f"Setup {setup_name} did not start solving.")
@@ -57,3 +74,13 @@ def analyze_watched(
             app.stop_simulations(clean_stop=True)
             raise RunCancelled("analyze")
         idle_polls = 0 if app.are_there_simulations_running else idle_polls + 1
+    status = app.solve_status(setup_name)
+    # An empty status is "AEDT did not say", not "AEDT said it failed": older
+    # profiles and the geometry-only path expose none, and refusing those would
+    # fail runs that are fine. A wrong number still cannot slip through, because
+    # an incomplete solve leaves its quantities unavailable with a reason.
+    if status and status != NORMAL_COMPLETION:
+        raise RuntimeError(
+            f"Setup {setup_name} stopped early: AEDT reported {status!r} "
+            f"instead of {NORMAL_COMPLETION!r}."
+        )

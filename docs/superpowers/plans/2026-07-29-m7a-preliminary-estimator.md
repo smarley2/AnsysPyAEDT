@@ -1803,7 +1803,7 @@ from inductor_designer.domain.project import (
     WindingOperatingPoint,
 )
 from inductor_designer.domain.winding import CurrentDirection, WindingDefinition
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from tests.unit.simulation.test_magnetic_estimate import make_bh_series, make_material_selection
 
@@ -1912,7 +1912,7 @@ from dataclasses import dataclass, field
 
 from inductor_designer.domain.catalog_records import ConductorRecord, CoreRecord
 from inductor_designer.domain.project import InductorProject
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.magnetic_estimate import (
     FieldStrengths,
@@ -2248,7 +2248,7 @@ from inductor_designer.domain.project import (
     WindingOperatingPoint,
 )
 from inductor_designer.domain.winding import CurrentDirection, WindingDefinition
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.simulation.preliminary import (
     PreliminaryRequest,

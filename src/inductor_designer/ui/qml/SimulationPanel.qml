@@ -85,6 +85,24 @@ Pane {
                 onActivated: simulationPanel.controller.setBackend(currentText)
             }
 
+            // M10 Task 2: the AEDT installation detected at startup (or its
+            // absence, or an unsupported release), so a mismatch is visible
+            // here, before Generate is clicked, rather than only after a
+            // run fails against it. Silent for FEMM and for the ordinary
+            // case where the supported release is present -- see
+            // `SimulationController._get_aedt_status_notice`.
+            Label {
+                objectName: "aedtStatusNotice"
+                Layout.fillWidth: true
+                visible: text !== ""
+                text: simulationPanel.controller === null
+                    ? ""
+                    : simulationPanel.controller.aedtStatusNotice
+                wrapMode: Text.WordWrap
+                color: "#a45528"
+                Accessible.name: text
+            }
+
             Label { text: qsTr("Run mode") }
             ComboBox {
                 id: modeCombo

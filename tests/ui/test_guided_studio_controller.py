@@ -12,9 +12,11 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
-from inductor_designer.domain.winding import (  # noqa: E402
+from inductor_designer.domain.catalog_records import Dimension  # noqa: E402
+from inductor_designer.domain.project import CatalogCoreSelection  # noqa: E402
+from inductor_designer.domain.winding import (
     ConductorMode,
-    CurrentDirection,
+    CurrentDirection,  # noqa: E402
 )
 from inductor_designer.ui.guided_studio_controller import (  # noqa: E402
     GuidedStudioController,
@@ -227,8 +229,11 @@ def test_a_new_winding_does_not_overlap_an_existing_sector() -> None:
     assert controller.addWinding() is True
 
     first, second = session.project.design.windings
-    assert second.start_angle_deg >= first.start_angle_deg + first.sector_deg
-    assert second.start_angle_deg + second.sector_deg <= 360.0
+    assert (
+        second.placement.start_angle_deg
+        >= first.placement.start_angle_deg + first.placement.sector_deg
+    )
+    assert second.placement.start_angle_deg + second.placement.sector_deg <= 360.0
 
 
 def test_a_full_core_refuses_another_winding() -> None:
@@ -374,3 +379,255 @@ def test_the_drawing_and_the_three_d_entries_describe_the_same_windings() -> Non
     entry_colors = {entry.color for entry in controller.previewEntries[1:]}
 
     assert colors == entry_colors
+
+
+def test_a_project_with_no_core_yet_does_not_break_the_controller() -> None:
+    """`__init__` called `_build_preview` unguarded, and `build_geometry_model`
+    refuses a coreless project ("Project has no core selection; geometry needs
+    one."). The blank project a launch with no `--project` opens therefore
+    raised `GeometryModelError` out of this constructor and took the whole
+    launch with it. `refresh()` already suppressed exactly that error, for
+    exactly this reason; the constructor did not.
+    """
+    from inductor_designer.application.services.new_project import new_project
+
+    session = ProjectSession(new_project())
+    controller = GuidedStudioController(session, CATALOG)
+
+    assert controller.previewEntries == []
+    # The reason is on the cut plane itself, not left as a blank rectangle.
+    assert controller.cutPlaneDrawing["note"] != ""
+    assert controller.windings[0]["turns"] == 1
+
+
+def test_a_core_that_cannot_hold_the_wire_says_so_on_the_empty_cut_plane() -> None:
+    """A new project starts with no geometry, so there is no "last valid
+    preview" to keep when the first core selection does not fit -- and the
+    placeholder note ("Select a core...") is then a lie: a core WAS selected.
+    The real refusal from the geometry model goes on the cut plane instead,
+    which is the only place the user is looking after picking a core.
+
+    `AWG 18` genuinely does not fit the smallest powder toroid's bore. That
+    refusal is correct; being told nothing about it is not.
+    """
+    from inductor_designer.application.services.new_project import new_project
+
+    session = ProjectSession(new_project())
+    controller = GuidedStudioController(session, CATALOG)
+    # The wiring `main.py` makes: the Core & Material screen applies to the
+    # session, and this controller recomputes from `projectChanged`.
+    session.projectChanged.connect(controller.refresh)
+    # A 1 mm bore cannot hold a ~1 mm conductor. The shipped catalog's
+    # smallest powder toroid refuses `AWG 18` for this exact reason; this
+    # test does not depend on which core in the index happens to be smallest.
+    catalog_core = CATALOG.list_cores()[0]
+    too_small = replace(
+        catalog_core,
+        inner_diameter=Dimension(nominal_m=0.001, min_m=None, max_m=None),
+    )
+    session.apply(
+        replace(
+            session.project,
+            design=replace(
+                session.project.design,
+                core=CatalogCoreSelection(too_small.part_number, too_small, ()),
+            ),
+        )
+    )
+
+    assert controller.previewEntries == []
+    note = controller.cutPlaneDrawing["note"]
+    assert "Select a core" not in note
+    assert "fit" in note
+
+
+def test_the_conductor_notice_says_when_the_offered_wires_are_unreviewed() -> None:
+    """Every conductor in the shipped index is `draft`: transcribed from a
+    standard but not yet checked against the source. Windings are sized on
+    those diameters, so being told nothing is the wrong default -- and the
+    notice has to stay true when the catalog is reviewed later, which is why
+    it is computed rather than written."""
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, CATALOG)
+
+    notice = controller.conductorReviewNotice
+    assert "draft" in notice
+    # All of them, so the count carries it -- naming 35 wires would be noise.
+    # The mixed case, where naming IS the point, is the next test.
+    assert str(len(controller.conductorNames)) in notice
+
+
+def test_a_mixed_catalog_names_the_draft_wires_rather_than_counting_them() -> None:
+    """Once some wires are reviewed, a count is useless: the user needs to
+    know whether the one they picked is the unchecked one."""
+    from dataclasses import replace as replace_record
+
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    # The unit-test catalog carries one conductor, so "mixed" needs a second:
+    # `AWG 18` stays draft, `AWG 20` is reviewed.
+    template = CATALOG.get_conductor("AWG 18")
+    assert template is not None
+
+    class _MostlyReviewedCatalog:
+        def get_core(self, part_number: str) -> object:
+            return CATALOG.get_core(part_number)
+
+        def list_cores(self) -> tuple[object, ...]:
+            return CATALOG.list_cores()
+
+        def get_conductor(self, name: str) -> object:
+            if name == "AWG 20":
+                return replace_record(
+                    template,
+                    name="AWG 20",
+                    review_status=ReviewStatus.REVIEWED,
+                    reviewed_by="a reviewer",
+                )
+            return CATALOG.get_conductor(name)
+
+        def list_conductor_names(self) -> tuple[str, ...]:
+            return ("AWG 18", "AWG 20")
+
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, _MostlyReviewedCatalog())
+
+    notice = controller.conductorReviewNotice
+    assert "AWG 18" in notice
+    assert "AWG 20" not in notice
+
+
+def test_the_conductor_notice_is_empty_once_every_wire_is_reviewed() -> None:
+    """A notice that cannot go away is decoration. This is what proves it
+    reads the catalog instead of asserting a permanent state of the world."""
+    from dataclasses import replace as replace_record
+
+    from inductor_designer.domain.catalog_records import ReviewStatus
+
+    class _ReviewedCatalog:
+        def get_core(self, part_number: str) -> object:
+            return CATALOG.get_core(part_number)
+
+        def list_cores(self) -> tuple[object, ...]:
+            return CATALOG.list_cores()
+
+        def get_conductor(self, name: str) -> object:
+            record = CATALOG.get_conductor(name)
+            return (
+                None
+                if record is None
+                else replace_record(
+                    record, review_status=ReviewStatus.REVIEWED, reviewed_by="a reviewer"
+                )
+            )
+
+        def list_conductor_names(self) -> tuple[str, ...]:
+            return CATALOG.list_conductor_names()
+
+    session = ProjectSession(make_project())
+    controller = GuidedStudioController(session, _ReviewedCatalog())
+    assert controller.conductorReviewNotice == ""
+
+
+def test_an_e_core_project_draws_its_cut_plane_in_the_controller() -> None:
+    """Found by review: the controller dispatched only to the toroid builder,
+    so an E-core project rendered an empty canvas saying "Select a core" while
+    a core was selected. The E-core geometry model and cut plane existed and
+    had no callers at all in `src/`.
+
+    No 3D entries: an E core has no mesh builder yet (M11b, with the export).
+    The cut plane is what makes the winding placement checkable, and it draws.
+    """
+    from inductor_designer.application.services.new_project import new_project
+    from inductor_designer.domain.project import ManualECoreSelection
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+    project = new_project()
+    session = ProjectSession(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core=ManualECoreSelection(
+                    centre_leg_width_m=0.0170,
+                    depth_m=0.0210,
+                    window_width_m=0.0092,
+                    window_height_m=0.0187,
+                    outer_leg_width_m=0.0085,
+                    yoke_thickness_m=0.0093,
+                    gaps_m=(0.001,),
+                ),
+                windings=(
+                    replace(
+                        project.design.windings[0],
+                        turns=12,
+                        placement=LegPlacement(
+                            leg=WindingLeg.CENTRE,
+                            window_start_m=0.0,
+                            window_span_m=0.0187,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    controller = GuidedStudioController(session, CATALOG)
+
+    drawing = controller.cutPlaneDrawing
+    assert controller.previewEntries == []
+    assert "Select a core" not in drawing["note"]
+    # `cutPlaneDrawing` hands QML dicts, not dataclasses, so this asserts on
+    # the shape the canvas actually receives: a rectangle carries a width, a
+    # circle carries a radius.
+    assert any("width_mm" in shape for shape in drawing["outline"])
+    assert not any("radius_mm" in shape for shape in drawing["outline"])
+    # 12 turns, cut twice each by a plane through the leg.
+    assert len(drawing["circles"]) == 24
+
+
+def test_adding_a_winding_to_an_e_core_places_it_on_the_leg() -> None:
+    """Found by review: `addWinding` built a `ToroidPlacement` unconditionally
+    and read the free sector through `require_toroid_placement`, so it raised
+    `ValueError` out of a Qt slot for an E-core project -- and no UI path
+    existed that could produce a leg placement at all."""
+    from inductor_designer.application.services.new_project import new_project
+    from inductor_designer.domain.project import ManualECoreSelection
+    from inductor_designer.domain.winding import LegPlacement, WindingLeg
+
+    project = new_project()
+    session = ProjectSession(
+        replace(
+            project,
+            design=replace(
+                project.design,
+                core=ManualECoreSelection(
+                    centre_leg_width_m=0.0170,
+                    depth_m=0.0210,
+                    window_width_m=0.0092,
+                    window_height_m=0.0187,
+                    outer_leg_width_m=0.0085,
+                    yoke_thickness_m=0.0093,
+                ),
+                windings=(
+                    replace(
+                        project.design.windings[0],
+                        turns=6,
+                        placement=LegPlacement(
+                            leg=WindingLeg.CENTRE,
+                            window_start_m=0.0,
+                            window_span_m=0.009,
+                        ),
+                    ),
+                ),
+            ),
+        )
+    )
+    controller = GuidedStudioController(session, CATALOG)
+
+    assert controller.addWinding() is True
+
+    first, second = session.project.design.windings
+    assert isinstance(second.placement, LegPlacement)
+    # After the first winding's span, not on top of it.
+    assert second.placement.window_start_m >= (
+        first.placement.window_start_m + first.placement.window_span_m
+    )

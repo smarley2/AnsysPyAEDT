@@ -10,6 +10,7 @@ __pycache__/
 build/
 dist/
 *.aedt.lock
+*.inductor.json.lock
 *.aedb/
 *.pyaedt/
 
@@ -18,3 +19,4 @@ artifacts/
 *.aedt
 *.aedt.lock
 *.aedtz
+*.log

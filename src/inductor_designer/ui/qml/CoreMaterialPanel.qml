@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 Pane {
@@ -88,13 +89,120 @@ Pane {
                     activeFocusOnTab: true
                     highlighted: coreMaterialPanel.controller !== null
                         && coreMaterialPanel.controller.selectedCore.partNumber === modelData.partNumber
-                    text: qsTr("%1  ·  %2  ·  %3")
+                    // The review status is part of the row, not a tooltip: a
+                    // `draft` core is a transcription nobody has checked
+                    // against the cited source page, and an imported one was
+                    // typed in by a user. Neither may read as a verified part.
+                    text: qsTr("%1  ·  %2  ·  %3  ·  %4")
                         .arg(modelData.partNumber)
                         .arg(modelData.manufacturer)
                         .arg(modelData.materialLabel)
+                        .arg(modelData.origin === "imported"
+                            ? qsTr("imported, %1").arg(modelData.reviewStatus)
+                            : modelData.reviewStatus)
                     Accessible.name: qsTr("Select core %1").arg(modelData.partNumber)
                     onClicked: coreMaterialPanel.controller.selectCatalogCore(modelData.partNumber)
                     Keys.onReturnPressed: coreMaterialPanel.controller.selectCatalogCore(modelData.partNumber)
+                }
+            }
+
+            // `Flow`, not `RowLayout`: two side-by-side buttons impose a
+            // minimum width that pushed the whole panel past the scroll view
+            // at the narrowest supported window (caught by
+            // tests/ui/test_panel_layout_containment.py). Flow wraps them
+            // onto a second line instead.
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Button {
+                    id: coreTemplateButton
+                    objectName: "coreTemplateButton"
+                    text: qsTr("Core template…")
+                    enabled: coreMaterialPanel.controller !== null
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Save an empty table to fill in from a core datasheet."
+                    )
+                    onClicked: coreTemplateDialog.open()
+                }
+                Button {
+                    id: importCoresButton
+                    objectName: "importCoresButton"
+                    text: qsTr("Import cores…")
+                    enabled: coreMaterialPanel.controller !== null
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Add cores from a filled template. Imported cores stay "
+                        + "draft until a reviewer checks them against the datasheet."
+                    )
+                    onClicked: importCoresDialog.open()
+                }
+            }
+
+            FileDialog {
+                id: coreTemplateDialog
+                objectName: "coreTemplateDialog"
+                title: qsTr("Save core template")
+                fileMode: FileDialog.SaveFile
+                currentFile: "file:core-import-template.csv"
+                nameFilters: [qsTr("Comma-separated values (*.csv)"),
+                              qsTr("Excel workbook (*.xlsx)")]
+                onAccepted: {
+                    if (coreMaterialPanel.controller !== null) {
+                        coreMaterialPanel.controller.downloadCoreTemplate(
+                            selectedFile.toString().toLowerCase().endsWith(".xlsx")
+                                ? "xlsx" : "csv",
+                            selectedFile)
+                    }
+                }
+            }
+
+            FileDialog {
+                id: importCoresDialog
+                objectName: "importCoresDialog"
+                title: qsTr("Import cores")
+                nameFilters: [qsTr("Core table (*.csv *.xlsx)")]
+                onAccepted: {
+                    if (coreMaterialPanel.controller !== null) {
+                        coreMaterialPanel.controller.importCores(selectedFile)
+                    }
+                }
+            }
+
+            // Only for one of your own imported cores that is still draft: a
+            // shipped core's review status belongs to the catalog source and
+            // its review process, not to whoever has the application open.
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+                visible: coreMaterialPanel.controller !== null
+                    && coreMaterialPanel.controller.selectedCore.origin === "imported"
+                    && coreMaterialPanel.controller.selectedCore.reviewStatus === "draft"
+
+                Label {
+                    objectName: "markReviewedPrompt"
+                    text: qsTr("Checked every number against the datasheet? Record who did:")
+                    color: "#6d7a7e"
+                    wrapMode: Text.WordWrap
+                }
+                TextField {
+                    id: reviewerField
+                    objectName: "coreReviewerField"
+                    placeholderText: qsTr("Reviewer name")
+                    Accessible.name: qsTr("Name of the person who checked this core")
+                }
+                Button {
+                    objectName: "markCoreReviewedButton"
+                    text: qsTr("Mark reviewed")
+                    enabled: reviewerField.text.trim() !== ""
+                    Accessible.name: text
+                    Accessible.description: qsTr(
+                        "Records this core as checked against its datasheet, by the named reviewer."
+                    )
+                    onClicked: coreMaterialPanel.controller.markCoreReviewed(
+                        coreMaterialPanel.controller.selectedCore.partNumber,
+                        reviewerField.text)
                 }
             }
 
@@ -168,6 +276,206 @@ Pane {
                     Number(innerField.text),
                     Number(heightField.text),
                     cornerField.text === "" ? 0.0 : Number(cornerField.text))
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: "#d8d4cd" }
+
+            Label { text: qsTr("Manual E core (gapped)"); font.bold: true; color: "#1e2b32" }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: "#6d7a7e"
+                font.pixelSize: 12
+                text: qsTr("Six dimensions of an E+E pair; the overall size follows from them. Gaps are a comma-separated list in mm, with one segment length between each pair of gaps.")
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 8
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Centre leg F (mm)")
+                }
+                TextField {
+                    id: ecoreLegField
+                    objectName: "ecoreLegField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core centre leg width in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Depth C (mm)")
+                }
+                TextField {
+                    id: ecoreDepthField
+                    objectName: "ecoreDepthField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core stack depth in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Window width E (mm)")
+                }
+                TextField {
+                    id: ecoreWindowWidthField
+                    objectName: "ecoreWindowWidthField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core window width in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Window height D (mm)")
+                }
+                TextField {
+                    id: ecoreWindowHeightField
+                    objectName: "ecoreWindowHeightField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core window height per half in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Outer leg G (mm)")
+                }
+                TextField {
+                    id: ecoreOuterLegField
+                    objectName: "ecoreOuterLegField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core outer leg width in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Yoke H (mm)")
+                }
+                TextField {
+                    id: ecoreYokeField
+                    objectName: "ecoreYokeField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: qsTr("E core yoke thickness in millimetres")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Gaps (mm)")
+                }
+                TextField {
+                    id: ecoreGapsField
+                    objectName: "ecoreGapsField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    placeholderText: qsTr("0.5, 0.5")
+                    Accessible.name: qsTr("E core gap lengths in millimetres, comma separated")
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: qsTr("Segments (mm)")
+                }
+                TextField {
+                    id: ecoreSpacingsField
+                    objectName: "ecoreSpacingsField"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    activeFocusOnTab: true
+                    placeholderText: qsTr("4")
+                    Accessible.name: qsTr("Core segments between the gaps, in millimetres")
+                }
+            }
+
+            CheckBox {
+                id: ecoreOuterGappedBox
+                objectName: "ecoreOuterGappedBox"
+                // A CheckBox's own label does not wrap and sets the row's
+                // minimum width, which pushed the whole panel past its scroll
+                // view at the narrowest window (caught by
+                // tests/ui/test_panel_layout_containment.py). Short text, and
+                // it may shrink; the explanation lives in its accessible
+                // description and the label above.
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                text: qsTr("Gap outer legs")
+                activeFocusOnTab: true
+                Accessible.name: text
+                Accessible.description: qsTr("A spacer between the halves gaps all three legs; unchecked means only the ground centre leg carries the gap.")
+            }
+
+            Button {
+                id: applyManualECoreButton
+                objectName: "applyManualECoreButton"
+                Layout.fillWidth: true
+                text: qsTr("Use these E-core dimensions")
+                activeFocusOnTab: true
+                enabled: coreMaterialPanel.controller !== null
+                    && ecoreLegField.acceptableInput && ecoreLegField.text !== ""
+                    && ecoreDepthField.acceptableInput && ecoreDepthField.text !== ""
+                    && ecoreWindowWidthField.acceptableInput && ecoreWindowWidthField.text !== ""
+                    && ecoreWindowHeightField.acceptableInput && ecoreWindowHeightField.text !== ""
+                    && ecoreOuterLegField.acceptableInput && ecoreOuterLegField.text !== ""
+                    && ecoreYokeField.acceptableInput && ecoreYokeField.text !== ""
+                Accessible.name: text
+                onClicked: coreMaterialPanel.controller.applyManualECore(
+                    Number(ecoreLegField.text),
+                    Number(ecoreDepthField.text),
+                    Number(ecoreWindowWidthField.text),
+                    Number(ecoreWindowHeightField.text),
+                    Number(ecoreOuterLegField.text),
+                    Number(ecoreYokeField.text),
+                    ecoreGapsField.text,
+                    ecoreSpacingsField.text,
+                    ecoreOuterGappedBox.checked)
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: "#d8d4cd" }

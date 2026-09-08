@@ -9,8 +9,9 @@ from inductor_designer.domain.project import (
     CatalogCoreSelection,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
 )
-from inductor_designer.domain.winding import WindingDefinition
+from inductor_designer.domain.winding import ToroidPlacement, WindingDefinition
 
 
 class ValidationCategory(str, Enum):
@@ -39,21 +40,87 @@ def _segments(start_deg: float, sector_deg: float) -> tuple[tuple[float, float],
 
 
 def _sectors_overlap(first: WindingDefinition, second: WindingDefinition) -> bool:
+    """Whether two toroid-placed windings claim the same arc.
+
+    Two windings on a leg cannot overlap by angle -- they share a window by
+    span instead -- so a pair that is not both toroid-placed is simply not
+    this rule's business and reports no overlap.
+    """
+    if not isinstance(first.placement, ToroidPlacement) or not isinstance(
+        second.placement, ToroidPlacement
+    ):
+        return False
     return any(
         a_start < b_end and b_start < a_end
-        for a_start, a_end in _segments(first.start_angle_deg, first.sector_deg)
-        for b_start, b_end in _segments(second.start_angle_deg, second.sector_deg)
+        for a_start, a_end in _segments(
+            first.placement.start_angle_deg, first.placement.sector_deg
+        )
+        for b_start, b_end in _segments(
+            second.placement.start_angle_deg, second.placement.sector_deg
+        )
     )
 
 
 def _sector_fields_valid(winding: WindingDefinition) -> bool:
-    return 0.0 <= winding.start_angle_deg < 360.0 and 0.0 < winding.sector_deg <= 360.0
+    if not isinstance(winding.placement, ToroidPlacement):
+        return True
+    return (
+        0.0 <= winding.placement.start_angle_deg < 360.0
+        and 0.0 < winding.placement.sector_deg <= 360.0
+    )
 
 
 def _validate_core(project: InductorProject) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     design = project.design
     core = design.core
+    def core_error(code: str, message: str) -> None:
+        issues.append(
+            ValidationIssue(ValidationCategory.ERROR, code, message, "design.core")
+        )
+
+    if isinstance(core, ManualECoreSelection):
+        # `ManualECoreSelection` checks finiteness only, exactly as
+        # `ManualCoreSelection` does, and its docstring says positivity is
+        # "reported as diagnostics by validation" -- which was not true until
+        # this branch existed: a negative centre leg validated clean.
+        named = (
+            ("centre_leg_width_m", core.centre_leg_width_m),
+            ("depth_m", core.depth_m),
+            ("window_width_m", core.window_width_m),
+            ("window_height_m", core.window_height_m),
+            ("outer_leg_width_m", core.outer_leg_width_m),
+            ("yoke_thickness_m", core.yoke_thickness_m),
+        )
+        for name, value in named:
+            if not value > 0.0:
+                core_error(
+                    "core.ecore_dimension",
+                    f"E-core {name} must be positive; got {value:g} m.",
+                )
+        for index_, gap in enumerate(core.gaps_m):
+            if not gap > 0.0:
+                core_error(
+                    "core.ecore_gap",
+                    f"E-core gap {index_ + 1} must be positive; got {gap:g} m.",
+                )
+        if len(core.gap_spacings_m) != max(len(core.gaps_m) - 1, 0):
+            core_error(
+                "core.ecore_gap_spacing",
+                f"{len(core.gaps_m)} gap(s) need "
+                f"{max(len(core.gaps_m) - 1, 0)} spacing(s); got "
+                f"{len(core.gap_spacings_m)}.",
+            )
+        occupied = sum(core.gaps_m) + sum(core.gap_spacings_m)
+        leg = 2.0 * core.window_height_m
+        if core.window_height_m > 0.0 and occupied > leg:
+            core_error(
+                "core.ecore_gap_stack",
+                f"Gaps and their spacings occupy {occupied:g} m of a centre "
+                f"leg {leg:g} m long.",
+            )
+        return issues
+
     if core is None:
         issues.append(
             ValidationIssue(
@@ -155,10 +222,11 @@ def _validate_winding(winding: WindingDefinition, path: str) -> list[ValidationI
 
     if winding.turns < 1:
         error("winding.turns", "Turn count must be at least 1.")
-    if not 0.0 <= winding.start_angle_deg < 360.0:
-        error("winding.start_angle", "Start angle must satisfy 0 <= angle < 360 degrees.")
-    if not 0.0 < winding.sector_deg <= 360.0:
-        error("winding.sector", "Sector must satisfy 0 < sector <= 360 degrees.")
+    if isinstance(winding.placement, ToroidPlacement):
+        if not 0.0 <= winding.placement.start_angle_deg < 360.0:
+            error("winding.start_angle", "Start angle must satisfy 0 <= angle < 360 degrees.")
+        if not 0.0 < winding.placement.sector_deg <= 360.0:
+            error("winding.sector", "Sector must satisfy 0 < sector <= 360 degrees.")
     if winding.min_spacing_m < 0 or winding.min_clearance_m < 0:
         error("winding.spacing", "Spacing and clearance must be non-negative.")
     return issues

@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import LineSegment, Vec3
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.domain.project import CatalogCoreSelection, CoreOverride, ManualCoreSelection
-from inductor_designer.geometry.core_solid import (
+from inductor_designer.geometry.toroid.core_solid import (
     CoreGeometryError,
     FinishedCore,
     resolve_finished_core,

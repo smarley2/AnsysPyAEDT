@@ -26,6 +26,7 @@ from inductor_designer.simulation.magnetic_estimate import (
     flux_densities,
 )
 from inductor_designer.simulation.preliminary_contracts import (
+    CoreMagneticProperties,
     DiagnosticCode,
     PreliminaryValue,
 )
@@ -484,3 +485,214 @@ def test_no_model_at_all_is_unavailable() -> None:
 
     assert isinstance(result, PreliminaryValue)
     assert result.code == DiagnosticCode.FLUX_DENSITY_NO_SUPPORTED_MODEL
+
+
+# --- Gapped cores: the loadline, not ampere-turns over a path length -------
+
+
+def _gapped_inputs() -> tuple[OperatingPoint, dict[str, int]]:
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(
+            WindingOperatingPoint("w1", 0.0, 0.0, 10.0, CurrentDirection.FORWARD),
+        ),
+    )
+    return point, {"w1": 30}
+
+
+def test_a_gap_pulls_the_iron_field_strength_far_below_ampere_turns_per_path() -> None:
+    """`H = NI/l` is right for an ungapped core and badly wrong for a gapped
+    one: most of the ampere-turns drop across the gap, so using it would
+    report an iron field strength several times too high -- and then a flux
+    density off the top of the B-H curve. The loadline is what fixes it.
+    """
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    point, turns = _gapped_inputs()
+    ungapped = field_strengths(point, turns, 0.15)
+    assert isinstance(ungapped, FieldStrengths)
+
+    solved = gapped_fields_and_flux(
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        ungapped,
+        iron_length_m=0.15,
+        gap_length_m=0.001,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(solved, PreliminaryValue), solved
+    fields, densities = solved
+
+    assert fields.h_dc_a_per_m < ungapped.h_dc_a_per_m / 2.0
+    # And the loadline is satisfied: NI = H*l_iron + (B/mu_0)*l_gap.
+    mmf = ungapped.h_dc_a_per_m * 0.15
+    reconstructed = (
+        fields.h_dc_a_per_m * 0.15 + densities.b_dc_t / MU_0 * 0.001
+    )
+    assert math.isclose(reconstructed, mmf, rel_tol=1e-9)
+
+
+def test_a_bigger_gap_gives_less_flux() -> None:
+    """The whole reason a gap exists: it holds flux density down at a bias
+    that would otherwise saturate the core."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    point, turns = _gapped_inputs()
+    ungapped = field_strengths(point, turns, 0.15)
+    assert isinstance(ungapped, FieldStrengths)
+    material = make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c")
+
+    flux = []
+    for gap in (0.0005, 0.001, 0.002):
+        solved = gapped_fields_and_flux(
+            material,
+            ungapped,
+            iron_length_m=0.15,
+            gap_length_m=gap,
+            effective_area_m2=3.57e-4,
+            core_temperature_c=25.0,
+        )
+        assert not isinstance(solved, PreliminaryValue), solved
+        flux.append(solved[1].b_dc_t)
+    assert flux == sorted(flux, reverse=True)
+
+
+def test_a_zero_gap_reproduces_the_ungapped_field_exactly() -> None:
+    """The solve has to be a strict generalisation, or the gapped path would
+    quietly disagree with the ungapped one at the boundary."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    # A bias that stays inside the recorded curve (0-200 A/m), so the
+    # equality is about the solve and not about an out-of-range refusal:
+    # 30 turns * 0.5 A / 0.15 m = 100 A/m.
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(
+            WindingOperatingPoint("w1", 0.0, 0.0, 0.5, CurrentDirection.FORWARD),
+        ),
+    )
+    ungapped = field_strengths(point, {"w1": 30}, 0.15)
+    assert isinstance(ungapped, FieldStrengths)
+
+    solved = gapped_fields_and_flux(
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        ungapped,
+        iron_length_m=0.15,
+        gap_length_m=0.0,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(solved, PreliminaryValue), solved
+    fields, _densities = solved
+    assert math.isclose(fields.h_dc_a_per_m, ungapped.h_dc_a_per_m, rel_tol=1e-9)
+
+
+def test_the_gap_length_defaults_to_zero_on_the_core_properties() -> None:
+    """Every core the application handled before M11a is ungapped, and its
+    numbers must not move: the new field defaults to 0.0 and the ungapped
+    arithmetic is untouched."""
+    properties = CoreMagneticProperties(
+        path_length_m=0.1,
+        volume_m3=1e-6,
+        effective_area_m2=1e-4,
+        al_value_nh=None,
+    )
+    assert properties.gap_length_m == 0.0
+
+
+def test_the_gapped_solve_is_odd_symmetric_in_the_ampere_turns() -> None:
+    """Found by review: forcing `sign = 1.0` in `_solve_loadline` passed every
+    test, so negative ampere-turns were unconstrained. Reversing the current
+    must reverse B and H and change nothing else -- the same odd symmetry the
+    ungapped path applies through `_interpolate`."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    material = make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c")
+    forward = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 4.0, CurrentDirection.FORWARD),),
+    )
+    reverse = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 4.0, CurrentDirection.REVERSE),),
+    )
+    solved = []
+    for point in (forward, reverse):
+        fields = field_strengths(point, {"w1": 30}, 0.15)
+        assert isinstance(fields, FieldStrengths)
+        result = gapped_fields_and_flux(
+            material,
+            fields,
+            iron_length_m=0.15,
+            gap_length_m=0.001,
+            effective_area_m2=3.57e-4,
+            core_temperature_c=25.0,
+        )
+        assert not isinstance(result, PreliminaryValue), result
+        solved.append(result)
+
+    (forward_fields, forward_flux), (reverse_fields, reverse_flux) = solved
+    assert math.isclose(
+        reverse_fields.h_dc_a_per_m, -forward_fields.h_dc_a_per_m, rel_tol=1e-9
+    )
+    assert math.isclose(reverse_flux.b_dc_t, -forward_flux.b_dc_t, rel_tol=1e-9)
+
+
+def test_the_solved_triple_keeps_min_below_max() -> None:
+    """Found by review: swapping `h_min` and `h_max` in the solved triple
+    passed every test, leaving the AC peak's sign unconstrained. With ripple
+    on a DC bias the ordering is what makes `b_ac_peak` positive."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 1.0, 0.0, 3.0, CurrentDirection.FORWARD),),
+    )
+    fields = field_strengths(point, {"w1": 30}, 0.15)
+    assert isinstance(fields, FieldStrengths)
+    result = gapped_fields_and_flux(
+        make_material_selection(series=(make_bh_series(),), bh_series_id="bh-25c"),
+        fields,
+        iron_length_m=0.15,
+        gap_length_m=0.001,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(result, PreliminaryValue), result
+    solved_fields, flux = result
+
+    assert solved_fields.h_min_a_per_m < solved_fields.h_dc_a_per_m
+    assert solved_fields.h_dc_a_per_m < solved_fields.h_max_a_per_m
+    assert solved_fields.h_ac_peak_a_per_m > 0.0
+    assert flux.b_ac_peak_t > 0.0
+
+
+def test_a_curve_that_does_not_start_at_the_origin_still_solves() -> None:
+    """Found by review: the bisection bracketed from H = 0, and a series
+    transcribed without the origin has no value below its first point -- so
+    every probe there returned None and roots inside the recorded range were
+    refused. A gapped core's iron field lands in exactly that region."""
+    from inductor_designer.simulation.magnetic_estimate import gapped_fields_and_flux
+
+    material = make_material_selection(
+        series=(make_bh_series(points=((10.0, 0.05), (200.0, 0.5), (700.0, 0.8))),),
+        bh_series_id="bh-25c",
+    )
+    point = OperatingPoint(
+        frequency_hz=100_000.0,
+        windings=(WindingOperatingPoint("w1", 0.0, 0.0, 2.0, CurrentDirection.FORWARD),),
+    )
+    fields = field_strengths(point, {"w1": 30}, 0.15)
+    assert isinstance(fields, FieldStrengths)
+
+    result = gapped_fields_and_flux(
+        material,
+        fields,
+        iron_length_m=0.15,
+        gap_length_m=0.0005,
+        effective_area_m2=3.57e-4,
+        core_temperature_c=25.0,
+    )
+    assert not isinstance(result, PreliminaryValue), result
+    solved_fields, _flux = result
+    assert solved_fields.h_dc_a_per_m > 0.0

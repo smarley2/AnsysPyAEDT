@@ -9,15 +9,28 @@ from PySide6.QtCore import Property, QObject, Signal, Slot
 
 from inductor_designer.application.services.geometry_model import (
     GeometryModelError,
+    build_ecore_geometry_model,
     build_geometry_model,
 )
-from inductor_designer.domain.project import WindingOperatingPoint
+from inductor_designer.domain.catalog_records import ReviewStatus
+from inductor_designer.domain.project import (
+    ManualECoreSelection,
+    WindingOperatingPoint,
+)
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    LegPlacement,
+    ToroidPlacement,
     WindingDirection,
+    WindingLeg,
+    WindingPlacement,
 )
-from inductor_designer.ui.cut_plane_view import CutPlaneDrawing, build_cut_plane_drawing
+from inductor_designer.ui.cut_plane_view import (
+    CutPlaneDrawing,
+    build_cut_plane_drawing,
+    build_ecore_cut_plane_drawing,
+)
 from inductor_designer.ui.preview_geometry import PreviewEntry, build_preview_entries
 
 if TYPE_CHECKING:
@@ -25,6 +38,29 @@ if TYPE_CHECKING:
     from inductor_designer.domain.project import InductorProject
     from inductor_designer.domain.winding import WindingDefinition
     from inductor_designer.ui.project_session import ProjectSession
+
+
+def _placement_row(placement: WindingPlacement) -> dict[str, object]:
+    """One winding's placement, in the unit its own family uses.
+
+    Neutral keys with a `placementKind` discriminator, rather than a toroid
+    pair plus an E-core pair of which one is always dead: the panel needs one
+    label and one field per number either way, and a row that carries unused
+    keys is a row whose reader has to guess which half is real.
+    """
+    if isinstance(placement, ToroidPlacement):
+        return {
+            "placementKind": "toroid",
+            "placementUnit": "deg",
+            "placementStart": placement.start_angle_deg,
+            "placementSpan": placement.sector_deg,
+        }
+    return {
+        "placementKind": "leg",
+        "placementUnit": "mm",
+        "placementStart": placement.window_start_m * 1000.0,
+        "placementSpan": placement.window_span_m * 1000.0,
+    }
 
 
 _COLORS = ("#e77b49", "#2e65e7", "#157a61", "#8a5cf6")
@@ -57,6 +93,9 @@ class GuidedStudioController(QObject):
     operatingPointChanged = Signal()
 
     _MINIMUM_NEW_SECTOR_DEG = 10.0
+    #: The shortest span worth starting a leg winding in: below this the
+    #: window holds no turn of any wire this catalog carries.
+    _MINIMUM_NEW_WINDOW_M = 0.002
     _PREFERRED_NEW_SECTOR_DEG = 90.0
 
     def __init__(
@@ -77,7 +116,16 @@ class GuidedStudioController(QObject):
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )
-        self._preview = self._build_preview(project)
+        # A project with no core yet -- the blank project a launch with no
+        # `--project` opens -- has no geometry to draw, and
+        # `build_geometry_model` refuses it rather than inventing one. That is
+        # not a startup failure: it is the state the user is about to fix on
+        # the Core & Material screen. `refresh()` already suppresses exactly
+        # this error for the same reason; without the same tolerance here the
+        # constructor raised and took the whole launch down with it.
+        self._preview = self._empty_preview()
+        with contextlib.suppress(GeometryModelError):
+            self._preview = self._build_preview(project)
         # Set around every `self._session.apply(...)` call below: `apply`
         # emits `projectChanged` synchronously, which `main.py` wires back to
         # `refresh()` on this same controller. Without the guard, one accepted
@@ -86,7 +134,44 @@ class GuidedStudioController(QObject):
         # already applied the very state `refresh()` would recompute.
         self._applying = False
 
+    def _empty_preview(
+        self, note: str = "Select a core to see the winding cross-section."
+    ) -> _PreviewState:
+        """No geometry to show, and the reason for it, on the cut plane.
+
+        The numbers match the defaults `CutPlaneView.qml` already carries for
+        its own unset state (including `extent_mm` 1.0, which its scaling
+        divides by), so an empty drawing renders exactly as no drawing does.
+        The default note is the no-core-yet case; `refresh` passes the
+        geometry model's own refusal when a selected core is the problem.
+        """
+        return _PreviewState(
+            entries=[],
+            drawing=CutPlaneDrawing(
+                outline=(),
+                depth_mm=0.0,
+                extent_mm=1.0,
+                circles=(),
+                starts=(),
+                note=note,
+            ),
+        )
+
     def _build_preview(self, project: InductorProject) -> _PreviewState:
+        """The preview for whichever family this project's core belongs to.
+
+        An E core has no 3D mesh builder yet (that is M11b, with the export),
+        so it draws the cut plane and no entries -- but it does draw, which is
+        the whole point: dispatching only to the toroid builder left every
+        E-core project with an empty canvas saying "Select a core" while a
+        core was selected.
+        """
+        if isinstance(project.design.core, ManualECoreSelection):
+            ecore_model = build_ecore_geometry_model(project, self._catalog)
+            return _PreviewState(
+                entries=[],
+                drawing=build_ecore_cut_plane_drawing(ecore_model, project),
+            )
         model = build_geometry_model(project, self._catalog)
         return _PreviewState(
             entries=build_preview_entries(model),
@@ -108,13 +193,45 @@ class GuidedStudioController(QObject):
         when the remaining gap is too small to be useful.
         """
         windings = self._session.project.design.windings
+        placements = [
+            winding.placement
+            for winding in windings
+            if isinstance(winding.placement, ToroidPlacement)
+        ]
         occupied_end = max(
-            (winding.start_angle_deg + winding.sector_deg for winding in windings),
+            (
+                placement.start_angle_deg + placement.sector_deg
+                for placement in placements
+            ),
             default=0.0,
         )
         if occupied_end >= 360.0 - self._MINIMUM_NEW_SECTOR_DEG:
             return None
         return (occupied_end, min(self._PREFERRED_NEW_SECTOR_DEG, 360.0 - occupied_end))
+
+    def _free_window(self) -> tuple[float, float] | None:
+        """The unclaimed span of the centre leg's window, in metres.
+
+        The leg analogue of `_free_sector`: a new winding goes after the
+        existing ones along the leg rather than on top of them. None when what
+        is left is too short to wind.
+        """
+        core = self._session.project.design.core
+        if not isinstance(core, ManualECoreSelection):
+            return None
+        leg = 2.0 * core.window_height_m
+        occupied_end = max(
+            (
+                placement.window_start_m + placement.window_span_m
+                for winding in self._session.project.design.windings
+                if isinstance(placement := winding.placement, LegPlacement)
+            ),
+            default=0.0,
+        )
+        remaining = leg - occupied_end
+        if remaining < self._MINIMUM_NEW_WINDOW_M:
+            return None
+        return (occupied_end, remaining)
 
     @staticmethod
     def _winding_rows(
@@ -130,8 +247,12 @@ class GuidedStudioController(QObject):
                 "conductor": winding.conductor_name,
                 "acRmsCurrentA": points_by_id[winding.winding_id].ac_rms_current_a,
                 "acPhaseDeg": points_by_id[winding.winding_id].ac_phase_deg,
-                "startAngleDeg": winding.start_angle_deg,
-                "sectorDeg": winding.sector_deg,
+                # Placement, in whichever family's terms this winding uses.
+                # Reading the toroid placement unconditionally here is what
+                # made the Windings screen raise out of `refresh()` for an
+                # E-core project -- found by walking the real application,
+                # not by a test.
+                **_placement_row(winding.placement),
                 "spacingMm": winding.min_spacing_m * 1000.0,
                 "clearanceMm": winding.min_clearance_m * 1000.0,
                 "direction": winding.winding_direction.value,
@@ -209,6 +330,45 @@ class GuidedStudioController(QObject):
 
     conductorNames = Property(list, _get_conductor_names, constant=True)
 
+    def _get_conductor_review_notice(self) -> str:
+        """Which offered conductors are unreviewed transcriptions, if any.
+
+        Every winding is sized on a conductor diameter, and every conductor in
+        the shipped index is `draft` -- transcribed from IEC 60317 or an AWG
+        table, not yet checked against the source by a second person. Sizing a
+        winding on that silently is the wrong default for a tool whose output
+        goes into a design decision.
+
+        Computed rather than written, so it tells the truth in all three
+        states: empty once every wire is reviewed, a plain statement when none
+        are, and naming the drafts when the catalog is mixed. A notice that
+        cannot go away is decoration.
+        """
+        drafts = [
+            name
+            for name in self._catalog.list_conductor_names()
+            if (record := self._catalog.get_conductor(name)) is not None
+            and record.review_status is ReviewStatus.DRAFT
+        ]
+        if not drafts:
+            return ""
+        total = len(self._catalog.list_conductor_names())
+        if len(drafts) == total:
+            return (
+                f"All {total} conductor sizes are draft transcriptions of "
+                "their standard, not yet checked against the source. Verify "
+                "the diameter before trusting a result that depends on it."
+            )
+        return (
+            "Draft conductor sizes, not yet checked against their standard: "
+            + ", ".join(drafts)
+            + "."
+        )
+
+    conductorReviewNotice = Property(
+        str, _get_conductor_review_notice, constant=True
+    )
+
     def _get_conductor_modes(self) -> list[str]:
         return [item.value for item in ConductorMode]
 
@@ -258,10 +418,26 @@ class GuidedStudioController(QObject):
             return replace(winding, turns=turns)
         if field == "conductor":
             return replace(winding, conductor_name=value.strip())
-        if field == "startAngleDeg":
-            return replace(winding, start_angle_deg=cls._number(value, "Start angle"))
-        if field == "sectorDeg":
-            return replace(winding, sector_deg=cls._number(value, "Sector"))
+        if field == "placementStart":
+            placement = winding.placement
+            number = cls._number(value, "Placement start")
+            if isinstance(placement, ToroidPlacement):
+                return replace(
+                    winding, placement=replace(placement, start_angle_deg=number)
+                )
+            return replace(
+                winding,
+                placement=replace(placement, window_start_m=number / 1000.0),
+            )
+        if field == "placementSpan":
+            placement = winding.placement
+            number = cls._number(value, "Placement span")
+            if isinstance(placement, ToroidPlacement):
+                return replace(winding, placement=replace(placement, sector_deg=number))
+            return replace(
+                winding,
+                placement=replace(placement, window_span_m=number / 1000.0),
+            )
         if field == "spacingMm":
             return replace(
                 winding,
@@ -431,14 +607,36 @@ class GuidedStudioController(QObject):
                 "placement defaults from."
             )
             return False
-        placement = self._free_sector()
-        if placement is None:
-            self._session.set_status(
-                "Unable to add a winding: no free sector remains on the core. "
-                "Reduce an existing winding's sector first."
+        # Placed in whichever family's coordinates this design uses. Building
+        # a `ToroidPlacement` unconditionally -- and reading the free sector
+        # through `require_toroid_placement` -- made this slot raise
+        # `ValueError` for an E-core project, and left no UI path at all that
+        # could produce a leg placement.
+        if isinstance(self._session.project.design.core, ManualECoreSelection):
+            window = self._free_window()
+            if window is None:
+                self._session.set_status(
+                    "Unable to add a winding: no free span remains on the "
+                    "centre leg. Reduce an existing winding's window span "
+                    "first."
+                )
+                return False
+            start_m, span_m = window
+            new_placement: WindingPlacement = LegPlacement(
+                leg=WindingLeg.CENTRE, window_start_m=start_m, window_span_m=span_m
             )
-            return False
-        start_deg, sector_deg = placement
+        else:
+            placement = self._free_sector()
+            if placement is None:
+                self._session.set_status(
+                    "Unable to add a winding: no free sector remains on the core. "
+                    "Reduce an existing winding's sector first."
+                )
+                return False
+            start_deg, sector_deg = placement
+            new_placement = ToroidPlacement(
+                start_angle_deg=start_deg, sector_deg=sector_deg
+            )
         template = windings[-1]
         winding_id = self._next_winding_id()
         definition = replace(
@@ -446,8 +644,7 @@ class GuidedStudioController(QObject):
             winding_id=winding_id,
             label=f"Winding {len(windings) + 1}",
             turns=1,
-            start_angle_deg=start_deg,
-            sector_deg=sector_deg,
+            placement=new_placement,
             terminal_intent="",
         )
         excitation = WindingOperatingPoint(
@@ -556,8 +753,20 @@ class GuidedStudioController(QObject):
         # Keep the last valid preview: a core edit that breaks geometry is
         # reported by its own controller, and a blank canvas would hide the
         # windings the user is about to fix.
-        with contextlib.suppress(GeometryModelError):
+        try:
             self._preview = self._build_preview(project)
+        except GeometryModelError as error:
+            # Unless there is no last valid preview to keep -- a new project
+            # whose first core selection does not fit. Keeping the empty one
+            # leaves "Select a core to see the winding cross-section." on
+            # screen after a core WAS selected, which sends the user looking
+            # for a control they already used. The model's own refusal (e.g.
+            # "Wire does not fit the core bore at layer 1") names what to
+            # change instead.
+            if not self._preview.entries:
+                self._preview = self._empty_preview(
+                    note="; ".join(str(issue) for issue in error.issues)
+                )
         self._windings = self._winding_rows(
             project.design.windings, project.operating_point.windings
         )

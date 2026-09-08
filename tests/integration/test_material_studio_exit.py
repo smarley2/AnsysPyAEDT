@@ -90,7 +90,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture_document = json.loads(PROJECT_FIXTURE.read_text(encoding="utf-8"))
-    assert fixture_document["schemaVersion"] == 5
+    assert fixture_document["schemaVersion"] == 6
 
     overlay = tmp_path / "overlay"
     materials = FileOverlayMaterialRepository(overlay)
@@ -216,7 +216,7 @@ def test_spreadsheet_workflow_pins_exact_revision_and_series_in_recording_export
 
     assert session.saveProject() is True
     persisted_document = json.loads(project_path.read_text(encoding="utf-8"))
-    assert persisted_document["schemaVersion"] == 5
+    assert persisted_document["schemaVersion"] == 6
     assert persisted_document["design"]["coreMaterial"]["revisionId"] == edited_revision
     assert persisted_document["design"]["coreMaterial"]["bhSeriesId"] == "bh-100c"
     reloaded = projects.load(project_path)

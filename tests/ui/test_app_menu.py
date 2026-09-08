@@ -25,8 +25,16 @@ os.environ.setdefault("QSG_RHI_BACKEND", "software")
 pytest.importorskip("PySide6")
 
 import PySide6.QtGui as QtGui  # noqa: E402
-from PySide6.QtCore import QMetaObject, QObject, QUrl  # noqa: E402
-from PySide6.QtGui import QAccessible, QGuiApplication  # noqa: E402
+from PySide6.QtCore import (  # noqa: E402
+    QMessageLogContext,
+    QMetaObject,
+    QObject,
+    QtMsgType,
+    QUrl,
+    qInstallMessageHandler,
+)
+from PySide6.QtGui import QAccessible, QGuiApplication, QKeySequence  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 
 import inductor_designer.ui.main as main_module  # noqa: E402
 from inductor_designer import __version__  # noqa: E402
@@ -67,6 +75,33 @@ _KEEPALIVE: list[object] = []
 
 def _trigger(item: QObject) -> None:
     assert QMetaObject.invokeMethod(item, "triggered") is True
+
+
+def _capture_qml_messages() -> list[str]:
+    """Record every `qWarning`/`qCritical` message the QML engine itself
+    reports, which is how a QML runtime error (e.g. an uncaught
+    `ReferenceError`) surfaces -- the exact mechanism `main.py`'s
+    `_install_qml_logging()` prints to stderr.
+    Caller must restore the previous handler with `qInstallMessageHandler(None)`.
+
+    Only messages carrying a QML source location are kept. `qInstallMessageHandler`
+    is process global and catches the platform's own chatter too: Qt's Windows
+    style opens native theme data per styled control, and when that fails it
+    logs `OpenThemeData() failed for theme 2 (EDIT). (The handle is invalid.)`
+    -- once per control, from whichever window happens to be building itself,
+    at a moment nothing in this test controls. That made `assert not messages`
+    fail at random under `pytest -n 8` and pass on every rerun. A QML
+    diagnostic always names the file and line of the offending QML; the
+    platform warnings name nothing, which is the difference filtered on here.
+    """
+    messages: list[str] = []
+
+    def handler(_mode: QtMsgType, context: QMessageLogContext, message: str) -> None:
+        if context.line > 0 or context.file:
+            messages.append(message)
+
+    qInstallMessageHandler(handler)
+    return messages
 
 
 def _accessible_text(item: QObject, part: QAccessible.Text) -> str:
@@ -123,29 +158,169 @@ def test_menu_bar_and_items_exist_with_expected_enabled_state() -> None:
     assert menu_bar is not None
     file_menu = root.findChild(QObject, "fileMenu")
     assert file_menu is not None and file_menu.property("title") == "File"
+    edit_menu = root.findChild(QObject, "editMenu")
+    assert edit_menu is not None and edit_menu.property("title") == "Edit"
     help_menu = root.findChild(QObject, "helpMenu")
     assert help_menu is not None and help_menu.property("title") == "Help"
 
     open_item = root.findChild(QObject, "openProjectMenuItem")
     save_item = root.findChild(QObject, "saveProjectMenuItem")
     save_as_item = root.findChild(QObject, "saveProjectAsMenuItem")
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    redo_item = root.findChild(QObject, "redoMenuItem")
     exit_item = root.findChild(QObject, "exitMenuItem")
     about_item = root.findChild(QObject, "aboutMenuItem")
+    save_bundle_item = root.findChild(QObject, "saveDiagnosticBundleMenuItem")
+    save_bundle_dialog = root.findChild(QObject, "saveBundleDialog")
 
-    for item in (open_item, save_item, save_as_item, exit_item, about_item):
+    for item in (
+        open_item,
+        save_item,
+        save_as_item,
+        undo_item,
+        redo_item,
+        exit_item,
+        about_item,
+        save_bundle_item,
+        save_bundle_dialog,
+    ):
         assert item is not None
 
-    # No project loaded: Open/Save/Save As are all disabled, and the reason
-    # is exposed to accessibility tooling (and to this test), not just a
-    # dead button.
+    # No project loaded: Open/Save/Save As/Undo/Redo are all disabled, and
+    # the reason is exposed to accessibility tooling (and to this test), not
+    # just a dead button.
     assert open_item.property("enabled") is False
     assert save_item.property("enabled") is False
     assert save_as_item.property("enabled") is False
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is False
     assert _accessible_text(open_item, QAccessible.Description) != ""
     assert _accessible_text(save_item, QAccessible.Description) != ""
+    assert _accessible_text(undo_item, QAccessible.Description) != ""
+    assert _accessible_text(redo_item, QAccessible.Description) != ""
     # Exit and About are always available.
     assert exit_item.property("enabled") is True
     assert about_item.property("enabled") is True
+
+
+def test_undo_and_redo_menu_items_reflect_and_drive_the_session_history() -> None:
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    redo_item = root.findChild(QObject, "redoMenuItem")
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is False
+
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    assert undo_item.property("enabled") is True
+
+    _trigger(undo_item)
+    app.processEvents()
+    assert session.project.description == ""
+    assert undo_item.property("enabled") is False
+    assert redo_item.property("enabled") is True
+
+    _trigger(redo_item)
+    app.processEvents()
+    assert session.project.description == "edited"
+
+
+def test_ctrl_z_and_ctrl_y_actually_undo_and_redo_with_no_qml_errors() -> None:
+    """The `Shortcut { onActivated: parent.triggered() }` wiring is dead:
+    `Shortcut` is a `QObject`, not an `Item`, so `parent` never resolves and
+    every keypress logs a QML `ReferenceError` instead of undoing anything.
+    `QTest.keySequence` delivers a real key event to the window, the same
+    path an actual keypress takes -- unlike calling the `Shortcut`'s
+    `activated` signal directly (`QMetaObject.invokeMethod`), which would
+    emit it unconditionally and could not tell a working shortcut from a
+    broken one, nor respect `enabled`.
+    """
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    root.requestActivate()
+    app.processEvents()
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence.Undo)
+        app.processEvents()
+
+        assert session.project.description == ""
+        assert not messages, messages
+
+        messages.clear()
+        QTest.keySequence(root, QKeySequence.Redo)
+        app.processEvents()
+
+        assert session.project.description == "edited"
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)
+
+
+def test_ctrl_z_does_nothing_when_undo_is_disabled() -> None:
+    """`Shortcut.enabled` defaults to `true` and, unless bound to the menu
+    item's own `enabled`, fires even when there is no project loaded at all
+    -- calling `projectSession.undo()` on a null `projectSession`.
+    """
+    _app, root = _bare_root()
+    undo_item = root.findChild(QObject, "undoMenuItem")
+    assert undo_item.property("enabled") is False
+    root.requestActivate()
+    QGuiApplication.instance().processEvents()
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence.Undo)
+        QGuiApplication.instance().processEvents()
+
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)
+
+
+def test_the_qml_message_capture_keeps_qml_errors_and_drops_platform_chatter() -> None:
+    """Pins the filter the two shortcut tests above depend on.
+
+    Without it, `assert not messages` gated on every warning in the process,
+    so Qt's Windows style logging `OpenThemeData() failed ...` while some
+    other window built itself failed the shortcut tests at random under
+    `pytest -n 8`. Deleting the filter must not be the fix either: a capture
+    that drops everything would make those tests green with the QML wiring
+    ripped out, which is the regression they exist to catch. So both halves
+    are asserted here -- the real `ReferenceError` a broken
+    `Shortcut { onActivated: parent.triggered() }` produces is kept, the
+    location-less platform warning is not.
+    """
+    from PySide6.QtCore import qWarning
+    from PySide6.QtQml import QQmlApplicationEngine
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    engine = QQmlApplicationEngine()
+    messages = _capture_qml_messages()
+    try:
+        qWarning("OpenThemeData() failed for theme 2 (EDIT). (The handle is invalid.)")
+        assert messages == []
+
+        # The exact shape of the wiring bug: `QtObject`, like `Shortcut`, is
+        # not an `Item`, so `parent` does not resolve at all there -- it is
+        # not merely null -- and the handler throws when it runs.
+        engine.loadData(
+            b"""
+            import QtQml
+            QtObject {
+                objectName: "referenceErrorProbe"
+                Component.onCompleted: parent.triggered()
+            }
+            """
+        )
+        app.processEvents()
+    finally:
+        qInstallMessageHandler(None)
+        _KEEPALIVE.append((app, engine, *engine.rootObjects()))
+
+    assert any("ReferenceError" in message for message in messages), messages
 
 
 def test_exit_routes_through_the_same_unsaved_changes_guard_as_window_close() -> None:
@@ -436,3 +611,107 @@ def test_open_a_project_with_different_winding_ids_resets_the_selection(
     turns_field = root.findChild(QObject, "windingTurnsField")
     assert turns_field.property("text") == "42"
     assert label_field.property("text") == "Primary"
+
+
+def test_the_diagnostic_bundle_item_offers_a_name_carrying_no_project_identity() -> None:
+    """The dialog's default name is the string users paste into tickets.
+
+    `suggestedFileName` was computed correctly and then never used -- the item
+    cleared `currentFile` instead, so the user typed a name, usually the
+    project's, putting a customer name in a filename that leaves BRUSA. This
+    pins the binding, which no test covered: reverting it to `""` kept every
+    other test green.
+    """
+    from inductor_designer.adapters.system.environment import environment_redaction_context
+    from inductor_designer.ui.diagnostics_controller import DiagnosticsController
+
+    app = QGuiApplication.instance() or QGuiApplication([])
+    session = ProjectSession(make_project(), Path("CustomerACME") / "boost.inductor.json")
+    controller = DiagnosticsController(session, None, environment_redaction_context())
+    engine = create_engine(diagnostics_controller=controller, project_session=session)
+    root = engine.rootObjects()[0]
+    _KEEPALIVE.append((app, engine, *engine.rootObjects(), controller, session))
+    app.processEvents()
+
+    _trigger(root.findChild(QObject, "saveDiagnosticBundleMenuItem"))
+
+    dialog = root.findChild(QObject, "saveBundleDialog")
+    offered = str(dialog.property("currentFile"))
+    assert "diagnostics-" in offered
+    assert "CustomerACME" not in offered
+    assert "boost" not in offered
+
+
+def test_new_from_a_dirty_project_warns_first_and_then_blanks_the_session() -> None:
+    """File > New must not silently discard unsaved work: it routes through
+    the same single guard as File > Open and the window's close button."""
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+
+    new_item = root.findChild(QObject, "newProjectMenuItem")
+    assert new_item.property("enabled") is True
+    _trigger(new_item)
+    app.processEvents()
+
+    unsaved_dialog = root.findChild(QObject, "unsavedProjectDialog")
+    assert unsaved_dialog.property("visible") is True
+    # Nothing replaced yet: the choice has not been made.
+    assert session.project.description == "edited"
+
+    assert (
+        QMetaObject.invokeMethod(
+            root.findChild(QObject, "unsavedProjectDiscardButton"), "clicked"
+        )
+        is True
+    )
+    app.processEvents()
+
+    assert session.document_path is None
+    assert session.project.design.core is None
+    assert session.dirty is False
+
+
+def test_save_on_a_project_with_no_document_path_offers_save_as_instead() -> None:
+    """`Save` writes to the session's document path, and a project started
+    from New has none -- the persister raises `RuntimeError` there. The menu
+    item has to ask for a name rather than fail."""
+    app, root, session = _loaded_root(None)
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+
+    save_item = root.findChild(QObject, "saveProjectMenuItem")
+    assert save_item.property("enabled") is True
+    _trigger(save_item)
+    app.processEvents()
+
+    assert root.findChild(QObject, "saveProjectAsDialog").property("visible") is True
+    # Still unsaved: the dialog is open, nothing has been written.
+    assert session.dirty is True
+
+
+def test_redo_also_answers_the_second_binding_windows_gives_it() -> None:
+    """`StandardKey.Redo` is two bindings on Windows -- Ctrl+Y and
+    Ctrl+Shift+Z -- and `sequence:` wires up only one of them, which is what
+    Qt's "Only binding to one of multiple key bindings" warning at load was
+    saying. `sequences:` binds both, so this is the half that used to be dead.
+    """
+    app, root, session = _loaded_root(Path("boost.inductor.json"))
+    session.apply(replace(session.project, description="edited"))
+    app.processEvents()
+    root.requestActivate()
+    app.processEvents()
+
+    QTest.keySequence(root, QKeySequence.Undo)
+    app.processEvents()
+    assert session.project.description == ""
+
+    messages = _capture_qml_messages()
+    try:
+        QTest.keySequence(root, QKeySequence("Ctrl+Shift+Z"))
+        app.processEvents()
+
+        assert session.project.description == "edited"
+        assert not messages, messages
+    finally:
+        qInstallMessageHandler(None)

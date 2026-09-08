@@ -5,9 +5,9 @@ import math
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackingError, WindingSpec, pack_winding
-from inductor_designer.geometry.turn_path import turn_loop_length_m
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackingError, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.turn_path import turn_loop_length_m
 
 cores = st.builds(
     FinishedCore,

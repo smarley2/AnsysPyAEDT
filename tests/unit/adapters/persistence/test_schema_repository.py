@@ -22,29 +22,29 @@ def schema_repository() -> SchemaRepository:
     return SchemaRepository(SCHEMAS)
 
 
-def test_latest_version_is_five() -> None:
-    assert LATEST_PROJECT_SCHEMA_VERSION == 5
+def test_latest_version_is_six() -> None:
+    assert LATEST_PROJECT_SCHEMA_VERSION == 6
 
 
-def test_v5_project_validates(schema_repository: SchemaRepository) -> None:
+def test_v6_project_validates(schema_repository: SchemaRepository) -> None:
     schema_repository.validate_project(project_to_document(make_project()))
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
 def test_legacy_project_versions_are_rejected(version: int) -> None:
     with pytest.raises(
         ValueError,
-        match=rf"Unsupported project schema version: {version}; expected 5",
+        match=rf"Unsupported project schema version: {version}; expected 6",
     ):
         SchemaRepository(SCHEMAS).validate_project({"schemaVersion": version})
 
 
 def test_unknown_project_version_is_rejected() -> None:
-    with pytest.raises(ValueError, match="Unsupported project schema version: 99; expected 5"):
+    with pytest.raises(ValueError, match="Unsupported project schema version: 99; expected 6"):
         SchemaRepository(SCHEMAS).validate_project({"schemaVersion": 99})
 
 
-def test_v5_rejects_legacy_top_level_fields(schema_repository: SchemaRepository) -> None:
+def test_v6_rejects_legacy_top_level_fields(schema_repository: SchemaRepository) -> None:
     document = project_to_document(make_project())
     document["target"] = {}
 
@@ -52,7 +52,7 @@ def test_v5_rejects_legacy_top_level_fields(schema_repository: SchemaRepository)
         schema_repository.validate_project(document)
 
 
-def test_v5_requires_operating_point_current_direction(
+def test_v6_requires_operating_point_current_direction(
     schema_repository: SchemaRepository,
 ) -> None:
     document = project_to_document(make_project())
@@ -72,7 +72,7 @@ def test_v5_requires_operating_point_current_direction(
         ),
     ],
 )
-def test_v5_rejects_nonfinite_numbers_with_document_path(
+def test_v6_rejects_nonfinite_numbers_with_document_path(
     schema_repository: SchemaRepository,
     path: tuple[str | int, ...],
     value: float,
@@ -93,7 +93,7 @@ def test_v5_rejects_nonfinite_numbers_with_document_path(
         schema_repository.validate_project(document)
 
 
-def test_sample_fixture_is_v5(schema_repository: SchemaRepository) -> None:
+def test_sample_fixture_is_v6(schema_repository: SchemaRepository) -> None:
     fixture = SCHEMAS.parents[0] / "tests" / "fixtures" / "sample_geometry_project.inductor.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
 

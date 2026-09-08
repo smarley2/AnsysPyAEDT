@@ -95,7 +95,15 @@ def test_generate_and_solve_analyzes_and_logs_its_stages(tmp_path: Path) -> None
     manifest = result.outcome.manifest
     assert manifest.status is RunStatus.SUCCEEDED
     assert [stage.name for stage in manifest.stages] == ["generate", "analyze"]
-    assert manifest.results is None, "M8a normalizes nothing; M8b owns results"
+    # M8a left `results` None; M8b made a solved run carry its normalized set,
+    # and this assertion still demanded the M8a shape until 2026-08-18. Live
+    # tests sit behind the `femm` marker, so the normal gate never ran it and
+    # nothing noticed. Assert the M8b contract instead of the absence.
+    assert manifest.results is not None
+    assert manifest.results.backend is RunBackend.FEMM
+    assert {entry.quantity for entry in manifest.results.quantities} == set(
+        project.simulation_recipe.requested_outputs
+    )
 
     log = result.location.results_directory / SOLVE_LOG_FILENAME
     assert log.is_file()

@@ -12,6 +12,11 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
+from inductor_designer.adapters.system.installations import (  # noqa: E402
+    AedtInstallation,
+    DetectionRoute,
+    UnsupportedAedtInstallation,
+)
 from inductor_designer.domain.project import RequestedOutput  # noqa: E402
 from inductor_designer.simulation.capabilities import (  # noqa: E402
     AedtEdition,
@@ -45,6 +50,8 @@ def build(
     dirty: bool = False,
     document: Path | None = Path("boost.inductor.json"),
     dc_current_a: float | None = None,
+    aedt_installation: AedtInstallation | None = None,
+    unsupported_aedt_installation: UnsupportedAedtInstallation | None = None,
 ) -> tuple[
     ProjectSession,
     list[tuple[str, bool]],
@@ -75,7 +82,13 @@ def build(
         )
     session = ProjectSession(project, document, lambda project: None)
     generation = GenerationController(runner)
-    controller = SimulationController(session, generation, SUPPORTED)
+    controller = SimulationController(
+        session,
+        generation,
+        SUPPORTED,
+        aedt_installation,
+        unsupported_aedt_installation,
+    )
     if dirty:
         session.apply(replace(session.project, description="edited"))
     return session, calls, generation, controller
@@ -291,3 +304,56 @@ def test_a_second_proceed_ac_only_after_a_successful_run_refuses() -> None:
 
     assert controller.proceedAcOnly() is False
     assert calls == [("FEMM 2D", False)]
+
+
+# M10 Task 2: the detected AEDT target, if any, is visible before a run is
+# started -- an unsupported release or an absent one calls for a different
+# remedy than a failed run's own advice, and must be visible earlier.
+
+
+def test_aedt_status_notice_is_silent_when_femm_is_selected() -> None:
+    _, _, _, controller = build()
+    controller.setBackend("FEMM 2D")
+
+    assert controller.aedtStatusNotice == ""
+
+
+def test_aedt_status_notice_is_silent_when_the_supported_release_is_installed() -> None:
+    installed = AedtInstallation(
+        AedtRelease(2025, 2), Path("C:/Program Files/ANSYS Inc"), DetectionRoute.STANDARD_LOCATION
+    )
+    _, _, _, controller = build(aedt_installation=installed)
+
+    assert controller.aedtStatusNotice == ""
+
+
+def test_aedt_status_notice_names_an_unsupported_release_found() -> None:
+    found = UnsupportedAedtInstallation(
+        AedtRelease(2024, 2), Path("C:/Program Files/ANSYS Inc"), DetectionRoute.REGISTRY
+    )
+    _, _, _, controller = build(unsupported_aedt_installation=found)
+
+    notice = controller.aedtStatusNotice
+    # "2025 R2 Commercial", matching aedt_support.py's own wording -- not
+    # AedtRelease.__str__'s "2025.2", which reads as a different product.
+    assert "2024 R2" in notice
+    assert "2025 R2 Commercial" in notice
+    assert "installation.aedt_unsupported_release" in notice
+
+
+def test_aedt_status_notice_reports_absence_when_nothing_was_found() -> None:
+    _, _, _, controller = build()
+
+    notice = controller.aedtStatusNotice
+    assert "not found" in notice
+    assert "2025 R2 Commercial" in notice
+    assert "installation.aedt_missing" in notice
+
+
+def test_aedt_status_notice_updates_when_the_backend_changes() -> None:
+    _, _, _, controller = build()
+    assert controller.aedtStatusNotice != ""
+
+    assert controller.setBackend("FEMM 2D") is True
+
+    assert controller.aedtStatusNotice == ""

@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from inductor_designer.geometry.collisions import occupancy_summary
 from inductor_designer.geometry.naming import (
     core_name,
     lead_names,
     terminal_names,
     winding_names,
 )
-from inductor_designer.geometry.symmetry import SymmetryPlan
+from inductor_designer.geometry.toroid.collisions import occupancy_summary
+from inductor_designer.geometry.toroid.symmetry import SymmetryPlan
 
 if TYPE_CHECKING:
     from inductor_designer.application.services.geometry_model import GeometryModel

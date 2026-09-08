@@ -6,6 +6,9 @@ Pane {
     id: windingsPanel
     objectName: "windingsPanel"
     property var controller: null
+    // The selected winding's placement family, so the two placement
+    // fields can label themselves without each binding re-deriving it.
+    property string placementKind: "toroid"
 
     function currentWinding() {
         if (controller === null) {
@@ -53,8 +56,10 @@ Pane {
         currentField.text = numberText(item.acRmsCurrentA)
         phaseField.text = numberText(item.acPhaseDeg)
         dcCurrentField.text = numberText(item.dcCurrentA)
-        startAngleField.text = numberText(item.startAngleDeg)
-        sectorField.text = numberText(item.sectorDeg)
+        windingsPanel.placementKind = item.placementKind === undefined
+            ? "toroid" : item.placementKind
+        startAngleField.text = numberText(item.placementStart)
+        sectorField.text = numberText(item.placementSpan)
         spacingField.text = numberText(item.spacingMm)
         clearanceField.text = numberText(item.clearanceMm)
         terminalIntentField.text = textOf(item.terminalIntent)
@@ -314,6 +319,22 @@ Pane {
                     Accessible.name: qsTr("Conductor")
                     onActivated: windingsPanel.applyChoice("conductor", currentText)
                 }
+                // Empty and invisible once the catalog's wires are reviewed:
+                // the controller computes this from the records, so it is not
+                // a permanent banner nobody can clear.
+                Item { Layout.minimumWidth: 0; Layout.preferredWidth: 0 }
+                Label {
+                    objectName: "conductorReviewNotice"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    color: "#8a5a00"
+                    font.pixelSize: 12
+                    text: windingsPanel.controller !== null
+                        ? windingsPanel.controller.conductorReviewNotice : ""
+                    visible: text !== ""
+                    Accessible.name: text
+                }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Conductor mode") }
                 ComboBox {
                     id: modeCombo
@@ -372,7 +393,16 @@ Pane {
                     Accessible.name: qsTr("Current direction")
                     onActivated: windingsPanel.applyChoice("currentDirection", currentText)
                 }
-                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Start angle (deg)") }
+                // A toroid places turns by angle, an E core along a leg
+                // inside its window. Same two fields, labelled in whichever
+                // family's unit this winding actually uses.
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: windingsPanel.placementKind === "leg"
+                        ? qsTr("Window start (mm)") : qsTr("Start angle (deg)")
+                }
                 TextField {
                     id: startAngleField
                     objectName: "windingStartAngleField"
@@ -380,11 +410,23 @@ Pane {
                     selectByMouse: true
                     activeFocusOnTab: true
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
-                    validator: DoubleValidator { bottom: 0.0; top: 359.999; notation: DoubleValidator.StandardNotation }
-                    Accessible.name: qsTr("Start angle in degrees")
-                    onEditingFinished: windingsPanel.applyField("startAngleDeg", startAngleField)
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        top: windingsPanel.placementKind === "leg" ? 10000.0 : 359.999
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: windingsPanel.placementKind === "leg"
+                        ? qsTr("Window start in millimetres")
+                        : qsTr("Start angle in degrees")
+                    onEditingFinished: windingsPanel.applyField("placementStart", startAngleField)
                 }
-                Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Sector (deg)") }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.WordWrap
+                    text: windingsPanel.placementKind === "leg"
+                        ? qsTr("Window span (mm)") : qsTr("Sector (deg)")
+                }
                 TextField {
                     id: sectorField
                     objectName: "windingSectorField"
@@ -392,9 +434,15 @@ Pane {
                     selectByMouse: true
                     activeFocusOnTab: true
                     inputMethodHints: Qt.ImhFormattedNumbersOnly
-                    validator: DoubleValidator { bottom: 0.0; top: 360.0; notation: DoubleValidator.StandardNotation }
-                    Accessible.name: qsTr("Sector span in degrees")
-                    onEditingFinished: windingsPanel.applyField("sectorDeg", sectorField)
+                    validator: DoubleValidator {
+                        bottom: 0.0
+                        top: windingsPanel.placementKind === "leg" ? 10000.0 : 360.0
+                        notation: DoubleValidator.StandardNotation
+                    }
+                    Accessible.name: windingsPanel.placementKind === "leg"
+                        ? qsTr("Window span in millimetres")
+                        : qsTr("Sector span in degrees")
+                    onEditingFinished: windingsPanel.applyField("placementSpan", sectorField)
                 }
                 Label { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.WordWrap; text: qsTr("Spacing (mm)") }
                 TextField {

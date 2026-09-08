@@ -20,7 +20,6 @@ from inductor_designer.simulation.raw_results import (
 from inductor_designer.simulation.result_expressions import (
     CORE_LOSS_EXPRESSION,
     DEVICE_EXPRESSIONS,
-    ENERGY_EXPRESSION,
     SOLID_LOSS_EXPRESSION,
     matrix_expressions,
     parse_matrix_expression,
@@ -113,7 +112,6 @@ def read_scalar_results(
         matrices=matrices,
         copper_loss_w=_real(values.get(SOLID_LOSS_EXPRESSION)),
         core_loss_w=_real(values.get(CORE_LOSS_EXPRESSION)),
-        magnetic_energy_j=_real(values.get(ENERGY_EXPRESSION)),
         convergence=RawConvergence(passes=passes) if passes else None,
         solver_status=f"Solved setup {setup_name}.",
         diagnostics=tuple(diagnostics),

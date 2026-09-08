@@ -78,16 +78,14 @@ before the next plan freezes assumptions that depend on it.
 - **Milestone 8 is split into three plans**, for the same reason M7 was: its
   approved scope covers three independently testable subsystems, each with its
   own failure modes and its own live evidence.
-  - **M8a implementation is complete and awaiting Fabio Posser's live
-    verification** (only he accepts a milestone); the evidence record is
+  - **M8a is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8a-live-solve-evidence.md](../../development/m8a-live-solve-evidence.md):
     [2026-08-10 M8a solve execution](2026-08-10-m8a-solve-execution.md) —
     solve execution on all three backends, stage progress, cooperative
     cancellation between stages, a durable `running` manifest, failed-stage
     diagnostics, and a `results/solve-log.txt`. It normalizes nothing;
     `RunManifest.results` stays `None` through the whole slice.
-  - **M8b implementation is complete and awaiting Fabio Posser's live
-    verification**; the evidence record is
+  - **M8b is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8b-results-evidence.md](../../development/m8b-results-evidence.md):
     [2026-08-10 M8b scalar results](2026-08-10-m8b-scalar-results.md) — scalar
     normalized results (resistance, inductance, impedance, supported matrices,
@@ -97,8 +95,7 @@ before the next plan freezes assumptions that depend on it.
     2026-08-10: export is automatic per run, results are a Review section
     rather than a sixth step, and a total loss the backend does not report is
     derived from its parts with a visible label and a `derived` provenance.
-  - **M8c implementation is complete and awaiting Fabio Posser's live
-    verification**; the evidence record is
+  - **M8c is accepted by Fabio Posser as of 2026-08-18**; the evidence record is
     [m8c-field-evidence.md](../../development/m8c-field-evidence.md):
     [2026-08-10 M8c field results](2026-08-10-m8c-field-results.md) — field
     results implementing the approved
@@ -111,12 +108,83 @@ before the next plan freezes assumptions that depend on it.
     DC-biased run reports the combined field with a label, with the AC-only
     entries unavailable, because one nonlinear solve cannot separate them.
 
+  M8 acceptance note, 2026-08-18: the recorded live evidence covers **one run
+  per backend** -- Maxwell 3D, Maxwell 2D and FEMM -- in
+  [m8b-results-evidence.md](../../development/m8b-results-evidence.md), together
+  with the enumerated AC Magnetic report vocabulary. That session closed both of
+  M8b's recorded risks, removed `Total_Energy` as a quantity AC Magnetic does not
+  have, and found two defects the risks had not predicted: a dead solver being
+  reported as a `succeeded` run, now refused by AEDT's own profile verdict, and a
+  live FEMM test that had rotted behind its marker. One item stays open and is
+  M8c's, not M8b's: Maxwell 2D asks for the named expression `Mag_J`, which its
+  design does not define, so 2D `current-density` cannot report.
+
   Plan-level decisions taken with Fabio Posser on 2026-07-29: run identifiers are
   UTC timestamps (`YYYYMMDD-HHMMSS`, numeric suffix on collision) so `runs/`
   sorts chronologically; diagnostic codes are lowercase dotted
   `<quantity>.<reason>` strings; a B-H or loss series supports a requested
   temperature only on exact equality, and a mismatch names the recorded
   temperatures so the user can pick one that exists.
+
+- **Milestone 9, Reliability, is accepted by Fabio Posser on 2026-09-01**,
+  after he ran the manual forced-failure walk on the Windows workstation. The
+  plan is
+  [2026-08-18 M9 reliability](2026-08-18-m9-reliability.md)
+  and the evidence record is
+  [m9-reliability-evidence.md](../../development/m9-reliability-evidence.md):
+  autosave and crash recovery through a `%LOCALAPPDATA%`-based recovery
+  snapshot, application-wide undo/redo with a structural `dirty` comparison
+  that re-gates `Generate` on undo, interrupted-run reconciliation that never
+  re-solves in place, an actionable installation/licence/material/file/
+  convergence advice table wired at the single manifest-diagnostic assembly
+  point, and a redacted application log plus a shareable diagnostic bundle.
+  `tests/integration/test_reliability_recovery.py` proves four forced
+  failures end to end against the real catalog, the real material overlay,
+  and the recording exporter fakes: a save that fails, a killed solve, a
+  licence failure whose bundle stays redacted, and a domain-rejected edit
+  undone back to the last valid project. Ruled 2026-08-18: the diagnostic
+  bundle excludes both the Project document and AEDT's own log files. Eight
+  other product questions remain open with a working default each, listed in
+  the evidence record.
+
+  Two defects found after that record was reviewed are fixed on the same branch
+  under [2026-09-01 recovery slot and project lock](2026-09-01-recovery-slot-and-project-lock.md):
+  the recovery snapshot slot was global, so two windows on two different
+  projects silently overwrote each other's unsaved work, and nothing stopped two
+  windows opening one project. Slots are now per document, and an advisory lock
+  refuses the second window while always taking a stale lock rather than
+  blocking a launch.
+
+  The active plan is now Milestone 10, Windows Release. **Decision, 2026-09-01:
+  the MCP server is NOT shipped in this release** -- it stays in the repository,
+  is excluded from the installer, and the release notes say so.
+
+- **Milestone 10, Windows Release, is implementation complete, awaiting
+  Fabio Posser's verification** -- not accepted; only he accepts a
+  milestone. The plan is
+  [2026-09-01-m10-windows-release.md](2026-09-01-m10-windows-release.md) and
+  the evidence record is
+  [m10-release-evidence.md](../../development/m10-release-evidence.md):
+  a resource-resolution seam for the frozen bundle, installed wheel, and
+  source checkout (with an `INDUCTOR_DESIGNER_RESOURCES` support override);
+  AEDT 2025 R2 Commercial and optional-FEMM detection with no PyAEDT import
+  and no desktop session started; a one-folder PyInstaller bundle (296.5 MB
+  after a 45.5% QML/DLL prune) shipping pyaedt's data files; a per-user,
+  unsigned Inno Setup installer that never touches
+  `%LOCALAPPDATA%\InductorDesigner`; and, from this task, `SHA256SUMS.txt`
+  covering the bundle archive and the installer, the filled 0.1.0 release
+  notes, and the clean-machine walk that alone can close the exit criterion.
+  All five open plan questions were ruled by Fabio Posser on 2026-09-01
+  (per-user/no-admin, unsigned, version 0.1.0, no sample project shipped,
+  artifacts published on `smarley2/AnsysPyAEDT` for now and identified by
+  checksum rather than URL alone). An unsigned per-user installer was
+  compiled on 2026-09-01 from a fresh end-to-end build and inspected
+  (`NotSigned` as documented, 15 cores in the shipped catalog index).
+  **Still not verified on any machine**: the installer has never been
+  executed, so the install/launch/uninstall walk has never run, and the
+  bundle's window was confirmed visually only before the size-pruning pass
+  -- the evidence record states all of this in its own section, and the
+  clean-machine walk is what closes it.
 
 The only supported AEDT target is AEDT 2025 R2 Commercial. The Windows
 application is the only product UI. Existing MCP functionality from M4.5

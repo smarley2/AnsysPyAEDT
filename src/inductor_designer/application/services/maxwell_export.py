@@ -45,6 +45,7 @@ from inductor_designer.application.services.run_planning import (
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.simulation.capabilities import CapabilitySnapshot
+from inductor_designer.simulation.failure_advice import advise
 from inductor_designer.simulation.femm_problem import FemmProblem
 from inductor_designer.simulation.maxwell2d_plan import Maxwell2dDesignPlan
 from inductor_designer.simulation.maxwell_plan import Maxwell3dDesignPlan
@@ -486,7 +487,20 @@ def _normalized_results(
             winding.dc_current_a != 0.0 for winding in planned_run.effective_inputs
         ),
         resistance_scale=_resistance_scale(planned_run),
+        percent_error_target=project.simulation_recipe.percent_error,
+        maximum_passes=project.simulation_recipe.maximum_passes,
     )
+
+
+def _with_advice(diagnostics: tuple[str, ...]) -> tuple[str, ...]:
+    """Each raw diagnostic, then its advice line. One assembly point, so every
+    backend and every failure path gets the same treatment."""
+    advised: list[str] = []
+    for diagnostic in diagnostics:
+        advice = advise(diagnostic)
+        advised.append(diagnostic)
+        advised.append(f"{advice.code}: {advice.action}")
+    return tuple(advised)
 
 
 def _build_manifest(
@@ -531,7 +545,7 @@ def _build_manifest(
         warnings=planned_run.warnings,
         stages=stages,
         status=status,
-        diagnostics=diagnostics,
+        diagnostics=_with_advice(diagnostics),
         artifacts=artifacts,
         results=results,
     )

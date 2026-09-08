@@ -17,11 +17,33 @@ from inductor_designer.domain.project import (
     CoreSelection,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.ecore.body import FinishedECore
+from inductor_designer.geometry.ecore.reluctance import referred_lengths
+from inductor_designer.geometry.toroid.core_solid import CoreGeometryError
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
 
+MANUAL_ECORE_NETWORK_NOTE = (
+    "Manual E-core reluctance is summed section by section from the entered "
+    "dimensions -- centre leg, both yokes, and the two outer legs in parallel "
+    "-- and reduced to an iron length and a gap length referred to the "
+    "centre-leg area A_e = F * C. Flux comes from that network rather than "
+    "from ampere-turns over a path length, because with a gap most of the "
+    "ampere-turns drop across the gap. Fringing is excluded, which understates "
+    "reluctance and so OVERSTATES inductance, by more as the gap grows; a "
+    "solved run is what shows the difference. Manufacturer effective values "
+    "and an inductance factor are not available for a Manual core."
+)
+MANUAL_ECORE_UNGAPPED_NOTE = (
+    "Manual E-core reluctance is summed section by section from the entered "
+    "dimensions -- centre leg, both yokes, and the two outer legs in parallel "
+    "-- referred to the centre-leg area A_e = F * C. The pair is ungapped, so "
+    "no gap term applies. Manufacturer effective values and an inductance "
+    "factor are not available for a Manual core."
+)
 MANUAL_CORE_PATH_NOTE = (
     "Manual-core magnetic path length and volume are computed from the entered "
     "toroid dimensions as l_e = pi * (outer diameter + inner diameter) / 2, "
@@ -45,6 +67,45 @@ def core_magnetic_properties(
     """The path length and volume the estimator needs, and their provenance."""
     if core is None:
         return None
+    if isinstance(core, ManualECoreSelection):
+        # The reluctance network, reduced to the two lengths the estimate
+        # needs (geometry/ecore/reluctance.py). Both are referred to the
+        # centre-leg area, which is also the area flux density is quoted
+        # against, by convention.
+        try:
+            body = FinishedECore(
+                centre_leg_width_m=core.centre_leg_width_m,
+                depth_m=core.depth_m,
+                window_width_m=core.window_width_m,
+                window_height_m=core.window_height_m,
+                outer_leg_width_m=core.outer_leg_width_m,
+                yoke_thickness_m=core.yoke_thickness_m,
+                gaps=core.gaps_m,
+                gap_spacings_m=core.gap_spacings_m,
+                outer_legs_gapped=core.outer_legs_gapped,
+            )
+        except CoreGeometryError:
+            # The UI validates on entry, so this is a hand-edited document:
+            # dimensions the body refuses (a gap stack longer than the leg, a
+            # spacing count that does not separate the gaps). The estimator
+            # reports missing core properties rather than raising through the
+            # Preliminary screen -- `build_preliminary_request` already treats
+            # None as "geometry refused this project" and says so per value.
+            return None
+        lengths = referred_lengths(body)
+        return CoreMagneticProperties(
+            path_length_m=lengths.iron_m,
+            volume_m3=lengths.iron_volume_m3,
+            effective_area_m2=lengths.effective_area_m2,
+            gap_length_m=lengths.gap_m,
+            # A manual core has no manufacturer inductance factor, so the A_L
+            # check has no reference and reports itself unavailable -- the
+            # same as a manual toroid.
+            al_value_nh=None,
+            notes=(MANUAL_ECORE_NETWORK_NOTE,)
+            if lengths.gap_m > 0.0
+            else (MANUAL_ECORE_UNGAPPED_NOTE,),
+        )
     if isinstance(core, ManualCoreSelection):
         path_length_m = math.pi * (core.outer_diameter_m + core.inner_diameter_m) / 2.0
         effective_area_m2 = (

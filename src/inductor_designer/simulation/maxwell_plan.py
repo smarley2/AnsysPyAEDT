@@ -10,7 +10,7 @@ from inductor_designer.domain.winding import (
 )
 from inductor_designer.geometry.naming import sanitize_identifier
 from inductor_designer.geometry.primitives import PathSegment
-from inductor_designer.geometry.terminals import TerminalDisk
+from inductor_designer.geometry.toroid.terminals import TerminalDisk
 from inductor_designer.materials.fitting import MaterialFitError, mean_relative_permeability
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (

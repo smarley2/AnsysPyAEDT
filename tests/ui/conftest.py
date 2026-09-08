@@ -1,16 +1,46 @@
 from __future__ import annotations
 
 import gc
+import logging
 import time
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import pytest
 
+from inductor_designer.adapters.system.app_logging import LOGGER_NAME
+
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from PySide6.QtGui import QGuiApplication
 
     from inductor_designer.ui.generation_controller import GenerationController
+
+
+# `main()` calls `configure_application_logging(log_directory(), ...)`, and
+# `log_directory()` reads LOCALAPPDATA -- without this, running the UI suite
+# creates and writes to the developer's real
+# `%LOCALAPPDATA%\InductorDesigner\logs\` directory, which is product-visible
+# state pytest must not leave behind.
+@pytest.fixture(autouse=True)
+def redirect_local_appdata_to_a_temp_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+
+# `configure_application_logging` sets `propagate = False` on this named
+# logger so its (redacted) lines never double up into the root logger in
+# production. Any test that runs `main()` (e.g. test_main_wiring.py) leaves
+# that set for the rest of the process, which silently breaks every later
+# test's plain `caplog.at_level(logger=LOGGER_NAME)` -- caplog's handler
+# lives on the root logger, and records that don't propagate never reach it.
+# Reset before each test instead of every affected test attaching
+# `caplog.handler` to this logger directly.
+@pytest.fixture(autouse=True)
+def reset_recovery_logger_propagation() -> None:
+    logging.getLogger(LOGGER_NAME).propagate = True
 
 
 # ponytail: the QML tests pin their engines in module-level lists, because a

@@ -7,6 +7,7 @@ import pytest
 
 from inductor_designer.adapters.persistence.project_repository import ProjectRepository
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.application.services.maxwell_export import _with_advice
 from tests.fakes.femm_solver import RecordingFemmSolver
 from tests.fakes.maxwell2d_exporter import RecordingMaxwell2dExporter
 from tests.unit.application.test_maxwell_export import project_for_runs
@@ -67,7 +68,9 @@ def test_main_writes_failed_run_manifest_when_exporter_raises(
     payload = json.loads(evidence.read_text(encoding="utf-8"))
     assert payload["backend"] == "maxwell-2d"
     assert payload["status"] == "failed"
-    assert payload["diagnostics"] == ["RuntimeError: CLI Maxwell 2D adapter failed"]
+    assert payload["diagnostics"] == list(
+        _with_advice(("RuntimeError: CLI Maxwell 2D adapter failed",))
+    )
     assert payload["artifacts"] == []
     run_directory = next((tmp_path / "runs").iterdir())
     assert payload == json.loads(

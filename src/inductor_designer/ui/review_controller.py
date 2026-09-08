@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
+from inductor_designer.application.services.run_recovery import (
+    UnfinishedRun,
+    find_unfinished_runs,
+)
 from inductor_designer.application.services.simulation_summary import (
     simulation_summary,
 )
@@ -70,7 +74,18 @@ class ReviewController(QObject):
         core = design.core
         rows: list[dict[str, str]] = []
         if isinstance(core, CatalogCoreSelection):
-            rows.append({"label": "Core", "text": f"Catalog {core.part_number}"})
+            # The review status belongs on this page above all: a `draft`
+            # record is a transcription nobody has checked against the cited
+            # source page, and its numbers look exactly like a reviewed one's.
+            rows.append(
+                {
+                    "label": "Core",
+                    "text": (
+                        f"Catalog {core.part_number} "
+                        f"({core.snapshot.review_status.value} catalog data)"
+                    ),
+                }
+            )
             rows.append(
                 {
                     "label": "Core material identity",
@@ -143,11 +158,18 @@ class ReviewController(QObject):
                     {"label": winding.winding_id, "text": "no excitation recorded"}
                 )
                 continue
+            conductor = self._catalog.get_conductor(winding.conductor_name)
+            provenance = (
+                f" ({conductor.review_status.value} conductor data)"
+                if conductor is not None
+                else " (conductor not in the catalog)"
+            )
             rows.append(
                 {
                     "label": f"{winding.winding_id} ({winding.label})",
                     "text": (
-                        f"{winding.turns} turns of {winding.conductor_name}; "
+                        f"{winding.turns} turns of {winding.conductor_name}"
+                        f"{provenance}; "
                         f"AC {excitation.ac_rms_current_a:g} A RMS at "
                         f"{excitation.ac_phase_deg:g} deg; DC "
                         f"{excitation.dc_current_a:g} A; "
@@ -207,7 +229,31 @@ class ReviewController(QObject):
                 {"label": "Solver notice", "text": warning}
                 for warning in manifest.warnings
             )
+        for run in self._interrupted_runs():
+            rows.append(
+                {
+                    "label": "Interrupted run",
+                    "text": (
+                        f"{run.run_id} ({run.backend}): no result. Start a new "
+                        "run; this directory cannot be solved again."
+                    ),
+                }
+            )
         return rows
+
+    def _interrupted_runs(self) -> tuple[UnfinishedRun, ...]:
+        # `_write_running_marker` (application/services/project_run.py) writes
+        # the identical "status": "running" marker for a run this process is
+        # executing right now and for one an earlier process abandoned mid-run
+        # -- the manifest alone cannot tell the two apart. `busy` is this
+        # process's own record of which case it is, so a run in flight is
+        # never listed here, no matter what its manifest currently says.
+        if self._generation.busy:
+            return ()
+        document_path = self._session.document_path
+        if document_path is None:
+            return ()
+        return find_unfinished_runs(document_path)
 
     def _get_sections(self) -> list[dict[str, object]]:
         results = self._generation.last_result_set
@@ -265,6 +311,18 @@ class ReviewController(QObject):
 
     canOpenRunFolder = Property(bool, _get_can_open_run_folder, notify=reviewChanged)
 
+    def _get_interrupted_runs(self) -> list[dict[str, str]]:
+        return [
+            {
+                "runId": run.run_id,
+                "backend": run.backend,
+                "startedUtc": run.started_utc or "",
+            }
+            for run in self._interrupted_runs()
+        ]
+
+    interruptedRuns = Property(list, _get_interrupted_runs, notify=reviewChanged)
+
     def _get_message(self) -> str:
         return self._message
 
@@ -303,3 +361,10 @@ class ReviewController(QObject):
     @Slot(result=bool)
     def openRunFolder(self) -> bool:
         return self._open(self._generation.last_run_directory, "run folder")
+
+    @Slot(str, result=bool)
+    def openRunFolderById(self, run_id: str) -> bool:
+        for run in self._interrupted_runs():
+            if run.run_id == run_id:
+                return self._open(run.directory, "run folder")
+        return False

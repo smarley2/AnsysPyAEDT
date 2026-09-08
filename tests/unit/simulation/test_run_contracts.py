@@ -84,6 +84,7 @@ def test_run_contract_enum_values_are_stable() -> None:
         "SUCCEEDED": "succeeded",
         "FAILED": "failed",
         "CANCELLED": "cancelled",
+        "INTERRUPTED": "interrupted",
     }
     assert {item.name: item.value for item in StageStatus} == {
         "SUCCEEDED": "succeeded",

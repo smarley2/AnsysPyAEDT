@@ -18,9 +18,13 @@ from inductor_designer.application.services.geometry_model import (  # noqa: E40
     build_geometry_model,
 )
 from inductor_designer.domain.project import WindingOperatingPoint  # noqa: E402
-from inductor_designer.domain.winding import CurrentDirection, WindingDirection  # noqa: E402
-from inductor_designer.geometry.packing import start_azimuth_deg  # noqa: E402
-from inductor_designer.geometry.tessellation import start_bead  # noqa: E402
+from inductor_designer.domain.winding import (  # noqa: E402
+    CurrentDirection,
+    ToroidPlacement,
+    WindingDirection,
+)
+from inductor_designer.geometry.toroid.packing import start_azimuth_deg  # noqa: E402
+from inductor_designer.geometry.toroid.tessellation import start_bead  # noqa: E402
 from inductor_designer.simulation.maxwell_plan import Polarity  # noqa: E402
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan  # noqa: E402
 from inductor_designer.simulation.run_contracts import effective_winding_inputs  # noqa: E402
@@ -47,8 +51,12 @@ def test_every_planar_conductor_becomes_one_circle_in_millimetres() -> None:
         for conductor in winding.conductors
     ]
     assert len(drawing.circles) == len(planar_conductors)
-    assert drawing.r_inner_mm == model.planar.r_inner_m * 1000.0
-    assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
+    # The annulus, as the two shapes the renderer paints in order.
+    outer, bore = drawing.outline
+    assert outer.radius_mm == model.planar.r_outer_m * 1000.0
+    assert outer.cutout is False
+    assert bore.radius_mm == model.planar.r_inner_m * 1000.0
+    assert bore.cutout is True
     assert drawing.depth_mm == model.planar.depth_m * 1000.0
 
     by_position = {
@@ -86,8 +94,9 @@ def test_the_two_legs_of_a_turn_carry_opposite_glyphs() -> None:
 
     drawing = build_cut_plane_drawing(model, project)
 
-    inner = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) < drawing.r_inner_mm]
-    outer = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) > drawing.r_outer_mm]
+    r_outer_mm, r_inner_mm = (shape.radius_mm for shape in drawing.outline)
+    inner = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) < r_inner_mm]
+    outer = [c for c in drawing.circles if math.hypot(c.x_mm, c.y_mm) > r_outer_mm]
     assert inner and outer
     assert len({c.into_plane for c in inner}) == 1
     assert len({c.into_plane for c in outer}) == 1
@@ -109,8 +118,14 @@ def test_winding_colour_matches_the_three_d_preview_order() -> None:
         design=replace(
             make_project().design,
             windings=(
-                make_winding(winding_id="w2", start_angle_deg=0.0, sector_deg=150.0),
-                make_winding(winding_id="w1", start_angle_deg=180.0, sector_deg=150.0),
+                make_winding(winding_id="w2", placement=ToroidPlacement(
+            start_angle_deg=0.0,
+            sector_deg=150.0,
+        )),
+                make_winding(winding_id="w1", placement=ToroidPlacement(
+            start_angle_deg=180.0,
+            sector_deg=150.0,
+        )),
             ),
         ),
         operating_point=make_operating_point(
@@ -234,7 +249,7 @@ def test_extent_covers_the_outermost_conductor_edge() -> None:
         math.hypot(c.x_mm, c.y_mm) + c.radius_mm for c in drawing.circles
     )
     assert drawing.extent_mm >= furthest
-    assert drawing.extent_mm >= drawing.r_outer_mm
+    assert drawing.extent_mm >= drawing.outline[0].radius_mm
 
 
 def test_a_design_without_conductors_still_draws_the_annulus() -> None:
@@ -248,8 +263,8 @@ def test_a_design_without_conductors_still_draws_the_annulus() -> None:
 
     assert drawing.circles == ()
     assert drawing.starts == ()
-    assert drawing.r_outer_mm == model.planar.r_outer_m * 1000.0
-    assert drawing.extent_mm == drawing.r_outer_mm
+    assert drawing.outline[0].radius_mm == model.planar.r_outer_m * 1000.0
+    assert drawing.extent_mm == drawing.outline[0].radius_mm
     assert "no conductors" in drawing.note
 
 

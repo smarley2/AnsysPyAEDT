@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
 import pytest
 
@@ -8,11 +8,12 @@ from inductor_designer.domain.project import MeshIntent, RequestedOutput, Simula
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding, WindingSpec, pack_winding
 from inductor_designer.materials.records import MaterialRecord
 from inductor_designer.simulation.capabilities import DcBiasDecision, DcBiasStrategy
 from inductor_designer.simulation.maxwell_plan import (
@@ -48,14 +49,22 @@ def make_definition(**overrides: object) -> WindingDefinition:
         "turns": 4,
         "conductor_name": "AWG 18",
         "mode": ConductorMode.SOLID,
-        "start_angle_deg": 0.0,
-        "sector_deg": 150.0,
+        "placement": ToroidPlacement(start_angle_deg=0.0, sector_deg=150.0),
         "min_spacing_m": 0.0002,
         "min_clearance_m": 0.001,
         "winding_direction": WindingDirection.COUNTERCLOCKWISE,
         "terminal_intent": "",
     }
     values.update(overrides)
+    angles = {
+        name: values.pop(name)
+        for name in ("start_angle_deg", "sector_deg")
+        if name in values
+    }
+    if angles:
+        base = values["placement"]
+        assert isinstance(base, ToroidPlacement)
+        values["placement"] = replace(base, **angles)  # type: ignore[arg-type]
     return WindingDefinition(**values)  # type: ignore[arg-type]
 
 
@@ -93,8 +102,8 @@ def pack(definition: WindingDefinition) -> PackedWinding:
             winding_id=definition.winding_id,
             turns=definition.turns,
             insulated_diameter_m=0.0011,
-            start_deg=definition.start_angle_deg,
-            sector_deg=definition.sector_deg,
+            start_deg=definition.placement.start_angle_deg,
+            sector_deg=definition.placement.sector_deg,
             min_spacing_m=definition.min_spacing_m,
             min_clearance_m=definition.min_clearance_m,
         ),

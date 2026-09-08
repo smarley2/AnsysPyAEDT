@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,44 @@ def build() -> tuple[RecordingOpener, GenerationController, ReviewController]:
         opener,
     )
     return opener, generation, controller
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewControllerEnvironment:
+    controller: ReviewController
+    document_path: Path
+    opener: RecordingOpener
+    generation: GenerationController
+
+
+def review_controller_environment(
+    tmp_path: Path, runner: Callable[[object], object] | None = None
+) -> ReviewControllerEnvironment:
+    """The same wiring as `build()`, but rooted at a real `tmp_path` document.
+
+    `find_unfinished_runs` resolves run directories relative to the project
+    document's parent, so tests that create `runs/<id>-<backend>/` directories
+    (interrupted-run recovery) need a document path that actually lives under
+    `tmp_path`, unlike `build()`'s unrooted relative path.
+
+    `runner` defaults to a stub that finishes instantly; pass a blocking one
+    (e.g. waiting on a `threading.Event`) to hold `generation.busy` True for a
+    test that needs to observe the controller mid-run.
+    """
+    QGuiApplication.instance() or QGuiApplication([])
+    document_path = tmp_path / "boost.inductor.json"
+    document_path.write_text("{}", encoding="utf-8")
+    session = ProjectSession(make_project_with_material(), document_path)
+    generation = GenerationController(runner or (lambda _request: ("done",)))
+    opener = RecordingOpener()
+    controller = ReviewController(
+        session,
+        PreliminaryController(session, CATALOG),
+        generation,
+        CATALOG,
+        opener,
+    )
+    return ReviewControllerEnvironment(controller, document_path, opener, generation)
 
 
 def test_review_shows_the_paired_core_material_operating_point_and_estimates() -> None:

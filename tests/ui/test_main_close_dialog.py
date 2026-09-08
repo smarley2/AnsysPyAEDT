@@ -200,3 +200,37 @@ def test_a_dirty_material_draft_still_takes_precedence_over_the_project_guard() 
         )
         is True
     )
+
+
+def test_discard_also_drops_the_recovery_snapshot() -> None:
+    """Discarding the edits must discard their recovery copy.
+
+    Autosave cleared its snapshot only on save, and crash recovery reads "a
+    snapshot exists" as "the process died". So pressing Discard and then quitting
+    produced, on the next launch, an offer to recover the very edits the user had
+    just chosen to abandon -- which trains them to dismiss the prompt that does
+    matter. Neither task's own tests spanned the pair.
+    """
+    app = QGuiApplication.instance() or QGuiApplication([])
+    cleared: list[int] = []
+    session = ProjectSession(
+        make_project(),
+        Path("boost.inductor.json"),
+        lambda _: None,
+        recovery_cleanup=lambda _path: cleared.append(1),
+    )
+    controller = GuidedStudioController(session, CATALOG)
+    assert controller.setWindingField("w1", "turns", "24") is True
+    engine = create_engine(
+        guided_studio_controller=controller, project_session=session
+    )
+    root = engine.rootObjects()[0]
+    _KEEPALIVE.append((app, engine, *engine.rootObjects(), controller, session))
+    app.processEvents()
+
+    root.close()
+    app.processEvents()
+    _click(root.findChild(QObject, "unsavedProjectDiscardButton"))
+    app.processEvents()
+
+    assert cleared == [1]

@@ -8,8 +8,10 @@ application services; new MCP work is outside the active MVP roadmap.
 Milestone 6 was accepted on 2026-07-28. This document distinguishes its
 implemented contracts from later approved targets:
 
-- Project schema v5 is the only supported Project document schema. It is a
-  deliberate clean break with no legacy migration.
+- Project schema v6 is the only supported Project document schema. It is a
+  deliberate clean break with no legacy migration, as v3, v4 and v5 each were
+  before it; v6 carries winding placement per core family and the E-core
+  selection (ADR 0009).
 - The implemented Project document is backend-independent and contains one
   Design, one Operating Point, and one Simulation Recipe.
 - Run Requests, Run Manifests, effective winding inputs, and immutable
@@ -44,9 +46,11 @@ code implement or adapt those interfaces.
 ## Implemented modules
 
 - `domain`: Units, core selections, conductors, winding definitions,
-  the v5 Project aggregate, Operating Point excitations, Simulation Recipe,
+  the v6 Project aggregate, Operating Point excitations, Simulation Recipe,
   exact material selection, and validation rules.
-- `geometry`: Solver-independent toroid construction, winding packing,
+- `geometry`: One independent component per core family (`geometry/toroid/`,
+  `geometry/ecore/`), neither knowing the other's coordinates (ADR 0009).
+  Solver-independent core construction, winding packing,
   collision checks, deterministic geometry, tessellation inputs, and the 2D
   equivalent.
 - `materials`: Material identities, immutable records, provenance, curve data,
@@ -63,7 +67,7 @@ code implement or adapt those interfaces.
 - `adapters/femm`: FEMM 2D translation, execution, and result extraction.
 - `adapters/materials`: CSV/XLSX import, workbook export, and filesystem
   material-overlay persistence.
-- `adapters/persistence`: Deterministic v5 Project JSON and v5-only schema
+- `adapters/persistence`: Deterministic v6 Project JSON and v6-only schema
   access.
 - `adapters/pyaedt`: AEDT 2025 R2 Commercial Maxwell 2D/3D operations and
   staged exporters.
@@ -74,7 +78,7 @@ code implement or adapt those interfaces.
 
 ## Implemented M6 contracts and approved M7 flow
 
-The implemented v5 Project document contains:
+The implemented v6 Project document contains:
 
 1. **Design** — core, dimensions, windings, conductors, materials, and geometry
    choices.

@@ -16,12 +16,20 @@ from inductor_designer.application.services.catalog_revisions import select_core
 from inductor_designer.application.services.material_selection import (
     pin_material_revision,
 )
-from inductor_designer.domain.catalog_records import CoreFamily
+from inductor_designer.domain.catalog_records import CoreFamily, ReviewStatus
 from inductor_designer.domain.project import (
     CatalogCoreSelection,
     InductorProject,
     ManualCoreSelection,
+    ManualECoreSelection,
 )
+from inductor_designer.domain.winding import (
+    LegPlacement,
+    ToroidPlacement,
+    WindingDefinition,
+    WindingLeg,
+)
+from inductor_designer.geometry.ecore.body import FinishedECore
 from inductor_designer.materials.identity import MaterialRef
 from inductor_designer.materials.records import (
     MaterialRecord,
@@ -38,6 +46,20 @@ class ClearedSelection(str, Enum):
     MATERIAL = "material"
 
 
+class CoreOrigin(str, Enum):
+    """Where an offered core came from.
+
+    A shipped core was compiled from this repository's reviewed catalog
+    source; an imported one is a datasheet transcription from the user's own
+    overlay. Both are real choices, and the screen has to say which is which
+    -- an imported core is always `draft`, and a `draft` that looks like a
+    reviewed part is a number nobody checked presented as one that was.
+    """
+
+    SHIPPED = "shipped"
+    IMPORTED = "imported"
+
+
 @dataclass(frozen=True, slots=True)
 class CoreOption:
     part_number: str
@@ -47,6 +69,8 @@ class CoreOption:
     outer_diameter_m: float
     inner_diameter_m: float
     height_m: float
+    review_status: ReviewStatus
+    origin: CoreOrigin
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +89,64 @@ class SelectionOutcome:
     message: str
 
 
+def _reshare(
+    windings: tuple[WindingDefinition, ...], leg_length_m: float | None
+) -> tuple[WindingDefinition, ...]:
+    """Re-place every winding in the coordinates its new core family uses.
+
+    Changing family changes what "where" means: a toroid places turns by angle
+    about its axis, an E core along a leg inside a window, and neither set of
+    numbers survives the switch. Leaving them alone produced a design no
+    geometry model would accept and no screen could draw, with no way back
+    except editing the placements one at a time.
+
+    The share-out is the same rule in both directions: each winding takes an
+    equal, non-overlapping slice in its existing order -- the sectors a toroid
+    would have shared, or the spans of the leg window. Deliberately even
+    rather than clever: it is a starting point the user then edits, and any
+    weighting would be a guess about intent.
+
+    `leg_length_m` None means the target is a toroid.
+    """
+    count = len(windings)
+    if count == 0:
+        return windings
+    if leg_length_m is None:
+        sector = 360.0 / count
+        return tuple(
+            replace(
+                winding,
+                placement=ToroidPlacement(
+                    start_angle_deg=index * sector, sector_deg=sector
+                ),
+            )
+            for index, winding in enumerate(windings)
+        )
+    span = leg_length_m / count
+    return tuple(
+        replace(
+            winding,
+            placement=LegPlacement(
+                leg=WindingLeg.CENTRE,
+                window_start_m=index * span,
+                window_span_m=span,
+            ),
+        )
+        for index, winding in enumerate(windings)
+    )
+
+
+def _reshared_note(windings: tuple[WindingDefinition, ...], changed: bool) -> str:
+    if not changed:
+        return ""
+    if len(windings) == 1:
+        return " The winding was re-placed for the new core shape."
+    return (
+        f" The {len(windings)} windings were re-placed for the new core "
+        "shape, sharing it equally; adjust them as you need."
+    )
+
+
 def required_material_ref(project: InductorProject) -> MaterialRef | None:
     """The material identity a catalog core demands; None for Manual or no core."""
     core = project.design.core
@@ -72,8 +154,18 @@ def required_material_ref(project: InductorProject) -> MaterialRef | None:
 
 
 def core_options(
-    catalog: CatalogRepository, material_ref: MaterialRef | None
+    catalog: CatalogRepository,
+    material_ref: MaterialRef | None,
+    overlay_part_numbers: tuple[str, ...] = (),
 ) -> tuple[CoreOption, ...]:
+    """Every core the project may choose from, with its provenance.
+
+    `overlay_part_numbers` names the cores that came from the user's own
+    overlay. Passed in rather than read off the repository, so this service
+    keeps knowing nothing about which adapter is behind the port -- the
+    dependency direction the architecture check enforces.
+    """
+    imported = frozenset(overlay_part_numbers)
     return tuple(
         CoreOption(
             part_number=record.part_number,
@@ -83,6 +175,12 @@ def core_options(
             outer_diameter_m=record.outer_diameter.nominal_m,
             inner_diameter_m=record.inner_diameter.nominal_m,
             height_m=record.height.nominal_m,
+            review_status=record.review_status,
+            origin=(
+                CoreOrigin.IMPORTED
+                if record.part_number in imported
+                else CoreOrigin.SHIPPED
+            ),
         )
         for record in catalog.list_cores()
         if material_ref is None or record.material == material_ref
@@ -160,10 +258,24 @@ def apply_catalog_core(
                 "Select a compatible material revision."
             ),
         )
+    windings = selected.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, ToroidPlacement) for winding in windings
+    )
+    if needs_reshare:
+        # Every catalog core is a toroid until 11c adds E-core records, so
+        # switching from a manual E core has to bring the windings back.
+        selected = replace(
+            selected,
+            design=replace(selected.design, windings=_reshare(windings, None)),
+        )
     return SelectionOutcome(
         project=selected,
         cleared=None,
-        message=f"Selected catalog core {part_number}.",
+        message=(
+            f"Selected catalog core {part_number}."
+            f"{_reshared_note(selected.design.windings, needs_reshare)}"
+        ),
     )
 
 
@@ -192,17 +304,108 @@ def apply_manual_core(
         if project.design.manual_material_compatibility_acknowledged
         else ""
     )
+    windings = project.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, ToroidPlacement) for winding in windings
+    )
+    reshared = _reshare(windings, None) if needs_reshare else windings
     return SelectionOutcome(
         project=replace(
             project,
             design=replace(
                 project.design,
                 core=core,
+                windings=reshared,
                 manual_material_compatibility_acknowledged=False,
             ),
         ),
         cleared=None,
-        message=f"Applied manual core dimensions.{reconfirm}",
+        message=(
+            f"Applied manual core dimensions."
+            f"{_reshared_note(reshared, needs_reshare)}{reconfirm}"
+        ),
+    )
+
+
+def apply_manual_ecore(
+    project: InductorProject,
+    *,
+    centre_leg_width_m: float,
+    depth_m: float,
+    window_width_m: float,
+    window_height_m: float,
+    outer_leg_width_m: float,
+    yoke_thickness_m: float,
+    gaps_m: tuple[float, ...],
+    gap_spacings_m: tuple[float, ...],
+    outer_legs_gapped: bool,
+) -> SelectionOutcome:
+    """Select a manual gapped E core, on the same terms as a manual toroid.
+
+    It carries no material identity, so nothing is ever cleared, and new
+    dimensions are new geometry, so a compatibility attestation the user made
+    about the previous shape is dropped -- both for the reasons
+    `apply_manual_core` documents.
+    """
+    core = ManualECoreSelection(
+        centre_leg_width_m=centre_leg_width_m,
+        depth_m=depth_m,
+        window_width_m=window_width_m,
+        window_height_m=window_height_m,
+        outer_leg_width_m=outer_leg_width_m,
+        yoke_thickness_m=yoke_thickness_m,
+        gaps_m=gaps_m,
+        gap_spacings_m=gap_spacings_m,
+        outer_legs_gapped=outer_legs_gapped,
+    )
+    # The body's own rules -- gaps that fit the leg, N-1 segments for N gaps --
+    # live in `FinishedECore` and are checked here, at the point of entry, so
+    # a project never holds a stack nobody could grind.
+    FinishedECore(
+        centre_leg_width_m=centre_leg_width_m,
+        depth_m=depth_m,
+        window_width_m=window_width_m,
+        window_height_m=window_height_m,
+        outer_leg_width_m=outer_leg_width_m,
+        yoke_thickness_m=yoke_thickness_m,
+        gaps=gaps_m,
+        gap_spacings_m=gap_spacings_m,
+        outer_legs_gapped=outer_legs_gapped,
+    )
+    reconfirm = (
+        " Confirm material compatibility again for the new dimensions."
+        if project.design.manual_material_compatibility_acknowledged
+        else ""
+    )
+    gap_note = (
+        f" {len(gaps_m)} gap(s), {sum(gaps_m) * 1000.0:.2f} mm total."
+        if gaps_m
+        else " Ungapped."
+    )
+    # Windings placed by angle mean nothing on a leg, so they are re-placed
+    # rather than left for the geometry model to refuse.
+    windings = project.design.windings
+    needs_reshare = any(
+        not isinstance(winding.placement, LegPlacement) for winding in windings
+    )
+    reshared = (
+        _reshare(windings, 2.0 * window_height_m) if needs_reshare else windings
+    )
+    return SelectionOutcome(
+        project=replace(
+            project,
+            design=replace(
+                project.design,
+                core=core,
+                windings=reshared,
+                manual_material_compatibility_acknowledged=False,
+            ),
+        ),
+        cleared=None,
+        message=(
+            f"Applied manual E-core dimensions.{gap_note}"
+            f"{_reshared_note(reshared, needs_reshare)}{reconfirm}"
+        ),
     )
 
 

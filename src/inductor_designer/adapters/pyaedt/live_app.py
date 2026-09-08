@@ -139,6 +139,24 @@ class LiveAppExtraction:
         passes, error_percent = rows[-1]
         return f"{passes} passes, {error_percent:.4g}% error"
 
+    def solve_status(self, name: str) -> str:
+        """AEDT's own verdict on the finished solve, or "" when it states none.
+
+        `Normal Completion` or `Engine Detected Error`, read from the setup
+        profile. `Setup.is_solved` is True in both cases -- it was True for the
+        run that lost its solver after one pass -- so it cannot be used for this.
+        """
+        setup = next((item for item in self._app.setups if item.name == name), None)
+        if setup is None:
+            return ""
+        try:
+            profile = setup.get_profile()
+        except Exception:  # noqa: BLE001 - a missing profile states no verdict
+            return ""
+        entry = (profile or {}).get(name)
+        status = getattr(entry, "status", None)
+        return str(status) if status else ""
+
     def convergence_rows(self, name: str) -> tuple[tuple[int, float], ...]:
         """`(pass number, error percent)` per adaptive pass, via AEDT's export.
 
@@ -253,3 +271,20 @@ class LiveAppExtraction:
         if angle:
             self._app.modeler.rotate(created, axis="Z", angle=angle)
         return str(created)
+
+    def desktop_messages(self) -> tuple[str, ...]:
+        """AEDT's own message channel for this design, oldest first.
+
+        The only place a solver's reason for dying is stated: on 2026-08-18 a
+        run was recorded `succeeded` while this channel held "Unable to
+        create child process: 3dedy". Session-scoped, so it must be read
+        before the desktop is released.
+
+        A failure here raises rather than reading as an empty channel: the
+        caller's handler exists to log the reason, and swallowing it here would
+        make an unreachable AEDT indistinguishable from a quiet one.
+        """
+        messages = self._app.odesktop.GetMessages(
+            self._app.project_name, self._app.design_name, 0
+        )
+        return tuple(str(line) for line in messages or ())

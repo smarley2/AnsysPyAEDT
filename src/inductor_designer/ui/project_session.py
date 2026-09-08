@@ -8,13 +8,48 @@ storage is the existing lock-protected `CurrentProjectProvider`.
 
 from __future__ import annotations
 
+import contextlib
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QTimer, QUrl, Signal, Slot
 
+from inductor_designer.adapters.system.app_logging import LOGGER_NAME
+from inductor_designer.adapters.system.project_lock import (
+    LockHolder,
+    LockOutcome,
+    ProjectLock,
+)
+from inductor_designer.application.services.new_project import new_project
+from inductor_designer.application.services.run_recovery import (
+    reconcile_unfinished_runs,
+)
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.ui.generation_controller import CurrentProjectProvider
+
+_logger = logging.getLogger(LOGGER_NAME)
+
+
+def _lock_refusal_message(path: Path, holder: LockHolder) -> str:
+    if holder.same_host:
+        return (
+            f"Unable to open {path.name}: already open in another window "
+            f"(process {holder.pid}). Close it there first."
+        )
+    return (
+        f"Unable to open {path.name}: already open on host {holder.host} "
+        f"(process {holder.pid}). It cannot be checked from here -- close "
+        "it on that machine."
+    )
+
+# Deep enough to cover a working session's edits, bounded so a long session
+# cannot grow the process without limit. Each entry is one immutable project.
+UNDO_DEPTH = 50
+
+# Long enough that dragging a numeric field does not write a file per frame,
+# short enough that a crash loses at most this much work.
+AUTOSAVE_DEBOUNCE_MS = 2000
 
 
 class ProjectSession(QObject):
@@ -22,6 +57,7 @@ class ProjectSession(QObject):
     dirtyChanged = Signal()
     statusMessageChanged = Signal()
     documentPathChanged = Signal()
+    undoStackChanged = Signal()
 
     def __init__(
         self,
@@ -29,6 +65,11 @@ class ProjectSession(QObject):
         document_path: Path | None = None,
         save_callback: Callable[[InductorProject], None] | None = None,
         open_callback: Callable[[Path], InductorProject] | None = None,
+        autosave_callback: Callable[[InductorProject, Path | None], None] | None = None,
+        recovery_cleanup: Callable[[Path | None], None] | None = None,
+        is_run_busy: Callable[[], bool] | None = None,
+        debounce_ms: int = AUTOSAVE_DEBOUNCE_MS,
+        lock: ProjectLock | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -36,8 +77,39 @@ class ProjectSession(QObject):
         self._document_path = document_path
         self._save_callback = save_callback
         self._open_callback = open_callback
+        self._is_run_busy = is_run_busy
+        # The lock guarding `self._document_path`, already acquired by
+        # whoever constructed this session (`main.py`, for the document
+        # given on launch). `openProject` swaps it for the newly opened
+        # document's lock; nothing else in this class touches it.
+        self._lock = lock
         self._dirty = False
         self._status_message = "Ready"
+        self._undo: list[InductorProject] = []
+        self._redo: list[InductorProject] = []
+        # The project as it exists on disk, or None when nothing has been
+        # written yet. `dirty` is a comparison against this, not a flag: an
+        # undo back to the saved state must re-enable the M7c Generate gate.
+        self._saved_project: InductorProject | None = (
+            project if document_path is not None else None
+        )
+        self._autosave_callback = autosave_callback
+        self._recovery_cleanup = recovery_cleanup
+        # The slot the live recovery snapshot occupies, which is NOT always the
+        # session's current document: Save As moves `_document_path` to the new
+        # file before the cleanup runs, and an Open deliberately leaves the
+        # previous document's snapshot on disk. Both of those were shipped as
+        # defects while this lived as a variable inside `main()`, where no test
+        # executes it -- so it lives here instead, beside the two operations
+        # that move it.
+        self._autosaved_path = document_path
+        self._autosave_pending = False
+        # Parented to self: Qt tears the timer down (and stops it) when this
+        # session is destroyed, with no separate cleanup step to remember.
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(debounce_ms)
+        self._autosave_timer.timeout.connect(self.flushAutosave)
 
     @property
     def project(self) -> InductorProject:
@@ -57,11 +129,83 @@ class ProjectSession(QObject):
         """
         self._save_callback = callback
 
+    def set_busy_check(self, is_run_busy: Callable[[], bool] | None) -> None:
+        """Bind the run-in-flight check after construction.
+
+        `main.py` builds the `GenerationController` from this session, so the
+        session cannot be told at construction time whether a run it starts
+        later is in flight -- the same ordering reason `set_save_callback`
+        exists.
+        """
+        self._is_run_busy = is_run_busy
+
     def apply(self, project: InductorProject) -> None:
         """Accept an already-validated edit as the current session project."""
+        self._push_undo(self._provider.current())
+        self._redo.clear()
         self._provider.replace(project)
-        self._set_dirty(True)
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
         self.projectChanged.emit()
+        self._schedule_autosave()
+
+    def applyRecovered(self, project: InductorProject) -> None:
+        """Adopt a recovered snapshot as the current project.
+
+        Deliberately not `apply`: there is no earlier in-session edit to undo
+        back to, and the recovered project is not on disk, so it stays dirty.
+        """
+        self._undo.clear()
+        self._redo.clear()
+        self._provider.replace(project)
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Recovered unsaved changes")
+
+    def _push_undo(self, project: InductorProject) -> None:
+        self._undo.append(project)
+        if len(self._undo) > UNDO_DEPTH:
+            del self._undo[0]
+
+    def _refresh_dirty(self) -> None:
+        self._set_dirty(self._provider.current() != self._saved_project)
+
+    @Slot(result=bool)
+    def undo(self) -> bool:
+        if not self._undo:
+            return False
+        self._redo.append(self._provider.current())
+        self._provider.replace(self._undo.pop())
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Undid the last edit")
+        self._schedule_autosave()
+        return True
+
+    @Slot(result=bool)
+    def redo(self) -> bool:
+        if not self._redo:
+            return False
+        self._push_undo(self._provider.current())
+        self._provider.replace(self._redo.pop())
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+        self.set_status("Redid the last undone edit")
+        self._schedule_autosave()
+        return True
+
+    def _get_can_undo(self) -> bool:
+        return bool(self._undo)
+
+    canUndo = Property(bool, _get_can_undo, notify=undoStackChanged)
+
+    def _get_can_redo(self) -> bool:
+        return bool(self._redo)
+
+    canRedo = Property(bool, _get_can_redo, notify=undoStackChanged)
 
     def _get_dirty(self) -> bool:
         return self._dirty
@@ -88,6 +232,57 @@ class ProjectSession(QObject):
         self._status_message = message
         self.statusMessageChanged.emit()
 
+    def _schedule_autosave(self) -> None:
+        if self._autosave_callback is None:
+            return
+        self._autosave_pending = True
+        # Restarting on every edit, not just starting once, is the coalescing
+        # behaviour itself: a timer already running is pushed back out to the
+        # full interval, so a burst of edits (e.g. dragging a numeric field)
+        # writes once, carrying whatever the LAST edit in the burst was.
+        self._autosave_timer.start()
+
+    @Slot()
+    def flushAutosave(self) -> None:
+        """Write the pending snapshot now. Never raises: a failed autosave must
+        not take the edit or the session with it."""
+        self._autosave_timer.stop()
+        if not self._autosave_pending or self._autosave_callback is None:
+            return
+        self._autosave_pending = False
+        try:
+            self._autosave_callback(self.project, self._document_path)
+            self._autosaved_path = self._document_path
+        except Exception as error:  # noqa: BLE001 - autosave must never wedge the UI
+            _logger.warning("Autosave failed: %s", error)
+            self.set_status(f"Unable to autosave a recovery copy: {error}")
+
+    @Slot()
+    def discardRecoverySnapshot(self) -> None:
+        """The user chose to abandon the unsaved edits, so drop their copy too.
+
+        Autosave's snapshot was cleared only on save, and crash recovery reads
+        "a snapshot exists" as "the process died". Together those meant pressing
+        Discard on the unsaved-changes dialog and then quitting produced a
+        recovery offer for the very edits the user had just discarded -- training
+        them to dismiss the prompt that does matter.
+
+        Distinct from `openProject`'s cancel-without-discard on purpose: that
+        stops a pending timer whose snapshot is still worth keeping, whereas this
+        is an explicit instruction to let the work go.
+        """
+        self._drop_recovery_snapshot()
+
+    def _drop_recovery_snapshot(self) -> None:
+        """What is now on disk needs no recovery copy."""
+        self._autosave_pending = False
+        self._autosave_timer.stop()
+        if self._recovery_cleanup is not None:
+            try:
+                self._recovery_cleanup(self._autosaved_path)
+            except Exception as error:  # noqa: BLE001 - a locked snapshot must not fail a successful save
+                _logger.warning("Unable to clear the recovery snapshot: %s", error)
+
     @Slot(result=bool)
     def saveProject(self) -> bool:
         # Guard on the persister, not on the path: production always sets both
@@ -98,12 +293,17 @@ class ProjectSession(QObject):
                 "into. Start the application with --project."
             )
             return False
+        project = self.project
         try:
-            self._save_callback(self.project)
+            self._save_callback(project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
+            _logger.warning("Save failed: %s", error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._set_dirty(False)
+        self._saved_project = project
+        self._refresh_dirty()
+        self._drop_recovery_snapshot()
+        _logger.info("Project saved to %s.", self._document_path)
         self.set_status("Saved")
         return True
 
@@ -121,15 +321,48 @@ class ProjectSession(QObject):
         # main.py) saves to `self.document_path`, so this is what makes "save
         # under this new name" and "save" the same operation underneath.
         self._document_path = path
+        project = self.project
         try:
-            self._save_callback(self.project)
+            self._save_callback(project)
         except Exception as error:  # noqa: BLE001 - QML needs a safe failure path
             self._document_path = previous_path
+            _logger.warning("Save as %s failed: %s", path, error)
             self.set_status(f"Unable to save project: {error}")
             return False
-        self._set_dirty(False)
+        self._saved_project = project
+        self._refresh_dirty()
+        self._drop_recovery_snapshot()
         self.documentPathChanged.emit()
-        self.set_status(f"Saved as {path.name}")
+        # The write has already landed on disk, so -- unlike openProject --
+        # refusing here is not an option: there is no "undo the save" to
+        # fall back to. Acquire the new path's lock now, swap it in, and
+        # release the old path's lock (this document no longer lives there).
+        # On the rare HELD_BY_LIVE_PROCESS -- another window already has
+        # THIS exact path open -- there is nothing correct left to do but
+        # proceed unlocked and say so: two windows racing to save the same
+        # path is a pre-existing hazard this after-the-fact lock cannot
+        # retroactively prevent, only report.
+        new_lock = ProjectLock(path)
+        outcome = new_lock.acquire()
+        previous_lock = self._lock
+        if outcome is LockOutcome.HELD_BY_LIVE_PROCESS:
+            assert new_lock.holder is not None
+            self._lock = None
+            _logger.warning(
+                "Saved to %s, but could not lock it: %s",
+                path,
+                _lock_refusal_message(path, new_lock.holder),
+            )
+            self.set_status(
+                f"Saved as {path.name}, but it is already open elsewhere -- "
+                "this window will not warn you if that window saves too."
+            )
+        else:
+            self._lock = new_lock
+            self.set_status(f"Saved as {path.name}")
+        if previous_lock is not None:
+            previous_lock.release()
+        _logger.info("Project saved to %s.", path)
         return True
 
     @Slot(QUrl, result=bool)
@@ -149,15 +382,135 @@ class ProjectSession(QObject):
             )
             return False
         path = Path(source.toLocalFile())
+        # There is no Revert menu item, so File > Open on the document this
+        # session already has open is the only way to reload from disk --
+        # and the unsaved-changes guard's Discard button leads straight
+        # here. Routing it through the lock like any other target would
+        # refuse it: a lock this same process already holds reads as
+        # `HELD_BY_LIVE_PROCESS` (pinned by
+        # `test_a_lock_held_by_this_live_process_is_refused`, which must
+        # stay refusing a SECOND window, not this one reopening its own
+        # document) rather than making `acquire()` re-entrant. So this case
+        # is short-circuited before the lock is even touched: reload the
+        # file, keep the existing lock exactly as it is.
+        if self._document_path is not None and path == self._document_path:
+            try:
+                project = self._open_callback(path)
+            except Exception as error:  # noqa: BLE001 - a bad file must never crash the app
+                self.set_status(f"Unable to open {path.name}: {error}")
+                return False
+            self._adopt_loaded_project(path, project)
+            _logger.info("Project reloaded from %s.", path)
+            self.set_status(f"Reloaded {path.name}")
+            return True
+        # Acquire the new document's lock BEFORE touching anything: a
+        # refused Open must leave the current document open and untouched,
+        # and the previous lock is only released once this one is confirmed
+        # ours (below). Acquiring ahead of the load itself means a locked
+        # target never even gets read.
+        new_lock = ProjectLock(path)
+        outcome = new_lock.acquire()
+        if outcome is LockOutcome.HELD_BY_LIVE_PROCESS:
+            assert new_lock.holder is not None
+            self.set_status(_lock_refusal_message(path, new_lock.holder))
+            return False
         try:
             project = self._open_callback(path)
         except Exception as error:  # noqa: BLE001 - a bad file must never crash the app
+            new_lock.release()
             self.set_status(f"Unable to open {path.name}: {error}")
             return False
-        self._provider.replace(project)
-        self._document_path = path
-        self._set_dirty(False)
-        self.projectChanged.emit()
+        previous_lock = self._lock
+        self._adopt_loaded_project(path, project)
         self.documentPathChanged.emit()
+        # The new document's lock is ours; release the previous one only now
+        # that the swap has actually succeeded.
+        self._lock = new_lock
+        if previous_lock is not None:
+            previous_lock.release()
+        _logger.info("Project opened from %s.", path)
         self.set_status(f"Opened {path.name}")
         return True
+
+    @Slot(result=bool)
+    def newProject(self) -> bool:
+        """Replace the project with a blank unsaved one, in place.
+
+        Same swap-what-is-inside idiom as `openProject`: every Guided Studio
+        controller holds this session rather than the project it wraps, so
+        nothing has to be rebuilt for the screens to see the new project.
+
+        The blank project is adopted as its own saved state, which is what
+        keeps an untouched new project from reporting unsaved changes --
+        `dirty` is a comparison against `_saved_project`, not a flag, so
+        without that the Exit guard would nag before the user touched
+        anything. `Save` is therefore disabled until the first edit, and
+        `Save As` is how a new project gets a name.
+        """
+        previous_lock = self._lock
+        # Cleared before adopting, not after: this session no longer has a
+        # document, so it must not be holding one's lock even briefly.
+        self._lock = None
+        self._adopt_loaded_project(None, new_project())
+        self.documentPathChanged.emit()
+        if previous_lock is not None:
+            previous_lock.release()
+        _logger.info("Started a new project.")
+        self.set_status("New project")
+        return True
+
+    def _adopt_loaded_project(self, path: Path | None, project: InductorProject) -> None:
+        """Swap a freshly loaded project in as the session's current state.
+
+        Shared by `openProject`'s normal path and its reload-the-current-
+        document short circuit; the only difference between the two is
+        whether the lock is touched, which stays in each caller.
+        """
+        self._provider.replace(project)
+        self._document_path = path
+        # An Open cancels the pending autosave but KEEPS the previous document's
+        # snapshot, so the tracked slot has to follow the document. Without this,
+        # the first Save, Save As or quit-time Discard made in the newly opened
+        # file clears the slot the previous document's snapshot lives in, and
+        # that work is gone with nothing on screen to say so.
+        self._autosaved_path = path
+        # A run directory beside the (re)opened document may still read
+        # "running" from a process that died mid-run; reconcile it to
+        # "interrupted" now so Review never reads it as a result. But a run
+        # this process is executing right now writes that identical marker,
+        # and Open is reachable while one is in flight (the run is a daemon
+        # thread, not something the Open menu item is gated on) -- reconciling
+        # in that window can catch a just-finished run between its manifest
+        # write and this one, permanently overwriting a real "succeeded"
+        # record with "interrupted". `_is_run_busy` is the same signal
+        # `ReviewController` uses to hide a live run from the interrupted-run
+        # list, so skipping the reconcile write under it here closes the same
+        # gap rather than adding a second, separate guard. A reconciliation
+        # failure must never block the open itself.
+        # `path is None` is File > New, and the blank project a launch with no
+        # `--project` opens: there is no document, so there is no `runs/`
+        # directory beside one to reconcile.
+        if path is not None and (self._is_run_busy is None or not self._is_run_busy()):
+            with contextlib.suppress(OSError):
+                reconcile_unfinished_runs(path)
+        # An Open is not an edit: the history of the previous document must
+        # not be able to overwrite the newly opened one.
+        self._undo.clear()
+        self._redo.clear()
+        self._autosave_pending = False
+        self._autosave_timer.stop()
+        self._saved_project = project
+        self._refresh_dirty()
+        self.undoStackChanged.emit()
+        self.projectChanged.emit()
+
+    def release_lock(self) -> None:
+        """Release this session's current document lock, if any.
+
+        Called on every normal exit path (`main.py` connects it to
+        `QGuiApplication.aboutToQuit`), so a clean shutdown never leaves a
+        lock behind for the next launch to have to clear as stale.
+        """
+        if self._lock is not None:
+            self._lock.release()
+            self._lock = None

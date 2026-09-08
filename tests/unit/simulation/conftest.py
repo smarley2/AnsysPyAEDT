@@ -21,10 +21,11 @@ from inductor_designer.domain.project import (
 from inductor_designer.domain.winding import (
     ConductorMode,
     CurrentDirection,
+    ToroidPlacement,
     WindingDefinition,
     WindingDirection,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.preliminary import PreliminaryRequest
 from inductor_designer.simulation.preliminary_contracts import CoreMagneticProperties
 from tests.unit.simulation.test_magnetic_estimate import make_bh_series, make_material_selection
@@ -86,8 +87,7 @@ def sample_request() -> PreliminaryRequest:
             turns=10,
             conductor_name="AWG 18",
             mode=ConductorMode.SOLID,
-            start_angle_deg=0.0,
-            sector_deg=150.0,
+            placement=ToroidPlacement(start_angle_deg=0.0, sector_deg=150.0),
             min_spacing_m=0.0005,
             min_clearance_m=0.0005,
             winding_direction=WindingDirection.CLOCKWISE,

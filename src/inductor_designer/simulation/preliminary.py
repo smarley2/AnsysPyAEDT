@@ -16,13 +16,15 @@ from inductor_designer.domain.project import (
     InductorProject,
     ManualCoreSelection,
     MaterialRevisionSelection,
+    OperatingPoint,
 )
 from inductor_designer.domain.winding import (
     CurrentDirection,
     WindingDefinition,
+    WindingDirection,
     mmf_sign,
 )
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.simulation.core_loss_estimate import core_loss_w
 from inductor_designer.simulation.inductance_estimate import (
     AL_TOLERANCE_NOTE,
@@ -38,6 +40,7 @@ from inductor_designer.simulation.magnetic_estimate import (
     FluxDensities,
     field_strengths,
     flux_densities,
+    gapped_fields_and_flux,
 )
 from inductor_designer.simulation.preliminary_contracts import (
     CoreMagneticProperties,
@@ -54,6 +57,46 @@ from inductor_designer.simulation.winding_estimate import (
     current_densities,
     wire_resistance_and_loss,
 )
+
+
+def _fields_and_flux(
+    material: MaterialRevisionSelection,
+    operating_point: OperatingPoint,
+    turns_by_winding: Mapping[str, int],
+    core: CoreMagneticProperties,
+    senses: Mapping[str, WindingDirection],
+) -> tuple[FieldStrengths, FluxDensities] | PreliminaryValue:
+    """Field strength and flux density, by whichever route the core needs.
+
+    An ungapped core takes the original two steps unchanged -- H from the
+    ampere-turns and the path length, then B from the material -- so no
+    existing number moves. A gapped core cannot: the iron's share of the
+    ampere-turns depends on the flux density, which depends on the material,
+    so both are solved together against the same recorded B-H curve.
+
+    Wiring this is what the first version of the gapped path forgot. The
+    solver existed and was tested; nothing called it, so every gapped estimate
+    silently used `H = NI/l_iron`, which for a 1 mm gap overstated flux and
+    inductance by about ten times.
+    """
+    fields = field_strengths(
+        operating_point, turns_by_winding, core.path_length_m, senses
+    )
+    if isinstance(fields, PreliminaryValue):
+        return fields
+    if core.gap_length_m > 0.0:
+        return gapped_fields_and_flux(
+            material,
+            fields,
+            iron_length_m=core.path_length_m,
+            gap_length_m=core.gap_length_m,
+            effective_area_m2=core.effective_area_m2,
+            core_temperature_c=operating_point.core_temperature_c,
+        )
+    densities = flux_densities(material, fields, operating_point.core_temperature_c)
+    if isinstance(densities, PreliminaryValue):
+        return densities
+    return fields, densities
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,17 +421,16 @@ def _own_mmf_al(
         for item in operating_point.windings
         if item.winding_id == definition.winding_id
     )
-    fields = field_strengths(
+    resolved = _fields_and_flux(
+        material,
         replace(operating_point, windings=own),
         {definition.winding_id: definition.turns},
-        core.path_length_m,
+        core,
         {definition.winding_id: definition.winding_direction},
     )
-    if isinstance(fields, PreliminaryValue):
-        return fields
-    densities = flux_densities(material, fields, operating_point.core_temperature_c)
-    if isinstance(densities, PreliminaryValue):
-        return densities
+    if isinstance(resolved, PreliminaryValue):
+        return resolved
+    fields, densities = resolved
     inductance = core_inductance(fields, densities, core)
     if not isinstance(inductance, CoreInductance):
         return inductance
@@ -685,30 +727,22 @@ def estimate_preliminary(request: PreliminaryRequest) -> PreliminaryResult:
         turns_by_winding = {
             definition.winding_id: definition.turns for definition in design.windings
         }
-        fields = field_strengths(
+        resolved = _fields_and_flux(
+            material,
             request.project.operating_point,
             turns_by_winding,
-            request.core.path_length_m,
+            request.core,
             {
                 definition.winding_id: definition.winding_direction
                 for definition in design.windings
             },
         )
         echo = _core_echo(request.core)
-        if isinstance(fields, PreliminaryValue):
-            core = _core_all(fields, echo)
+        if isinstance(resolved, PreliminaryValue):
+            core = _core_all(resolved, echo)
         else:
-            densities = flux_densities(
-                material,
-                fields,
-                request.project.operating_point.core_temperature_c,
-            )
-            if isinstance(densities, PreliminaryValue):
-                core = _core_all(densities, echo)
-            else:
-                core = _core_estimates(
-                    request, fields, densities, request.core, echo
-                )
+            fields, densities = resolved
+            core = _core_estimates(request, fields, densities, request.core, echo)
 
     al_by_winding = {
         definition.winding_id: _al_for(request, definition, core.al_effective)

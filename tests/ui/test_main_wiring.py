@@ -10,6 +10,7 @@ nothing raised.
 from __future__ import annotations
 
 import os
+import platform
 import sys
 from pathlib import Path
 
@@ -30,6 +31,8 @@ from inductor_designer.adapters.persistence.project_repository import (  # noqa:
 from inductor_designer.adapters.persistence.schema_repository import (  # noqa: E402
     SchemaRepository,
 )
+from inductor_designer.adapters.system import resources  # noqa: E402
+from tests.optional_extras import needs_pyaedt  # noqa: E402
 from tests.unit.domain.test_project import make_project_with_material  # noqa: E402
 from tools.build_catalog import build  # noqa: E402
 
@@ -43,6 +46,8 @@ CONTROLLER_CONTEXT_PROPERTIES = (
     "preliminaryController",
     "simulationController",
     "reviewController",
+    "recoveryController",
+    "diagnosticsController",
 )
 # objectName -> the QML `controller` property it must be bound to. A dropped
 # or reordered controller still lets the panel *load* (its `controller`
@@ -134,3 +139,278 @@ def test_main_wires_all_five_controllers_and_shared_session(
         panel = root.findChild(QObject, name)
         assert panel is not None, name
         assert panel.property("controller") is not None, name
+
+
+def test_the_startup_log_tells_an_absent_aedt_from_an_unsupported_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two conditions, two remedies, so they must not read alike.
+
+    "No AEDT here" means install it; "AEDT 2024 R2 is here" means install the
+    supported release beside it. A log line carrying neither code sends the user
+    down the wrong path, which is what advice codes exist to prevent everywhere
+    else in this application. The log is also what the diagnostic bundle
+    carries, so it is the durable record for a machine support cannot reach.
+    """
+    import logging
+
+    from inductor_designer.adapters.system import app_logging, installations
+    from inductor_designer.application.services.redaction import RedactionContext
+    from inductor_designer.domain.aedt_target import AedtRelease
+    from inductor_designer.simulation.failure_advice import AdviceCode
+
+    log_path = app_logging.configure_application_logging(
+        tmp_path / "logs", RedactionContext()
+    )
+    logger = logging.getLogger(app_logging.LOGGER_NAME)
+
+    monkeypatch.setattr(installations, "detect_aedt", lambda: None)
+    monkeypatch.setattr(installations, "detect_femm", lambda: None)
+    monkeypatch.setattr(installations, "detect_unsupported_aedt", lambda: None)
+    assert main_module.log_detected_installations(logger) == (None, None)
+
+    unsupported = installations.UnsupportedAedtInstallation(
+        release=AedtRelease(2024, 2),
+        install_root=tmp_path / "v242" / "AnsysEM",
+        route=installations.DetectionRoute.REGISTRY,
+    )
+    monkeypatch.setattr(installations, "detect_unsupported_aedt", lambda: unsupported)
+    assert main_module.log_detected_installations(logger) == (None, unsupported)
+
+    for handler in logger.handlers:
+        handler.flush()
+    written = log_path.read_text(encoding="utf-8")
+
+    assert AdviceCode.INSTALLATION_AEDT_MISSING in written
+    assert AdviceCode.INSTALLATION_AEDT_UNSUPPORTED_RELEASE in written
+    # Redaction matches Windows drive and UNC path shapes -- the only ones the
+    # product platform produces (ADR 0004). A POSIX `tmp_path` is not one of
+    # them, so this half of the assertion belongs to the Windows runners.
+    if platform.system() == "Windows":
+        assert str(tmp_path) not in written
+
+
+def test_main_refuses_before_any_window_when_a_shipped_resource_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Task 1's Step 5: the seam's defect surfaces here, on the real `main()`
+    startup path, not only inside `resources.py`'s own unit tests. An empty
+    override directory stands in for a broken install -- every one of the
+    four resources is absent."""
+    empty_resource_root = tmp_path / "broken-install"
+    empty_resource_root.mkdir()
+    monkeypatch.setenv(resources.OVERRIDE_VARIABLE, str(empty_resource_root))
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    def _must_not_be_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("create_engine must not run for a refused launch")
+
+    monkeypatch.setattr(main_module, "create_engine", _must_not_be_called)
+    monkeypatch.setattr(sys, "argv", ["inductor-designer"])
+
+    result = main_module.main()
+
+    assert result == 6
+    stderr = capsys.readouterr().err
+    assert "resources.missing" in stderr
+    assert "schemas directory" in stderr
+    assert "catalog index" in stderr
+    assert "compatibility matrix" in stderr
+    assert "material overlay directory" in stderr
+    assert str(empty_resource_root) in stderr
+
+    # Important 3: a Start Menu launch has no console, so the redacting log
+    # file `configure_application_logging` writes (LOCALAPPDATA redirected
+    # into `tmp_path` by the autouse fixture above) is the only durable
+    # record -- it must carry the same named list, at error level, not just
+    # a count. `caplog` cannot see this: `configure_application_logging`
+    # strips every existing handler off this named logger (including one
+    # `caplog.at_level(logger=...)` would attach) before this line runs, and
+    # sets `propagate = False` before the refusal log call, so a root-level
+    # `caplog` handler never sees it either.
+    from inductor_designer.adapters.system.app_logging import APP_LOG_FILENAME
+    from inductor_designer.adapters.system.environment import log_directory
+
+    log_text = (log_directory() / APP_LOG_FILENAME).read_text(encoding="utf-8")
+    refusal_lines = [line for line in log_text.splitlines() if "Launch refused" in line]
+    assert len(refusal_lines) == 1
+    refusal_line = refusal_lines[0]
+    assert "\tERROR\t" in refusal_line
+    assert "schemas directory" in refusal_line
+    assert "catalog index" in refusal_line
+    assert "compatibility matrix" in refusal_line
+    assert "material overlay directory" in refusal_line
+
+
+def test_main_launches_when_a_valid_catalog_flag_supersedes_a_resource_root_lacking_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Important 1: someone debugging with a hand-built catalog passes
+    `--catalog` pointing at a real index while the resource root itself (an
+    override, here, standing in for an otherwise-incomplete install) has
+    none. That is exactly the case the flag exists for -- it must supersede
+    the resource, not get refused for the very thing it fixes."""
+    partial_resource_root = tmp_path / "partial-install"
+    (partial_resource_root / "schemas").mkdir(parents=True)
+    (partial_resource_root / "compatibility").mkdir(parents=True)
+    (partial_resource_root / "compatibility" / "aedt-matrix.yml").write_text(
+        (ROOT / "compatibility" / "aedt-matrix.yml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (partial_resource_root / "materials-overlay").mkdir(parents=True)
+    # No artifacts/catalog/catalog.sqlite: the resource root's own catalog is
+    # missing on purpose -- the thing the `--catalog` flag below must cover.
+    monkeypatch.setenv(resources.OVERRIDE_VARIABLE, str(partial_resource_root))
+
+    hand_built_catalog = tmp_path / "hand-built-catalog.sqlite"
+    build(ROOT / "catalog", ROOT / "schemas" / "catalog", hand_built_catalog)
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    real_create_engine = main_module.create_engine
+
+    def capturing_create_engine(*args: object, **kwargs: object) -> object:
+        engine = real_create_engine(*args, **kwargs)
+        _ENGINES.append((engine, *engine.rootObjects(), *args, *kwargs.values()))
+        return engine
+
+    monkeypatch.setattr(main_module, "create_engine", capturing_create_engine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["inductor-designer", "--catalog", str(hand_built_catalog)],
+    )
+
+    result = main_module.main()
+
+    assert result == 0
+    assert _ENGINES, "create_engine must have run: the launch must not be refused"
+
+
+def _run_main_without_a_project(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[object, object]:
+    """Run `main()` the way the installer's shortcuts do: no arguments beyond
+    the two resource paths a test has to point at its own copies."""
+    index = tmp_path / "catalog.sqlite"
+    build(ROOT / "catalog", ROOT / "schemas" / "catalog", index)
+
+    real_app_cls = QtGui.QGuiApplication
+    monkeypatch.setattr(
+        QtGui,
+        "QGuiApplication",
+        lambda argv: real_app_cls.instance() or real_app_cls(argv),
+    )
+    monkeypatch.setattr(real_app_cls, "exec", lambda self: 0)
+
+    real_create_engine = main_module.create_engine
+
+    def capturing_create_engine(*args: object, **kwargs: object) -> object:
+        engine = real_create_engine(*args, **kwargs)
+        _ENGINES.append((engine, *engine.rootObjects(), *args, *kwargs.values()))
+        return engine
+
+    monkeypatch.setattr(main_module, "create_engine", capturing_create_engine)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "inductor-designer",
+            "--catalog",
+            str(index),
+            "--matrix",
+            str(ROOT / "compatibility" / "aedt-matrix.yml"),
+        ],
+    )
+
+    assert main_module.main() == 0
+    engine, root, *_kept = _ENGINES[-1]
+    # `QtGui.QGuiApplication` is the monkeypatched lambda by now; the real
+    # class is the one captured above.
+    real_app_cls.instance().processEvents()
+    return engine, root
+
+
+def test_a_launch_with_no_project_still_offers_every_screen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The 0.1.0 defect this closes: the installer's shortcuts pass no
+    arguments, `session` was built only for a `--project` launch, and every
+    screen controller hung off that session -- so the Core & Material core
+    list was literally `[]`, and `File > Open`, the one thing that could have
+    fixed it, was disabled because it is gated on the session existing. The
+    catalog was never the problem.
+    """
+    engine, root = _run_main_without_a_project(tmp_path, monkeypatch)
+    context = engine.rootContext()
+
+    session = context.contextProperty("projectSession")
+    assert session is not None
+    assert session.documentPath == ""
+    # Nothing has been edited, so there is nothing to warn about on Exit.
+    assert session.dirty is False
+
+    for name in CONTROLLER_CONTEXT_PROPERTIES:
+        assert context.contextProperty(name) is not None, name
+    core_material = context.contextProperty("coreMaterialController")
+    assert len(core_material.coreOptions) > 0
+    assert len(context.contextProperty("backendChoices")) > 0
+
+    for name in PANEL_OBJECT_NAMES:
+        panel = root.findChild(QObject, name)
+        assert panel is not None, name
+        assert panel.property("controller") is not None, name
+
+    assert root.findChild(QObject, "newProjectMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "openProjectMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "saveProjectAsMenuItem").property("enabled") is True
+    assert root.findChild(QObject, "saveProjectMenuItem").property("enabled") is False
+
+
+def test_a_launch_with_no_project_refuses_to_generate_until_it_is_saved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run writes its directory beside the project document, and a project
+    that has never been saved has none. The refusal already existed; this
+    pins that a blank launch reaches it instead of crashing on the way, and
+    that Generate is not quietly enabled against a document-less project."""
+    engine, _root = _run_main_without_a_project(tmp_path, monkeypatch)
+    simulation = engine.rootContext().contextProperty("simulationController")
+
+    assert simulation.canGenerate is False
+    assert "no document path" in simulation.blockedReason
+
+
+# Exit 6 -- naming the missing module -- is the correct answer without the extra.
+@needs_pyaedt
+def test_the_solver_import_check_reports_and_exits_without_a_window(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check-solver-imports` answers known risk 2 on the machine that has
+    the problem, so it must not need a display, a project, or AEDT: no window
+    is created, nothing is solved, and the exit code carries the answer."""
+    engines_before = len(_ENGINES)
+    monkeypatch.setattr(sys, "argv", ["inductor-designer", "--check-solver-imports"])
+
+    assert main_module.main() == 0
+
+    printed = capsys.readouterr().err
+    assert "ansys.aedt.core" in printed
+    assert "expression_catalog.toml" in printed
+    # The report has to say what it did not check, or it reads as proof a
+    # solve works.
+    assert "not exercised here" in printed
+    assert len(_ENGINES) == engines_before

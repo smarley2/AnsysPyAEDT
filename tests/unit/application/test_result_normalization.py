@@ -6,9 +6,11 @@ import pytest
 
 from inductor_designer.application.services.result_normalization import (
     DERIVED_TOTAL_LOSS_NOTE,
+    MAXWELL_ENERGY_REASON,
     normalize_scalar_results,
 )
 from inductor_designer.domain.project import RequestedOutput
+from inductor_designer.simulation.failure_advice import AdviceCode
 from inductor_designer.simulation.raw_results import (
     RawConvergence,
     RawMatrix,
@@ -248,6 +250,40 @@ def test_matrices_are_unavailable_when_the_backend_exposes_none() -> None:
     assert entry.reason.startswith("matrices.not_exposed")
 
 
+@pytest.mark.parametrize(
+    ("backend", "expected_reason"),
+    [
+        (RunBackend.MAXWELL_3D, "magnetic-energy.not_exposed"),
+        (RunBackend.MAXWELL_2D, "magnetic-energy.not_exposed"),
+        (RunBackend.FEMM, "magnetic-energy.not_reported"),
+    ],
+)
+def test_a_missing_magnetic_energy_says_whether_the_backend_could_report_it(
+    backend: RunBackend, expected_reason: str
+) -> None:
+    """Would catch reporting `not_reported` for every backend alike.
+
+    An AC Magnetic design exposes no energy report quantity at all (enumerated
+    live on AEDT 2025 R2 Commercial, 2026-08-18), so on the Maxwell backends the
+    gap is permanent and `not_exposed`. FEMM does expose a stored-energy block
+    integral that nothing here reads yet, so its gap stays `not_reported` - a
+    thing still worth fetching, not a thing that cannot exist.
+    """
+    result_set = normalize_scalar_results(
+        RawScalarResults(),
+        run_id="20260818-120000",
+        backend=backend,
+        requested_outputs=(RequestedOutput.MAGNETIC_ENERGY,),
+        provenance="solution data",
+    )
+
+    entry = find(result_set, RequestedOutput.MAGNETIC_ENERGY, "device")
+    assert entry.availability is ResultAvailability.UNAVAILABLE
+    assert entry.reason is not None
+    assert entry.reason.startswith(expected_reason)
+    assert (MAXWELL_ENERGY_REASON in entry.reason) is (backend is not RunBackend.FEMM)
+
+
 def test_total_loss_is_derived_from_the_parts_and_says_so() -> None:
     raw = RawScalarResults(copper_loss_w=3.0, core_loss_w=1.25)
 
@@ -289,6 +325,29 @@ def test_convergence_reports_the_final_error_and_the_history() -> None:
     assert entry.provenance is not None
     assert "2 passes" in entry.provenance
     assert entry.unit == "percent"
+
+
+def test_convergence_stays_available_but_carries_advice_when_the_target_is_missed() -> None:
+    """M9 task 3: an unconverged solve reports its real number plus the
+    reading of it, never a silent gap and never a guess with no evidence."""
+    raw = RawScalarResults(
+        convergence=RawConvergence(passes=((1, 12.5), (2, 4.0)), converged=False)
+    )
+    result_set = normalize_scalar_results(
+        raw,
+        run_id="20260818-000000",
+        backend=RunBackend.MAXWELL_3D,
+        requested_outputs=(RequestedOutput.CONVERGENCE,),
+        provenance="Maxwell 3D solution data",
+        percent_error_target=1.0,
+        maximum_passes=2,
+    )
+    entry = find(result_set, RequestedOutput.CONVERGENCE, "device")
+
+    assert entry.availability is ResultAvailability.AVAILABLE
+    assert entry.value == 4.0
+    assert entry.approximation is not None
+    assert entry.approximation.startswith(f"{AdviceCode.CONVERGENCE_PASS_LIMIT}: ")
 
 
 def test_a_quantity_the_user_did_not_request_is_absent() -> None:

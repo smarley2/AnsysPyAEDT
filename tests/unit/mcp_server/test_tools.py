@@ -12,6 +12,7 @@ from inductor_designer.adapters.persistence.project_repository import (
     project_to_document,
 )
 from inductor_designer.adapters.persistence.schema_repository import SchemaRepository
+from inductor_designer.application.services.maxwell_export import _with_advice
 from inductor_designer.domain.project import MaterialRevisionSelection
 from inductor_designer.mcp_server import tools
 from tests.fakes.femm_solver import RecordingFemmSolver
@@ -170,9 +171,11 @@ def test_generate_maxwell3d_failure_returns_and_writes_failed_manifest(
 
     assert result["backend"] == "maxwell-3d"
     assert result["status"] == "failed"
-    assert result["diagnostics"] == ["RuntimeError: MCP Maxwell 3D adapter failed"]
+    assert result["diagnostics"] == list(
+        _with_advice(("RuntimeError: MCP Maxwell 3D adapter failed",))
+    )
     assert result["issues"] == result["diagnostics"]
-    assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
+    assert result["error"] == "; ".join(result["diagnostics"])  # type: ignore[arg-type]
     assert result["artifacts"] == []
     run_directory = Path(str(result["runDirectory"]))
     evidence = run_directory / "run-manifest.json"
@@ -226,11 +229,11 @@ def test_generate_2d_femm_failure_returns_and_writes_failed_manifest(
     assert result["backend"] == "femm"
     assert result["mode"] == "generate-only"
     assert result["status"] == "failed"
-    assert result["diagnostics"] == [
-        "RuntimeError: Circuit 'primary' returned zero current"
-    ]
+    assert result["diagnostics"] == list(
+        _with_advice(("RuntimeError: Circuit 'primary' returned zero current",))
+    )
     assert result["issues"] == result["diagnostics"]
-    assert result["error"] == result["diagnostics"][0]  # type: ignore[index]
+    assert result["error"] == "; ".join(result["diagnostics"])  # type: ignore[arg-type]
     assert result["artifacts"] == []
     run_directory = Path(str(result["runDirectory"]))
     evidence = run_directory / "run-manifest.json"
@@ -321,7 +324,9 @@ def test_a_failed_generation_returns_the_manifest_and_its_run_directory(
 
     run_directory = Path(str(result["runDirectory"]))
     assert result["status"] == "failed"
-    assert result["diagnostics"] == ["RuntimeError: MCP Maxwell 3D adapter failed"]
+    assert result["diagnostics"] == list(
+        _with_advice(("RuntimeError: MCP Maxwell 3D adapter failed",))
+    )
     assert result["issues"] == result["diagnostics"]
     assert json.loads(
         (run_directory / "run-manifest.json").read_text(encoding="utf-8")

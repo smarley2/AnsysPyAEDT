@@ -212,7 +212,7 @@ def test_m6_project_round_trip_and_all_backend_manifests(tmp_path: Path) -> None
     assert loaded == project
     assert second_path.read_bytes() == first_path.read_bytes()
     document = json.loads(first_path.read_text(encoding="utf-8"))
-    assert document["schemaVersion"] == 5
+    assert document["schemaVersion"] == 6
     assert set(document) == {
         "schemaVersion",
         "projectId",

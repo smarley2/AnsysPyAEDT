@@ -27,6 +27,9 @@ from inductor_designer.adapters.pyaedt.section_sheets import (
 )
 from inductor_designer.adapters.pyaedt.solve_watch import analyze_watched
 from inductor_designer.adapters.pyaedt.stage_progress import (
+    log_desktop_messages as _log_desktop_messages,
+)
+from inductor_designer.adapters.pyaedt.stage_progress import (
     record_cancellation as _record_cancellation,
 )
 from inductor_designer.application.ports.maxwell_exporter import (
@@ -103,6 +106,8 @@ class Maxwell3dApp(Protocol):
 
     def setup_convergence(self, name: str) -> str: ...
 
+    def solve_status(self, name: str) -> str: ...
+
     def solution_values(self, expressions: tuple[str, ...]) -> Any: ...
 
     def create_section_rectangle(
@@ -135,6 +140,8 @@ class Maxwell3dApp(Protocol):
     def save_project(self, path: str) -> bool: ...
 
     def release_desktop(self, close_projects: bool, close_desktop: bool) -> None: ...
+
+    def desktop_messages(self) -> tuple[str, ...]: ...
 
 
 class Maxwell3dAppFactory(Protocol):
@@ -612,6 +619,9 @@ class PyaedtMaxwell3dExporter:
                         stages.append(
                             StageRecord(name="save", succeeded=False, message=str(save_error))
                         )
+                    # After the save, so anything the save itself told AEDT's
+                    # channel is captured too; still before the release.
+                    _log_desktop_messages(app, name)
                     return result()
                 stages.append(StageRecord(name=name, succeeded=True, message=message))
                 _emit(request.progress, name, StagePhase.SUCCEEDED, message)
@@ -633,6 +643,7 @@ class PyaedtMaxwell3dExporter:
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
                 _emit(request.progress, "save", StagePhase.FAILED, str(error))
+                _log_desktop_messages(app, "save")
                 return result()
             if cancelled_before is None and request.solve:
                 if _cancelled(request.cancellation):
@@ -650,6 +661,7 @@ class PyaedtMaxwell3dExporter:
                             StageRecord(name="analyze", succeeded=False, message=str(error))
                         )
                         _emit(request.progress, "analyze", StagePhase.FAILED, str(error))
+                        _log_desktop_messages(app, "analyze")
                         return result()
                     else:
                         stages.append(
@@ -747,6 +759,7 @@ class PyaedtMaxwell3dExporter:
                         stages.append(
                             StageRecord(name="save", succeeded=False, message=str(save_error))
                         )
+                    _log_desktop_messages(app, name)
                     return result()
                 stages.append(StageRecord(name=name, succeeded=True, message=message))
             try:
@@ -760,6 +773,7 @@ class PyaedtMaxwell3dExporter:
                 )
             except Exception as error:  # noqa: BLE001 - stage boundary
                 stages.append(StageRecord(name="save", succeeded=False, message=str(error)))
+                _log_desktop_messages(app, "save")
         finally:
             release_live_app(app)
         return result()

@@ -25,6 +25,12 @@ ApplicationWindow {
     color: "#f3f1ed"
     title: qsTr("PyAEDT Inductor Designer")
 
+    Component.onCompleted: {
+        if (recoveryController !== null && recoveryController.available) {
+            recoveryDialog.open()
+        }
+    }
+
     menuBar: MenuBar {
         objectName: "appMenuBar"
 
@@ -32,6 +38,20 @@ ApplicationWindow {
             objectName: "fileMenu"
             title: qsTr("File")
 
+            MenuItem {
+                objectName: "newProjectMenuItem"
+                text: qsTr("New")
+                enabled: projectSession !== null
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "New is unavailable: no project session is loaded."
+                )
+                // Same guard as Open and the window's close button: unsaved
+                // work is resolved before the project is replaced.
+                onTriggered: window.requestGuardedProjectAction(function() {
+                    projectSession.newProject()
+                })
+            }
             MenuItem {
                 objectName: "openProjectMenuItem"
                 text: qsTr("Open…")
@@ -52,7 +72,16 @@ ApplicationWindow {
                 Accessible.description: enabled ? "" : qsTr(
                     "Save is unavailable: no project is loaded, or there are no unsaved changes."
                 )
-                onTriggered: guidedStudioController.saveDraft()
+                // A project started from New has no document path, and the
+                // persister raises there rather than inventing a filename.
+                // Asking for the name is what Save means in that state.
+                onTriggered: {
+                    if (projectSession.documentPath === "") {
+                        saveProjectAsDialog.open()
+                    } else {
+                        guidedStudioController.saveDraft()
+                    }
+                }
             }
             MenuItem {
                 objectName: "saveProjectAsMenuItem"
@@ -76,9 +105,70 @@ ApplicationWindow {
             }
         }
         Menu {
+            objectName: "editMenu"
+            title: qsTr("Edit")
+
+            MenuItem {
+                id: undoMenuItem
+                objectName: "undoMenuItem"
+                text: qsTr("Undo")
+                enabled: projectSession !== null && projectSession.canUndo
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Undo is unavailable: there is no earlier project edit to return to."
+                )
+                onTriggered: projectSession.undo()
+
+                Shortcut {
+                    objectName: "undoShortcut"
+                    // `sequences`, not `sequence`: a StandardKey maps to
+                    // several bindings on some platforms, and binding one of
+                    // them leaves the others dead -- Qt says so at load
+                    // ("Only binding to one of multiple key bindings
+                    // associated with 11"), and that warning is a located QML
+                    // message, so it also leaked into the shortcut tests'
+                    // no-QML-errors assertion when the menu instantiated
+                    // inside their capture window.
+                    sequences: [StandardKey.Undo]
+                    enabled: undoMenuItem.enabled
+                    onActivated: undoMenuItem.triggered()
+                }
+            }
+            MenuItem {
+                id: redoMenuItem
+                objectName: "redoMenuItem"
+                text: qsTr("Redo")
+                enabled: projectSession !== null && projectSession.canRedo
+                Accessible.name: text
+                Accessible.description: enabled ? "" : qsTr(
+                    "Redo is unavailable: nothing has been undone."
+                )
+                onTriggered: projectSession.redo()
+
+                Shortcut {
+                    objectName: "redoShortcut"
+                    // Redo carries two bindings on Windows -- Ctrl+Y and
+                    // Ctrl+Shift+Z -- and `sequence` wired up only one.
+                    sequences: [StandardKey.Redo]
+                    enabled: redoMenuItem.enabled
+                    onActivated: redoMenuItem.triggered()
+                }
+            }
+        }
+        Menu {
             objectName: "helpMenu"
             title: qsTr("Help")
 
+            MenuItem {
+                objectName: "saveDiagnosticBundleMenuItem"
+                text: qsTr("Save diagnostic bundle…")
+                enabled: diagnosticsController !== null
+                Accessible.name: text
+                onTriggered: {
+                    saveBundleDialog.currentFile = diagnosticsController.suggestedFileName
+                    saveBundleDialog.open()
+                }
+            }
             MenuItem {
                 objectName: "aboutMenuItem"
                 text: qsTr("About")
@@ -685,6 +775,12 @@ ApplicationWindow {
                     Accessible.name: qsTr("Discard unsaved changes and continue")
                     onClicked: {
                         unsavedProjectDialog.close()
+                        // Discarding the edits must discard their recovery copy
+                        // too, or the next launch offers back the very work the
+                        // user just chose to abandon.
+                        if (projectSession !== null) {
+                            projectSession.discardRecoverySnapshot()
+                        }
                         var action = window.pendingUnsavedAction
                         window.pendingUnsavedAction = null
                         if (action !== null) {
@@ -731,6 +827,15 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: saveBundleDialog
+        objectName: "saveBundleDialog"
+        title: qsTr("Save diagnostic bundle")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Diagnostic bundle (*.zip)")]
+        onAccepted: diagnosticsController.saveBundle(selectedFile)
+    }
+
     Dialog {
         id: aboutDialog
         objectName: "aboutDialog"
@@ -760,6 +865,40 @@ ApplicationWindow {
                         .arg(appInfo.supportedAedtEdition)
                     : ""
                 Accessible.name: text
+            }
+        }
+    }
+
+    Dialog {
+        id: recoveryDialog
+        objectName: "recoveryDialog"
+        title: qsTr("Recover unsaved changes?")
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        closePolicy: Popup.NoAutoClose
+
+        contentItem: Label {
+            objectName: "recoveryDialogMessage"
+            text: recoveryController === null ? "" : recoveryController.summary
+            wrapMode: Text.WordWrap
+        }
+
+        footer: DialogButtonBox {
+            Button {
+                objectName: "recoverButton"
+                text: qsTr("Recover")
+                onClicked: {
+                    recoveryController.recover()
+                    recoveryDialog.close()
+                }
+            }
+            Button {
+                objectName: "discardRecoveryButton"
+                text: qsTr("Discard")
+                onClicked: {
+                    recoveryController.discard()
+                    recoveryDialog.close()
+                }
             }
         }
     }

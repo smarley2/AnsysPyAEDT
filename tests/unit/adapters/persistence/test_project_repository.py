@@ -62,13 +62,13 @@ def test_document_round_trip_preserves_project() -> None:
     assert project_from_document(project_to_document(project)) == project
 
 
-def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None:
+def test_document_has_only_v6_design_operating_point_and_recipe_fields() -> None:
     document = project_to_document(make_project())
     design = document["design"]
     operating_point = document["operatingPoint"]
     simulation_recipe = document["simulationRecipe"]
 
-    assert document["schemaVersion"] == 5
+    assert document["schemaVersion"] == 6
     assert set(document) == {
         "schemaVersion",
         "projectId",
@@ -90,8 +90,7 @@ def test_document_has_only_v5_design_operating_point_and_recipe_fields() -> None
         "turns",
         "conductor",
         "mode",
-        "startAngleDeg",
-        "sectorDeg",
+        "placement",
         "minSpacingM",
         "minClearanceM",
         "windingDirection",
@@ -256,13 +255,13 @@ def test_save_replace_failure_preserves_existing_file_and_cleans_temp(
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
 def test_load_rejects_legacy_project_versions(tmp_path: Path, version: int) -> None:
     path = tmp_path / f"legacy-v{version}.inductor.json"
     path.write_text(json.dumps({"schemaVersion": version}), encoding="utf-8")
 
     with pytest.raises(
         ValueError,
-        match=rf"Unsupported project schema version: {version}; expected 5",
+        match=rf"Unsupported project schema version: {version}; expected 6",
     ):
         repository().load(path)

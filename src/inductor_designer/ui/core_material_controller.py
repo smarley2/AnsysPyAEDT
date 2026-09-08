@@ -7,15 +7,17 @@ never-substituting clear stay testable without Qt.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 
 from inductor_designer.application.services.core_material_selection import (
     ClearedSelection,
     SelectionOutcome,
     apply_catalog_core,
     apply_manual_core,
+    apply_manual_ecore,
     apply_material_revision,
     clear_material_selection,
     core_options,
@@ -59,9 +61,24 @@ class CoreMaterialController(QObject):
             session.project.design.manual_material_compatibility_acknowledged
         )
 
+    def _overlay_part_numbers(self) -> tuple[str, ...]:
+        """Which offered cores came from the user's own overlay, if any.
+
+        Asked of the repository by duck typing rather than by importing the
+        overlay adapter: this controller is handed whatever satisfies the
+        catalog port, and a plain SQLite repository (every unit test, and a
+        launch before the first import) simply has no overlay to report.
+        """
+        reader = getattr(self._catalog, "overlay_part_numbers", None)
+        return tuple(reader()) if callable(reader) else ()
+
     def _get_core_options(self) -> list[dict[str, object]]:
         pinned = self._session.project.design.core_material
-        options = core_options(self._catalog, pinned.ref if pinned else None)
+        options = core_options(
+            self._catalog,
+            pinned.ref if pinned else None,
+            overlay_part_numbers=self._overlay_part_numbers(),
+        )
         return [
             {
                 "partNumber": option.part_number,
@@ -74,6 +91,11 @@ class CoreMaterialController(QObject):
                 "outerDiameterMm": option.outer_diameter_m * 1000.0,
                 "innerDiameterMm": option.inner_diameter_m * 1000.0,
                 "heightMm": option.height_m * 1000.0,
+                # Provenance, on every row: a `draft` core is a transcription
+                # nobody has checked against the cited source page, and an
+                # imported one is a datasheet the user typed in themselves.
+                "reviewStatus": option.review_status.value,
+                "origin": option.origin.value,
             }
             for option in options
         ]
@@ -104,6 +126,23 @@ class CoreMaterialController(QObject):
         if isinstance(core, CatalogCoreSelection):
             return {
                 "kind": "catalog",
+                # Read from the catalog, not from the snapshot the project
+                # pinned when this core was selected: "has this data been
+                # checked?" is a question about the record as it stands now,
+                # and marking a core reviewed must not appear to do nothing.
+                # The pinned snapshot itself is deliberately left alone --
+                # a project records the numbers it was designed against.
+                "reviewStatus": (
+                    current.review_status.value
+                    if (current := self._catalog.get_core(core.part_number))
+                    is not None
+                    else core.snapshot.review_status.value
+                ),
+                "origin": (
+                    "imported"
+                    if core.part_number in self._overlay_part_numbers()
+                    else "shipped"
+                ),
                 "partNumber": core.part_number,
                 "manufacturer": core.snapshot.manufacturer,
                 "materialLabel": (
@@ -213,6 +252,66 @@ class CoreMaterialController(QObject):
             return False
         return self._publish(outcome)
 
+    @staticmethod
+    def _lengths_mm(text: str, label: str) -> tuple[float, ...]:
+        """A comma-separated list of millimetre lengths, as metres.
+
+        A typed field is where a NaN gets in, so this refuses the text rather
+        than passing `float("nan")` into a core nobody could grind.
+        """
+        entries = [part.strip() for part in text.split(",") if part.strip()]
+        values: list[float] = []
+        for entry in entries:
+            try:
+                values.append(float(entry) / 1000.0)
+            except ValueError as error:
+                raise ValueError(f"{label} must be numbers in mm, got {entry!r}") from error
+        return tuple(values)
+
+    @Slot(float, float, float, float, float, float, str, str, bool, result=bool)
+    def applyManualECore(
+        self,
+        centre_leg_width_mm: float,
+        depth_mm: float,
+        window_width_mm: float,
+        window_height_mm: float,
+        outer_leg_width_mm: float,
+        yoke_thickness_mm: float,
+        gaps_mm: str,
+        gap_spacings_mm: str,
+        outer_legs_gapped: bool,
+    ) -> bool:
+        """Select a manual gapped E core from the entered dimensions.
+
+        Gaps arrive as text because there can be several of them; every other
+        field is a number, and all of them are millimetres in, metres stored --
+        the same boundary the manual toroid fields already cross, so a user
+        never types a number in metres.
+        """
+        # New dimensions are new geometry, so a compatibility attestation the
+        # user made about the previous shape must not carry over.
+        self._acknowledged = False
+        try:
+            outcome = apply_manual_ecore(
+                self._session.project,
+                centre_leg_width_m=centre_leg_width_mm / 1000.0,
+                depth_m=depth_mm / 1000.0,
+                window_width_m=window_width_mm / 1000.0,
+                window_height_m=window_height_mm / 1000.0,
+                outer_leg_width_m=outer_leg_width_mm / 1000.0,
+                yoke_thickness_m=yoke_thickness_mm / 1000.0,
+                gaps_m=self._lengths_mm(gaps_mm, "Gap lengths"),
+                gap_spacings_m=self._lengths_mm(gap_spacings_mm, "Gap spacings"),
+                outer_legs_gapped=outer_legs_gapped,
+            )
+        except ValueError as error:
+            # `FinishedECore` refuses a stack that does not fit the leg and a
+            # spacing count that does not separate the gaps; `ManualECoreSelection`
+            # refuses non-finite dimensions, and QML `Number("")` yields NaN.
+            self._set_message(f"Unable to apply manual E-core dimensions: {error}")
+            return False
+        return self._publish(outcome)
+
     @Slot(str, str, str, str, str, result=bool)
     def selectMaterial(
         self,
@@ -267,6 +366,112 @@ class CoreMaterialController(QObject):
         """
         self._acknowledged = acknowledged
         self.selectionChanged.emit()
+        return True
+
+    @Slot(str, str, result=bool)
+    def downloadCoreTemplate(self, file_format: str, destination_url: str) -> bool:
+        """Write an empty core table for the user to fill in from a datasheet.
+
+        Same shape as Material Studio's `downloadTemplate`, deliberately: the
+        two import flows should not be two different habits to learn.
+        """
+        from inductor_designer.adapters.catalog.core_table import core_import_template
+
+        try:
+            template = core_import_template(file_format)
+            destination = Path(QUrl(destination_url).toLocalFile())
+            destination.write_bytes(template.data)
+        except (OSError, ValueError) as error:
+            self._set_message(f"Unable to save the core template: {error}")
+            return False
+        self._set_message(
+            f"Core template saved to {destination.name}. Fill one row per part "
+            "number, then use Import cores."
+        )
+        return True
+
+    @Slot(str, result=bool)
+    def importCores(self, source_url: str) -> bool:
+        """Read a filled core table and add every row that stands on its own.
+
+        Returns False when nothing was imported, so the caller can tell "your
+        file had problems" from "your cores are in". Both cases report what
+        happened per row: a datasheet family is ten rows off one page, and the
+        user needs to know which one to go and fix.
+        """
+        from inductor_designer.adapters.catalog.core_table import (
+            CoreTableError,
+            import_core_file,
+        )
+        from inductor_designer.adapters.catalog.overlay_repository import (
+            CoreOverlayError,
+            write_overlay_core,
+        )
+        from inductor_designer.adapters.system.environment import (
+            catalog_overlay_directory,
+        )
+
+        source = Path(QUrl(source_url).toLocalFile())
+        try:
+            result = import_core_file(source.name, source.read_bytes())
+        except (OSError, CoreTableError) as error:
+            self._set_message(f"Unable to import cores: {error}")
+            return False
+
+        overlay_root = catalog_overlay_directory()
+        imported = 0
+        problems = [
+            f"row {rejection.row}: {rejection.reason}" for rejection in result.rejections
+        ]
+        for record in result.records:
+            try:
+                write_overlay_core(overlay_root, record, shipped=self._catalog)
+            except (OSError, CoreOverlayError) as error:
+                problems.append(f"{record.part_number}: {error}")
+                continue
+            imported += 1
+
+        self.optionsChanged.emit()
+        summary = f"Imported {imported} core(s); {len(problems)} refused."
+        if problems:
+            # Every refusal, not a count: the user has to fix each one, and a
+            # count tells them only that something is wrong somewhere.
+            summary = summary + " " + " | ".join(problems)
+        self._set_message(summary)
+        return imported > 0
+
+    @Slot(str, str, result=bool)
+    def markCoreReviewed(self, part_number: str, reviewed_by: str) -> bool:
+        """Record that a person checked one of your imported cores.
+
+        `catalog/README.md` rules that only a human reviewer may set
+        `reviewed`, after checking every number against the cited source page.
+        So this asks for the name of whoever did that, and the adapter refuses
+        without one: a status with nobody attached is the same unverified
+        number wearing a better label.
+
+        A core that belongs in the product still gets promoted by being added
+        to `catalog/cores/*.yaml` and reviewed there -- this marks a local
+        core as checked, it does not publish one.
+        """
+        from inductor_designer.adapters.catalog.overlay_repository import (
+            CoreOverlayError,
+            promote_overlay_core,
+        )
+        from inductor_designer.adapters.system.environment import (
+            catalog_overlay_directory,
+        )
+
+        try:
+            promote_overlay_core(catalog_overlay_directory(), part_number, reviewed_by)
+        except (OSError, CoreOverlayError) as error:
+            self._set_message(str(error))
+            return False
+        self.optionsChanged.emit()
+        self.selectionChanged.emit()
+        self._set_message(
+            f"{part_number} marked reviewed by {reviewed_by.strip()}."
+        )
         return True
 
     @Slot()

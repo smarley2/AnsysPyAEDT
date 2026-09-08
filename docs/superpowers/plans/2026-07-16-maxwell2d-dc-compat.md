@@ -760,9 +760,9 @@ from __future__ import annotations
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
-from inductor_designer.geometry.planar import build_planar_model
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.planar import build_planar_model
 from inductor_designer.simulation.maxwell_plan import PlanBuildError, Polarity
 from inductor_designer.simulation.plan_builder2d import build_maxwell2d_plan
 from tests.unit.simulation.test_maxwell_plan import make_core_record
@@ -859,7 +859,7 @@ from inductor_designer.domain.winding import (
     WindingDirection,
 )
 from inductor_designer.geometry.naming import core_name, unique_identifiers
-from inductor_designer.geometry.planar import PlanarModel
+from inductor_designer.geometry.toroid.planar import PlanarModel
 from inductor_designer.simulation.capabilities import DcBiasDecision
 from inductor_designer.simulation.maxwell2d_plan import (
     DESIGN_NAME_2D,

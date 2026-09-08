@@ -491,7 +491,7 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.domain.project import CatalogCoreSelection, CoreOverride, ManualCoreSelection
-from inductor_designer.geometry.core_solid import (
+from inductor_designer.geometry.toroid.core_solid import (
     CoreGeometryError,
     FinishedCore,
     resolve_finished_core,
@@ -674,9 +674,9 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import ArcSegment, LineSegment, path_length
-from inductor_designer.geometry.turn_path import (
+from inductor_designer.geometry.toroid.turn_path import (
     TurnGeometryError,
     build_connector,
     build_lead,
@@ -760,7 +760,7 @@ from __future__ import annotations
 
 import math
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import (
     ArcSegment,
     LineSegment,
@@ -918,9 +918,9 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackingError, WindingSpec, pack_winding
-from inductor_designer.geometry.turn_path import turn_loop_length_m
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackingError, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.turn_path import turn_loop_length_m
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -1018,8 +1018,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.turn_path import radial_build_m, turn_loop_length_m
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.turn_path import radial_build_m, turn_loop_length_m
 
 
 class PackingError(ValueError):
@@ -1178,9 +1178,9 @@ from __future__ import annotations
 
 import pytest
 
-from inductor_designer.geometry.collisions import check_clearances, occupancy_summary
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.collisions import check_clearances, occupancy_summary
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -1235,8 +1235,8 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -1334,7 +1334,7 @@ from __future__ import annotations
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 from inductor_designer.geometry.naming import (
     core_name,
     lead_names,
@@ -1343,7 +1343,7 @@ from inductor_designer.geometry.naming import (
     turn_name,
     winding_names,
 )
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 
 
 def test_sanitize() -> None:
@@ -1385,7 +1385,7 @@ from __future__ import annotations
 
 import re
 
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.packing import PackedWinding
 
 _INVALID = re.compile(r"[^A-Za-z0-9_]")
 
@@ -1467,7 +1467,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from inductor_designer.geometry.symmetry import (
+from inductor_designer.geometry.toroid.symmetry import (
     SymmetryPlan,
     SymmetryRefusal,
     propose_symmetry_plan,
@@ -1650,9 +1650,9 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
-from inductor_designer.geometry.planar import build_planar_model
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.planar import build_planar_model
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -1708,8 +1708,8 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -1819,7 +1819,7 @@ from inductor_designer.domain.catalog_records import (
     CoreRecord,
     ReviewStatus,
 )
-from inductor_designer.geometry.symmetry import SymmetryRefusal
+from inductor_designer.geometry.toroid.symmetry import SymmetryRefusal
 from tests.unit.domain.test_catalog_records import make_core
 from tests.unit.domain.test_project import make_project, make_winding
 
@@ -1949,11 +1949,11 @@ from inductor_designer.application.ports.catalog import CatalogRepository
 from inductor_designer.domain.catalog_records import ConductorRecord
 from inductor_designer.domain.project import InductorProject
 from inductor_designer.domain.validation import ValidationCategory, validate_project
-from inductor_designer.geometry.collisions import CollisionIssue, check_clearances
-from inductor_designer.geometry.core_solid import CoreGeometryError, FinishedCore, resolve_finished_core
-from inductor_designer.geometry.packing import PackedWinding, PackingError, WindingSpec, pack_winding
-from inductor_designer.geometry.planar import PlanarModel, build_planar_model
-from inductor_designer.geometry.symmetry import SymmetryPlan, SymmetryRefusal, propose_symmetry_plan
+from inductor_designer.geometry.toroid.collisions import CollisionIssue, check_clearances
+from inductor_designer.geometry.toroid.core_solid import CoreGeometryError, FinishedCore, resolve_finished_core
+from inductor_designer.geometry.toroid.packing import PackedWinding, PackingError, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.planar import PlanarModel, build_planar_model
+from inductor_designer.geometry.toroid.symmetry import SymmetryPlan, SymmetryRefusal, propose_symmetry_plan
 
 
 class GeometryModelError(ValueError):
@@ -2161,14 +2161,14 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from inductor_designer.geometry.collisions import occupancy_summary
+from inductor_designer.geometry.toroid.collisions import occupancy_summary
 from inductor_designer.geometry.naming import (
     core_name,
     lead_names,
     terminal_names,
     winding_names,
 )
-from inductor_designer.geometry.symmetry import SymmetryPlan
+from inductor_designer.geometry.toroid.symmetry import SymmetryPlan
 
 if TYPE_CHECKING:
     from inductor_designer.application.services.geometry_model import GeometryModel
@@ -2329,9 +2329,9 @@ import math
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackingError, WindingSpec, pack_winding
-from inductor_designer.geometry.turn_path import turn_loop_length_m
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackingError, WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.turn_path import turn_loop_length_m
 
 cores = st.builds(
     FinishedCore,
@@ -2452,10 +2452,10 @@ import math
 
 import pytest
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.primitives import Vec3
-from inductor_designer.geometry.tessellation import Mesh, tessellate_core, tessellate_winding, tube
+from inductor_designer.geometry.toroid.tessellation import Mesh, tessellate_core, tessellate_winding, tube
 
 CORE = FinishedCore(r_inner_m=0.00973, r_outer_m=0.01683, half_height_m=0.005715,
                     corner_radius_m=0.0)
@@ -2534,10 +2534,10 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import PackedWinding
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import PackedWinding
 from inductor_designer.geometry.primitives import Vec3, sample_path
-from inductor_designer.geometry.turn_path import build_connector, build_lead, build_turn_loop
+from inductor_designer.geometry.toroid.turn_path import build_connector, build_lead, build_turn_loop
 
 
 @dataclass(frozen=True, slots=True)
@@ -2779,7 +2779,7 @@ from PySide6.QtCore import Property, QByteArray, QObject
 from PySide6.QtQuick3D import QQuick3DGeometry
 
 from inductor_designer.application.services.geometry_model import GeometryModel
-from inductor_designer.geometry.tessellation import Mesh, tessellate_core, tessellate_winding
+from inductor_designer.geometry.toroid.tessellation import Mesh, tessellate_core, tessellate_winding
 
 
 class MeshGeometry(QQuick3DGeometry):

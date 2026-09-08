@@ -5,10 +5,10 @@ import math
 import pytest
 
 from inductor_designer.domain.winding import CurrentDirection, WindingDirection
-from inductor_designer.geometry.core_solid import FinishedCore
-from inductor_designer.geometry.packing import WindingSpec, pack_winding
 from inductor_designer.geometry.primitives import Vec3
-from inductor_designer.geometry.tessellation import (
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.packing import WindingSpec, pack_winding
+from inductor_designer.geometry.toroid.tessellation import (
     Mesh,
     start_bead,
     tessellate_core,

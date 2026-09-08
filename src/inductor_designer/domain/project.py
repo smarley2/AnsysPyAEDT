@@ -51,7 +51,57 @@ class ManualCoreSelection:
                 raise ValueError(f"ManualCoreSelection {name} must be finite")
 
 
-CoreSelection = CatalogCoreSelection | ManualCoreSelection
+@dataclass(frozen=True, slots=True)
+class ManualECoreSelection:
+    """An E+E pair entered by hand, with the gap stack ground into its centre
+    leg (spec 2026-09-04).
+
+    Six independent dimensions; the overall outline is derived from them by
+    the geometry layer rather than stored, so a project can never carry an
+    outline that disagrees with its own legs.
+
+    Finiteness only here, for the same reason `ManualCoreSelection` checks
+    only finiteness: ordering and positivity are reported as diagnostics by
+    validation and geometry, where the user can see them beside the field.
+    NaN is what those checks cannot see, because every comparison against it
+    is False.
+    """
+
+    centre_leg_width_m: float
+    depth_m: float
+    window_width_m: float
+    window_height_m: float
+    outer_leg_width_m: float
+    yoke_thickness_m: float
+    gaps_m: tuple[float, ...] = ()
+    gap_spacings_m: tuple[float, ...] = ()
+    outer_legs_gapped: bool = False
+
+    def __post_init__(self) -> None:
+        named = (
+            ("centre_leg_width_m", self.centre_leg_width_m),
+            ("depth_m", self.depth_m),
+            ("window_width_m", self.window_width_m),
+            ("window_height_m", self.window_height_m),
+            ("outer_leg_width_m", self.outer_leg_width_m),
+            ("yoke_thickness_m", self.yoke_thickness_m),
+        )
+        for name, value in named:
+            if not isfinite(value):
+                raise ValueError(f"ManualECoreSelection {name} must be finite")
+        for index, gap in enumerate(self.gaps_m):
+            if not isfinite(gap):
+                raise ValueError(
+                    f"ManualECoreSelection gap {index + 1} must be finite"
+                )
+        for index, spacing in enumerate(self.gap_spacings_m):
+            if not isfinite(spacing):
+                raise ValueError(
+                    f"ManualECoreSelection gap spacing {index + 1} must be finite"
+                )
+
+
+CoreSelection = CatalogCoreSelection | ManualCoreSelection | ManualECoreSelection
 
 
 class MeshIntent(str, Enum):

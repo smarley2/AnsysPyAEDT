@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from inductor_designer.adapters.pyaedt.polyline_data import polyline_data
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import LineSegment, Vec3
-from inductor_designer.geometry.turn_path import build_turn_loop
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
+from inductor_designer.geometry.toroid.turn_path import build_turn_loop
 
 CORE = FinishedCore(r_inner_m=0.01, r_outer_m=0.02, half_height_m=0.005, corner_radius_m=0.0)
 

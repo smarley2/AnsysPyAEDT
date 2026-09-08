@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-from inductor_designer.geometry.core_solid import FinishedCore
 from inductor_designer.geometry.primitives import (
     ArcSegment,
     LineSegment,
@@ -10,6 +9,7 @@ from inductor_designer.geometry.primitives import (
     Vec3,
     half_plane_point,
 )
+from inductor_designer.geometry.toroid.core_solid import FinishedCore
 
 
 class TurnGeometryError(ValueError):

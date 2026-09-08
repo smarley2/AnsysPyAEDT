@@ -49,12 +49,15 @@
         "minClearanceM": 0.001,
         "minSpacingM": 0.0001,
         "mode": "solid",
-        "sectorDeg": 150.0,
-        "startAngleDeg": 0.0,
         "terminalIntent": "",
         "turns": 10,
         "windingDirection": "cw",
-        "windingId": "w1"
+        "windingId": "w1",
+        "placement": {
+          "kind": "toroid",
+          "startAngleDeg": 0.0,
+          "sectorDeg": 150.0
+        }
       },
       {
         "conductor": "AWG 18",
@@ -62,12 +65,15 @@
         "minClearanceM": 0.001,
         "minSpacingM": 0.0001,
         "mode": "solid",
-        "sectorDeg": 150.0,
-        "startAngleDeg": 180.0,
         "terminalIntent": "",
         "turns": 10,
         "windingDirection": "cw",
-        "windingId": "w2"
+        "windingId": "w2",
+        "placement": {
+          "kind": "toroid",
+          "startAngleDeg": 180.0,
+          "sectorDeg": 150.0
+        }
       }
     ]
   },
@@ -97,11 +103,14 @@
     ]
   },
   "projectId": "a7e5b21c-6a53-4f0e-9d3a-2f1b4c8d9e0f",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "simulationRecipe": {
     "maximumPasses": 10,
     "meshIntent": "standard",
     "percentError": 1.0,
-    "requestedOutputs": ["resistance", "inductance"]
+    "requestedOutputs": [
+      "resistance",
+      "inductance"
+    ]
   }
 }
